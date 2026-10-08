@@ -22,6 +22,23 @@ INTROSPECTION_PORT.md for the feature inventory, SDK extension plan and evidence
 The completed private v0.1 checkpoint below is the foundation, not completion of
 this new development goal.
 
+ADDITIONAL ACTIVE REQUIREMENT (2026-10-08): one unified SDK management harness
+with a native UMG frontend, independent console fallback (`mods`) and configurable
+keybind manager. All three share one mod registry, settings store, action
+dispatcher and lifecycle. Preserve the reusable Introspection Explorer. Audit
+the actual installed MattsBL4ModsMenu, console_mod_menu, mods_base and native
+keybinds before porting. Implement shared primitives and console fallback first;
+UMG reverse engineering must not block them. Full requirements and all17 live
+acceptance tests are preserved locally in USER_REQUEST_MANAGEMENT.txt. This is
+additional scope, not a replacement or a completed feature. The current loader's
+one-enabled-mod restriction must be resolved through shared session ownership.
+
+Initial source discovery found MattsBL4ModsMenu.sdkmod and its package source
+under BL4 sdk_mods/tools/matts_bl4_mods_menu, installed mods_base.sdkmod and
+console_mod_menu.sdkmod, and keybinds Python wrapper/stubs/native module. Audit
+and preservation are ongoing. CONSOLE_DUMPS.md records the short requested
+diagnostic investigation and target-specific UMG/input research leads.
+
 USER REQUIREMENT: Build an independent Python SDK for locally owned/offline Expedition 33. First capstone: our Python code enumerates real live objects through our independently validated native runtime layer. Static dumps, asset lists, and hard-coded names cannot satisfy it.
 
 USER REQUIREMENT: Follow stages 0-12 in MILESTONES.md; no gameplay features first; no DRM/anti-cheat/authentication bypass; no public push or release. All new project material lives on D:. Existing installed tools may be reused.
