@@ -21,6 +21,19 @@ class Session:
 
 
 class ConsoleTests(unittest.TestCase):
+    def test_output_preserves_unicode_and_escapes_untransportable_text(self):
+        session = Session()
+        console = Console(session)
+        console.enable()
+        console.write('hello\0\ud800 \U0001f642')
+        self.assertEqual(session._transport.calls[-1],
+                         ('console-print', 'hello\\0\\ud800 \U0001f642'))
+        console.write('\U0001f642' * 4097)
+        chunks = [payload for command, payload in session._transport.calls[-2:]]
+        self.assertEqual(''.join(chunks), '\U0001f642' * 4097)
+        self.assertTrue(all(len(chunk.encode('utf-16le')) <= 65536 for chunk in chunks))
+        console._close()
+
     def test_toggle_key_is_explicit_and_bounded(self):
         session = Session()
         console = Console(session)

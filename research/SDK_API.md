@@ -20,7 +20,7 @@ PROVEN by live integration check: 96,053 objects including `/Script/CoreUObject`
 
 ## Native class metadata
 
-`expedition33.reflect_class(name) -> ClassMetadata` queries a uniquely named native Class. It returns the class hierarchy, instance sizes, and inherited property metadata (owner/name/type/offset/element_size/dimension). It rejects duplicate native class names; BlueprintGeneratedClass is outside this initial API. This metadata query returns no property values or persistent pointers.
+`expedition33.reflect_class(name) -> ClassMetadata` queries a uniquely named native Class. It returns the class hierarchy, instance sizes, and inherited property metadata (owner/name/type/offset/element_size/dimension plus optional struct_name, enum_name, inner_type and inner_element_size). It rejects duplicate native class names; BlueprintGeneratedClass is outside this initial API. This metadata query returns no property values or persistent pointers.
 
 PROVEN: Actor -> Object, sizes656/40, 80 properties; HUD -> Actor -> Object, sizes896/656/40, 96 properties. Object has no fields. Live check compares all inherited metadata and verifies bounds; unknown class fails explicitly. Reproduce with scripts/verify_live_reflection.py.
 

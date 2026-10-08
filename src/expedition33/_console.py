@@ -66,6 +66,11 @@ class Console:
         self._session._check()
         if not self._enabled:
             raise RuntimeError('Console is disabled')
+        if not isinstance(text, str):
+            raise TypeError('Console output must be text')
+        # Python can print NULs or lone surrogates; native FString transport
+        # cannot represent those safely. Render escapes without ending the session.
+        text = text.replace('\0', r'\0').encode('utf-16le', 'backslashreplace').decode('utf-16le')
         for offset in range(0, len(text), 4096):
             self._session._transport.command('console-print', text[offset:offset+4096])
 
