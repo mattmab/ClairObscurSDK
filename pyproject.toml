@@ -4,8 +4,8 @@ build-backend = "setuptools.build_meta"
 
 [project]
 name = "expedition33-research"
-version = "0.0.1"
-description = "Independent read-only Expedition 33 runtime research bridge"
+version = "0.1.0"
+description = "Independent build-specific Expedition 33 Python modding SDK"
 requires-python = ">=3.13"
 
 [tool.setuptools.packages.find]
