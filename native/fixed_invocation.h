@@ -25,7 +25,7 @@ inline uint64_t fixed_slot(uint64_t base, int32_t index, int32_t serial) {
     if (!object || local_read<int32_t>(slot + 0x10) != serial || local_read<int32_t>(object + 0xc) != index) return 0;
     return object;
 }
-inline uint32_t invoke_fixed_body(SchedulePacket* packet) {
+inline uint32_t invoke_fixed_body(SchedulePacket* packet, uint64_t allowed_entry = 0) {
     uint64_t base = reinterpret_cast<uint64_t>(GetModuleHandleW(nullptr));
     if (!base || local_read<uint16_t>(base) != 0x5a4d) return 10;
     auto* nt = reinterpret_cast<const IMAGE_NT_HEADERS64*>(base + local_read<uint32_t>(base + 0x3c));
@@ -52,7 +52,8 @@ inline uint32_t invoke_fixed_body(SchedulePacket* packet) {
         local_read<int32_t>(prop + 0x30) != 1 || local_read<int32_t>(prop + 0x34) != 1 ||
         local_read<int32_t>(prop + 0x44) != 0 || local_read<uint32_t>(prop + 0x70) != 0xff010001) return 15;
     if (local_read<uint32_t>(function + 0xb0) != 0x54020401 || local_read<uint16_t>(function + 0xb6) != 1 ||
-        local_read<uint16_t>(function + 0xb8) != 0 || local_read<uint64_t>(function + 0xd8) != base + 0x333be80) return 16;
+        local_read<uint16_t>(function + 0xb8) != 0 ||
+        local_read<uint64_t>(function + 0xd8) != (allowed_entry ? allowed_entry : base + 0x333be80)) return 16;
     uint64_t dispatch = local_read<uint64_t>(local_read<uint64_t>(object) + 0x268);
     if (dispatch != base + 0x332bb90) return 17;
     uint8_t expected = local_read<uint8_t>(object + 0x5d) & 1;
@@ -64,8 +65,8 @@ inline uint32_t invoke_fixed_body(SchedulePacket* packet) {
         fixed_slot(base, packet->function_index, packet->function_serial) != function) return 18;
     packet->result = result; return 0;
 }
-inline uint32_t invoke_fixed_guarded(SchedulePacket* packet) {
+inline uint32_t invoke_fixed_guarded(SchedulePacket* packet, uint64_t allowed_entry = 0) {
     // Contain access faults, but do not claim SEH can roll back arbitrary engine state.
-    __try { return invoke_fixed_body(packet); }
+    __try { return invoke_fixed_body(packet, allowed_entry); }
     __except(EXCEPTION_EXECUTE_HANDLER) { return 19; }
 }
