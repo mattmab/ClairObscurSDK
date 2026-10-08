@@ -575,7 +575,7 @@ int main(int argc, char** argv) {
                             // 14133c740 stored object reference. No custom getters.
                             const int width = type == "FloatProperty" || type == "IntProperty" ? 4 :
                                 type == "UInt16Property" ? 2 : type == "ByteProperty" ? 1 :
-                                type == "NameProperty" || type == "ObjectProperty" ? 8 : 0;
+                                type == "NameProperty" || type == "ObjectProperty" || type == "DoubleProperty" ? 8 : 0;
                             if (width) {
                                 try {
                                     require(p.element_size == width && p.dimension <= 1024, "VALUE_LAYOUT_INVALID");
@@ -586,6 +586,9 @@ int main(int argc, char** argv) {
                                         std::ostringstream value;
                                         if (type == "FloatProperty") {
                                             float number; std::memcpy(&number, &raw, 4);
+                                            value << stored_float_json(number);
+                                        } else if (type == "DoubleProperty") {
+                                            double number; std::memcpy(&number, &raw, 8);
                                             value << stored_float_json(number);
                                         } else if (type == "IntProperty") value << static_cast<int32_t>(raw);
                                         else if (type == "UInt16Property") value << static_cast<uint16_t>(raw);
@@ -615,6 +618,52 @@ int main(int argc, char** argv) {
                                     std::cout << "{\"event\":\"stored_value_error\",\"owner_index\":" << header.index
                                               << ",\"name\":" << quote(field_name) << ",\"error\":" << quote(error.what()) << "}\n";
                                 }
+                            }
+                        }
+                        if (read_values && type == "StrProperty") {
+                            try {
+                                struct StringHeader { uint64_t data; int32_t count, capacity; };
+                                static_assert(sizeof(StringHeader) == 16);
+                                require(p.element_size == 16 && p.dimension <= 1024, "STRING_PROPERTY_LAYOUT_INVALID");
+                                for (int32_t element = 0; element < p.dimension; ++element) {
+                                    const auto at = item.object + p.offset + uint64_t(element) * 16;
+                                    const auto text = reader.get<StringHeader>(at);
+                                    require(text.count >= 0 && text.count <= text.capacity && text.capacity <= 1048576,
+                                            "STRING_COUNTS_INVALID");
+                                    const auto units = std::min(text.count, 8193);
+                                    std::wstring wide(units, 0), repeated(units, 0);
+                                    if (units) {
+                                        reader.read(text.data, wide.data(), units * 2);
+                                        reader.read(text.data, repeated.data(), units * 2);
+                                        require(wide == repeated, "STRING_CONTENT_CHANGED");
+                                    }
+                                    const auto text_again = reader.get<StringHeader>(at);
+                                    const auto property_again = reader.get<PropertyPrefix>(field);
+                                    require(std::memcmp(&text, &text_again, sizeof(text)) == 0 &&
+                                            std::memcmp(&p, &property_again, sizeof(p)) == 0, "STRING_HEADER_CHANGED");
+                                    if (text.count && text.count <= 8193) {
+                                        require(wide.back() == 0, "STRING_TERMINATOR_INVALID");
+                                        wide.pop_back();
+                                    } else if (wide.size() > 8192) wide.resize(8192);
+                                    // A bounded prefix must not end halfway through a surrogate pair.
+                                    if (text.count > 8193 && !wide.empty() && wide.back() >= 0xd800 && wide.back() <= 0xdbff)
+                                        wide.pop_back();
+                                    std::string decoded;
+                                    if (!wide.empty()) {
+                                        const auto bytes = WideCharToMultiByte(CP_UTF8, WC_ERR_INVALID_CHARS, wide.data(),
+                                            static_cast<int>(wide.size()), nullptr, 0, nullptr, nullptr);
+                                        require(bytes > 0, "STRING_UTF16_INVALID"); decoded.resize(bytes);
+                                        WideCharToMultiByte(CP_UTF8, WC_ERR_INVALID_CHARS, wide.data(),
+                                            static_cast<int>(wide.size()), decoded.data(), bytes, nullptr, nullptr);
+                                    }
+                                    std::cout << "{\"event\":\"stored_value\",\"owner_index\":" << header.index
+                                              << ",\"name\":" << quote(field_name) << ",\"element\":" << element
+                                              << ",\"value\":" << quote(decoded) << ",\"truncated\":"
+                                              << (text.count > 8193 ? "true" : "false") << "}\n";
+                                }
+                            } catch (const std::exception& error) {
+                                std::cout << "{\"event\":\"stored_value_error\",\"owner_index\":" << header.index
+                                          << ",\"name\":" << quote(field_name) << ",\"error\":" << quote(error.what()) << "}\n";
                             }
                         }
                         if ((!bool_object.empty() || read_values) && type == "BoolProperty") {

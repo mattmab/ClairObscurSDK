@@ -1,6 +1,7 @@
 # BL4 Introspection Harness port
 
-Status: original roots/search and initial schema port live-validated. No Expedition 33
+Status: original roots/search/schema, selected stored-value inspection, snapshots
+and diffs are live-validated; the local-file protocol is ported. No Expedition 33
 harness parity is claimed yet. Updated 2026-10-08.
 
 ## Original and provenance
@@ -175,7 +176,7 @@ retained values, reload, full UI/exit/relaunch and packaging validation.
 ## Local-file protocol port
 
 PROVEN 2026-10-08: the original client/protocol is now adapted to the external
-SDK controller. Start `launch.cmd introspection --console-key F10`, then from a
+SDK controller. Start `launch.cmd introspection`, then from a
 second terminal use the existing D: Python environment:
 
 ```text
@@ -259,3 +260,37 @@ error recovery and normal shutdown. Evidence remains in
 evidence/introspection-file-service-live.json. All42 Python tests pass. Neither
 this protocol check nor the read tests claim native UI typing, gameplay travel,
 mutations or general retained-value ownership.
+
+## Stored strings and doubles
+
+PROVEN 2026-10-08: DoubleProperty and StrProperty stored reads now extend the
+same identity-checked API and unchanged original Explorer. Target numeric vtable
+slot +0x200 resolves to 141370af0 for DoubleProperty, which reads eight bytes.
+StrProperty export 14136bd30 uses the reflected offset, reads a data pointer and
+count at +8, subtracts the terminating character and copies two-byte code units.
+Evidence: introspection-double-string-types.json and
+introspection-double-string-decompile.json in the local evidence directory.
+
+The reader validates the 16-byte string header and bounds count/capacity, checks
+repeated header/content/property observations, requires the complete string's
+terminator and strictly decodes UTF-16. Reads are capped at 8192 code units;
+prefixes avoid split surrogate pairs and are marked in StoredValues.truncated.
+The original Explorer retains its own 4096-character output bound. These checks
+do not pin allocation lifetime or make external reads atomic. Custom getters are
+not executed. The double formatter preserves round-trip precision, negative zero
+and tagged nonfinite values.
+
+`scripts/verify_live_introspection_strings.py` passed against PID34604, including
+ProjectName="Expedition 33", ProjectVersion="1.5.6.0", an empty Description and
+Blueprint default BPS_LookAtTarget_C.StartTime/RotationProgress (both 0.0). Those
+are observed specimens, not universal expectations about gameplay values. The
+verifier discovers a double-bearing class through loaded metadata. Evidence:
+evidence/introspection-strings-double-live.json. All43 Python tests pass.
+
+The persistent introspection controller was restored without --seconds or an
+optional function-key binding. Default native backtick/Tilde remains the console
+key; F10 was an extra validation binding. Its process and advancing heartbeat were
+verified. No new physical keypress/UI validation is claimed by this milestone.
+Future validation must preserve this user session instead of replacing it with a
+bounded controller. Recursive types, writes, general calls/traces, agent actions,
+retained native values and full harness relaunch/reload parity remain pending.

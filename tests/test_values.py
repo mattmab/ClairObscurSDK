@@ -52,5 +52,13 @@ class ValueTests(unittest.TestCase):
         self.rows = self.rows[:1]; self.rows[0]['serial'] = 2
         with self.assertRaises(RuntimeQueryError): self.read()
 
+    def test_string_truncation_and_double_type(self):
+        self.property('Text', 'StrProperty'); self.value('Text', 'prefix')
+        self.rows[-1]['truncated'] = True
+        self.property('Precision', 'DoubleProperty'); self.value('Precision', 1)
+        result = self.read()
+        self.assertIn((2, 'Text'), result.truncated)
+        self.assertIs(type(result.values[2, 'Precision']), float)
+
 
 if __name__ == '__main__': unittest.main()

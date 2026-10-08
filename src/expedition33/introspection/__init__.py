@@ -198,7 +198,7 @@ class Harness:
                 result['original_argument_types'] = result['argument_types']
                 result['argument_types'] = []
                 result['parity_complete'] = False
-                result['limitations'] = ['Value reads currently cover stored bool/byte/int32/uint16/float/name/object references; other types pending',
+                result['limitations'] = ['Value reads cover stored bool/byte/int32/uint16/float/double/name/string/object references; recursive types pending',
                     'Writes, invocation, traces and agent bridge pending',
                     'Object-class, map/set and delegate type references pending',
                     'Function pages use registry identity order within each declaring class']

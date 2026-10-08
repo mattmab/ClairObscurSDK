@@ -1,8 +1,9 @@
 # Expedition 33 independent Python SDK research
 
 Current development: porting the actual BL4 Introspection Harness. Live roots,
-search and initial generated-class/function/struct schema are working through the
-original core; value inspection and the remaining operations are still in progress.
+search, generated-class/function/struct schema, selected stored-value inspection,
+and snapshot/diff are working through the original core and local-file protocol.
+Recursive values and the remaining operations are still in progress.
 See [the port inventory](research/INTROSPECTION_PORT.md). This work does not change
 the previously packaged private v0.1 archive.
 
@@ -23,8 +24,12 @@ Game files are read-only research inputs. No public publishing is authorized.
 ## Interactive console
 
 Launch the game normally, then run `launch.cmd console` from the checkout or a
-verified development bundle. Tilde opens the native Unreal console. An optional
+verified development bundle. Press backtick (`), without Shift on a US keyboard,
+to open the native Unreal console (the engine calls this key Tilde). An optional
 additional toggle is available with `launch.cmd console --console-key F10`.
+For the introspection harness, use `launch.cmd introspection` instead. Keep its
+controller running; the default has no timeout. `--seconds N` is intended for
+bounded validation and detaches the console when that interval ends.
 
 Enter native commands such as `stat fps`, or Python commands such as:
 

@@ -11,6 +11,7 @@ class StoredValues:
     values: object
     errors: object
     types: object
+    truncated: frozenset = frozenset()
 
 
 def read_values(catalog, observed):
@@ -25,7 +26,7 @@ def read_values(catalog, observed):
     if (target['index'] != obj.index or target['serial'] != obj.serial or
             int(target['address'], 16) != obj.address or target['class_index'] != obj.class_index or target['name'] != obj.name):
         raise RuntimeQueryError('Value target identity changed')
-    metadata, elements, errors = {}, {}, {}
+    metadata, elements, errors, truncated = {}, {}, {}, set()
     for row in rows:
         kind = row['event']
         if kind == 'property_metadata':
@@ -48,7 +49,9 @@ def read_values(catalog, observed):
             if not 0 <= index < metadata[key]['dimension'] or index in elements.get(key, {}):
                 raise RuntimeQueryError('Invalid static array element')
             value = row['value']
-            if metadata[key]['type'] == 'FloatProperty' and type(value) in (int, float):
+            if row.get('truncated') is True:
+                truncated.add(key)
+            if metadata[key]['type'] in ('FloatProperty', 'DoubleProperty') and type(value) in (int, float):
                 value = float(value)
             if isinstance(value, dict) and '$reference' in value:
                 reference = value['$reference']
@@ -73,4 +76,4 @@ def read_values(catalog, observed):
         sequence = tuple(entries[i] for i in range(meta['dimension']))
         values[key] = sequence[0] if meta['dimension'] == 1 else sequence
     return StoredValues(obj, MappingProxyType(values), MappingProxyType(errors),
-                        MappingProxyType({key: meta['type'] for key, meta in metadata.items()}))
+                        MappingProxyType({key: meta['type'] for key, meta in metadata.items()}), frozenset(truncated))
