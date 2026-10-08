@@ -97,7 +97,7 @@ capture contexts and reliable focus filtering require additional verified work.
 | --- | --- | --- |
 | Registry | mods_base.mod_list shared by native and console UI | Pending stable-ID registry attached to one runtime; do not duplicate enabled state |
 | Installed/loaded mods | Startup discovery plus registered mod objects | Existing folder loader is minimal; expose discovery separately from loaded/enabled status |
-| Lifecycle | Enable/disable hooks, keys, commands; protected core/library entries | Existing loader supports one enabled mod; replace with scoped ownership of one controller session before enabling multiple mods |
+| Lifecycle | Enable/disable hooks, keys, commands; protected core/library entries | Shared loader Session with per-mod resource scopes implemented; resource sharing live-tested, full multi-mod loader/relaunch validation pending |
 | Metadata | Name, author, version, description, type, custom status | One definition and immutable UI views for both frontends |
 | Values | Bool, slider, selections, hidden/grouped/nested settings | Pending shared typed validation, defaults, change callbacks and stable option IDs |
 | Buttons/actions | Option callbacks, native workspace actions | Pending one action dispatcher for UI, console, keybind and introspection adapters |
@@ -149,3 +149,32 @@ Next implementation sequence:
 All17 new acceptance tests remain unproven for the unified harness. Existing
 console/introspection tests establish their previous scopes only. The earlier
 Introspection parity requirements remain active alongside this matrix.
+
+## Shared resource ownership milestone
+
+PROVEN2026-10-08: SessionScope resources share an existing native Session.
+Scopes wrap fixed getter calls/hooks and console commands/exposures, revoke their
+callbacks before cleanup, remove only their own handles and reject calls after
+close. Exposed names are removed only if their values have not been replaced by
+the user. This is cooperative lifecycle ownership for trusted mods, not isolation
+from malicious Python or revocation of arbitrary user-created aliases.
+
+ModLoader now creates one Session for enabled mods, closes it after the last
+scope is disabled, and contains second-mod enable failures without closing an
+existing mod's transport. poll() drains console/events once and pumps enabled
+mods; it handles the last mod being unloaded by a console action. The single-mod
+my_mod convenience name never replaces another mod's existing binding.
+
+All47 Python tests pass, including simultaneous registrations, failed second
+enable, stale scopes, repeated enable/disable and last-mod unload during polling.
+The live in-game Python command ran scripts/verify_live_scopes.py against PID34604:
+two scoped callbacks observed the first fixed getter call, closing the first
+left the second receiving the next call, and closing both restored the command
+set and left the original session callable. evidence/shared-scopes-live.json and
+the persistent controller log preserve the result (one/two observed events).
+
+The running introspection host was not replaced or reloaded. This live test proves
+scope resource behavior on its existing Session, not a complete multi-mod loader,
+relaunch or packaged-runtime pass. The loader changes apply to a future host
+start. Registry/settings/actions, general keybinds and both management frontends
+remain next work; no unified-menu acceptance gate is claimed by this milestone.

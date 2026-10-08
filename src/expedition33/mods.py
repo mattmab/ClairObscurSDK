@@ -1,7 +1,7 @@
 """Explicit loading of trusted local Python mods; this is not a sandbox.
 
-Each enabled mod owns a Session. This first runtime supports one enabled mod at
-a time; its own subscribers may share that session. No sys.path changes occur.
+Enabled mods own resource scopes on one loader-owned Session. Disabling one mod
+does not detach another mod's transport or console. No sys.path changes occur.
 """
 from dataclasses import dataclass
 import importlib.util
@@ -11,6 +11,7 @@ import threading
 import uuid
 
 from .sdk import Session
+from ._scope import SessionScope
 
 
 class ModError(RuntimeError):
@@ -36,6 +37,9 @@ class ModLoader:
         self.root = Path(root).resolve(strict=True)
         self._loaded = {}
         self._owner = threading.get_ident()
+        self._session = None
+        self._polling = False
+        self._disabling = set()
 
     def _check_thread(self):
         if threading.get_ident() != self._owner:
@@ -73,16 +77,19 @@ class ModLoader:
         record = self._record(name)
         if record[2] is not None:
             return
-        if any(value[2] is not None for value in self._loaded.values()):
-            raise ModError('This runtime currently supports one enabled mod at a time')
-        session = Session()
+        if self._session is None:
+            self._session = Session()
+        session = SessionScope(self._session)
         record[2] = session
         try:
             if console:
-                session.console.enable()
+                self._session.console.enable()
                 if console_key is not None:
-                    session.console.set_toggle_key(console_key)
-                session.console.expose('my_mod', record[1])
+                    self._session.console.set_toggle_key(console_key)
+                # Preserve the single-mod convenience alias without replacing
+                # another enabled mod's binding. Other modules can expose names.
+                if 'my_mod' not in self._session.console.dispatcher.namespace:
+                    session.console.expose('my_mod', record[1])
             record[1].enable(session)
         except BaseException as error:
             failure = _error('enable', error)
@@ -94,9 +101,12 @@ class ModLoader:
 
     def disable(self, name):
         record = self._record(name)
+        if name in self._disabling:
+            raise ModError('Recursive mod disable is not supported')
         session = record[2]
         if session is None:
             return
+        self._disabling.add(name)
         failure = None
         try:
             record[1].disable()
@@ -109,22 +119,51 @@ class ModLoader:
                 close_error = _error('session cleanup', error)
                 failure = ModError(f'{failure}; {close_error}') if failure else close_error
             record[2] = None
+            if not any(value[2] is not None for value in self._loaded.values()):
+                shared, self._session = self._session, None
+                try:
+                    shared.close()
+                except BaseException as error:
+                    close_error = _error('shared session cleanup', error)
+                    failure = ModError(f'{failure}; {close_error}') if failure else close_error
+            self._disabling.discard(name)
         if failure:
             raise failure from None
 
-    def poll(self, name):
-        record = self._record(name)
-        if record[2] is None:
+    def poll(self, name=None):
+        """Drain shared transport once, then poll selected/all enabled mods."""
+        self._check_thread()
+        if self._polling:
+            raise ModError('Recursive mod polling is not supported')
+        selected = tuple(self._loaded) if name is None else (name,)
+        if name is not None and self._record(name)[2] is None:
             raise ModError(f'Mod {name!r} is disabled')
-        record[2].console.poll()
-        delivered = record[2].poll()
-        callback = getattr(record[1], 'poll', None)
-        if callback is not None:
-            try:
-                callback()
-            except BaseException as error:
-                raise _error('poll', error) from None
-        return delivered
+        shared = self._session
+        if shared is None:
+            return 0
+        self._polling = True
+        try:
+            shared.console.poll()
+            # Console actions may disable the last mod and close this session.
+            if self._session is not shared:
+                return 0
+            delivered = shared.poll()
+            failures = []
+            records = [(key, self._loaded.get(key)) for key in selected]
+            for key, record in records:
+                if record is None or self._loaded.get(key) is not record or record[2] is None:
+                    continue
+                callback = getattr(record[1], 'poll', None)
+                if callback is not None:
+                    try:
+                        callback()
+                    except BaseException as error:
+                        failures.append(str(_error('poll', error)))
+            if failures:
+                raise ModError('; '.join(failures))
+            return delivered
+        finally:
+            self._polling = False
 
     def unload(self, name):
         self._check_thread()

@@ -10,7 +10,7 @@ All live results below apply only to the recorded executable fingerprint.
 | Native class/property/function metadata | Implemented and live-tested; nested struct/enum names and array element descriptors included. |
 | Property values | Stored booleans implemented and live-tested; general values and writes unsupported. |
 | Reflected calls and persistent observation | Implemented and live-tested for the fixed default Actor getter; arbitrary functions unsupported. |
-| Trivial Python mod lifecycle | Load/enable/disable/unload implemented and live-tested; one enabled mod per controller. |
+| Python mod lifecycle | Original single-mod lifecycle live-tested. Current checkout adds shared-session resource scopes; scope hooks/commands live-tested, full multi-mod loader lifecycle pending. |
 | Native Unreal console UI | Constructed and attached through verified engine paths; Tilde open/close/reopen tested. |
 | Unreal commands | Normal engine path preserved; supported diagnostic commands and CVars tested. Shipping-disabled commands remain unavailable. |
 | In-game persistent Python | `py` dispatch, imports/variables, SDK/mod calls, output, expression results and tracebacks implemented and live-tested. |
@@ -40,11 +40,15 @@ disable, or use `remove_owner(self)`. Session close clears every registration.
 Choose a mod-specific command name: registered names intentionally intercept that
 name before Unreal. Updating registrations discards already-queued SDK commands
 so they cannot reach a replacement owner. `ModLoader.enable(name, console=True)`
-exposes the enabled mod instance as `my_mod` and `ModLoader.poll(name)` services
-its console and existing observer callbacks. Standalone sessions call
+exposes the first available mod instance as `my_mod` without overwriting an existing
+binding. Use mod-specific `console.expose` names for additional mods.
+`ModLoader.poll()` drains the shared transport once and polls all enabled mods;
+`poll(name)` selects one mod's optional pump. Standalone sessions call
 `session.console.poll()` explicitly on their owning Python thread.
 
-Limits: one controller/session and one enabled mod; one-line Python,4096 UTF-16
+Current checkout: one controller/session shared by enabled mod resource scopes.
+The immutable v0.1 archive retains its original one-enabled-mod limit.
+Console limits: one-line Python,4096 UTF-16
 units per input,16 queued commands,32768 output characters. Long Python work can
 block the controller (not the game loop); queue overflow rejects new SDK commands.
 Only native commands included and enabled by this shipping build can work.
@@ -59,6 +63,15 @@ reopening were tested live. Tilde remains available. Modified key chords are
 ignored, and the extra binding ends on console detach/session close.
 No arbitrary stock Unreal layouts or missing shipping commands are supplied.
 See research/CONSOLE.md for target-specific evidence and remaining validation.
+
+In the current loader, `enable(session)` receives a mod-owned resource scope with
+find_object/call/hook/poll and scoped console registration/output methods. Disabling
+the mod removes its hooks, commands and unchanged exposed namespace bindings even
+if the mod forgets cleanup. A closed scope rejects calls; it does not close other
+mods' shared transport. The last enabled mod's cleanup closes the underlying
+session. Console attachment and toggle-key configuration belong to the controller,
+not individual mod scopes. Trusted Python references copied by a user are not
+revocable sandbox handles. Full multi-mod reload/relaunch validation is pending.
 
 This is an independently implemented, build-specific Windows x64 research SDK.
 It supports Steam build 23765773, shipping SHA256

@@ -1,0 +1,139 @@
+"""Mod-owned resources on a shared controller Session; trusted code, not a sandbox."""
+import threading
+
+
+class ScopedConsole:
+    def __init__(self, scope):
+        self._scope = scope
+        self._commands = []
+        self._exposed = {}
+
+    def register(self, name, callback, *, owner):
+        self._scope._check()
+        if owner is None or not callable(callback):
+            raise ValueError('A callback and lifecycle owner are required')
+        def guarded(arguments):
+            self._scope._check()
+            return callback(arguments)
+        handle = self._scope._session.console.register(name, guarded, owner=self)
+        self._commands.append((owner, handle))
+        return handle
+
+    def remove_owner(self, owner):
+        self._scope._check()
+        for registered_owner, handle in tuple(self._commands):
+            if registered_owner is owner:
+                handle.remove()
+                self._commands.remove((registered_owner, handle))
+
+    def expose(self, name, value):
+        self._scope._check()
+        self._scope._session.console.expose(name, value)
+        self._exposed[name] = value
+
+    def execute(self, command):
+        self._scope._check()
+        return self._scope._session.console.execute(command)
+
+    def write(self, text):
+        self._scope._check()
+        return self._scope._session.console.write(text)
+
+    def complete(self, prefix):
+        self._scope._check()
+        return self._scope._session.console.complete(prefix)
+
+    @property
+    def history(self):
+        self._scope._check()
+        return self._scope._session.console.history
+
+    def _close(self):
+        console = self._scope._session.console
+        try:
+            if self._commands:
+                console.remove_owner(self)
+        finally:
+            self._commands.clear()
+            for name, value in self._exposed.items():
+                # Preserve a user replacement made through persistent Python.
+                if console.dispatcher.namespace.get(name) is value:
+                    del console.dispatcher.namespace[name]
+            self._exposed.clear()
+
+
+class SessionScope:
+    """A mod can release its resources without closing another mod's transport.
+
+    Console attachment and toggle configuration belong to the controller. Explicit
+    supported methods avoid exposing a second independent transport lifecycle.
+    """
+    def __init__(self, session):
+        self._session = session
+        self._owner = threading.get_ident()
+        self._closed = False
+        self._hooks = []
+        self.console = ScopedConsole(self)
+
+    def _check(self):
+        if threading.get_ident() != self._owner:
+            raise RuntimeError('Mod resources require the owning Python thread')
+        if self._closed:
+            raise RuntimeError('Mod resource scope is closed')
+        self._session._check()
+
+    @property
+    def pid(self):
+        self._check()
+        return self._session.pid
+
+    def find_object(self, name):
+        self._check()
+        return self._session.find_object(name)
+
+    def call(self, obj, target):
+        self._check()
+        return self._session.call(obj, target)
+
+    def hook(self, obj, target, callback):
+        self._check()
+        if not callable(callback):
+            raise ValueError('A callback is required')
+        def guarded(context):
+            if not self._closed:
+                self._check()
+                callback(context)
+        handle = self._session.hook(obj, target, guarded)
+        self._hooks.append(handle)
+        return handle
+
+    def poll(self):
+        self._check()
+        return self._session.poll()
+
+    @property
+    def failures(self):
+        self._check()
+        return self._session.failures
+
+    def close(self):
+        if threading.get_ident() != self._owner:
+            raise RuntimeError('Mod cleanup requires the owning Python thread')
+        if self._closed:
+            return
+        # Revoke callback access before any transport operation can fail.
+        self._closed = True
+        errors = []
+        for hook in reversed(self._hooks):
+            try:
+                hook.remove()
+            except BaseException as error:
+                errors.append(type(error).__name__)
+        self._hooks.clear()
+        try:
+            self.console._close()
+        except BaseException as error:
+            errors.append(type(error).__name__)
+        self._session = None
+        if errors:
+            raise RuntimeError('Mod resource cleanup failed: ' + ', '.join(errors))

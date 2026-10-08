@@ -7,17 +7,25 @@ from unittest.mock import patch
 import weakref
 from types import SimpleNamespace
 from expedition33.mods import ModLoader, ModError
+from expedition33._console_dispatch import CommandDispatcher
 
 
 class FakeSession:
     instances = []
     def __init__(self):
         self.closed = False
-        self.console = SimpleNamespace(poll=lambda: ())
+        dispatcher = CommandDispatcher(self, lambda _: None)
+        self.console = SimpleNamespace(poll=lambda: (), dispatcher=dispatcher,
+            register=dispatcher.register, remove_owner=dispatcher.remove_owner,
+            expose=lambda name, value: dispatcher.namespace.__setitem__(name, value),
+            enable=lambda: None, set_toggle_key=lambda key: None)
         self.instances.append(self)
+    def _check(self):
+        if self.closed: raise RuntimeError('closed')
     def poll(self): return 0
     def close(self):
         self.closed = True
+        self.console.dispatcher.close()
 
 
 class ModTests(unittest.TestCase):
@@ -71,6 +79,47 @@ class ModTests(unittest.TestCase):
             with self.assertRaisesRegex(ModError, 'poll failed: SystemExit'):
                 loader.poll('Specimen')
         self.assertTrue(FakeSession.instances[0].closed)
+
+    def test_two_mods_share_session_and_cleanup_owned_commands(self):
+        self.source('class Mod:\n def enable(self, session):\n  self.session=session\n  session.console.register("first", lambda _: "one", owner=self)\n def disable(self): pass\n')
+        other = self.root / 'Other'; other.mkdir()
+        (other / 'mod.py').write_text('class Mod:\n def enable(self, session):\n  self.session=session\n  session.console.register("second", lambda _: "two", owner=self)\n def disable(self): pass\n')
+        with ModLoader(self.root) as loader:
+            for name in ('Specimen', 'Other'):
+                loader.load(name); loader.enable(name, console=True)
+            self.assertEqual(len(FakeSession.instances), 1)
+            shared = FakeSession.instances[0]
+            stale = loader._loaded['Specimen'][2]
+            first_mod = loader._loaded['Specimen'][1]
+            self.assertIs(shared.console.dispatcher.namespace['my_mod'], first_mod)
+            loader.disable('Specimen')
+            self.assertFalse(shared.closed)
+            self.assertEqual(shared.console.dispatcher.command_names, ('second',))
+            self.assertNotIn('my_mod', shared.console.dispatcher.namespace)
+            with self.assertRaisesRegex(RuntimeError, 'scope is closed'): stale.poll()
+            self.assertEqual(shared.console.dispatcher.execute('second').output.strip(), "'two'")
+            loader.enable('Specimen', console=True)
+            self.assertEqual(set(shared.console.dispatcher.command_names), {'first','second'})
+            loader.unload('Specimen'); loader.unload('Other')
+            self.assertTrue(shared.closed)
+
+    def test_console_callback_can_unload_last_mod_during_poll(self):
+        self.source('class Mod:\n def enable(self, session): pass\n def disable(self): pass\n')
+        with ModLoader(self.root) as loader:
+            loader.load('Specimen'); loader.enable('Specimen')
+            FakeSession.instances[0].console.poll = lambda: loader.unload('Specimen')
+            self.assertEqual(loader.poll(), 0)
+
+    def test_failed_second_enable_preserves_first_session(self):
+        self.source('class Mod:\n def enable(self, session): pass\n def disable(self): pass\n')
+        other = self.root / 'Other'; other.mkdir()
+        (other / 'mod.py').write_text('class Mod:\n def enable(self, session): raise SystemExit("second")\n def disable(self): pass\n')
+        with ModLoader(self.root) as loader:
+            loader.load('Specimen'); loader.enable('Specimen')
+            loader.load('Other')
+            with self.assertRaises(ModError): loader.enable('Other')
+            self.assertFalse(FakeSession.instances[0].closed)
+            self.assertTrue(loader.status()[0].enabled)
 
 
 if __name__ == '__main__':
