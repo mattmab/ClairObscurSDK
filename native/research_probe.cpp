@@ -60,6 +60,19 @@ std::string sha256(const std::vector<uint8_t>& bytes) {
     return out.str();
 }
 
+std::vector<uint8_t> supported_image(const std::filesystem::path& path) {
+    std::ifstream file(path, std::ios::binary | std::ios::ate);
+    require(bool(file), "MODULE_FILE_OPEN_FAILED");
+    require(file.tellg() == 162421568, "UNSUPPORTED_BUILD_SIZE");
+    std::vector<uint8_t> image(162421568); file.seekg(0);
+    file.read(reinterpret_cast<char*>(image.data()), image.size());
+    require(bool(file), "MODULE_FILE_READ_FAILED");
+    const auto fingerprint = sha256(image);
+    require(fingerprint == "218a2478aad5b3a1674b5d7097ec1ac4f994abb95466f9da1407fcd39d639618",
+            "UNSUPPORTED_BUILD_SHA256=" + fingerprint);
+    return image;
+}
+
 struct Reader {
     HANDLE process;
     void read(uint64_t address, void* target, size_t size) const {
@@ -159,6 +172,12 @@ std::string read_name(const Reader& reader, uint64_t pool, uint32_t id, uint32_t
 
 int main(int argc, char** argv) {
     try {
+        if (argc == 3 && std::string(argv[1]) == "--check-image") {
+            // Exactly the startup fingerprint gate, without finding/attaching a process.
+            supported_image(std::filesystem::path(argv[2]));
+            std::cout << "{\"event\":\"build_supported\"}\n";
+            return 0;
+        }
         uint32_t limit = 32;
         std::string reflect_class;
         std::string bool_object;
@@ -192,15 +211,8 @@ int main(int argc, char** argv) {
         MODULEENTRY32W module{}; module.dwSize = sizeof(module);
         require(Module32FirstW(snapshot.value, &module) != FALSE, "MODULE_NOT_FOUND");
         require(_wcsicmp(module.szModule, L"SandFall-Win64-Shipping.exe") == 0, "UNEXPECTED_MAIN_MODULE");
-        std::ifstream file(std::filesystem::path(module.szExePath), std::ios::binary | std::ios::ate);
-        require(bool(file), "MODULE_FILE_OPEN_FAILED");
-        require(file.tellg() == 162421568, "UNSUPPORTED_BUILD_SIZE");
-        std::vector<uint8_t> image(162421568); file.seekg(0);
-        file.read(reinterpret_cast<char*>(image.data()), image.size());
-        require(bool(file), "MODULE_FILE_READ_FAILED");
-        const auto fingerprint = sha256(image);
-        require(fingerprint == "218a2478aad5b3a1674b5d7097ec1ac4f994abb95466f9da1407fcd39d639618",
-                "UNSUPPORTED_BUILD_SHA256=" + fingerprint);
+        auto image = supported_image(std::filesystem::path(module.szExePath));
+        const std::string fingerprint = "218a2478aad5b3a1674b5d7097ec1ac4f994abb95466f9da1407fcd39d639618";
         auto registry = resolve_anchor(image, "48 8d 0d ?? ?? ?? ?? 48 8b d7 89 5c 24 20 44 8d 4b ff e8 ?? ?? ?? ?? 48 8b cf");
         auto names = resolve_anchor(image, "4c 8d 05 ?? ?? ?? ?? eb 16 48 8d 0d ?? ?? ?? ?? e8 ?? ?? ?? ?? 4c 8b c0 c6 05 ?? ?? ?? ?? 01 8b d3 0f b7 c3 c1 ea 10 89 44 24 44 89 54 24 40");
         require(registry.global_rva == 0x9361b60 && names.global_rva == 0x92aadc0,

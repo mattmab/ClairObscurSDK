@@ -3,6 +3,7 @@
 
 struct RuntimeSessionController {
     HANDLE mapping = nullptr;
+    HANDLE target_process = nullptr;
     SessionPacket* packet = nullptr;
     HMODULE module = nullptr;
     HHOOK bootstrap = nullptr;
@@ -18,8 +19,10 @@ struct RuntimeSessionController {
         if (module) FreeLibrary(module);
         if (packet) UnmapViewOfFile(packet);
         if (mapping) CloseHandle(mapping);
+        if (target_process) CloseHandle(target_process);
     }
     void command(DWORD action) {
+        require(target_process && WaitForSingleObject(target_process, 0) == WAIT_TIMEOUT, "SESSION_TARGET_EXITED");
         require(!InterlockedCompareExchange(&packet->closed, 0, 0), "SESSION_ALREADY_CLOSED");
         packet->request.action = action; packet->request.error = 0;
         InterlockedExchange(&packet->request.state, kRequested);
@@ -36,6 +39,8 @@ struct RuntimeSessionController {
 inline void run_runtime_session(DWORD pid, DWORD thread, int32_t object_index, int32_t object_serial,
                                 int32_t function_index, int32_t function_serial) {
     RuntimeSessionController connection; connection.tid = thread;
+    connection.target_process = OpenProcess(SYNCHRONIZE, FALSE, pid);
+    require(connection.target_process != nullptr, "SESSION_TARGET_HANDLE_FAILED");
     require(BCryptGenRandom(nullptr, reinterpret_cast<PUCHAR>(&connection.nonce), sizeof(connection.nonce), BCRYPT_USE_SYSTEM_PREFERRED_RNG) >= 0,
             "SESSION_RANDOM_FAILED");
     wchar_t name[96]; session_mapping_name(name, connection.controller, connection.nonce);
