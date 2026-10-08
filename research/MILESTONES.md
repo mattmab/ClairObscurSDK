@@ -12,12 +12,12 @@ Stages 0-2 are established; the object/name subset and first live Python capston
 
 Record source or command, artifact path, game fingerprint, confidence, and reproduction steps with each finding. Reference SDK behavior is not target-game evidence.
 
-## Current state: 9/12 frontier (fixed reflected invocation proven; Ghidra OOM recovery pending)
+## Current state: 9/12 frontier (fixed reflected invocation proven; analysis resumed with 32 GB heap)
 
 0. Environment inventoried — D: tree and installed apps inspected; MSVC 14.44.35207 and Windows SDK 10.0.26100.0 installed; x64 fixture compilation and execution proven.
 1. Target game/build fingerprinted — SHA256, x64 PE headers, local Steam build identified.
 2. Ghidra MCP operational — proven by fixture import, metadata/function queries, decompilation, and exact annotation persistence after save/close/reopen. See GHIDRA_MCP.md.
-3. Expedition 33 binary analyzed — shipping copy imported; whole-image autoanalysis failed with a 16 GB Java heap exhaustion. Recovery is pending; relevant object/name routines and runtime evidence are recorded separately.
+3. Expedition 33 binary analyzed — whole-image autoanalysis failed with a 16 GB heap exhaustion. Restarted with 32 GB after user stopped the old process; saved program reopened and anchor annotations/getter boundaries restored and saved. Whole-image analysis is running again, not complete.
 4. Unreal runtime anchors: object registry and name pool proven; dispatcher and GameThread ID corroborated; world/engine and other anchors pending.
 5. Name/object infrastructure: chunk traversal, identity fields, name decoding proven; GC lifetime and broader reflection remain pending.
 6. Native live enumeration: PROVEN with our read-only external process reader.

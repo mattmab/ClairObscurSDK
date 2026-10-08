@@ -6,7 +6,7 @@ Evidence labels: OBSERVED = directly seen; PROVEN = reproduced with a stated tes
 
 ## Status
 
-Fixture persistence was proven and game runtime findings were obtained. Current backend is stalled after whole-image analysis exhausted its 16 GB heap; recovery is pending. See the dated recovery entry below and the runtime journals for already-proven layouts.
+Fixture persistence was proven and game runtime findings were obtained. Backend recovered after a 16 GB heap exhaustion; whole-image analysis restarted with 32 GB. See the dated recovery entries below and the runtime journals for already-proven layouts.
 
 ## Evidence discipline
 
@@ -71,4 +71,12 @@ OBSERVED: application.log at 15:18:56-15:19:01 reports Java heap space OutOfMemo
 Preservation: copied the .gpr/.rep into D:/HobbyDevelopment/Analysis/ClairObscurSDK/recovery-20261008-oom while the process remained open. This diagnostic copy is not claimed transaction-consistent. jcmd 21416 GC.heap_dump -all -gz=1 completed successfully in 77.721 seconds, producing ghidra21416.hprof.gz (9,024,382,398 bytes). The heap snapshot is diagnostic evidence, not a directly reopenable Ghidra project. Log and thread dumps: evidence/ghidra-oom-20261008.log, ghidra-oom-threads.txt, ghidra-after-save-threads.txt.
 
 User approval requested before terminating the stuck process, because unsaved analysis may need rerunning. No termination performed as of this entry. scripts/launch-ghidra.ps1 is prepared for a 32 GB heap and rejects a duplicate running Ghidra instance; its actual launch/recovery remains untested. Machine has approximately 64 GB RAM. Runtime enumeration, reflected invocation and their evidence remain independent of this analysis failure.
+
+## Recovery completed; analysis restarted
+
+PROVEN: user manually stopped the old Ghidra and explicitly requested restart. scripts/launch-ghidra.ps1 launched new JVM PID37224; jcmd VM.flags reports MaxHeapSize=34359738368. Existing project reopened through Computer Use. CodeBrowser prompted for its installed MCP plugin; enabled it and saved the tool configuration through File > Save Tool.
+
+MCP get_metadata succeeded: shipping program retained 288,587 functions and 290,527 symbols. This is fewer than the last pre-failure count; the unsaved analysis did not all survive. Replayed the preserved registry/name/dispatcher annotations and recreated runtime-validated getter boundaries at 14333be80 (31 bytes) and 143339a70 (32 bytes). save_program returned saved=true after both batches. Evidence: mcp-recovered-shipping-metadata.json, recovery-annotate-*.json, recovery-anchors-saved.json, recovery-*-thunk.json and recovery-thunks-saved.json under evidence/.
+
+Computer Use reviewed standard x64 analysis defaults (Decompiler Parameter ID and aggressive instruction finder off), then clicked Analyze. MCP analysis_status reported analyzing=true and 290,732 functions in recovery-analysis-started.json. Its analyzed=true flag alone is not completion evidence while analyzing=true. Full analysis still needs completion and a verified save.
 
