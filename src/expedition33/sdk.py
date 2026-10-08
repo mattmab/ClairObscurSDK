@@ -65,6 +65,12 @@ class Session:
         if self._closed:
             raise RuntimeQueryError('SDK session is closed')
 
+    @property
+    def pid(self):
+        """Process identity established by this session's native handshake."""
+        self._check()
+        return self._object.pid
+
     def find_object(self, name):
         self._check()
         matches = [obj for obj in objects() if obj.pid == self._object.pid and obj.name == name]

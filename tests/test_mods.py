@@ -5,6 +5,7 @@ import tempfile
 import unittest
 from unittest.mock import patch
 import weakref
+from types import SimpleNamespace
 from expedition33.mods import ModLoader, ModError
 
 
@@ -12,7 +13,9 @@ class FakeSession:
     instances = []
     def __init__(self):
         self.closed = False
+        self.console = SimpleNamespace(poll=lambda: ())
         self.instances.append(self)
+    def poll(self): return 0
     def close(self):
         self.closed = True
 
@@ -60,6 +63,14 @@ class ModTests(unittest.TestCase):
                 loader.load('Specimen')
             self.assertFalse(any(key.startswith('_expedition33_mod_') for key in set(sys.modules) - before))
             self.assertEqual(loader.status(), ())
+
+    def test_owner_poll_exception_is_contained_and_cleanup_runs(self):
+        self.source('class Mod:\n def enable(self, session): pass\n def poll(self): raise SystemExit("pump")\n def disable(self): pass\n')
+        with ModLoader(self.root) as loader:
+            loader.load('Specimen'); loader.enable('Specimen')
+            with self.assertRaisesRegex(ModError, 'poll failed: SystemExit'):
+                loader.poll('Specimen')
+        self.assertTrue(FakeSession.instances[0].closed)
 
 
 if __name__ == '__main__':

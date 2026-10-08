@@ -171,3 +171,45 @@ transport, not this external reader.
 Next: finish type-reference metadata and safe reflected value reads, then adapt
 inspect/snapshot/diff; file service and agent operations; writes/invocation/traces;
 retained values, reload, full UI/exit/relaunch and packaging validation.
+
+## Local-file protocol port
+
+PROVEN 2026-10-08: the original client/protocol is now adapted to the external
+SDK controller. Start `launch.cmd introspection --console-key F10`, then from a
+second terminal use the existing D: Python environment:
+
+```text
+python scripts/e33_introspect.py status
+python scripts/e33_introspect.py roots
+python scripts/e33_introspect.py schema --class Actor --limit 20
+python scripts/e33_introspect.py request request.json
+```
+
+The client remains standard-library-only and retains `send(request, data,
+timeout)`, stdin request support, original response keys, UUIDs, session/expiry
+checks and no automatic mutation retries. Default data is
+`settings/E33Introspection`. Requests are atomically claimed as `.processing`;
+crash leftovers are never replayed or overwritten by a duplicate ID. Responses
+remain as local evidence. Request/response limits are 64/256 KiB, including the
+final response envelope. Settings and logs are excluded from Git/package payloads.
+
+`FileService` adapts the original entry-point pump. `ModLoader.poll` now supports
+an optional mod-owned `poll()` on the Python owner thread, with BaseException
+containment and existing deterministic session cleanup. No BL4 camera hook or new
+socket is installed. Heartbeats identify controller and target PIDs separately;
+they do not claim that Python runs on GameThread. Normal unload disables the
+heartbeat; unexpected process death leaves it stale and clients reject it after
+five seconds. Engine-facing work remains subject to existing native scheduling.
+
+`scripts/verify_live_introspection_service.py` ran an isolated 25-second host
+(PID12964) against game PID34604. A separate client completed status, roots,
+Actor schema, invalid-operation rejection and a subsequent status in the same
+session. Host exit was zero; enabled=false persisted and no claims remained.
+Evidence: `evidence/introspection-file-service-live.json` and host log. An initial
+verifier run incorrectly compared a Windows venv-launcher PID with its child
+controller PID; it was corrected to launch the same installed base interpreter
+directly. That failed verifier is not counted as a protocol pass.
+
+38 Python tests pass, including seven protocol tests and mod-poll exception
+cleanup. The protocol is working for currently ported read operations; mutations,
+agent actions, retained values and full gameplay/relaunch parity are still pending.

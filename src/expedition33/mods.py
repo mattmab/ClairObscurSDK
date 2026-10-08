@@ -117,7 +117,14 @@ class ModLoader:
         if record[2] is None:
             raise ModError(f'Mod {name!r} is disabled')
         record[2].console.poll()
-        return record[2].poll()
+        delivered = record[2].poll()
+        callback = getattr(record[1], 'poll', None)
+        if callback is not None:
+            try:
+                callback()
+            except BaseException as error:
+                raise _error('poll', error) from None
+        return delivered
 
     def unload(self, name):
         self._check_thread()
