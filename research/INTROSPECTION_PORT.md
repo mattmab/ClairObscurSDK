@@ -1,6 +1,6 @@
 # BL4 Introspection Harness port
 
-Status: source audit complete; first catalog primitive validated. No Expedition 33
+Status: original roots/search and initial schema port live-validated. No Expedition 33
 harness parity is claimed yet. Updated 2026-10-08.
 
 ## Original and provenance
@@ -115,3 +115,59 @@ regressions. `scripts/verify_live_catalog.py` reproduces live evidence in
 `evidence/introspection-catalog-live.json`. Catalogs are external observations,
 not GC-atomic snapshots or owning references; native operations must still
 revalidate before access. No engine writes or new injected hooks were introduced.
+
+## Original core integration and initial schema
+
+The original `core.py` is copied unchanged into `src/expedition33/introspection`,
+with its MIT license. Normalized source SHA256 is
+`6c043cb1664e71daa6a6b3a50f9d04f284854101d071ac0b21ce18b1469fe543`.
+`Harness` supplies a compatibility adapter, keeping the original roots/search/
+schema logic, pagination, result keys and bounds. Status explicitly reports
+supported operations separately from original operations and parity_complete=false.
+
+PROVEN static target path semantics: live reflection identifies GetPathName thunk
+14384f9c0, which calls 1413b2910 and recursive 1413b2aa0. Separator is ':' when the
+outer is not Package and its outer is Package; otherwise '.'. Package getter
+1413400c0 registers /Script/CoreUObject.Package. Ghidra outputs are preserved in
+`evidence/introspection-path-*.json`. Paths were reconstructed from live ownership
+chains and resolved back to their identities; direct engine-return comparison is
+still untested. No stock offset/path implementation was imported.
+
+The reusable `expedition33.reflection.describe(catalog, observations)` batches
+identity-selected UStruct metadata. Native checks process, index/serial/address,
+registered UStruct ancestry, property ownership/extents and stable headers. It
+supports generated classes, ScriptStruct and Function observations. Properties
+include flags, owner identity and verified struct/enum descriptor identities.
+UserDefinedStruct/Enum subclasses required replacing exact native-class equality
+with verified registered superclass membership. Return values remain metadata,
+not callable pointers or owning native handles.
+
+PROVEN initial live schema: BP_jRPG_Controller_MainMenu_C yielded 20 properties
+and 20 functions with inherited owners and parameter flags, in approximately
+3.3 seconds. Function candidates come from registered reflected Functions owned
+by each class, ordered by registry identity; this differs from the original
+SDK's UField linked-list order but retains deduplication and paging behavior.
+Object-class, map/set and delegate reference descriptors are still missing.
+The original native-class reflection verifier still passes (Actor 80 fields,
+HUD 96, Object zero). Thirty Python regression tests pass.
+
+Development use: `launch.cmd introspection --console-key F10`, then `e33i.status`,
+`e33i.roots`, or `e33i.request {"op":"schema","class":"Actor","limit":10}`.
+Persistent Python access: `py introspection.request({"op":"roots"})`.
+Two live mod load/enable/disable/unload cycles passed with native console attached.
+Actual typing of these new commands in the UI remains untested. This is source
+development functionality, not a new parity-complete release. The existing v0.1
+archive is unchanged. `scripts/verify_live_introspection.py` preserves live results.
+
+Further live checks passed: follow the controller's Rotator reference into a
+ScriptStruct schema (Pitch/Yaw/Roll, all DoubleProperty); reject an intentionally
+wrong serial before metadata access; reject an ordinary controller object as a
+UStruct. These tests do not imply any value-write capability. The unchanged
+original core's game-thread docstring describes its BL4 host; the E33 adapter
+executes on the external Python owner thread and only performs read-only queries
+at this stage. Future engine-facing mutations must use the native game-thread
+transport, not this external reader.
+
+Next: finish type-reference metadata and safe reflected value reads, then adapt
+inspect/snapshot/diff; file service and agent operations; writes/invocation/traces;
+retained values, reload, full UI/exit/relaunch and packaging validation.

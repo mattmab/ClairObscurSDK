@@ -20,6 +20,7 @@ name = 'expedition33-0.1.0-' + ('private-' if args.release else 'candidate-') + 
 destination = root / 'dist' / name
 destination.mkdir(parents=True, exist_ok=False)
 files = [root / 'README.md', root / 'DEVELOPMENT.md', root / 'launch.cmd', root / 'pyproject.toml']
+files.append(root / 'src/expedition33/introspection/LICENSE')
 for directory, pattern in [('src', '*.py'), ('mods', '*.py'), ('scripts', '*.py'), ('scripts', '*.cmd'),
                             ('scripts', '*.ps1'), ('native', '*.h'), ('native', '*.cpp'), ('tests', '*.py'), ('research', '*.md')]:
     files.extend((root / directory).rglob(pattern))

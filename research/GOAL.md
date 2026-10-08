@@ -14,6 +14,14 @@ Record source or command, artifact path, game fingerprint, confidence, and repro
 
 ## Active goal and scope
 
+NEXT ACTIVE GOAL (2026-10-08): port the user's actual BL4 Introspection Harness,
+preserving its capabilities wherever technically achievable. Original source has
+been located and audited; the unchanged core now supports live roots/search and
+initial schema through an E33 adapter. Full parity is unfinished. Follow
+INTROSPECTION_PORT.md for the feature inventory, SDK extension plan and evidence.
+The completed private v0.1 checkpoint below is the foundation, not completion of
+this new development goal.
+
 USER REQUIREMENT: Build an independent Python SDK for locally owned/offline Expedition 33. First capstone: our Python code enumerates real live objects through our independently validated native runtime layer. Static dumps, asset lists, and hard-coded names cannot satisfy it.
 
 USER REQUIREMENT: Follow stages 0-12 in MILESTONES.md; no gameplay features first; no DRM/anti-cheat/authentication bypass; no public push or release. All new project material lives on D:. Existing installed tools may be reused.

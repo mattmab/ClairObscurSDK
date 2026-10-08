@@ -1,6 +1,7 @@
 evidence/
 build/
 dist/
+logs/
 .venv/
 __pycache__/
 *.pyc

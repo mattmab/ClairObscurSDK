@@ -1,5 +1,11 @@
 # Expedition 33 independent Python SDK research
 
+Current development: porting the actual BL4 Introspection Harness. Live roots,
+search and initial generated-class/function/struct schema are working through the
+original core; value inspection and the remaining operations are still in progress.
+See [the port inventory](research/INTROSPECTION_PORT.md). This work does not change
+the previously packaged private v0.1 archive.
+
 Status: **live Python object enumeration and interactive in-game Python work**. The independently derived runtime also supports native class and nested type metadata, stored boolean reads, a fixed game-thread reflected invocation, persistent removable observation with Python callbacks, and a trivial mod lifecycle. General calls and object ownership remain limited; this is the private v0.1 development SDK. The reduced whole-image Ghidra pass completed, saved, and reopened successfully; known analyzer warnings are documented.
 
 Primary goal: independently discover the local game's Unreal runtime and build a

@@ -32,7 +32,7 @@ if not Path(expedition33.__file__).resolve().is_relative_to(ROOT):
 
 def main():
     parser = argparse.ArgumentParser(description='Expedition 33 development SDK')
-    parser.add_argument('command', choices=['objects', 'example', 'smoke', 'console'])
+    parser.add_argument('command', choices=['objects', 'example', 'smoke', 'console', 'introspection'])
     parser.add_argument('--seconds', type=float, default=0, help='Console duration; 0 runs until Ctrl+C')
     parser.add_argument('--console-key', choices=[f'F{i}' for i in range(1, 13)], help='Optional additional console toggle')
     args = parser.parse_args()
@@ -42,19 +42,23 @@ def main():
         handlers=[logging.StreamHandler(), RotatingFileHandler(log_dir / 'sdk.log', maxBytes=2_000_000, backupCount=3, encoding='utf-8')])
     log = logging.getLogger('expedition33.launcher')
     try:
-        if args.command == 'console':
+        if args.command in ('console', 'introspection'):
+            mod_name = 'IntrospectionHarness' if args.command == 'introspection' else 'ConsoleExample'
             with ModLoader(ROOT / 'mods') as loader:
-                loader.load('ConsoleExample')
-                loader.enable('ConsoleExample', console=True, console_key=args.console_key)
-                log.info('Native console ready. Press Tilde; use py help(), py my_mod.some_function(), or sdk.hello. Ctrl+C stops the controller.')
+                loader.load(mod_name)
+                loader.enable(mod_name, console=True, console_key=args.console_key)
+                if args.command == 'introspection':
+                    log.info('Introspection stage 1 ready: e33i.status, e33i.roots, e33i.request JSON, or py introspection.request(...). Ctrl+C stops the controller.')
+                else:
+                    log.info('Native console ready. Press Tilde; use py help(), py my_mod.some_function(), or sdk.hello. Ctrl+C stops the controller.')
                 deadline = time.monotonic() + args.seconds if args.seconds > 0 else float('inf')
                 try:
                     while time.monotonic() < deadline:
-                        loader.poll('ConsoleExample')
+                        loader.poll(mod_name)
                         time.sleep(.05)
                 except KeyboardInterrupt:
                     log.info('Closing console session')
-            log.info('ConsoleExample unloaded and console detached')
+            log.info('%s unloaded and console detached', mod_name)
         if args.command in ('objects', 'smoke'):
             observed = expedition33.objects()
             if not observed:

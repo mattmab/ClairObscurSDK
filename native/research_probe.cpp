@@ -184,6 +184,8 @@ int main(int argc, char** argv) {
         std::string reflect_class;
         std::string bool_object;
         std::string function_owner, function_name;
+        DWORD descriptor_pid = 0;
+        std::unordered_map<int32_t, std::pair<int32_t, uint64_t>> descriptors;
         bool thread_ping = argc == 2 && std::string(argv[1]) == "--thread-ping";
         bool invoke_proof = argc == 2 && std::string(argv[1]) == "--invoke-proof";
         bool observe_proof = argc == 2 && std::string(argv[1]) == "--observe-proof";
@@ -206,9 +208,25 @@ int main(int argc, char** argv) {
                     "FUNCTION_NAME_REQUIRES_OWNER_DOT_NAME");
             function_owner = qualified.substr(0, dot); function_name = qualified.substr(dot + 1); limit = 0;
         }
+        else if (argc == 4 && std::string(argv[1]) == "--describe") {
+            descriptor_pid = std::stoul(argv[2]);
+            std::istringstream tokens(argv[3]); std::string token;
+            while (std::getline(tokens, token, ',')) {
+                auto first = token.find(':'), last = token.rfind(':');
+                require(first != std::string::npos && last > first, "DESCRIPTOR_SELECTOR_INVALID");
+                const auto index = std::stoi(token.substr(0, first));
+                const auto serial = std::stoi(token.substr(first + 1, last - first - 1));
+                const auto address = std::stoull(token.substr(last + 1), nullptr, 16);
+                require(index >= 0 && descriptors.size() < 1024 &&
+                        descriptors.emplace(index, std::make_pair(serial, address)).second,
+                        "DESCRIPTOR_SELECTOR_DUPLICATE_OR_LIMIT");
+            }
+            require(!descriptors.empty(), "DESCRIPTOR_SELECTORS_EMPTY"); limit = 0;
+        }
         else require(argc == 1 || catalog || thread_ping || invoke_proof || observe_proof || runtime_session || console_construction, "USAGE: research_probe.exe [--catalog | --limit N | --reflect-class NAME | --read-bools OBJECT | --reflect-function OWNER.NAME | --thread-ping | --invoke-proof | --observe-proof | --session]");
-        const bool reflection = !reflect_class.empty() || !bool_object.empty() || !function_name.empty();
+        const bool reflection = !reflect_class.empty() || !bool_object.empty() || !function_name.empty() || !descriptors.empty();
         DWORD pid = discover_process();
+        require(descriptors.empty() || pid == descriptor_pid, "DESCRIPTOR_PROCESS_CHANGED");
         Handle process(OpenProcess(PROCESS_VM_READ | PROCESS_QUERY_LIMITED_INFORMATION, FALSE, pid));
         require(process.value != nullptr, "OPEN_PROCESS_FAILED win32=" + std::to_string(GetLastError()));
         Handle snapshot(CreateToolhelp32Snapshot(TH32CS_SNAPMODULE | TH32CS_SNAPMODULE32, pid));
@@ -265,6 +283,29 @@ int main(int argc, char** argv) {
             return 0;
         }
         uint32_t emitted = 0, null_slots = 0, changing_slots = 0;
+        auto derives_from_core_type = [&](uint64_t type, const std::string& wanted) {
+            std::unordered_set<uint64_t> seen;
+            bool found = false;
+            while (type) {
+                require(seen.size() < 128 && seen.insert(type).second, "TYPE_CHAIN_CYCLE_OR_LIMIT");
+                const auto header = reader.get<ObjectHeader>(type);
+                const auto slot = item_at(header.index);
+                require(slot.object == type, "TYPE_NOT_REGISTERED");
+                if (read_name(reader, pool, header.name_id, header.name_number) == wanted && header.outer) {
+                    const auto package = reader.get<ObjectHeader>(header.outer);
+                    require(item_at(package.index).object == header.outer, "TYPE_PACKAGE_NOT_REGISTERED");
+                    found |= read_name(reader, pool, package.name_id, package.name_number) == "/Script/CoreUObject";
+                }
+                const auto parent = reader.get<uint64_t>(type + 0x40);
+                const auto again = reader.get<ObjectHeader>(type);
+                const auto slot_again = item_at(header.index);
+                require(std::memcmp(&header, &again, sizeof(header)) == 0 &&
+                        slot_again.object == type && slot_again.serial == slot.serial &&
+                        reader.get<uint64_t>(type + 0x40) == parent, "TYPE_CHAIN_CHANGED");
+                type = parent;
+            }
+            return found;
+        };
         // UObject.Class and UStruct.SuperStruct are independently established for
         // this image. Record registered identities, not borrowed native handles.
         std::unordered_map<uint64_t, bool> catalog_classes;
@@ -305,7 +346,13 @@ int main(int argc, char** argv) {
             return is_metaclass;
         };
         for (int32_t i = 0; i < array.num_elements && (!limit || emitted < limit); ++i) {
+            if (!descriptors.empty() && descriptors.find(i) == descriptors.end()) continue;
             auto item = item_at(i);
+            if (!descriptors.empty()) {
+                const auto expected = descriptors.at(i);
+                require(item.serial == expected.first && item.object == expected.second,
+                        "DESCRIPTOR_IDENTITY_CHANGED");
+            }
             if (!item.object) { ++null_slots; continue; }
             auto object = reader.get<ObjectHeader>(item.object);
             if (object.index != i || !object.cls) { ++changing_slots; continue; }
@@ -316,6 +363,35 @@ int main(int argc, char** argv) {
             auto name = read_name(reader, pool, object.name_id, object.name_number);
             auto class_name = read_name(reader, pool, cls.name_id, cls.name_number);
             auto meta_name = read_name(reader, pool, meta.name_id, meta.name_number);
+            bool descriptor_function = false;
+            if (!descriptors.empty()) {
+                // Validate UStruct membership through the observed metaclass chain;
+                // never reinterpret arbitrary UObject bytes as reflection metadata.
+                std::unordered_set<uint64_t> seen_types;
+                bool is_struct = false;
+                for (uint64_t type = object.cls; type;) {
+                    require(seen_types.size() < 128 && seen_types.insert(type).second,
+                            "DESCRIPTOR_TYPE_CYCLE_OR_LIMIT");
+                    const auto header = reader.get<ObjectHeader>(type);
+                    const auto slot = item_at(header.index);
+                    require(slot.object == type, "DESCRIPTOR_TYPE_NOT_REGISTERED");
+                    const auto type_name = read_name(reader, pool, header.name_id, header.name_number);
+                    if (header.outer && (type_name == "Struct" || type_name == "Function")) {
+                        const auto package = reader.get<ObjectHeader>(header.outer);
+                        require(item_at(package.index).object == header.outer, "DESCRIPTOR_PACKAGE_NOT_REGISTERED");
+                        if (read_name(reader, pool, package.name_id, package.name_number) == "/Script/CoreUObject") {
+                            is_struct |= type_name == "Struct";
+                            descriptor_function |= type_name == "Function";
+                        }
+                    }
+                    const auto parent = reader.get<uint64_t>(type + 0x40);
+                    const auto again = reader.get<ObjectHeader>(type);
+                    require(std::memcmp(&header, &again, sizeof(header)) == 0 &&
+                            item_at(header.index).serial == slot.serial, "DESCRIPTOR_TYPE_CHANGED");
+                    type = parent;
+                }
+                require(is_struct, "DESCRIPTOR_TARGET_NOT_STRUCT");
+            }
             int32_t outer_index = -1, outer_serial = 0;
             if (catalog) {
                 if (record_class(object.cls)) record_class(item.object);
@@ -348,7 +424,7 @@ int main(int argc, char** argv) {
                 if (read_name(reader, pool, outer.name_id, outer.name_number) != function_owner) continue;
             }
             if (!bool_object.empty()) require(meta_name == "Class", "NATIVE_OBJECT_REQUIRED");
-            if (reflection) require(emitted == 0, "AMBIGUOUS_QUERY_NAME");
+            if (reflection && descriptors.empty()) require(emitted == 0, "AMBIGUOUS_QUERY_NAME");
             auto again = item_at(i);
             auto object_again = reader.get<ObjectHeader>(item.object);
             if (again.object != item.object || again.serial != item.serial ||
@@ -371,13 +447,19 @@ int main(int argc, char** argv) {
             }
             std::cout << "}\n";
             ++emitted;
-            if (!function_name.empty()) {
+            if (!function_name.empty() || descriptor_function) {
+                auto reported_owner = function_owner;
+                if (descriptor_function) {
+                    const auto outer = reader.get<ObjectHeader>(object.outer);
+                    require(item_at(outer.index).object == object.outer, "FUNCTION_OWNER_NOT_REGISTERED");
+                    reported_owner = read_name(reader, pool, outer.name_id, outer.name_number);
+                }
                 uint32_t flags = reader.get<uint32_t>(item.object + 0xb0);
                 uint16_t params_size = reader.get<uint16_t>(item.object + 0xb6);
                 uint16_t return_offset = reader.get<uint16_t>(item.object + 0xb8);
                 uint64_t entry = reader.get<uint64_t>(item.object + 0xd8);
                 require(entry >= base && entry < base + module.modBaseSize, "FUNCTION_ENTRY_OUTSIDE_MODULE");
-                std::cout << "{\"event\":\"function_metadata\",\"owner\":" << quote(function_owner)
+                std::cout << "{\"event\":\"function_metadata\",\"owner\":" << quote(reported_owner)
                           << ",\"flags\":" << quote(hex(flags)) << ",\"params_size\":" << params_size
                           << ",\"return_offset\":" << return_offset
                           << ",\"entry_rva\":" << quote(hex(entry - base)) << "}\n";
@@ -396,9 +478,10 @@ int main(int argc, char** argv) {
                     uint64_t super = reader.get<uint64_t>(owner + 0x40);
                     uint64_t first = reader.get<uint64_t>(owner + 0x50);
                     int32_t size = reader.get<int32_t>(owner + 0x58);
-                    require(size >= (function_name.empty() ? 40 : 0) && size <= 16 * 1024 * 1024, "STRUCT_SIZE_INVALID");
-                    std::cout << "{\"event\":" << quote(function_name.empty() ? "class_metadata" : "struct_metadata") << ",\"name\":" << quote(owner_name)
+                    require(size >= (function_name.empty() && descriptors.empty() ? 40 : 0) && size <= 16 * 1024 * 1024, "STRUCT_SIZE_INVALID");
+                    std::cout << "{\"event\":" << quote(function_name.empty() && descriptors.empty() ? "class_metadata" : "struct_metadata") << ",\"name\":" << quote(owner_name)
                               << ",\"index\":" << header.index << ",\"size\":" << size
+                              << ",\"serial\":" << owner_item.serial << ",\"address\":" << quote(hex(owner))
                               << ",\"super\":" << quote(hex(super)) << "}\n";
                     std::unordered_set<uint64_t> fields;
                     for (uint64_t field = first; field;) {
@@ -423,6 +506,7 @@ int main(int argc, char** argv) {
                         auto p_again = reader.get<PropertyPrefix>(field);
                         require(std::memcmp(&p, &p_again, sizeof(p)) == 0, "PROPERTY_CHANGED");
                         std::cout << "{\"event\":\"property_metadata\",\"owner\":" << quote(owner_name)
+                                  << ",\"owner_index\":" << header.index
                                   << ",\"name\":" << quote(field_name) << ",\"type\":" << quote(type)
                                   << ",\"offset\":" << p.offset << ",\"element_size\":" << p.element_size
                                   << ",\"dimension\":" << p.dimension << ",\"flags\":" << quote(hex(p.flags));
@@ -440,9 +524,7 @@ int main(int argc, char** argv) {
                                 const auto target = reader.get<ObjectHeader>(reference);
                                 const auto target_item = item_at(target.index);
                                 require(target_item.object == reference, "PROPERTY_TYPE_NOT_REGISTERED");
-                                const auto target_class = reader.get<ObjectHeader>(target.cls);
-                                const auto target_kind = read_name(reader, pool, target_class.name_id, target_class.name_number);
-                                require(target_kind == (type == "StructProperty" ? "ScriptStruct" : "Enum"),
+                                require(derives_from_core_type(target.cls, type == "StructProperty" ? "ScriptStruct" : "Enum"),
                                         "PROPERTY_TYPE_CLASS_MISMATCH");
                                 const auto target_name = read_name(reader, pool, target.name_id, target.name_number);
                                 const auto target_again = reader.get<ObjectHeader>(reference);
@@ -452,7 +534,11 @@ int main(int argc, char** argv) {
                                         reader.get<uint64_t>(field + reference_offset) == reference,
                                         "PROPERTY_TYPE_CHANGED");
                                 std::cout << (type == "StructProperty" ? ",\"struct_name\":" : ",\"enum_name\":")
-                                          << quote(target_name);
+                                          << quote(target_name)
+                                          << (type == "StructProperty" ? ",\"struct_index\":" : ",\"enum_index\":")
+                                          << target.index
+                                          << (type == "StructProperty" ? ",\"struct_serial\":" : ",\"enum_serial\":")
+                                          << target_item.serial;
                             }
                         }
                         if (type == "ArrayProperty" || type == "EnumProperty") {
@@ -466,10 +552,12 @@ int main(int argc, char** argv) {
                                     "INNER_PROPERTY_LAYOUT_INVALID");
                             const auto child_type = reader.get<uint64_t>(child.type);
                             const auto child_name = read_name(reader, pool, uint32_t(child_type), uint32_t(child_type >> 32));
+                            const auto child_field_name = read_name(reader, pool, child.name_id, child.number);
                             const auto child_again = reader.get<PropertyPrefix>(inner);
                             require(std::memcmp(&child, &child_again, sizeof(child)) == 0 &&
                                     reader.get<uint64_t>(field + inner_offset) == inner, "INNER_PROPERTY_CHANGED");
                             std::cout << ",\"inner_type\":" << quote(child_name)
+                                      << ",\"inner_name\":" << quote(child_field_name)
                                       << ",\"inner_element_size\":" << child.element_size;
                         }
                         std::cout << "}\n";
@@ -511,6 +599,7 @@ int main(int argc, char** argv) {
             }
         }
         require(emitted != 0, "NO_VALID_OBJECTS");
+        require(descriptors.empty() || emitted == descriptors.size(), "DESCRIPTOR_SET_INCOMPLETE");
         if (invoke_proof || observe_proof || runtime_session || console_construction) {
             require(proof_object >= 0 && proof_function >= 0 && emitted == 2, "PROOF_TARGETS_MISSING_OR_UNSTABLE");
             if (runtime_session) run_runtime_session(pid, game_thread, proof_object, proof_object_serial, proof_function, proof_function_serial);

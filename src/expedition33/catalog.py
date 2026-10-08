@@ -36,6 +36,10 @@ class Catalog:
         if len(self.by_index) != len(self.objects) or len(self.classes) != len(classes):
             raise RuntimeQueryError('Duplicate catalog identity')
         self._ancestors = {}
+        self._classes_by_name = {}
+        self._paths = {}
+        for cls in self.classes.values():
+            self._classes_by_name.setdefault(cls.name, []).append(cls)
         for obj in self.objects:
             if obj.pid != pid:
                 raise RuntimeQueryError('Catalog process mismatch')
@@ -72,7 +76,7 @@ class Catalog:
 
     def find_class(self, name):
         """Resolve a unique observed class name; ambiguity is an error."""
-        matches = [cls for cls in self.classes.values() if cls.name == name]
+        matches = self._classes_by_name.get(name, ())
         if len(matches) != 1:
             raise RuntimeQueryError(f'Expected one class {name!r}; found {len(matches)}')
         return matches[0]
@@ -104,6 +108,34 @@ class Catalog:
             if current.outer_index == -1:
                 return tuple(reversed(result))
             current = self.by_index[current.outer_index]
+
+    def path_name(self, observed):
+        """Target-derived UObject path, with the package/subobject separator rule.
+
+        Shipping GetPathName thunk 14384f9c0 calls 1413b2910; recursive
+        1413b2aa0 uses ':' only when outer is not Package and outer's outer
+        is Package, otherwise '.'. Package identity getter is 1413400c0.
+        """
+        current = self.resolve(observed)
+        if current.index in self._paths:
+            return self._paths[current.index]
+        chain = self.outer_chain(current)
+        package = self.find_class('Package').index
+        result = chain[0].name
+        for index in range(1, len(chain)):
+            outer = chain[index - 1]
+            colon = (outer.class_index != package and index >= 2 and
+                     chain[index - 2].class_index == package)
+            result += (':' if colon else '.') + chain[index].name
+        self._paths[current.index] = result
+        return result
+
+    def find_path(self, path, class_name='Object'):
+        """Resolve an exact target-derived path; ambiguous references fail."""
+        matches = [obj for obj in self.select(class_name) if self.path_name(obj) == path]
+        if len(matches) != 1:
+            raise RuntimeQueryError(f'Expected one object at {path!r}; found {len(matches)}')
+        return matches[0]
 
 
 def capture():

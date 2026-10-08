@@ -56,5 +56,18 @@ class CatalogTests(unittest.TestCase):
         c = Catalog(123, objects, classes)
         with self.assertRaises(RuntimeQueryError): c.find_class('Actor')
 
+    def test_package_and_subobject_path_separators(self):
+        objects, classes = fixture()
+        # Replace the fixture's spare derived class with Package.
+        classes[3] = replace(classes[3], name='Package', super_index=0)
+        objects[3] = replace(objects[3], name='Package')
+        objects[4] = replace(objects[4], name='/Game/Test', class_index=3, class_name='Package')
+        objects[5] = replace(objects[5], name='World', class_index=2, class_name='Actor')
+        objects.append(replace(objects[5], index=6, address=6000, name='PersistentLevel', outer_index=5))
+        objects.append(replace(objects[5], index=7, address=7000, name='Actor', outer_index=6))
+        c = Catalog(123, objects, classes)
+        self.assertEqual(c.path_name(objects[-1]), '/Game/Test.World:PersistentLevel.Actor')
+        self.assertEqual(c.find_path('/Game/Test.World', 'Actor').index, 5)
+
 
 if __name__ == '__main__': unittest.main()
