@@ -6,7 +6,7 @@ Evidence labels: OBSERVED = directly seen; PROVEN = reproduced with a stated tes
 
 ## Status
 
-Not yet investigated. No Expedition 33 layouts, offsets, or runtime APIs are validated.
+Build-specific registry/name-pool traversal, native reflection metadata, reflected getter dispatch and console construction/command paths have static and live corroboration. Findings below are chronological; OBJECT_SYSTEM.md, FUNCTION_INVOCATION.md and CONSOLE.md record the validated runtime surface. Whole-image analysis remains incomplete after memory failures; successful targeted findings do not imply whole-image completion.
 
 ## Evidence discipline
 

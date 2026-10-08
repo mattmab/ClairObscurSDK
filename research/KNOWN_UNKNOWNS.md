@@ -10,7 +10,7 @@ PROVEN on the recorded build: live object/name enumeration, native class hierarc
 
 Remaining research: complete and durably save an appropriate Ghidra analysis pass after the recorded analyzer memory failures; expand independently verified nested array/struct/enum metadata; finish actor/component and local-player relationship evidence. General property values beyond stored bools, arbitrary function marshalling, arbitrary-object GC ownership, synchronous event cancellation and multiple enabled mods remain unsupported. Fixed-target lifecycle evidence must not be generalized to arbitrary objects.
 
-Native Up/Tab integration for intercepted Python/custom commands is unsupported; dispatcher history and lexical completion APIs exist. Configurable keys are limited to an additional F1-F12 toggle, with F10 tested; this does not remap Unreal's existing Tilde binding. Gameplay/map-transition validation and all-key coverage remain unproven. The latest tested isolated package contains v4; the working v5 key addition needs a refreshed package validation before distribution.
+Native Up/Tab integration for intercepted Python/custom commands is unsupported; dispatcher history and lexical completion APIs exist. Configurable keys are limited to an additional F1-F12 toggle, with F10 tested across cleanup and relaunch; this does not remap Unreal's existing Tilde binding. Gameplay/map-transition validation and all-key coverage remain unproven. The isolated v5 candidate passed smoke and console/mod execution after relaunch; it remains a development candidate while the broader research stages are unfinished.
 
 ## Evidence discipline
 

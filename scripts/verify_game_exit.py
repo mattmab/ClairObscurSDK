@@ -15,7 +15,10 @@ kernel.GetExitCodeProcess.argtypes = [wintypes.HANDLE, ctypes.POINTER(wintypes.D
 kernel.CloseHandle.argtypes = [wintypes.HANDLE]
 parser = argparse.ArgumentParser()
 parser.add_argument('--console', action='store_true')
+parser.add_argument('--console-key', choices=[f'F{i}' for i in range(1, 13)])
 args = parser.parse_args()
+if args.console_key and not args.console:
+    parser.error('--console-key requires --console')
 session = sdk.Session()
 actor = session.find_object('Default__Actor')
 process = kernel.OpenProcess(0x100000 | 0x1000, False, actor.pid)
@@ -24,6 +27,8 @@ events = []
 try:
     if args.console:
         session.console.enable()
+        if args.console_key:
+            session.console.set_toggle_key(args.console_key)
         session.console.register('sdk.exitproof', lambda _: 'exit proof', owner=session)
     hook = session.hook(actor, sdk.TARGET, events.append)
     session.call(actor, sdk.TARGET)
@@ -47,9 +52,11 @@ try:
     assert not hook.active
     result = {'pid': actor.pid, 'exit_code': exit_code.value, 'transport_failure': failure,
               'console_attached_before_exit': args.console,
+              'configured_console_key': args.console_key,
               'console_namespace_cleared': not session.console.dispatcher.namespace,
               'python_cleanup': True, 'pre_exit_callbacks': len(events)}
-    filename = 'console-game-exit.json' if args.console else 'game-exit.json'
+    filename = ('console-key-game-exit.json' if args.console_key else
+                'console-game-exit.json' if args.console else 'game-exit.json')
     (Path(__file__).resolve().parents[1] / 'evidence' / filename).write_text(json.dumps(result, indent=2), encoding='utf-8')
     print(json.dumps(result), flush=True)
     assert exit_code.value == 0, 'Game did not exit normally; inspect crash evidence'

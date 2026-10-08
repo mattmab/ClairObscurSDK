@@ -6,7 +6,7 @@ Evidence labels: OBSERVED = directly seen; PROVEN = reproduced with a stated tes
 
 ## Status
 
-PROVEN: build-scoped object registry and name pool support live native/Python enumeration. See OBJECT_SYSTEM.md. Reflection and invocation remain under investigation.
+PROVEN: build-scoped object registry and name pool support live native/Python enumeration. Native reflection metadata, stored booleans, a fixed reflected getter and persistent observer are validated. Console research additionally corroborates engine, viewport, world and game-instance relationships and the native console construction/command/state paths. See OBJECT_SYSTEM.md, FUNCTION_INVOCATION.md and CONSOLE.md; arbitrary invocation and object lifetime remain outside the validated surface.
 
 ## Evidence discipline
 
@@ -30,3 +30,11 @@ No exact hits for GUObjectArray, FUObjectArray, FNamePool, UObject::ProcessEvent
 
 NEXT EXPERIMENT: Ghidra xrefs to the unique StaticFindObject text and CoreUObject package registration strings, then inspect callers/callees for allocation/lookup behavior. Do not assign canonical function names before that evidence exists.
 
+
+## Live local-player and component relationships
+
+OBSERVED 2026-10-08, shipping SHA256 218a2478aad5b3a1674b5d7097ec1ac4f994abb95466f9da1407fcd39d639618, PID34604 at the main menu: scripts/inspect_runtime_relationships.py obtains offsets from live native reflection and follows registered object identities using read-only process access. LocalPlayer index85501 points through ViewportClient +0x78 to CustomGameViewportClient index85500, and PlayerController +0x30 to BP_jRPG_Controller_MainMenu_C index56577. That controller's Player +0x330 points back to index85501.
+
+Its inherited Actor.RootComponent +0x1a0 points to SceneComponent TransformComponent0 index56576. The component's UObject.Outer +0x20 points back to the controller. GameInstance.LocalPlayers +0x38 is an observed pointer/count/capacity array with count1/capacity4 containing the same local player. This corroborates the viewport/game-instance/player/controller/component chain for this main-menu state; it does not establish arbitrary gameplay actors or map transitions.
+
+Evidence: evidence/runtime-relationship-metadata.json and evidence/runtime-relationships.json. The reader checks bounded counts, registered target identities, source identity stability and the array header before/after traversal. These are external observations, not GC-pinned handles or atomic engine snapshots. No engine calls or writes occur.

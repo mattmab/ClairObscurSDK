@@ -6,7 +6,7 @@ Evidence labels: OBSERVED = directly seen; PROVEN = reproduced with a stated tes
 
 ## Status
 
-Not yet investigated. No Expedition 33 layouts, offsets, or runtime APIs are validated.
+Reference source was inspected at the pinned revisions below. These architectural observations informed the independent implementation; Expedition 33 evidence is tracked separately in OBJECT_SYSTEM.md, FUNCTION_INVOCATION.md and CONSOLE.md.
 
 ## Evidence discipline
 
@@ -48,4 +48,4 @@ Ghidra MCP is selected for persistent native analysis and annotations, subject t
 
 ### Design implications (INFERRED; provisional)
 
-Build fingerprint -> replaceable discovery -> validated native handles -> safe reflection/dispatch -> Python bridge -> tiny API -> lifecycle-managed mods. First probe should be external/read-only if sufficient, to limit crash coupling; later invocation/hooks may justify in-process components. Python hosting remains undecided until runtime evidence and thread requirements are known.
+Build fingerprint -> replaceable discovery -> validated native handles -> safe reflection/dispatch -> Python bridge -> tiny API -> lifecycle-managed mods. First probe should be external/read-only if sufficient, to limit crash coupling; later invocation/hooks may justify in-process components. The implemented SDK now uses an external persistent CPython controller and bounded copied transport, rather than embedding Python; later target evidence and the implemented layering are recorded in ARCHITECTURE.md.

@@ -80,3 +80,11 @@ MCP get_metadata succeeded: shipping program retained 288,587 functions and 290,
 
 Computer Use reviewed standard x64 analysis defaults (Decompiler Parameter ID and aggressive instruction finder off), then clicked Analyze. MCP analysis_status reported analyzing=true and 290,732 functions in recovery-analysis-started.json. Its analyzed=true flag alone is not completion evidence while analyzing=true. Full analysis still needs completion and a verified save.
 
+
+## Second recovery: reduced analyzer pass
+
+PROVEN 2026-10-08: the 32 GB pass also exhausted memory in AddressTableAnalyzer and damaged the active database transaction. A save through MCP entered a non-cancellable analysis wait (ProgramSaves.awaitAnalysis uses TaskMonitor.DUMMY); the subsequent GUI recovery save failed with Transaction id not active. Normal close remained at Stopping Tasks. With the user's explicit recovery authorization, preserved diagnostic project/log copies under recovery-20261008-32g and restarted only the verified Ghidra JVM.
+
+PROVEN: reopened database reports 288,589 functions and 290,529 symbols (evidence/recovery2-metadata.json). Disabled Create Address Tables, ASCII Strings, Variadic Function Signature Override, Data Reference.Create Address Tables and Reference.Create Address Tables. Each configuration request succeeded, and save_program returned saved=true (recovery2-config-saved.json). This confirms the recovered baseline is saveable; the failed pass's later findings were not retained.
+
+OBSERVED: restarted analysis through the GUI with these saved settings. recovery2-analysis-started.json reports analyzing=true and 290,732 functions. Completion and post-analysis save remain pending. Do not call MCP save while analysis runs: its implicit wait can obscure progress and disable normal cancellation.
