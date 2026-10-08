@@ -67,6 +67,31 @@ class BoolSnapshot:
     values: tuple[StoredBool, ...]
 
 
+@dataclass(frozen=True)
+class FunctionParameter:
+    name: str
+    type: str
+    offset: int
+    element_size: int
+    dimension: int
+    flags: int
+    bool_encoding: int | None
+
+
+@dataclass(frozen=True)
+class FunctionMetadata:
+    pid: int
+    game_thread_id: int
+    owner: str
+    name: str
+    index: int
+    flags: int
+    params_size: int
+    return_offset: int | None
+    entry_rva: int
+    parameters: tuple[FunctionParameter, ...]
+
+
 def objects(*, limit: int = 0) -> list[ObjectSnapshot]:
     """Read current objects through our native bridge (0 = all occupied slots).
 
@@ -148,6 +173,54 @@ def stored_bools(object_name: str) -> BoolSnapshot:
         raise RuntimeQueryError(f'Invalid stored boolean response: {error}') from error
 
 
+def reflect_function(qualified_name: str) -> FunctionMetadata:
+    """Inspect a live Function by owner and name, for example Actor.IsActorBeingDestroyed.
+
+    Returns build-scoped metadata only. This API does not invoke game code.
+    Duplicate owner/name matches fail rather than selecting an arbitrary object.
+    """
+    if (not isinstance(qualified_name, str) or '\x00' in qualified_name or
+            len(qualified_name) > 2047 or '.' not in qualified_name):
+        raise ValueError('qualified_name must have the form Owner.Function')
+    owner, name = qualified_name.rsplit('.', 1)
+    if not owner or not name:
+        raise ValueError('qualified_name must have the form Owner.Function')
+    start, samples = _query(['--reflect-function', qualified_name])
+    try:
+        objects_seen = [row for row in samples if row['event'] == 'object']
+        functions = [row for row in samples if row['event'] == 'function_metadata']
+        structs = [row for row in samples if row['event'] == 'struct_metadata']
+        properties = [row for row in samples if row['event'] == 'property_metadata']
+        if (len(objects_seen) != 1 or len(functions) != 1 or not structs or
+                len(samples) != 1 + len(functions) + len(structs) + len(properties)):
+            raise ValueError('Incomplete function response')
+        target, fn = objects_seen[0], functions[0]
+        if target['name'] != name or target['class_name'] != 'Function' or fn['owner'] != owner:
+            raise ValueError('Function identity mismatch')
+        if not 0 <= fn['params_size'] <= structs[0]['size']:
+            raise ValueError('Parameter buffer exceeds struct size')
+        return_offset = None if fn['return_offset'] == 65535 else fn['return_offset']
+        if return_offset is not None and not 0 <= return_offset < fn['params_size']:
+            raise ValueError('Return offset outside parameter buffer')
+        parameters = []
+        for p in properties:
+            flags = int(p['flags'], 16)
+            # Dispatcher iterates the initial fields while the low-byte sign bit
+            # is set (141393330): this distinguishes parameter fields from locals.
+            if not flags & 0x80:
+                continue
+            if not 0 <= p['offset'] < p['offset'] + p['element_size'] * p['dimension'] <= fn['params_size']:
+                raise ValueError('Parameter extent outside parameter buffer')
+            parameters.append(FunctionParameter(p['name'], p['type'], p['offset'],
+                              p['element_size'], p['dimension'], flags,
+                              int(p['bool_encoding'], 16) if 'bool_encoding' in p else None))
+        return FunctionMetadata(start['pid'], start['game_thread_id'], owner, name, target['index'],
+                                int(fn['flags'], 16), fn['params_size'], return_offset,
+                                int(fn['entry_rva'], 16), tuple(parameters))
+    except (ValueError, KeyError, TypeError) as error:
+        raise RuntimeQueryError(f'Invalid function metadata response: {error}') from error
+
+
 def _query(arguments: list[str]) -> tuple[dict, list[dict]]:
     root = Path(__file__).resolve().parents[2]
     executable = root / 'build' / 'research-probe' / 'research_probe.exe'
@@ -177,5 +250,5 @@ def _query(arguments: list[str]) -> tuple[dict, list[dict]]:
         raise RuntimeQueryError(f'Invalid native bridge response: {error}') from error
 
 
-__all__ = ['objects', 'reflect_class', 'stored_bools', 'ObjectSnapshot', 'ClassMetadata',
-           'PropertyMetadata', 'StoredBool', 'BoolSnapshot', 'RuntimeQueryError']
+__all__ = ['objects', 'reflect_class', 'stored_bools', 'reflect_function', 'ObjectSnapshot', 'ClassMetadata',
+           'PropertyMetadata', 'StoredBool', 'BoolSnapshot', 'FunctionParameter', 'FunctionMetadata', 'RuntimeQueryError']

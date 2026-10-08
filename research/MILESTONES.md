@@ -18,8 +18,8 @@ Record source or command, artifact path, game fingerprint, confidence, and repro
 1. Target game/build fingerprinted — SHA256, x64 PE headers, local Steam build identified.
 2. Ghidra MCP operational — proven by fixture import, metadata/function queries, decompilation, and exact annotation persistence after save/close/reopen. See GHIDRA_MCP.md.
 3. Expedition 33 binary analyzed — shipping copy imported; whole-image autoanalysis continues. Relevant object/name routines are already disassembled and decompiled.
-4. Unreal runtime anchors: object registry and name pool proven; dispatcher and other anchors pending.
-5. Name/object infrastructure: chunk traversal, identity fields, name decoding proven; GC lifetime and reflection pending.
+4. Unreal runtime anchors: object registry and name pool proven; dispatcher and GameThread ID corroborated; world/engine and other anchors pending.
+5. Name/object infrastructure: chunk traversal, identity fields, name decoding proven; GC lifetime and broader reflection remain pending.
 6. Native live enumeration: PROVEN with our read-only external process reader.
 7. Python live queries: PROVEN, 96,053 objects across two registry chunks in 1.967 seconds.
 8. Reflection/property reads: native class inheritance and property metadata PROVEN; stored BoolProperty reads PROVEN; other value types and GC-safe handles pending.

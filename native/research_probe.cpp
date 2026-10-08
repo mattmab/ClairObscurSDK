@@ -158,6 +158,7 @@ int main(int argc, char** argv) {
         uint32_t limit = 32;
         std::string reflect_class;
         std::string bool_object;
+        std::string function_owner, function_name;
         if (argc == 3 && std::string(argv[1]) == "--limit") limit = std::stoul(argv[2]);
         else if (argc == 3 && std::string(argv[1]) == "--reflect-class") {
             reflect_class = argv[2]; limit = 0;
@@ -165,8 +166,14 @@ int main(int argc, char** argv) {
         else if (argc == 3 && std::string(argv[1]) == "--read-bools") {
             bool_object = argv[2]; limit = 0;
         }
-        else require(argc == 1, "USAGE: research_probe.exe [--limit N | --reflect-class NAME | --read-bools OBJECT]");
-        const bool reflection = !reflect_class.empty() || !bool_object.empty();
+        else if (argc == 3 && std::string(argv[1]) == "--reflect-function") {
+            std::string qualified = argv[2]; auto dot = qualified.rfind('.');
+            require(dot != std::string::npos && dot > 0 && dot + 1 < qualified.size(),
+                    "FUNCTION_NAME_REQUIRES_OWNER_DOT_NAME");
+            function_owner = qualified.substr(0, dot); function_name = qualified.substr(dot + 1); limit = 0;
+        }
+        else require(argc == 1, "USAGE: research_probe.exe [--limit N | --reflect-class NAME | --read-bools OBJECT | --reflect-function OWNER.NAME]");
+        const bool reflection = !reflect_class.empty() || !bool_object.empty() || !function_name.empty();
         DWORD pid = discover_process();
         Handle process(OpenProcess(PROCESS_VM_READ | PROCESS_QUERY_LIMITED_INFORMATION, FALSE, pid));
         require(process.value != nullptr, "OPEN_PROCESS_FAILED win32=" + std::to_string(GetLastError()));
@@ -191,6 +198,12 @@ int main(int argc, char** argv) {
         const uint64_t base = reinterpret_cast<uint64_t>(module.modBaseAddr);
         require(module.modBaseSize == 166776832, "UNSUPPORTED_RUNTIME_IMAGE_SIZE");
         Reader reader{process.value};
+        // Target thread-name and stack-report routines 141082dd0 / 14107b770
+        // identify this build-scoped DWORD as GameThread's OS thread ID.
+        DWORD game_thread = reader.get<DWORD>(base + 0x9272d30);
+        Handle game_thread_handle(OpenThread(THREAD_QUERY_LIMITED_INFORMATION, FALSE, game_thread));
+        require(game_thread_handle.value && GetProcessIdOfThread(game_thread_handle.value) == pid,
+                "GAME_THREAD_ID_NOT_OWNED_BY_TARGET");
         for (const auto& anchor : {registry, names}) {
             std::vector<uint8_t> live(anchor.original.size());
             reader.read(base + anchor.instruction_rva, live.data(), live.size());
@@ -210,6 +223,7 @@ int main(int argc, char** argv) {
             return reader.get<ObjectItem>(chunks[uint32_t(index) >> 16] + uint64_t(index & 0xffff) * 24);
         };
         std::cout << "{\"event\":\"snapshot_start\",\"pid\":" << pid
+                  << ",\"game_thread_id\":" << game_thread
                   << ",\"module_base\":" << quote(hex(base)) << ",\"sha256\":" << quote(fingerprint)
                   << ",\"registry_rva\":" << quote(hex(registry.global_rva))
                   << ",\"name_pool_rva\":" << quote(hex(names.global_rva))
@@ -229,6 +243,12 @@ int main(int argc, char** argv) {
             auto meta_name = read_name(reader, pool, meta.name_id, meta.name_number);
             if (!reflect_class.empty() && (name != reflect_class || class_name != "Class")) continue;
             if (!bool_object.empty() && name != bool_object) continue;
+            if (!function_name.empty()) {
+                if (name != function_name || class_name != "Function") continue;
+                auto outer = reader.get<ObjectHeader>(object.outer);
+                require(item_at(outer.index).object == object.outer, "FUNCTION_OWNER_NOT_REGISTERED");
+                if (read_name(reader, pool, outer.name_id, outer.name_number) != function_owner) continue;
+            }
             if (!bool_object.empty()) require(meta_name == "Class", "NATIVE_OBJECT_REQUIRED");
             if (reflection) require(emitted == 0, "AMBIGUOUS_QUERY_NAME");
             auto again = item_at(i);
@@ -238,8 +258,29 @@ int main(int argc, char** argv) {
             std::cout << "{\"event\":\"object\",\"index\":" << i << ",\"serial\":" << item.serial
                       << ",\"address\":" << quote(hex(item.object)) << ",\"name\":" << quote(name)
                       << ",\"class_name\":" << quote(class_name) << ",\"metaclass_name\":" << quote(meta_name)
-                      << ",\"class_index\":" << cls.index << "}\n";
+                      << ",\"class_index\":" << cls.index;
+            if (reflection) {
+                // Candidate slot corroborated by two name-lookup callers.
+                // Expose research evidence only; never invoke it here.
+                auto dispatch = reader.get<uint64_t>(object.vtable + 0x268);
+                require(dispatch >= base && dispatch < base + module.modBaseSize,
+                        "DISPATCH_CANDIDATE_OUTSIDE_MODULE");
+                std::cout << ",\"vtable_rva\":" << quote(hex(object.vtable - base))
+                          << ",\"dispatch_candidate_rva\":" << quote(hex(dispatch - base));
+            }
+            std::cout << "}\n";
             ++emitted;
+            if (!function_name.empty()) {
+                uint32_t flags = reader.get<uint32_t>(item.object + 0xb0);
+                uint16_t params_size = reader.get<uint16_t>(item.object + 0xb6);
+                uint16_t return_offset = reader.get<uint16_t>(item.object + 0xb8);
+                uint64_t entry = reader.get<uint64_t>(item.object + 0xd8);
+                require(entry >= base && entry < base + module.modBaseSize, "FUNCTION_ENTRY_OUTSIDE_MODULE");
+                std::cout << "{\"event\":\"function_metadata\",\"owner\":" << quote(function_owner)
+                          << ",\"flags\":" << quote(hex(flags)) << ",\"params_size\":" << params_size
+                          << ",\"return_offset\":" << return_offset
+                          << ",\"entry_rva\":" << quote(hex(entry - base)) << "}\n";
+            }
             if (reflection) {
                 // Derived from target routines 1412792f0, 1412813d0, 14134c3b0,
                 // 1412ab240 and 1412aca00. Research metadata, not callable handles.
@@ -254,8 +295,8 @@ int main(int argc, char** argv) {
                     uint64_t super = reader.get<uint64_t>(owner + 0x40);
                     uint64_t first = reader.get<uint64_t>(owner + 0x50);
                     int32_t size = reader.get<int32_t>(owner + 0x58);
-                    require(size >= 40 && size <= 16 * 1024 * 1024, "CLASS_SIZE_INVALID");
-                    std::cout << "{\"event\":\"class_metadata\",\"name\":" << quote(owner_name)
+                    require(size >= (function_name.empty() ? 40 : 0) && size <= 16 * 1024 * 1024, "STRUCT_SIZE_INVALID");
+                    std::cout << "{\"event\":" << quote(function_name.empty() ? "class_metadata" : "struct_metadata") << ",\"name\":" << quote(owner_name)
                               << ",\"index\":" << header.index << ",\"size\":" << size
                               << ",\"super\":" << quote(hex(super)) << "}\n";
                     std::unordered_set<uint64_t> fields;
@@ -283,7 +324,11 @@ int main(int argc, char** argv) {
                         std::cout << "{\"event\":\"property_metadata\",\"owner\":" << quote(owner_name)
                                   << ",\"name\":" << quote(field_name) << ",\"type\":" << quote(type)
                                   << ",\"offset\":" << p.offset << ",\"element_size\":" << p.element_size
-                                  << ",\"dimension\":" << p.dimension << "}\n";
+                                  << ",\"dimension\":" << p.dimension << ",\"flags\":" << quote(hex(p.flags));
+                        if (type == "BoolProperty") {
+                            std::cout << ",\"bool_encoding\":" << quote(hex(reader.get<uint32_t>(field + 0x70)));
+                        }
+                        std::cout << "}\n";
                         if (!bool_object.empty() && type == "BoolProperty") {
                             // Target export routine 14136a160 confirms this stored-value
                             // truth test; this does not call custom property accessors.

@@ -35,3 +35,7 @@ OBSERVED: Ghidra set_comment succeeded on registration/name routines and comment
 ## Stored property values
 
 PROVEN: scripts/verify_live_bools.py reads Default__Actor and Default__HUD through Python/native reflection, validates33/39 observations with true/false shared-byte specimens and repeated Actor equality. Metadata and object enumeration regressions also passed. All game access remains read-only; no invocation, injection, hooks, writes or save loading performed.
+
+## Dispatcher, function parameters and game thread
+
+PROVEN: live vtable slots on Object/Actor/HUD resolve to statically inspected dispatch implementations. Python function metadata validates two single-byte boolean returns and a24-byte struct return. Wrong-owner query rejects. Ghidra create_function at observed native entry pointers resolves earlier missing-boundary failures. Game-thread DWORD27548 is owned by PID25988 according to Windows. Existing boolean live tests pass after the extension. No game invocation performed.
