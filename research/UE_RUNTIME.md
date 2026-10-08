@@ -6,7 +6,7 @@ Evidence labels: OBSERVED = directly seen; PROVEN = reproduced with a stated tes
 
 ## Status
 
-Not yet investigated. No Expedition 33 layouts, offsets, or runtime APIs are validated.
+PROVEN: build-scoped object registry and name pool support live native/Python enumeration. See OBJECT_SYSTEM.md. Reflection and invocation remain under investigation.
 
 ## Evidence discipline
 
@@ -29,3 +29,4 @@ Reproduce: run scripts/find_static_leads.py against the unchanged shipping image
 No exact hits for GUObjectArray, FUObjectArray, FNamePool, UObject::ProcessEvent, ProcessEvent, StaticAllocateObject, NamePoolData, or .?AVUObject@@. This is not evidence that the corresponding runtime primitive is absent; native shipping code often lacks these spellings.
 
 NEXT EXPERIMENT: Ghidra xrefs to the unique StaticFindObject text and CoreUObject package registration strings, then inspect callers/callees for allocation/lookup behavior. Do not assign canonical function names before that evidence exists.
+

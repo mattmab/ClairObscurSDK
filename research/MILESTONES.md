@@ -6,28 +6,28 @@ Evidence labels: OBSERVED = directly seen; PROVEN = reproduced with a stated tes
 
 ## Status
 
-Stages 0–2 established with the evidence below. No Expedition 33 runtime layouts, offsets, or live-object APIs are validated.
+Stages 0-2 are established; the object/name subset and first live Python capstone are proven. Whole-image analysis and later SDK stages remain active.
 
 ## Evidence discipline
 
 Record source or command, artifact path, game fingerprint, confidence, and reproduction steps with each finding. Reference SDK behavior is not target-game evidence.
 
-## Current state: 2/12 (Ghidra MCP fixture proof complete; shipping import begun)
+## Current state: 7/12 frontier (live enumeration proven; whole-image analysis still running)
 
 0. Environment inventoried — D: tree and installed apps inspected; MSVC 14.44.35207 and Windows SDK 10.0.26100.0 installed; x64 fixture compilation and execution proven.
 1. Target game/build fingerprinted — SHA256, x64 PE headers, local Steam build identified.
 2. Ghidra MCP operational — proven by fixture import, metadata/function queries, decompilation, and exact annotation persistence after save/close/reopen. See GHIDRA_MCP.md.
-3. Expedition 33 binary analyzed — shipping analysis-copy import started; analysis pending.
-4. Unreal runtime anchors identified — pending.
-5. Name/object infrastructure understood — pending.
-6. Native probe enumerates live objects — pending.
-7. Python queries live objects — pending (first capstone).
+3. Expedition 33 binary analyzed — shipping copy imported; whole-image autoanalysis continues. Relevant object/name routines are already disassembled and decompiled.
+4. Unreal runtime anchors: object registry and name pool proven; dispatcher and other anchors pending.
+5. Name/object infrastructure: chunk traversal, identity fields, name decoding proven; GC lifetime and reflection pending.
+6. Native live enumeration: PROVEN with our read-only external process reader.
+7. Python live queries: PROVEN, 96,053 objects across two registry chunks in 1.967 seconds.
 8. Reflection/property reads — pending.
 9. Safe invocation — pending.
 10. Hooks/callbacks — pending.
 11. Minimal mod loader — pending.
 12. Private SDK package/docs/trivial mod — pending.
 
-No runtime offsets are validated. No SDK release exists.
+Offsets are scoped to the recorded SHA256, checked against unique code signatures and live identity invariants. No SDK release exists.
 
 

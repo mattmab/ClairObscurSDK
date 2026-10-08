@@ -27,3 +27,7 @@ PROVEN by MCP read_memory and independent pefile-backed byte scan: substring Sta
 OBSERVED full ASCII diagnostic source paths (preferred static VA): UObjectGlobals.cpp 0x146e1cef0; UObjectArray.cpp 0x146e1c470; UObjectHash.cpp 0x146e22130; UnrealNames.cpp 0x146dcc6a0; ScriptCore.cpp 0x146e19a00; GarbageCollection.cpp 0x146e04a50. Paths are under C:/p4ws/Engine/Source/Runtime, embedded build-machine strings, not local filesystem paths. These support focused future xref experiments; they do not prove a registry address, layout, FName resolver, or ProcessEvent identity.
 
 MCP analysis_status still reports analyzing=true. The analyzed=true flag in the same response is NOT completion while analyzing remains true. Early string xref queries returned empty lists; no negative semantic conclusion may be drawn before relevant disassembly/reference analysis finishes.
+
+## Runtime-corroborated anchors — 2026-10-08
+
+PROVEN for the recorded fingerprint: registration `1413ab9d0`, chunk allocation `1413aae40`, registration caller `1413aeba0`, name formatting `1411bcab0`, entry copy `1411a3660`, pool initialization `14119e730`. See OBJECT_SYSTEM.md for the independently derived offsets and live invariants. Raw RIP-relative byte candidates were only hypotheses until disassembly/decompilation corroborated them. Full-image autoanalysis still running at the first successful live query; partial function metadata during analysis is not a final boundary guarantee.

@@ -6,7 +6,7 @@ Evidence labels: OBSERVED = directly seen; PROVEN = reproduced with a stated tes
 
 ## Status
 
-Not yet investigated. No Expedition 33 layouts, offsets, or runtime APIs are validated.
+PROVEN: our native reader and Python API enumerate live objects in Steam build 23765773. Reflection, invocation, hooks, and the full SDK remain unfinished.
 
 ## Evidence discipline
 
@@ -18,4 +18,17 @@ OBSERVED in BL-SDK: native registry access and FName resolution underpin lookup.
 
 HYPOTHESIS to test for Expedition 33: a chunked object registry and interned name pool. Do not import chunk size, entry stride, flags or offsets. Evidence required: static access paths plus runtime identity consistency across multiple objects and repeated observations.
 
-No Expedition 33 object pointer has been read by our code yet.
+Live evidence now supersedes the initial untested registry hypothesis; see the validated layout below.
+
+## Validated object and name subset
+
+PROVEN on Steam build 23765773, shipping SHA256 `218a2478aad5b3a1674b5d7097ec1ac4f994abb95466f9da1407fcd39d639618`.
+Registry RVA `0x9361b60`; name pool RVA `0x92aadc0`. These are resolved through independently derived unique instruction signatures, then checked against the recorded build. No absolute process address is assumed.
+
+Ghidra registration routine `1413ab9d0` and chunk allocator `1413aae40` establish 65,536 slots per chunk and 24-byte slots. Registry+0x10 points to the chunk table; count is registry+0x24. Object identity fields: index+0x0c, class+0x10, FName+0x18, outer+0x20. Caller `1413aeba0` corroborates the global and assignments.
+
+Name formatting routine `1411bcab0`, entry copy `1411a3660`, and initializer `14119e730` establish block pointers at pool+0x10, block=id>>16, byte offset=2*(id&0xffff), two-byte entry header, length=header>>6, UTF16 flag=header&1, payload+2. Nonzero number appends underscore and number-1.
+
+OBSERVED: native first-32 query in PID25988; Python full query returned 96,053 occupied stable observations from 96,605 slots, max index96,604, spanning two chunks. Class and metaclass pointers resolve back through their registry indices; Class is its own metaclass. Name ID0 resolves None. Game remained at its main menu after the queries.
+
+Reproduce with `scripts/verify_live_enumeration.py`. Local evidence: `evidence/python-live-enumeration.json`, `.log`, `mcp-object-registration-followup.json`, `mcp-anchor-disassembly.json`, `mcp-namepool-init.json`. Snapshots are not atomic across GC; rereads detect some changes but do not pin objects. Never reuse a snapshot address as an ownership guarantee.

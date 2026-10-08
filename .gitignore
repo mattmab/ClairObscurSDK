@@ -14,3 +14,5 @@ __pycache__/
 *.gpr
 *.rep/
 research/USER_REQUEST*.txt
+
+*.egg-info/
