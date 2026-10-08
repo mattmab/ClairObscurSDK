@@ -8,7 +8,7 @@ from types import SimpleNamespace
 
 from ..catalog import capture
 from ..reflection import describe
-from ..values import read_values
+from ..values import read_values, StoredArray
 from .. import ObjectSnapshot, RuntimeQueryError
 from .core import Explorer
 
@@ -49,6 +49,7 @@ class _Object:
             raise UnsupportedCapability(observation.errors[key])
         def adapt(value):
             if isinstance(value, ObjectSnapshot): return self._backend.wrap(value)
+            if isinstance(value, StoredArray): return StoredArray(tuple(adapt(item) for item in value.items), value.length)
             if isinstance(value, tuple): return tuple(adapt(item) for item in value)
             return value
         return adapt(observation.values[key])
@@ -90,7 +91,7 @@ class _Property:
 class _Backend:
     __version__ = 'expedition33-independent/introspection-stage1'
     unreal = SimpleNamespace(UObject=_Object, UFunction=_Function,
-        WrappedStruct=_UnavailableValue, WrappedArray=_UnavailableValue)
+        WrappedStruct=_UnavailableValue, WrappedArray=StoredArray)
 
     def __init__(self):
         self.catalog = None

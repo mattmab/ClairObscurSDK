@@ -601,14 +601,106 @@ int main(int argc, char** argv) {
                                       << ",\"inner_element_size\":" << child.element_size;
                         }
                         std::cout << "}\n";
+                        const auto scalar_json = [&](const std::string& value_type, uint64_t raw) {
+                            std::ostringstream value;
+                            if (value_type == "FloatProperty") {
+                                float number; std::memcpy(&number, &raw, 4);
+                                value << stored_float_json(number);
+                            } else if (value_type == "DoubleProperty") {
+                                double number; std::memcpy(&number, &raw, 8);
+                                value << stored_float_json(number);
+                            } else if (value_type == "IntProperty") value << static_cast<int32_t>(raw);
+                            else if (value_type == "UInt16Property") value << static_cast<uint16_t>(raw);
+                            else if (value_type == "ByteProperty") value << static_cast<unsigned>(static_cast<uint8_t>(raw));
+                            else if (value_type == "NameProperty") value << quote(read_name(reader, pool, uint32_t(raw), uint32_t(raw >> 32)));
+                            else {
+                                require(value_type == "ObjectProperty", "SCALAR_TYPE_UNSUPPORTED");
+                                if (!raw) value << "null";
+                                else {
+                                    const auto target = reader.get<ObjectHeader>(raw);
+                                    const auto slot = item_at(target.index);
+                                    require(slot.object == raw, "VALUE_REFERENCE_NOT_REGISTERED");
+                                    const auto target_name = read_name(reader, pool, target.name_id, target.name_number);
+                                    const auto target_again = reader.get<ObjectHeader>(raw);
+                                    const auto slot_again = item_at(target.index);
+                                    require(slot_again.object == raw && slot_again.serial == slot.serial &&
+                                        std::memcmp(&target, &target_again, sizeof(target)) == 0, "VALUE_REFERENCE_CHANGED");
+                                    value << "{\"$reference\":{\"index\":" << target.index << ",\"serial\":" << slot.serial
+                                          << ",\"address\":" << quote(hex(raw)) << ",\"name\":" << quote(target_name) << "}}";
+                                }
+                            }
+                            return value.str();
+                        };
+                        const auto scalar_width = [](const std::string& value_type) {
+                            return value_type == "FloatProperty" || value_type == "IntProperty" ? 4 :
+                                value_type == "UInt16Property" ? 2 : value_type == "ByteProperty" ? 1 :
+                                value_type == "NameProperty" || value_type == "ObjectProperty" || value_type == "DoubleProperty" ? 8 : 0;
+                        };
+                        if (read_values && type == "ArrayProperty") {
+                            try {
+                                // Target export 14133c540: flags +70, child +78,
+                                // data +0/count +8. Copy 14133a6f0 checks capacity
+                                // at +c; 14133c010 strides by child ElementSize.
+                                // Relative/frozen allocator storage is not decoded.
+                                struct ArrayHeader { uint64_t data; int32_t count, capacity; };
+                                static_assert(sizeof(ArrayHeader) == 16);
+                                const auto array_flags = reader.get<uint8_t>(field + 0x70);
+                                require((array_flags & 1) == 0, "ARRAY_ALLOCATOR_UNSUPPORTED");
+                                require(p.element_size == 16 && p.dimension <= 1024, "ARRAY_PROPERTY_LAYOUT_INVALID");
+                                const auto inner = reader.get<uint64_t>(field + 0x78);
+                                require(inner && inner != field, "ARRAY_INNER_INVALID");
+                                const auto child = reader.get<PropertyPrefix>(inner);
+                                const auto child_id = reader.get<uint64_t>(child.type);
+                                const auto child_type = read_name(reader, pool, uint32_t(child_id), uint32_t(child_id >> 32));
+                                const auto width = scalar_width(child_type);
+                                require(width != 0, "ARRAY_ELEMENT_TYPE_UNSUPPORTED");
+                                require(child.owner == field && child.dimension == 1 && child.offset == 0 &&
+                                        child.element_size == width && (reader.get<uint64_t>(child.type + 0x10) & 0x8000),
+                                        "ARRAY_INNER_LAYOUT_INVALID");
+                                for (int32_t element = 0; element < p.dimension; ++element) {
+                                    const auto at = item.object + p.offset + uint64_t(element) * 16;
+                                    const auto observed_array = reader.get<ArrayHeader>(at);
+                                    require(observed_array.count >= 0 && observed_array.count <= observed_array.capacity && observed_array.capacity <= 1048576,
+                                            "ARRAY_COUNTS_INVALID");
+                                    const auto copied = std::min(observed_array.count, 64);
+                                    std::vector<uint8_t> bytes(size_t(copied) * width), repeated(bytes.size());
+                                    if (copied) {
+                                        require(observed_array.data && (observed_array.data & 1) == 0, "ARRAY_DATA_INVALID");
+                                        reader.read(observed_array.data, bytes.data(), bytes.size());
+                                    }
+                                    std::ostringstream values;
+                                    for (int32_t index = 0; index < copied; ++index) {
+                                        uint64_t raw = 0;
+                                        std::memcpy(&raw, bytes.data() + size_t(index) * width, width);
+                                        if (index) values << ',';
+                                        values << scalar_json(child_type, raw);
+                                    }
+                                    if (copied) reader.read(observed_array.data, repeated.data(), repeated.size());
+                                    const auto array_again = reader.get<ArrayHeader>(at);
+                                    const auto child_again = reader.get<PropertyPrefix>(inner);
+                                    const auto property_again = reader.get<PropertyPrefix>(field);
+                                    require(bytes == repeated && std::memcmp(&observed_array, &array_again, sizeof(observed_array)) == 0 &&
+                                            std::memcmp(&child, &child_again, sizeof(child)) == 0 &&
+                                            std::memcmp(&p, &property_again, sizeof(p)) == 0 &&
+                                            reader.get<uint64_t>(field + 0x78) == inner &&
+                                            reader.get<uint8_t>(field + 0x70) == array_flags, "ARRAY_OBSERVATION_CHANGED");
+                                    std::cout << "{\"event\":\"stored_value\",\"owner_index\":" << header.index
+                                              << ",\"name\":" << quote(field_name) << ",\"element\":" << element
+                                              << ",\"value\":{\"$array\":{\"length\":" << observed_array.count
+                                              << ",\"items\":[" << values.str() << "]}},\"truncated\":"
+                                              << (observed_array.count > copied ? "true" : "false") << "}\n";
+                                }
+                            } catch (const std::exception& error) {
+                                std::cout << "{\"event\":\"stored_value_error\",\"owner_index\":" << header.index
+                                          << ",\"name\":" << quote(field_name) << ",\"error\":" << quote(error.what()) << "}\n";
+                            }
+                        }
                         if (read_values && type != "BoolProperty") {
                             // Target exports: 14136b3e0 -> numeric vt+200,
                             // 141370ac0 float, 141370a60 signed32, 141370a30
                             // unsigned16; 14136a290 byte; 14136b200 FName;
                             // 14133c740 stored object reference. No custom getters.
-                            const int width = type == "FloatProperty" || type == "IntProperty" ? 4 :
-                                type == "UInt16Property" ? 2 : type == "ByteProperty" ? 1 :
-                                type == "NameProperty" || type == "ObjectProperty" || type == "DoubleProperty" ? 8 : 0;
+                            const int width = scalar_width(type);
                             if (width) {
                                 try {
                                     require(p.element_size == width && p.dimension <= 1024, "VALUE_LAYOUT_INVALID");
@@ -616,36 +708,13 @@ int main(int argc, char** argv) {
                                         const auto at = item.object + p.offset + uint64_t(element) * width;
                                         uint64_t raw = 0, value_again = 0;
                                         reader.read(at, &raw, width);
-                                        std::ostringstream value;
-                                        if (type == "FloatProperty") {
-                                            float number; std::memcpy(&number, &raw, 4);
-                                            value << stored_float_json(number);
-                                        } else if (type == "DoubleProperty") {
-                                            double number; std::memcpy(&number, &raw, 8);
-                                            value << stored_float_json(number);
-                                        } else if (type == "IntProperty") value << static_cast<int32_t>(raw);
-                                        else if (type == "UInt16Property") value << static_cast<uint16_t>(raw);
-                                        else if (type == "ByteProperty") value << static_cast<unsigned>(static_cast<uint8_t>(raw));
-                                        else if (type == "NameProperty") value << quote(read_name(reader, pool, uint32_t(raw), uint32_t(raw >> 32)));
-                                        else if (!raw) value << "null";
-                                        else {
-                                            const auto target = reader.get<ObjectHeader>(raw);
-                                            const auto slot = item_at(target.index);
-                                            require(slot.object == raw, "VALUE_REFERENCE_NOT_REGISTERED");
-                                            const auto target_name = read_name(reader, pool, target.name_id, target.name_number);
-                                            const auto target_again = reader.get<ObjectHeader>(raw);
-                                            const auto slot_again = item_at(target.index);
-                                            require(slot_again.object == raw && slot_again.serial == slot.serial &&
-                                                std::memcmp(&target, &target_again, sizeof(target)) == 0, "VALUE_REFERENCE_CHANGED");
-                                            value << "{\"$reference\":{\"index\":" << target.index << ",\"serial\":" << slot.serial
-                                                  << ",\"address\":" << quote(hex(raw)) << ",\"name\":" << quote(target_name) << "}}";
-                                        }
+                                        const auto value = scalar_json(type, raw);
                                         reader.read(at, &value_again, width);
                                         const auto property_again = reader.get<PropertyPrefix>(field);
                                         require(raw == value_again && std::memcmp(&p, &property_again, sizeof(p)) == 0, "STORED_VALUE_CHANGED");
                                         std::cout << "{\"event\":\"stored_value\",\"owner_index\":" << header.index
                                                   << ",\"name\":" << quote(field_name) << ",\"element\":" << element
-                                                  << ",\"value\":" << value.str() << "}\n";
+                                                  << ",\"value\":" << value << "}\n";
                                     }
                                 } catch (const std::exception& error) {
                                     std::cout << "{\"event\":\"stored_value_error\",\"owner_index\":" << header.index

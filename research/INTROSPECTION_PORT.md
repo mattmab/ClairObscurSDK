@@ -330,3 +330,61 @@ These additional descriptors are verified in the candidate build and source;
 they become available to that persistent session only after a normal controller
 restart with the newly built default reader. Map/set references, nested inner
 descriptors and unverified property variants remain pending.
+
+## Bounded dynamic-array observations
+
+PROVEN2026-10-08 in the separate candidate reader: stored ArrayProperty values
+now feed the unchanged original Explorer inspect/snapshot/diff algorithms.
+Supported inner types are ByteProperty, IntProperty, UInt16Property, FloatProperty,
+DoubleProperty, NameProperty and ObjectProperty. This is copied observation data,
+not ownership of a native array, writable storage or a retained function result.
+
+Target evidence: ArrayProperty export virtual +e0 resolves to14133c540. It reads
+allocator flags at property+70, the inner descriptor at+78, the data at header+0
+and count at+8. Its flags-bit0 branch decodes a relative/frozen pointer. Copy routine
+14133a6f0 compares capacity at header+c and branches on the same allocator flag.
+Export helper14133c010 strides by the inner property's ElementSize (+34). MCP
+responses are preserved as evidence/introspection-array-export.json,
+introspection-array-copy.json and introspection-array-helper.json. The additional
+requested address14133f600 was not a defined Ghidra function; no layout conclusion
+was drawn from that missing result.
+
+The reader rejects the flagged allocator form and unsupported inner types,
+validates the16-byte array header, count/capacity bounds, inner owner/type/extent,
+then copies at most64 elements. It rechecks bytes, header, property and inner
+descriptor before publishing the field. Object elements retain registry identity
+and serial validation, then Python verifies them against the current catalog.
+Any changing/invalid element rejects the entire property. External reads remain
+non-atomic and do not pin GC or allocation lifetime.
+
+StoredArray exposes an immutable copied prefix and the observed total length.
+Iteration visits copied items; indexing beyond the prefix fails explicitly.
+The original core therefore reports the true length and its normal64-item
+truncation flag. Python validates array tags, element kinds, counts, truncation
+and object identities. Tests cover a100-element observation with64 copied items,
+stale references, invalid extents/types, unsupported empty types and nonfinite
+floats. The large-array/truncation case is unit-tested, not yet a live specimen.
+
+scripts/verify_live_introspection_arrays.py --probe
+build/research-probe-schema/research_probe.exe passed on PID34604. Confirmed:
+
+- Actual BP_jRPG_GI_Custom_C GameInstance.LocalPlayers contained the same one live
+  LocalPlayer object identified independently by the original roots operation.
+- Default__RadialForceComponent.ObjectTypesToAffect contained bytes[2,3,4,5].
+- Default__Actor.Tags was an empty array; no nonempty NameProperty-array proof is
+  claimed from this specimen.
+- Original-core inspect and repeated snapshots/diff agreed on all three pages.
+
+Evidence: evidence/introspection-arrays-live.json. The updated scalar regression
+verifier also passed against the candidate: all33 legacy Actor bool observations
+agree, PlayerController references/numerics/names remain valid, Tags now returns
+an array, and snapshot/diff still agrees (introspection-values-arrays-live.json).
+All67 Python tests pass and the native /W4 build has no warnings.
+
+Deployment remains deferred to normal controller handover: the current user host
+and its previous default reader were preserved; its heartbeat continued. The
+candidate executable includes the earlier class/delegate schema improvements.
+Bool/string/struct/nested-container array elements, map/set values, and general
+retained native values remain unsupported. In particular, input key arrays whose
+elements are reflected FKey structs still require the struct decoder; their
+presence alone does not establish keybind dispatch or safe mutation.

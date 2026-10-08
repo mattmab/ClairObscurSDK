@@ -8,7 +8,7 @@ All live results below apply only to the recorded executable fingerprint.
 | --- | --- |
 | Live Unreal object/name enumeration | Implemented; repeatedly tested in the real game and isolated bundles. |
 | Native class/property/function metadata | Implemented and live-tested; nested struct/enum names and array element descriptors included. |
-| Property values | Stored booleans implemented and live-tested; general values and writes unsupported. |
+| Property values | v0.1 stored booleans live-tested. Current checkout adds bounded stored scalars/strings/references and selected dynamic arrays, with live proofs in research/INTROSPECTION_PORT.md; recursive structs and writes remain unsupported. Candidate reader deployment to the persistent host is pending. |
 | Reflected calls and persistent observation | Implemented and live-tested for the fixed default Actor getter; arbitrary functions unsupported. |
 | Python mod lifecycle | Original single-mod lifecycle live-tested. Current checkout adds shared-session scopes and management; console load/enable/action/unload/reload tested on a borrowed live session. Integrated startup/relaunch pending. |
 | Native Unreal console UI | Constructed and attached through verified engine paths; Tilde open/close/reopen tested. |

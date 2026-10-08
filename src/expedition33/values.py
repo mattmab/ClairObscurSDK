@@ -14,6 +14,28 @@ class StoredValues:
     truncated: frozenset = frozenset()
 
 
+@dataclass(frozen=True)
+class StoredArray:
+    """Copied prefix plus observed total length, never a native allocation owner.
+
+    Iteration visits only copied items. Indexing an uncopied position fails rather
+    than silently fabricating a value or issuing another potentially stale read.
+    """
+    items: tuple
+    length: int
+
+    def __len__(self):
+        return self.length
+
+    def __iter__(self):
+        return iter(self.items)
+
+    def __getitem__(self, index):
+        if type(index) is not int or not 0 <= index < len(self.items):
+            raise IndexError('Array index is outside the copied observation prefix')
+        return self.items[index]
+
+
 def read_values(catalog, observed):
     obj = catalog.resolve(observed)
     start, rows = _query(['--read-values', str(catalog.pid), f'{obj.index}:{obj.serial}:{obj.address:x}'])
@@ -51,6 +73,51 @@ def read_values(catalog, observed):
             value = row['value']
             if row.get('truncated') is True:
                 truncated.add(key)
+            if metadata[key]['type'] == 'ArrayProperty':
+                try:
+                    if not isinstance(value, dict) or set(value) != {'$array'}:
+                        raise ValueError('Missing array tag')
+                    array = value['$array']
+                    if set(array) != {'length', 'items'}:
+                        raise ValueError('Unexpected array fields')
+                    length, items = array['length'], array['items']
+                    if (type(length) is not int or not 0 <= length <= 1048576 or type(items) is not list
+                            or len(items) != min(length, 64) or row.get('truncated') is not (length > 64)):
+                        raise ValueError('Invalid array extent or truncation')
+                    element_type = metadata[key]['inner_type']
+                    if element_type not in ('ObjectProperty', 'FloatProperty', 'DoubleProperty',
+                                            'NameProperty', 'IntProperty', 'UInt16Property', 'ByteProperty'):
+                        raise ValueError('Unsupported array element type')
+                    decoded = []
+                    for item in items:
+                        if element_type == 'ObjectProperty':
+                            if item is not None:
+                                reference = item['$reference']
+                                observed_ref = catalog.by_index.get(reference['index'])
+                                if (observed_ref is None or observed_ref.serial != reference['serial'] or
+                                        observed_ref.address != int(reference['address'], 16) or
+                                        observed_ref.name != reference['name']):
+                                    errors[key] = 'Array reference changed since catalog; refresh required'
+                                item = observed_ref
+                        elif element_type in ('FloatProperty', 'DoubleProperty'):
+                            if type(item) not in (int, float) and not (isinstance(item, dict) and
+                                    set(item) == {'$float'} and item['$float'] in ('nan', 'inf', '-inf')):
+                                raise ValueError('Invalid floating array item')
+                            item = float(item['$float']) if isinstance(item, dict) else float(item)
+                        elif element_type == 'NameProperty':
+                            if type(item) is not str:
+                                raise ValueError('Invalid name array item')
+                        elif element_type in ('IntProperty', 'UInt16Property', 'ByteProperty'):
+                            lower, upper = {'IntProperty': (-2147483648, 2147483647),
+                                            'UInt16Property': (0, 65535), 'ByteProperty': (0, 255)}[element_type]
+                            if type(item) is not int or not lower <= item <= upper:
+                                raise ValueError('Invalid integer array item')
+                        else:
+                            raise ValueError('Unsupported array element type')
+                        decoded.append(item)
+                    value = StoredArray(tuple(decoded), length)
+                except (KeyError, ValueError, TypeError, OverflowError) as error:
+                    raise RuntimeQueryError(f'Invalid array observation: {error}') from error
             if metadata[key]['type'] in ('FloatProperty', 'DoubleProperty') and type(value) in (int, float):
                 value = float(value)
             if isinstance(value, dict) and '$reference' in value:

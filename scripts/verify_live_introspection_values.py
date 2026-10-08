@@ -1,6 +1,10 @@
 """Read-only live inspect/snapshot/diff with independent native-API comparisons."""
 import json
+import argparse
+from contextlib import nullcontext
 from pathlib import Path
+import subprocess
+from unittest.mock import patch
 
 import expedition33
 from expedition33.catalog import capture
@@ -8,7 +12,7 @@ from expedition33.values import read_values
 from expedition33.introspection import Harness
 
 
-def main():
+def main(output=None):
     catalog = capture()
     actor = next(obj for obj in catalog.objects if obj.name == 'Default__Actor')
     stored = read_values(catalog, actor)
@@ -32,7 +36,8 @@ def main():
         assert type(values['NetDriverName']) is str
         assert type(values['LastCompletedSeamlessTravelCount']) is int
         assert 0 <= values['LastCompletedSeamlessTravelCount'] <= 65535
-        assert '$error' in values['Tags']  # Explicitly unsupported until array work lands.
+        assert set(values['Tags']) == {'items', 'length', 'truncated'}
+        assert all(type(tag) is str for tag in values['Tags']['items'])
         before = harness.request(dict(request, op='snapshot', name='before'))
         after = harness.request(dict(request, op='snapshot', name='after'))
         difference = harness.request({'op': 'diff', 'before': 'before', 'after': 'after'})
@@ -44,9 +49,20 @@ def main():
         result = {'pid': catalog.pid, 'bool_comparisons': len(previous.values),
                   'inspect': inspected, 'before': before, 'after': after, 'diff': difference,
                   'limitations': 'Stored observations, not getters, owning handles or GC-atomic snapshots'}
-    destination = Path(__file__).resolve().parents[1] / 'evidence/introspection-values-live.json'
+    destination = output or Path(__file__).resolve().parents[1] / 'evidence/introspection-values-live.json'
     destination.write_text(json.dumps(result, indent=2), encoding='utf-8')
     print(f'Live value inspection passed; {len(previous.values)} existing bool observations agree; references and diff verified.')
 
 
-if __name__ == '__main__': main()
+if __name__ == '__main__':
+    parser = argparse.ArgumentParser()
+    parser.add_argument('--probe', type=Path)
+    parser.add_argument('--output', type=Path)
+    args = parser.parse_args()
+    default = (Path(__file__).resolve().parents[1] / 'build/research-probe/research_probe.exe').resolve()
+    original_run = subprocess.run
+    def launch(command, *positional, **kwargs):
+        assert Path(command[0]).resolve() == default and '--session' not in command
+        return original_run([str(args.probe.resolve(strict=True)), *command[1:]], *positional, **kwargs)
+    with patch('expedition33.subprocess.run', side_effect=launch) if args.probe else nullcontext():
+        main(args.output)

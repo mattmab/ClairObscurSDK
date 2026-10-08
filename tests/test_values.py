@@ -4,7 +4,7 @@ from unittest.mock import patch
 
 from expedition33 import RuntimeQueryError
 from expedition33.catalog import Catalog
-from expedition33.values import read_values
+from expedition33.values import read_values, StoredArray
 from test_catalog import fixture
 
 
@@ -59,6 +59,58 @@ class ValueTests(unittest.TestCase):
         result = self.read()
         self.assertIn((2, 'Text'), result.truncated)
         self.assertIs(type(result.values[2, 'Precision']), float)
+
+    def array(self, kind, length, items):
+        self.property('Dynamic', 'ArrayProperty')
+        self.rows[-1]['inner_type'] = kind
+        self.value('Dynamic', {'$array': {'length': length, 'items': items}})
+        self.rows[-1]['truncated'] = length > 64
+
+    def test_bounded_array_preserves_length_and_original_core_output(self):
+        from expedition33.introspection import _Backend, Explorer
+        self.array('IntProperty', 100, list(range(64)))
+        result = self.read()
+        array = result.values[2, 'Dynamic']
+        self.assertIsInstance(array, StoredArray)
+        self.assertEqual(len(array), 100)
+        self.assertEqual(tuple(array), tuple(range(64)))
+        with self.assertRaises(IndexError): array[64]
+        encoded = Explorer(_Backend()).encode(array)
+        self.assertEqual(encoded, {'items': list(range(64)), 'length': 100, 'truncated': True})
+        self.assertIn((2, 'Dynamic'), result.truncated)
+
+    def test_array_reference_identity_and_whole_field_failure(self):
+        reference = self.catalog.by_index[5]
+        self.array('ObjectProperty', 2, [None, {'$reference': dict(index=reference.index,
+            serial=reference.serial, address=hex(reference.address), name=reference.name)}])
+        result = self.read()
+        self.assertEqual(result.values[2, 'Dynamic'].items, (None, reference))
+        self.rows[-1]['value']['$array']['items'][1]['$reference']['serial'] += 1
+        result = self.read()
+        self.assertNotIn((2, 'Dynamic'), result.values)
+        self.assertIn('reference changed', result.errors[2, 'Dynamic'])
+
+    def test_array_invalid_extent_type_and_truncation_rejected(self):
+        self.array('ByteProperty', 1, [True])
+        with self.assertRaises(RuntimeQueryError): self.read()
+        self.rows[-1]['value']['$array']['items'] = [255]
+        self.assertEqual(self.read().values[2, 'Dynamic'].items, (255,))
+        self.rows[-1]['value']['$array']['length'] = 2
+        with self.assertRaises(RuntimeQueryError): self.read()
+        self.rows[-1]['value']['$array']['length'] = 1
+        self.rows[-1]['truncated'] = True
+        with self.assertRaises(RuntimeQueryError): self.read()
+
+    def test_array_nonfinite_floats_and_unsupported_empty_type(self):
+        import math
+        self.array('DoubleProperty', 3, [1, {'$float': 'nan'}, {'$float': '-inf'}])
+        values = self.read().values[2, 'Dynamic'].items
+        self.assertIs(type(values[0]), float)
+        self.assertTrue(math.isnan(values[1]))
+        self.assertEqual(values[2], float('-inf'))
+        self.rows[-2]['inner_type'] = 'StructProperty'
+        self.rows[-1]['value']['$array'] = {'length': 0, 'items': []}
+        with self.assertRaises(RuntimeQueryError): self.read()
 
 
 if __name__ == '__main__': unittest.main()
