@@ -1,6 +1,26 @@
 #pragma once
 #include "session_protocol.h"
 
+inline void decode_console_payload(const std::string& encoded,wchar_t (&out)[32769]) {
+    require(encoded.size()%4==0 && encoded.size()/4<=32768,"CONSOLE_PAYLOAD_SIZE");
+    auto digit=[](char c)->unsigned { if(c>='0'&&c<='9') return c-'0'; if(c>='a'&&c<='f') return c-'a'+10;
+        throw std::runtime_error("CONSOLE_PAYLOAD_ENCODING"); };
+    for(size_t i=0;i<encoded.size()/4;++i) {
+        unsigned low=digit(encoded[i*4])*16+digit(encoded[i*4+1]);
+        unsigned high=digit(encoded[i*4+2])*16+digit(encoded[i*4+3]);
+        out[i]=static_cast<wchar_t>(low+high*256); require(out[i]!=0,"CONSOLE_PAYLOAD_NUL");
+    }
+    out[encoded.size()/4]=0;
+}
+inline std::string console_utf8(const wchar_t* value) {
+    size_t length=wcsnlen_s(value,32769); require(length<32769,"CONSOLE_RESPONSE_SIZE");
+    if(!length) return {};
+    int size=WideCharToMultiByte(CP_UTF8,WC_ERR_INVALID_CHARS,value,static_cast<int>(length),nullptr,0,nullptr,nullptr);
+    require(size>0,"CONSOLE_RESPONSE_ENCODING"); std::string result(size,0);
+    WideCharToMultiByte(CP_UTF8,WC_ERR_INVALID_CHARS,value,static_cast<int>(length),result.data(),size,nullptr,nullptr);
+    return result;
+}
+
 struct RuntimeSessionController {
     HANDLE mapping = nullptr;
     HANDLE target_process = nullptr;
@@ -55,7 +75,7 @@ inline void run_runtime_session(DWORD pid, DWORD thread, int32_t object_index, i
     packet.request.object_index = object_index; packet.request.object_serial = object_serial;
     packet.request.function_index = function_index; packet.request.function_serial = function_serial;
     wchar_t executable[32768]; require(GetModuleFileNameW(nullptr, executable, 32768) != 0, "SESSION_SELF_PATH");
-    auto path = std::filesystem::path(executable).parent_path().parent_path() / L"runtime-session" / L"runtime_session_v2.dll";
+    auto path = std::filesystem::path(executable).parent_path().parent_path() / L"runtime-session" / L"runtime_session_v3.dll";
     connection.module = LoadLibraryW(path.c_str()); require(connection.module != nullptr, "SESSION_DLL_LOAD_FAILED");
     auto callback = reinterpret_cast<HOOKPROC>(GetProcAddress(connection.module, "SessionScheduleHook"));
     require(callback != nullptr, "SESSION_EXPORT_MISSING");
@@ -67,16 +87,22 @@ inline void run_runtime_session(DWORD pid, DWORD thread, int32_t object_index, i
     std::cout << "{\"event\":\"session_ready\",\"pid\":" << pid << ",\"game_thread_id\":" << thread << "}\n" << std::flush;
     std::string command;
     while (std::getline(std::cin, command)) {
+        auto separator=command.find(' ');
+        packet.console_text[0]=0; packet.console_dropped=0;
+        if(separator!=std::string::npos) { decode_console_payload(command.substr(separator+1),packet.console_text); command.resize(separator); }
         DWORD action = command == "enable" ? SessionEnable : command == "disable" ? SessionDisable :
             command == "invoke" ? SessionInvoke : command == "drain" ? SessionDrain :
             command == "ping" ? SessionPing : command == "close" ? SessionClose :
             command == "console-attach" ? SessionConsoleAttach : command == "console-detach" ? SessionConsoleDetach :
-            command == "console-status" ? SessionConsoleStatus : 0;
+            command == "console-status" ? SessionConsoleStatus : command == "console-poll" ? SessionConsolePoll :
+            command == "console-execute" ? SessionConsoleExecute : command == "console-print" ? SessionConsolePrint : 0;
         require(action != 0, "SESSION_UNKNOWN_COMMAND");
         connection.command(action);
         std::cout << "{\"event\":\"session_response\",\"command\":" << quote(command)
                   << ",\"result\":" << packet.request.result << ",\"closed\":" << (packet.closed ? "true" : "false")
                   << ",\"close_reason\":" << packet.close_reason << ",\"dropped\":" << (action == SessionDrain ? packet.events.dropped : 0)
+                  << ",\"console_text\":" << quote(action==SessionConsolePoll ? console_utf8(packet.console_text) : "")
+                  << ",\"console_dropped\":" << packet.console_dropped
                   << ",\"events\":[";
         if (action == SessionDrain) {
             require(packet.events.count <= 64, "SESSION_EVENT_COUNT_INVALID");

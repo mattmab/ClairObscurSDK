@@ -1,5 +1,6 @@
 #pragma once
 #include "console_construction.h"
+#include "console_commands.h"
 
 static uint64_t attached_console = 0, attached_viewport = 0;
 static int32_t console_index = -1, viewport_index = -1;
@@ -19,7 +20,8 @@ inline bool attachment_valid(uint64_t base) {
         fixed_slot(base,console_index,cs)==attached_console && fixed_slot(base,viewport_index,vs)==attached_viewport &&
         local_read<uint64_t>(attached_viewport+0x40)==attached_console &&
         local_read<uint64_t>(attached_console+0x20)==attached_viewport &&
-        local_read<uint64_t>(attached_console)==base+0x7818778;
+        (local_read<uint64_t>(attached_console)==base+0x7818778 ||
+         local_read<uint64_t>(attached_console)==reinterpret_cast<uint64_t>(console_shadow+1));
 }
 inline uint32_t attach_console(uint64_t base, SchedulePacket* packet) {
     if (attached_console) return attachment_valid(base) ? 0 : 121;
@@ -34,22 +36,30 @@ inline uint32_t attach_console(uint64_t base, SchedulePacket* packet) {
     if (InterlockedCompareExchangePointer(reinterpret_cast<void* volatile*>(viewport+0x40),
             reinterpret_cast<void*>(console),nullptr)!=nullptr) return 123;
     attached_console=console; attached_viewport=viewport;
+    if (!install_console_commands(base,console)) return 130;
     return attachment_valid(base) ? 0 : 124;
 }
 inline uint32_t detach_console(uint64_t base, bool shutting_down) {
     if (!attached_console) return 0;
     uint32_t error=0;
     if (!shutting_down) {
-        if (!attachment_valid(base)) error=125;
+        if (!attachment_valid(base)) {
+            // Never write through an unvalidated UObject. Disable dispatch; the
+            // pinned fallback remains safe if an old object still owns the table.
+            remove_console_commands(0,true);
+            error=125;
+        }
         else {
             uint64_t transition=local_read<uint64_t>(local_read<uint64_t>(attached_console)+0x3c8);
             if (transition!=base+0x3dcff60) return 126;
             using Transition=void(__fastcall*)(void*,uint64_t);
             reinterpret_cast<Transition>(transition)(reinterpret_cast<void*>(attached_console),0);
+            if (!remove_console_commands(attached_console,false)) return 131;
             if (InterlockedCompareExchangePointer(reinterpret_cast<void* volatile*>(attached_viewport+0x40),nullptr,
                     reinterpret_cast<void*>(attached_console))!=reinterpret_cast<void*>(attached_console)) error=127;
         }
     }
+    if (shutting_down) remove_console_commands(0,true);
     // During exit purge never dereference cached engine objects.
     attached_console=attached_viewport=0; console_index=viewport_index=-1;
     console_serial=viewport_serial=0;

@@ -36,6 +36,22 @@ uint32_t backend_open(SessionPacket* packet) {
 uint32_t backend_command(SessionPacket* packet) {
     if (!lifetime_valid()) return 61;
     switch (packet->request.action) {
+    case SessionConsolePoll:
+        if (!attachment_valid(runtime_base)) return 132;
+        packet->request.result=poll_console_command(packet->console_text)?1:0;
+        packet->console_dropped=console_dropped; console_dropped=0; return 0;
+    case SessionConsoleExecute:
+    case SessionConsolePrint: {
+        if (!attachment_valid(runtime_base)) return 132;
+        size_t length=wcsnlen_s(packet->console_text,32769);
+        if (length>=32769 || (packet->request.action==SessionConsoleExecute && length>4096)) return 133;
+        if (packet->request.action==SessionConsolePrint) console_write(attached_console,packet->console_text);
+        else {
+            ConsoleString value{packet->console_text,static_cast<int32_t>(length+1),static_cast<int32_t>(length+1)};
+            console_original_command(reinterpret_cast<void*>(attached_console),&value);
+        }
+        packet->request.result=0; return 0;
+    }
     case SessionConsoleAttach: {
         if (observing) return 120;
         uint32_t error=attach_console(runtime_base,&target);

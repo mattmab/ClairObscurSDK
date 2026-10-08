@@ -70,14 +70,22 @@ class SessionTransport:
             raise RuntimeQueryError(value.get('message', 'Native session failed'))
         return value
 
-    def command(self, command):
+    def command(self, command, payload=None):
         self._check_thread()
         if self._closed:
             raise RuntimeQueryError('Native session is closed')
-        if command not in ('enable', 'disable', 'invoke', 'drain', 'ping', 'close', 'console-attach', 'console-detach', 'console-status'):
+        if command not in ('enable', 'disable', 'invoke', 'drain', 'ping', 'close', 'console-attach', 'console-detach', 'console-status', 'console-poll', 'console-execute', 'console-print'):
             raise ValueError('Unsupported native session command')
+        suffix = ''
+        if payload is not None:
+            if command not in ('console-execute', 'console-print') or not isinstance(payload, str) or '\0' in payload:
+                raise ValueError('Invalid console payload')
+            encoded = payload.encode('utf-16le')
+            if len(encoded) > (8192 if command == 'console-execute' else 65536):
+                raise ValueError('Console payload is too long')
+            suffix = ' ' + encoded.hex()
         try:
-            self._process.stdin.write(command + '\n')
+            self._process.stdin.write(command + suffix + '\n')
             self._process.stdin.flush()
             response = self._read()
             if response.get('event') != 'session_response' or response.get('command') != command:
@@ -99,7 +107,10 @@ class SessionTransport:
         if self._process.poll() is None:
             self._process.kill()
         self._process.wait(timeout=10)
-        self._process.stdin.close()
+        try:
+            self._process.stdin.close()
+        except OSError:
+            pass  # A dead controller can reject the buffered pipe flush.
         self._reader.join(timeout=2)
         self._process.stdout.close()
 

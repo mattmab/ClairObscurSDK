@@ -8,6 +8,7 @@ import weakref
 from . import RuntimeQueryError, ObjectSnapshot, objects
 from ._callbacks import CallbackDispatcher, ObservedIdentity, ObserverContext
 from ._session import SessionTransport
+from ._console import Console
 
 TARGET = 'Actor.IsActorBeingDestroyed'
 
@@ -53,6 +54,7 @@ class Session:
         self._polling = False
         self._sequence = 0
         self.dropped_events = 0
+        self.console = Console(self)
         row = next(row for row in self._transport.objects if row['class_name'] == 'Actor')
         self._object = ObjectSnapshot(pid=self._transport.start['pid'], index=row['index'],
             serial=row['serial'], address=int(row['address'], 16), name=row['name'],
@@ -138,6 +140,7 @@ class Session:
         try:
             self._transport.close()
         finally:
+            self.console._close()
             self._dispatcher.close()
             self._hooks.clear()
             self._enabled = False

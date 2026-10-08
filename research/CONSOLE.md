@@ -1,5 +1,15 @@
 # Native console and persistent Python command integration
 
+## Latest status: live Python integration (v3)
+
+PROVEN on PID9552/GameThread36408, same recorded executable SHA256: the per-instance UConsole command slot +0x2c8 intercepts `py` into a bounded 16-entry queue. The controller polls copied UTF-16 text, executes in its persistent Python namespace, and schedules native output through +0x2d8. Original native commands pass through unchanged. The primary vtable clone retains its RTTI locator and 123 slots; only the command slot changes. Native code/storage remain pinned for late calls. Queue access is confined to the owning GameThread; atomic context checks reject other threads.
+
+PROVEN via in-game entry and visible output: `py print("Hello World")`; variable assignment returning41; a later command returning `(42, 9.0)` using retained counter and imported math; `py 1 / 0` displaying a traceback; subsequent `py help()` succeeding; `py sdk.console.execute("stat fps")` enabling the native119.98FPS/8.33ms display. A normal `stat fps` command disabled it through the original handler. Closing/reopening the UI retained Python state and scrollback. Tool screenshots and controller JSON responses preserve this evidence. One combined help/execute typing attempt did not reach the dispatcher; separately entered commands passed, so the combined attempt is not counted as success.
+
+PROVEN console-specific abrupt disconnect: terminated only SDK controller23084, leaving game9552 alive. Native target-owned cleanup removed the open UI. Independent `scripts/inspect_console_runtime.py` confirmed ViewportConsole=0; evidence/console-v3-after-disconnect.json. The host reported a dead-pipe error during abort; `_session.py` now suppresses the redundant close/flush error so it cannot mask the initiating failure. This cleanup change still needs regression coverage.
+
+IMPLEMENTED: `session.console.enable/disable/execute/write/poll`, persistent external namespace with `sdk` bound to that session, bounded output and tracebacks. The research host services console polling explicitly. Native command history works; intercepted Python history is currently dispatcher-only, not native Up navigation. Lexical completion is dispatcher-only. Custom registration exists in Python but direct native command interception/mod integration is pending. Configurable key changes and console-specific game exit/relaunch remain unvalidated. Earlier sections below are chronological findings, superseded by this status where stated.
+
 ## Required v0.1 capability (user addition, 2026-10-08)
 
 Native in-game console UI, preferably configurable tilde toggle; preserve the
