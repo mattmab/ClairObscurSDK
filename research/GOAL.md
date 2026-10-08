@@ -36,7 +36,8 @@ one-enabled-mod restriction must be resolved through shared session ownership.
 Initial source discovery found MattsBL4ModsMenu.sdkmod and its package source
 under BL4 sdk_mods/tools/matts_bl4_mods_menu, installed mods_base.sdkmod and
 console_mod_menu.sdkmod, and keybinds Python wrapper/stubs/native module. Audit
-and preservation are ongoing. CONSOLE_DUMPS.md records the short requested
+and preservation are ongoing; MANAGEMENT_PORT.md records the source audit,
+feature matrix and shared ownership design. CONSOLE_DUMPS.md records the short requested
 diagnostic investigation and target-specific UMG/input research leads.
 
 USER REQUIREMENT: Build an independent Python SDK for locally owned/offline Expedition 33. First capstone: our Python code enumerates real live objects through our independently validated native runtime layer. Static dumps, asset lists, and hard-coded names cannot satisfy it.
