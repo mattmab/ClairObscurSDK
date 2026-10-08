@@ -26,7 +26,7 @@ specimen does not establish support for arbitrary Unreal objects or functions.
 | Disconnect, shutdown and relaunch | Controller-death console detachment; game exit0 with observer/console/F10 active; SESSION_TARGET_EXITED clears namespace; isolated v5 console/mod run after normal Steam relaunch. | Proven |
 | Private Git infrastructure | Repository created with Private selected and post-create UI verification recorded in DECISIONS.md; authenticated Git pushes continue. Connector lacks access; no visibility mutation performed. | Proven creation; Git transport working |
 | Installation, education and checklist | README.md, DEVELOPMENT.md, SDK_API.md and research journals describe usage, why primitives work, source references, failure history, supported/unsupported behavior. | Implemented |
-| Private v0.1 development release | Candidate c204cbb archive and manifest passed isolated live smoke. Version0.1.0 source is prepared; final archive verification is next. The separate completed-analysis requirement remains pending. No public publishing authorized. | Ready for packaging |
+| Private v0.1 development release | Private v0.1 archive from clean e82dd8e passed98 manifest hashes/CRC, isolated live smoke and console attach/detach. Native DLL matches the prior UI/relaunch-validated v5. See MILESTONES.md and evidence/private-v0.1-package.json. Separate completed-analysis requirement remains pending; no public publishing. | Proven |
 
 The evidence supports a small build-specific SDK, not BL-SDK feature parity.
 Arbitrary function marshalling, object GC ownership, writes, synchronous event
