@@ -6,7 +6,7 @@ Evidence labels: OBSERVED = directly seen; PROVEN = reproduced with a stated tes
 
 ## Status
 
-Not yet investigated. No Expedition 33 layouts, offsets, or runtime APIs are validated.
+Operational and fixture-validated. Expedition 33 analysis is beginning; no game runtime layouts or offsets are validated.
 
 ## Evidence discipline
 
@@ -41,3 +41,26 @@ PROVEN: Visual Studio Build Tools installer completed with exit code 0. Reposito
 PROVEN: Existing Ghidra source dependency-fetch task completed successfully (Gradle 9.8.0, Java 25), exit 0. Distribution compilation is running; this does not yet prove a launchable Ghidra or operational backend.
 
 OBSERVED: Computer Use window enumeration now succeeds after the earlier Escape interruption. No further intervention requested.
+
+STALE/DISPROVEN build environment: first distribution build exited 1 after 273 tasks because native toolchain discovery ran before Windows SDK installation completed; it retained `!WindowsSdkDir!` and an empty SDK version. The independently reproduced C++ fixture succeeds after installer exit 0. Retrying distribution with --no-daemon to force fresh native SDK discovery; preserving first failure in evidence/ghidra-build.log and retry in evidence/ghidra-build-sdk-ready.log.
+
+PROVEN retry progress: fresh Gradle discovery reports C:/Program Files (x86)/Windows Kits/10 and SDK 10.0.26100.0; native decompiler compilation and linking completed. Initial missing-SDK build failure was transient installation timing, not an unresolved compiler incompatibility.
+
+OBSERVED launcher detail: Ghidra LaunchSupport AppConfig reads application.settingsdir from support/launch.properties when saving its JDK selection. Passing the property only as a caller JVM argument would redirect the main application but not this earlier step. scripts/configure-ghidra.ps1 applies the D: directories to the built distribution's launch.properties before its first launch. It is prepared, not yet executed against a finished distribution.
+
+PROVEN: Existing source built successfully with 719 Gradle tasks on the SDK-ready retry. Archive build/dist/ghidra_12.3_DEV_20261008.zip extracted under the same source tree at build/local-install/ghidra_12.3_DEV. Ghidra GUI launched, startup completed, and Computer Use installed the GhidraMCP 7.0.0 ZIP stamped 12.3.
+
+Compatibility experiment: unmodified extension failed compilation at three DataTypeManager.remove(DataType, null) calls. Ghidra 12.3 DataTypeManager.java exposes boolean remove(DataType), with the monitored overload now taking a list. Adapted the three calls to the singleton overload; buildExtension succeeded. Reproducible patch: patches/ghidra-mcp-7.0.0-ghidra12.3.patch, against reference commit 9cc29c0f1efb6c63a7d6898c9a23aff39397f992. Java 25 override remains in scripts/ghidra-mcp-java25.init.gradle. This is local tooling compatibility, not any target-game discovery.
+
+OBSERVED persistent locations: extension under D:/HobbyDevelopment/Analysis/ClairObscurSDK/settings/Matt-ghidra/ghidra_12.3_DEV/Extensions/GhidraMCP; LaunchSupport java_home.save under settings/ghidra/ghidra_12.3_DEV. Both satisfy D: placement. Plugin enabling and live MCP tests remain pending.
+
+## Stage 2 proven: actual MCP fixture experiment
+
+PROVEN 2026-10-08: local GUI backend responds as GhidraMCP 7.0.0 at http://127.0.0.1:8089; the Python MCP stdio client discovers 212 tools with backend attached. GUI confirms GhidraMCPPlugin enabled in the project window. Non-shared project: D:/HobbyDevelopment/Analysis/ClairObscurSDK/Expedition33-23765773.gpr.
+
+MCP imported build/mcp-smoke/mcp_smoke.exe into /fixtures, auto-analyzed it, and returned x86:LE:64:default / Windows compiler / preferred base 0x140000000 / 5988 functions. find_functions enumerated a bounded page (its total 5896 excludes external functions; metadata counts 5988). get_functions returned research_add at 0x140007280 with signature int research_add(int,int) and decompilation returning param_1 + param_2, independently agreeing with our C source.
+
+set_comment wrote a unique plate annotation at 0x140007280. save_program succeeded; close_program returned closed_count 1 and released_cache true; open_program reopened /fixtures/mcp_smoke.exe without reanalysis. get_comment returned the exact annotation. This proves metadata, enumeration, decompilation, write and database persistence through the actual MCP path.
+
+Evidence files under evidence/: mcp-connected-tools.json, mcp-import-fixture-result.json, mcp-fixture-metadata.json, mcp-fixture-functions.json, mcp-fixture-decompile.json, mcp-fixture-comment-written.json, mcp-fixture-saved.json, mcp-fixture-closed.json, mcp-fixture-reopened.json, mcp-fixture-persisted-comment.json. Corresponding argument JSON and scripts/ghidra_mcp_client.py reproduce each request. Game layouts remain unvalidated; this proves the research instrument only.
+
