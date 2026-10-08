@@ -19,7 +19,7 @@ All live results below apply only to the recorded executable fingerprint.
 | History/autocomplete | Python dispatcher history and lexical completion APIs implemented; native Up/Tab integration for intercepted commands unsupported. |
 | Disconnect/relaunch | Normal close, controller death, game shutdown and packaged operation after relaunch tested. |
 | Gameplay/map transitions | Not validated; current live console/relationship evidence is from the main menu. |
-| Final release | Pending completion of the recovered Ghidra analysis and final research/package reconciliation. |
+| Private v0.1 | Functional release criteria passed; package verification is recorded in research/MILESTONES.md. The recovered Ghidra research pass is tracked separately. |
 
 ## Interactive native console
 
@@ -165,4 +165,5 @@ a build fixture copy. Live verifiers require the supported running game and do n
 fall back to saved dumps. `verify_game_exit.py` arms a hook and waits for normal
 GUI quit; run it only when deliberately testing shutdown. Research scripts write
 local ignored evidence. Ghidra autoanalysis completion and broader research remain
-tracked separately; a development candidate is not a completed v0.1 release.
+tracked separately. The private v0.1 release covers the validated functionality
+and explicit boundaries above; it does not claim exhaustive binary analysis.

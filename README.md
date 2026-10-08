@@ -1,6 +1,6 @@
 # Expedition 33 independent Python SDK research
 
-Status: **live Python object enumeration and interactive in-game Python work**. The independently derived runtime also supports native class and nested type metadata, stored boolean reads, a fixed game-thread reflected invocation, persistent removable observation with Python callbacks, and a trivial mod lifecycle. General calls and object ownership remain limited; this is a private development candidate.
+Status: **live Python object enumeration and interactive in-game Python work**. The independently derived runtime also supports native class and nested type metadata, stored boolean reads, a fixed game-thread reflected invocation, persistent removable observation with Python callbacks, and a trivial mod lifecycle. General calls and object ownership remain limited; this is the private v0.1 development SDK. The recovered whole-image Ghidra pass is tracked separately and remains in progress.
 
 Primary goal: independently discover the local game's Unreal runtime and build a
 Python-facing SDK, culminating in a private v0.1 with verified live object queries,
