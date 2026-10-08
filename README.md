@@ -1,6 +1,6 @@
 # Expedition 33 independent Python SDK research
 
-Status: **live Python object enumeration works**. Native class metadata, stored boolean reads, a fixed harmless reflected invocation, and scoped native function observation with Python callbacks also work. Persistent hook sessions, general calls, broader reflection, and the complete SDK remain in development.
+Status: **live Python object enumeration and interactive in-game Python work**. The independently derived runtime also supports native class and nested type metadata, stored boolean reads, a fixed game-thread reflected invocation, persistent removable observation with Python callbacks, and a trivial mod lifecycle. General calls and object ownership remain limited; this is a private development candidate.
 
 Primary goal: independently discover the local game's Unreal runtime and build a
 Python-facing SDK, culminating in a private v0.1 with verified live object queries,
@@ -13,6 +13,29 @@ No Borderlands offsets or layouts are accepted as Expedition 33 facts.
 All new tools, repositories, environments, caches, databases, and outputs live
 under `D:\HobbyDevelopment`. Existing installed runtimes may be reused.
 Game files are read-only research inputs. No public publishing is authorized.
+
+## Interactive console
+
+Launch the game normally, then run `launch.cmd console` from the checkout or a
+verified development bundle. Tilde opens the native Unreal console. An optional
+additional toggle is available with `launch.cmd console --console-key F10`.
+
+Enter native commands such as `stat fps`, or Python commands such as:
+
+```text
+py print("Hello World")
+py count = 1
+py count += 1; count
+py sdk.console.execute("stat fps")
+py my_mod.some_function()
+py help()
+```
+
+Python runs in the external controller's persistent session. Output and errors
+appear in the native console and SDK log. Closing the controller detaches the
+console and removes SDK command registrations. Native Up/Tab handling for
+intercepted Python commands is currently unsupported. See DEVELOPMENT.md for
+installation, mod commands, lifecycle rules and the tested feature boundaries.
 
 ## Reproduce the first capstone
 
@@ -31,4 +54,4 @@ Additional live checks: `scripts/verify_live_reflection.py` and `scripts/verify_
 
 For the actual invocation proof, build `scripts/build-scheduling-fixture.cmd` as well as the research probe, then run `scripts/verify_live_invocation.py`. `expedition33.invoke_proof()` temporarily attaches the scheduling DLL on the verified game thread, calls the fixed native Actor getter through reflection, and verifies hook removal and DLL unload. This is not an arbitrary invocation API.
 
-For scoped native function observation, also build `scripts/build-fixed-observer.cmd`, then run `scripts/verify_live_observer.py`. `expedition33.observe_proof(callback)` observes two real getter calls, restores the UFunction entry, and delivers copied context to Python. Callback exceptions are recorded and isolated. The observer DLL intentionally remains mapped until game exit to keep late-fetched callback pointers valid; event storage is detached and the engine entry restored before success. Restart the game before rebuilding that loaded DLL, or use a new reviewed module version. This is not yet a persistent `sdk.hook` session.
+For the earlier bounded observation proof, also build `scripts/build-fixed-observer.cmd`, then run `scripts/verify_live_observer.py`. `expedition33.observe_proof(callback)` observes two real getter calls, restores the UFunction entry, and delivers copied context to Python. The persistent API is `sdk.Session().hook(...)`, documented in DEVELOPMENT.md. Callback exceptions are contained. Native callback code intentionally remains mapped until game exit to keep late-fetched pointers valid; removal detaches event storage and restores the engine entry. Exit the game before rebuilding a loaded DLL under the same filename.

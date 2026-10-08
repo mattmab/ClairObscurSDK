@@ -6,7 +6,7 @@ Evidence labels: OBSERVED = directly seen; PROVEN = reproduced with a stated tes
 
 ## Status
 
-PROVEN: our native reader and Python API enumerate live objects in Steam build 23765773. Reflection, invocation, hooks, and the full SDK remain unfinished.
+PROVEN: independent live enumeration, native and nested reflection metadata, stored booleans, fixed game-thread invocation, persistent observer sessions, minimal mod lifecycle and native-console Python commands. Python remains in an external persistent controller; the isolated development bundle and launcher were tested after game relaunch. Earlier entries are chronological design/research history.
 
 ## Evidence discipline
 

@@ -1,5 +1,26 @@
 # Private development SDK
 
+## v0.1 feature checklist
+
+All live results below apply only to the recorded executable fingerprint.
+
+| Capability | Implementation and validation |
+| --- | --- |
+| Live Unreal object/name enumeration | Implemented; repeatedly tested in the real game and isolated bundles. |
+| Native class/property/function metadata | Implemented and live-tested; nested struct/enum names and array element descriptors included. |
+| Property values | Stored booleans implemented and live-tested; general values and writes unsupported. |
+| Reflected calls and persistent observation | Implemented and live-tested for the fixed default Actor getter; arbitrary functions unsupported. |
+| Trivial Python mod lifecycle | Load/enable/disable/unload implemented and live-tested; one enabled mod per controller. |
+| Native Unreal console UI | Constructed and attached through verified engine paths; Tilde open/close/reopen tested. |
+| Unreal commands | Normal engine path preserved; supported diagnostic commands and CVars tested. Shipping-disabled commands remain unavailable. |
+| In-game persistent Python | `py` dispatch, imports/variables, SDK/mod calls, output, expression results and tracebacks implemented and live-tested. |
+| Mod console commands | Registration, dispatch, explicit removal and owner/session cleanup implemented and live-tested. |
+| Configurable toggle | Additional F1-F12 binding implemented; F10 tested, including removal, shutdown and relaunch. |
+| History/autocomplete | Python dispatcher history and lexical completion APIs implemented; native Up/Tab integration for intercepted commands unsupported. |
+| Disconnect/relaunch | Normal close, controller death, game shutdown and packaged operation after relaunch tested. |
+| Gameplay/map transitions | Not validated; current live console/relationship evidence is from the main menu. |
+| Final release | Pending completion of the recovered Ghidra analysis and final research/package reconciliation. |
+
 ## Interactive native console
 
 Run `launch.cmd console` after the game reaches its main menu. Press the existing

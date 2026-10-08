@@ -6,7 +6,7 @@ Evidence labels: OBSERVED = directly seen; PROVEN = reproduced with a stated tes
 
 ## Status
 
-Fixture persistence was proven and game runtime findings were obtained. Backend recovered after a 16 GB heap exhaustion; whole-image analysis restarted with 32 GB. See the dated recovery entries below and the runtime journals for already-proven layouts.
+Fixture persistence and targeted game findings are proven. After both 16 GB and 32 GB analysis failures, the recovered baseline and reduced analyzer configuration saved successfully. The new GUI pass is running with address-table discovery, ASCII scanning and variadic-signature analysis disabled. Completion is not yet claimed; see the recovery entries below.
 
 ## Evidence discipline
 

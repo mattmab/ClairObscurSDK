@@ -6,7 +6,7 @@ Evidence labels: OBSERVED = directly seen; PROVEN = reproduced with a stated tes
 
 ## Status
 
-Not yet investigated. No Expedition 33 layouts, offsets, or runtime APIs are validated.
+The installed Steam build 23765773 and shipping executable are fingerprinted and independently PE-validated. Runtime support is gated by the full SHA256 below. Embedded version text supports UE 5.4.4; all SDK layouts are independently target-derived.
 
 ## Evidence discipline
 
@@ -51,3 +51,25 @@ Reproduce with scripts/inventory_modules.py; complete ordinary/delay import and 
 ## Compatibility rejection regression
 
 PROVEN: scripts/verify_compatibility.py exercises the exact supported_image function called by normal native startup before signature scanning, memory reads or attachment. It accepts the preserved original SHA256 and rejects a same-size copy with one flipped final byte (UNSUPPORTED_BUILD_SHA256), a different-size file (UNSUPPORTED_BUILD_SIZE), and a missing file (MODULE_FILE_OPEN_FAILED). Changes occur only in build/compatibility on D:, never in the installed game or preserved analysis input. The --check-image command is offline only; it cannot skip fingerprint validation on a live session. Evidence: evidence/compatibility.json. Initial verifier incorrectly expected failures on stdout; native errors use stderr, so the verifier was corrected to read the appropriate stream. The gate itself rejected the altered copy on both runs.
+
+
+## Static image catalog
+
+OBSERVED from the preserved PE: ten sections (Ghidra additionally represents headers as a memory block).
+
+| Section | RVA | Virtual bytes | Raw bytes |
+| --- | --- | ---: | ---: |
+| .text | 0x1000 | 114641932 | 114642432 |
+| .rdata | 0x6d56000 | 36712488 | 36712960 |
+| .data | 0x905a000 | 6245396 | 1901056 |
+| .pdata | 0x964f000 | 5808528 | 5808640 |
+| .msvcjmc | 0x9bda000 | 8 | 512 |
+| CPADinfo | 0x9bdb000 | 56 | 512 |
+| .rodata | 0x9bdc000 | 1936 | 2048 |
+| _RDATA | 0x9bdd000 | 383760 | 384000 |
+| .rsrc | 0x9c3b000 | 310224 | 310272 |
+| .reloc | 0x9c87000 | 2644452 | 2644480 |
+
+The ordinary import table contains 1103 entries from 41 DLLs, including Windows APIs, MSVC runtime, graphics/audio and OpenColorIO. There are 356 exported symbols, including libpng/sample-rate conversion and AntiLag module interfaces. These exports are not an exposed Unreal object SDK. Full ordinary/delay imports were already retained in all-pe-module-inventory.json; this compact catalog is evidence/static-image-catalog.json.
+
+RTTI lead rejection: a bounded MSVC class-name byte scan for UObject/UConsole/UGameViewportClient and property classes only found .?AVUObject@icu_64@@ at preferred VA0x14921e820. That is ICU namespaced UObject, not Unreal UObject. This scan is not proof that all RTTI is absent. Runtime Unreal class and FField metadata, validated code paths and vtable relationships provide the established anchors.

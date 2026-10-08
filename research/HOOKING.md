@@ -6,7 +6,7 @@ Evidence labels: OBSERVED = directly seen; PROVEN = reproduced with a stated tes
 
 ## Status
 
-PROVEN: a scoped Unreal UFunction entry observer reaches Python with copied object identity and return values. Repeated removal/restoration and Python exception isolation work. Persistent hook sessions and mod-facing handles remain pending. Temporary scheduling hooks still have independently verified removal/unload.
+PROVEN: persistent public Session hook handles observe the fixed native Actor getter, deliver copied contexts to external Python, contain callback exceptions, restore the entry on removal and clean up after disconnect. Normal game shutdown and relaunch were tested, including with the console active. Arbitrary function hooks and synchronous cancellation remain unsupported. Entries below preserve the chronological experiments.
 
 ## Evidence discipline
 
