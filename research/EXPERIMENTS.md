@@ -39,3 +39,9 @@ PROVEN: scripts/verify_live_bools.py reads Default__Actor and Default__HUD throu
 ## Dispatcher, function parameters and game thread
 
 PROVEN: live vtable slots on Object/Actor/HUD resolve to statically inspected dispatch implementations. Python function metadata validates two single-byte boolean returns and a24-byte struct return. Wrong-owner query rejects. Ghidra create_function at observed native entry pointers resolves earlier missing-boundary failures. Game-thread DWORD27548 is owned by PID25988 according to Windows. Existing boolean live tests pass after the extension. No game invocation performed.
+
+## Thread scheduling and actual invocation
+
+PROVEN: independent fixture processes5172/14068/2480 ran callbacks on their exact main threads, returned42, rejected wrong-thread and non-game invocation requests, passed timeout/removal checks, unloaded DLLs and exited0. The fixture cleanup was improved to avoid posting WM_QUIT after the child had already exited (thread-ID reuse risk).
+
+PROVEN: game-thread ping in PID25988/TID27548 then actual Python reflected call Default__Actor.IsActorBeingDestroyed returnedfalse twice. Native validations and callback result transport passed. Before/after stored boolean observations match; scheduling hook removed; remote DLL absent before success. Game remained healthy at menu. No save loaded, no gameplay mutation performed. Source: native/scheduling_*.cpp, scheduling_protocol.h, fixed_invocation.h, thread_ping.h; verifier: scripts/verify_live_invocation.py.

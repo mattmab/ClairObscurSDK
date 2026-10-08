@@ -1,6 +1,6 @@
 # Expedition 33 independent Python SDK research
 
-Status: **live Python object enumeration works**. Native class metadata and stored boolean reads also work. Invocation, hooks, broader reflection, and the complete SDK remain in development.
+Status: **live Python object enumeration works**. Native class metadata and stored boolean reads also work. A fixed harmless reflected invocation also works. General calls, engine-function hooks, broader reflection, and the complete SDK remain in development.
 
 Primary goal: independently discover the local game's Unreal runtime and build a
 Python-facing SDK, culminating in a private v0.1 with verified live object queries,
@@ -28,3 +28,5 @@ D:\HobbyDevelopment\Python\expedition33-tools\Scripts\python.exe scripts\verify_
 `import expedition33; expedition33.objects()` returns immutable observations of live objects. These are snapshots, not GC-pinned engine handles. The reader rejects an unknown executable fingerprint. Evidence outputs remain local and ignored by Git.
 
 Additional live checks: `scripts/verify_live_reflection.py` and `scripts/verify_live_bools.py`. Python entry points are `reflect_class("HUD")` and `stored_bools("Default__Actor")`.
+
+For the actual invocation proof, build `scripts/build-scheduling-fixture.cmd` as well as the research probe, then run `scripts/verify_live_invocation.py`. `expedition33.invoke_proof()` temporarily attaches the scheduling DLL on the verified game thread, calls the fixed native Actor getter through reflection, and verifies hook removal and DLL unload. This is not an arbitrary invocation API.

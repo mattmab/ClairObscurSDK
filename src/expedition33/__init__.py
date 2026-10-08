@@ -2,8 +2,9 @@
 
 Every objects() call invokes our native reader against the running game.
 Returned values are observations, not durable UObject handles. Native class
-metadata and stored boolean observations are supported; invocation, hooks and
-mod loading remain unimplemented.
+metadata, stored boolean observations and a fixed reflected invocation proof
+are supported. General invocation, engine-function hooks and mod loading remain
+unimplemented.
 """
 from dataclasses import dataclass
 import json
@@ -90,6 +91,17 @@ class FunctionMetadata:
     return_offset: int | None
     entry_rva: int
     parameters: tuple[FunctionParameter, ...]
+
+
+@dataclass(frozen=True)
+class InvocationProof:
+    pid: int
+    game_thread_id: int
+    object_index: int
+    function_index: int
+    result: bool
+    hook_removed: bool
+    remote_module_unloaded: bool
 
 
 def objects(*, limit: int = 0) -> list[ObjectSnapshot]:
@@ -221,6 +233,34 @@ def reflect_function(qualified_name: str) -> FunctionMetadata:
         raise RuntimeQueryError(f'Invalid function metadata response: {error}') from error
 
 
+def invoke_proof() -> InvocationProof:
+    """Call Default__Actor.IsActorBeingDestroyed through reflected dispatch.
+
+    This deliberately fixed research experiment temporarily attaches our native
+    DLL to the verified game thread, validates the target and its parameter
+    layout, invokes the reflected dispatcher, removes the scheduling hook and
+    verifies DLL unload. It is not a general arbitrary function-call API.
+    """
+    start, samples = _query(['--invoke-proof'])
+    try:
+        objects_seen = [row for row in samples if row['event'] == 'object']
+        invocations = [row for row in samples if row['event'] == 'fixed_invocation']
+        if len(objects_seen) != 2 or len(invocations) != 1 or len(samples) != 3:
+            raise ValueError('Incomplete invocation proof')
+        targets = {row['name']: row for row in objects_seen}
+        obj, fn = targets['Default__Actor'], targets['IsActorBeingDestroyed']
+        result = invocations[0]
+        if (obj['class_name'] != 'Actor' or fn['class_name'] != 'Function' or
+                result['observed_pid'] != start['pid'] or result['observed_tid'] != start['game_thread_id'] or
+                result['callbacks'] != 1 or type(result['result']) is not int or result['result'] not in (0, 1) or
+                result['hook_removed'] is not True or result['remote_module_unloaded'] is not True):
+            raise ValueError('Invocation identity, return or cleanup mismatch')
+        return InvocationProof(start['pid'], start['game_thread_id'], obj['index'], fn['index'],
+                               bool(result['result']), True, True)
+    except (ValueError, KeyError, TypeError) as error:
+        raise RuntimeQueryError(f'Invalid invocation proof response: {error}') from error
+
+
 def _query(arguments: list[str]) -> tuple[dict, list[dict]]:
     root = Path(__file__).resolve().parents[2]
     executable = root / 'build' / 'research-probe' / 'research_probe.exe'
@@ -250,5 +290,5 @@ def _query(arguments: list[str]) -> tuple[dict, list[dict]]:
         raise RuntimeQueryError(f'Invalid native bridge response: {error}') from error
 
 
-__all__ = ['objects', 'reflect_class', 'stored_bools', 'reflect_function', 'ObjectSnapshot', 'ClassMetadata',
-           'PropertyMetadata', 'StoredBool', 'BoolSnapshot', 'FunctionParameter', 'FunctionMetadata', 'RuntimeQueryError']
+__all__ = ['objects', 'reflect_class', 'stored_bools', 'reflect_function', 'invoke_proof', 'ObjectSnapshot', 'ClassMetadata',
+           'PropertyMetadata', 'StoredBool', 'BoolSnapshot', 'FunctionParameter', 'FunctionMetadata', 'InvocationProof', 'RuntimeQueryError']

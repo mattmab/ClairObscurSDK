@@ -153,12 +153,18 @@ std::string read_name(const Reader& reader, uint64_t pool, uint32_t id, uint32_t
     return value;
 }
 
+#include "thread_ping.h"
+
 int main(int argc, char** argv) {
     try {
         uint32_t limit = 32;
         std::string reflect_class;
         std::string bool_object;
         std::string function_owner, function_name;
+        bool thread_ping = argc == 2 && std::string(argv[1]) == "--thread-ping";
+        bool invoke_proof = argc == 2 && std::string(argv[1]) == "--invoke-proof";
+        if (invoke_proof) limit = 0;
+        int32_t proof_object = -1, proof_object_serial = 0, proof_function = -1, proof_function_serial = 0;
         if (argc == 3 && std::string(argv[1]) == "--limit") limit = std::stoul(argv[2]);
         else if (argc == 3 && std::string(argv[1]) == "--reflect-class") {
             reflect_class = argv[2]; limit = 0;
@@ -172,7 +178,7 @@ int main(int argc, char** argv) {
                     "FUNCTION_NAME_REQUIRES_OWNER_DOT_NAME");
             function_owner = qualified.substr(0, dot); function_name = qualified.substr(dot + 1); limit = 0;
         }
-        else require(argc == 1, "USAGE: research_probe.exe [--limit N | --reflect-class NAME | --read-bools OBJECT | --reflect-function OWNER.NAME]");
+        else require(argc == 1 || thread_ping || invoke_proof, "USAGE: research_probe.exe [--limit N | --reflect-class NAME | --read-bools OBJECT | --reflect-function OWNER.NAME | --thread-ping | --invoke-proof]");
         const bool reflection = !reflect_class.empty() || !bool_object.empty() || !function_name.empty();
         DWORD pid = discover_process();
         Handle process(OpenProcess(PROCESS_VM_READ | PROCESS_QUERY_LIMITED_INFORMATION, FALSE, pid));
@@ -228,6 +234,11 @@ int main(int argc, char** argv) {
                   << ",\"registry_rva\":" << quote(hex(registry.global_rva))
                   << ",\"name_pool_rva\":" << quote(hex(names.global_rva))
                   << ",\"num_elements\":" << array.num_elements << ",\"num_chunks\":" << array.num_chunks << "}\n";
+        if (thread_ping) {
+            run_thread_ping(pid, game_thread);
+            std::cout << "{\"event\":\"snapshot_end\",\"emitted\":0}\n";
+            return 0;
+        }
         uint32_t emitted = 0, null_slots = 0, changing_slots = 0;
         for (int32_t i = 0; i < array.num_elements && (!limit || emitted < limit); ++i) {
             auto item = item_at(i);
@@ -241,6 +252,16 @@ int main(int argc, char** argv) {
             auto name = read_name(reader, pool, object.name_id, object.name_number);
             auto class_name = read_name(reader, pool, cls.name_id, cls.name_number);
             auto meta_name = read_name(reader, pool, meta.name_id, meta.name_number);
+            if (invoke_proof) {
+                if (name == "Default__Actor" && class_name == "Actor") {
+                    require(proof_object == -1, "AMBIGUOUS_PROOF_OBJECT"); proof_object = i; proof_object_serial = item.serial;
+                } else if (name == "IsActorBeingDestroyed" && class_name == "Function") {
+                    auto outer = reader.get<ObjectHeader>(object.outer);
+                    require(item_at(outer.index).object == object.outer, "PROOF_FUNCTION_OWNER_INVALID");
+                    if (read_name(reader, pool, outer.name_id, outer.name_number) != "Actor") continue;
+                    require(proof_function == -1, "AMBIGUOUS_PROOF_FUNCTION"); proof_function = i; proof_function_serial = item.serial;
+                } else continue;
+            }
             if (!reflect_class.empty() && (name != reflect_class || class_name != "Class")) continue;
             if (!bool_object.empty() && name != bool_object) continue;
             if (!function_name.empty()) {
@@ -367,6 +388,10 @@ int main(int argc, char** argv) {
             }
         }
         require(emitted != 0, "NO_VALID_OBJECTS");
+        if (invoke_proof) {
+            require(proof_object >= 0 && proof_function >= 0 && emitted == 2, "PROOF_TARGETS_MISSING_OR_UNSTABLE");
+            run_thread_ping(pid, game_thread, 1, proof_object, proof_object_serial, proof_function, proof_function_serial);
+        }
         std::cout << "{\"event\":\"snapshot_end\",\"emitted\":" << emitted
                   << ",\"null_slots\":" << null_slots << ",\"changing_slots\":" << changing_slots << "}\n";
         return 0;

@@ -32,4 +32,8 @@ PROVEN: Default__Actor index28233 exposes33 booleans; Default__HUD index29206 ex
 
 ## Function metadata
 
-`reflect_function("Actor.IsActorBeingDestroyed") -> FunctionMetadata` returns owner/name/index, process and game-thread IDs, flags, parameter buffer size, return offset, build-scoped entry RVA and reflected parameters. Owner/name ambiguity fails. This is a read-only inspection API; entry RVAs are research evidence, not externally callable pointers. No invocation API is implemented yet. scripts/verify_live_functions.py checks two independently decompiled boolean thunks, a24-byte struct return, and wrong-owner rejection.
+`reflect_function("Actor.IsActorBeingDestroyed") -> FunctionMetadata` returns owner/name/index, process and game-thread IDs, flags, parameter buffer size, return offset, build-scoped entry RVA and reflected parameters. Owner/name ambiguity fails. This is a read-only inspection API; entry RVAs are research evidence, not externally callable pointers. The fixed invocation proof below is available; this metadata API itself remains read-only. scripts/verify_live_functions.py checks two independently decompiled boolean thunks, a24-byte struct return, and wrong-owner rejection.
+
+## Fixed invocation proof
+
+`invoke_proof() -> InvocationProof` performs the actual reflected call Default__Actor.IsActorBeingDestroyed on the game thread, returning process/thread IDs, live registry indices, boolean result and verified hook-removal/module-unload status. It accepts no target/function arguments. This is a controlled invocation experiment, not a general call API or gameplay feature. A skipped dispatcher leaves a0xcc sentinel and fails rather than returning a fabricated result.

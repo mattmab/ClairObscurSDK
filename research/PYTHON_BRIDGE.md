@@ -25,3 +25,7 @@ The first game-facing module now works through read-only native IPC; embedded Py
 PROVEN: `src/expedition33` calls our native `research_probe.exe` via JSONL IPC. It requires successful process exit, matching begin/end records, matching counts, and unique indices before returning immutable snapshots. It has no static-dump fallback. Native access uses only process query and memory-read rights. The process executable SHA256 and runtime signature windows must match before enumeration.
 
 This external reader minimizes the first experiment's lifecycle requirements. It is not yet an invocation or callback bridge; game-thread execution, GC lifetime, interpreter shutdown, and mod unloading remain open work.
+
+## First game-thread execution path
+
+PROVEN: external CPython -> native controller subprocess -> Windows thread-specific scheduling DLL -> validated reflected dispatcher -> shared-memory response -> Python InvocationProof. Python stays outside the game. The temporary bridge closes after each fixed call and verifies remote DLL unload. This is an execution bridge now, but persistent callback delivery and mod teardown remain unimplemented.

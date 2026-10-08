@@ -6,7 +6,7 @@ Evidence labels: OBSERVED = directly seen; PROVEN = reproduced with a stated tes
 
 ## Status
 
-Dispatch and function metadata are identified and corroborated against live objects. No game function has been invoked by our code yet.
+Dispatch and function metadata are identified and corroborated against live objects. PROVEN: Python invokes the fixed Default__Actor.IsActorBeingDestroyed specimen through the reflected dispatcher on the verified game thread.
 
 ## Evidence discipline
 
@@ -28,6 +28,16 @@ OBSERVED: Ghidra initially lacked boundaries for the boolean entry pointers. Cre
 
 OBSERVED:141082dd0 returns the literal GameThread when a supplied OS thread ID equals DWORD149272d30. Independent stack-report routine14107b770 labels that same ID GameThread. PROVEN live: RVA0x9272d30 holds27548; Windows OpenThread/GetProcessIdOfThread confirms it belongs to game PID25988. All values are tied to the executable fingerprint, not assumed across builds or restarts.
 
-NEXT: test a removable same-thread native scheduling bridge in an independent message-pump fixture; verify callback thread identity, result transfer, timeout handling and removal before installing it in the game. Then prove the Python -> bridge -> reflected dispatcher -> boolean return chain. In-process lifecycle and GC/reentrancy remain unproven. No injection or invocation has occurred yet.
+NEXT: test a removable same-thread native scheduling bridge in an independent message-pump fixture; verify callback thread identity, result transfer, timeout handling and removal before installing it in the game. Then prove the Python -> bridge -> reflected dispatcher -> boolean return chain. In-process lifecycle and GC/reentrancy remain unproven. The initially pending attachment and invocation experiments are now proven below.
 
 Reproduce read-only metadata with scripts/verify_live_functions.py. Evidence: mcp-scriptcore-functions.json, mcp-function-lookup.json, mcp-dispatch-callers.json, live-dispatch-candidates.json, mcp-dispatcher-functions.json, mcp-function-invoke.json, mcp-game-thread-functions.json, python-live-functions.json.
+
+## Actual invocation proof — 2026-10-08
+
+PROVEN: `expedition33.invoke_proof()` loads our scheduling DLL through a thread-specific WH_GETMESSAGE hook after the controller validates the executable SHA256 and runtime anchors. The callback runs on game PID25988 / verified GameThread27548. It resolves the supplied object/function registry indices and serials anew, checks Default__Actor/ClassDefaultObject flag, Actor ownership, IsActorBeingDestroyed identity, exact flags and one-byte ReturnValue layout, target code bytes and dispatcher/entry pointers. No arbitrary address or command is accepted.
+
+The callback calls Actor's actual reflected dispatcher at module+0x332bb90 with the live object, live UFunction and a one-byte parameter buffer initialized to0xcc. This delegates to the identified dispatcher. It requires a real0/1 result matching the pre/post state read specified by the independently decompiled thunk; the expected value is never substituted. Result=false, object index28233, function index10700. Repeated Python experiments passed.
+
+PROVEN cleanup: native controller removes the scheduling hook and observes scheduling_hook.dll disappear from the game's module list before returning success. Before/after reflected boolean snapshots matched. Computer Use confirms the game remains at its main menu. SEH reports access faults but cannot roll back arbitrary engine mutations; this proof is deliberately restricted to a native default-object getter. General objects, parameter marshalling, custom thread contexts and lifetime rules remain unfinished.
+
+Reproduce: scripts/build-scheduling-fixture.cmd, scripts/build-research-probe.cmd, then scripts/verify_live_invocation.py. Evidence: python-live-invocation-first.json, python-live-invocation.json, game-thread-ping-first.jsonl, scheduling-fixture-verified.json. Only stage9's fixed harmless specimen is established; engine-function hooks and mod lifecycle remain pending.
