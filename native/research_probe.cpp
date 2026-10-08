@@ -15,6 +15,8 @@
 #include <string>
 #include <vector>
 #include <unordered_set>
+#include <unordered_map>
+#include <functional>
 
 struct Handle {
     HANDLE value;
@@ -187,6 +189,8 @@ int main(int argc, char** argv) {
         bool observe_proof = argc == 2 && std::string(argv[1]) == "--observe-proof";
         bool console_construction = argc == 2 && std::string(argv[1]) == "--console-construct-proof";
         bool runtime_session = argc == 2 && std::string(argv[1]) == "--session";
+        bool catalog = argc == 2 && std::string(argv[1]) == "--catalog";
+        if (catalog) limit = 0;
         if (invoke_proof || observe_proof || runtime_session || console_construction) limit = 0;
         int32_t proof_object = -1, proof_object_serial = 0, proof_function = -1, proof_function_serial = 0;
         if (argc == 3 && std::string(argv[1]) == "--limit") limit = std::stoul(argv[2]);
@@ -202,7 +206,7 @@ int main(int argc, char** argv) {
                     "FUNCTION_NAME_REQUIRES_OWNER_DOT_NAME");
             function_owner = qualified.substr(0, dot); function_name = qualified.substr(dot + 1); limit = 0;
         }
-        else require(argc == 1 || thread_ping || invoke_proof || observe_proof || runtime_session || console_construction, "USAGE: research_probe.exe [--limit N | --reflect-class NAME | --read-bools OBJECT | --reflect-function OWNER.NAME | --thread-ping | --invoke-proof | --observe-proof | --session]");
+        else require(argc == 1 || catalog || thread_ping || invoke_proof || observe_proof || runtime_session || console_construction, "USAGE: research_probe.exe [--catalog | --limit N | --reflect-class NAME | --read-bools OBJECT | --reflect-function OWNER.NAME | --thread-ping | --invoke-proof | --observe-proof | --session]");
         const bool reflection = !reflect_class.empty() || !bool_object.empty() || !function_name.empty();
         DWORD pid = discover_process();
         Handle process(OpenProcess(PROCESS_VM_READ | PROCESS_QUERY_LIMITED_INFORMATION, FALSE, pid));
@@ -261,6 +265,45 @@ int main(int argc, char** argv) {
             return 0;
         }
         uint32_t emitted = 0, null_slots = 0, changing_slots = 0;
+        // UObject.Class and UStruct.SuperStruct are independently established for
+        // this image. Record registered identities, not borrowed native handles.
+        std::unordered_map<uint64_t, bool> catalog_classes;
+        std::unordered_set<uint64_t> catalog_visiting;
+        std::function<bool(uint64_t)> record_class = [&](uint64_t at) -> bool {
+            if (!at) return false;
+            auto known = catalog_classes.find(at);
+            if (known != catalog_classes.end()) return known->second;
+            require(catalog_visiting.size() < 128 && catalog_visiting.insert(at).second,
+                    "CATALOG_CLASS_CYCLE_OR_LIMIT");
+            const auto header = reader.get<ObjectHeader>(at);
+            const auto slot = item_at(header.index);
+            require(slot.object == at, "CATALOG_CLASS_NOT_REGISTERED");
+            const auto parent = reader.get<uint64_t>(at + 0x40);
+            const auto size = reader.get<int32_t>(at + 0x58);
+            const auto name = read_name(reader, pool, header.name_id, header.name_number);
+            // Metaclass default objects (observed Default__Class) may have a
+            // zero-sized uninitialized descriptor. Catalog it, but do not infer
+            // that it describes readable UObject instance storage.
+            require(size >= 0 && size <= 16 * 1024 * 1024,
+                    "CATALOG_CLASS_SIZE_INVALID name=" + name + " index=" +
+                    std::to_string(header.index) + " size=" + std::to_string(size));
+            const bool parent_is_metaclass = record_class(parent);
+            const bool is_metaclass = (name == "Class" && header.cls == at) || parent_is_metaclass;
+            int32_t parent_index = -1;
+            if (parent) parent_index = reader.get<ObjectHeader>(parent).index;
+            const auto again = reader.get<ObjectHeader>(at);
+            const auto slot_again = item_at(header.index);
+            require(slot_again.object == at && slot_again.serial == slot.serial &&
+                    std::memcmp(&header, &again, sizeof(header)) == 0 &&
+                    reader.get<uint64_t>(at + 0x40) == parent &&
+                    reader.get<int32_t>(at + 0x58) == size, "CATALOG_CLASS_CHANGED");
+            std::cout << "{\"event\":\"class_relation\",\"index\":" << header.index
+                      << ",\"serial\":" << slot.serial << ",\"name\":" << quote(name)
+                      << ",\"super_index\":" << parent_index << ",\"size\":" << size << "}\n";
+            catalog_visiting.erase(at);
+            catalog_classes.emplace(at, is_metaclass);
+            return is_metaclass;
+        };
         for (int32_t i = 0; i < array.num_elements && (!limit || emitted < limit); ++i) {
             auto item = item_at(i);
             if (!item.object) { ++null_slots; continue; }
@@ -273,6 +316,19 @@ int main(int argc, char** argv) {
             auto name = read_name(reader, pool, object.name_id, object.name_number);
             auto class_name = read_name(reader, pool, cls.name_id, cls.name_number);
             auto meta_name = read_name(reader, pool, meta.name_id, meta.name_number);
+            int32_t outer_index = -1, outer_serial = 0;
+            if (catalog) {
+                if (record_class(object.cls)) record_class(item.object);
+                if (object.outer) {
+                    const auto outer = reader.get<ObjectHeader>(object.outer);
+                    const auto outer_item = item_at(outer.index);
+                    const auto outer_again = reader.get<ObjectHeader>(object.outer);
+                    require(outer_item.object == object.outer &&
+                            std::memcmp(&outer, &outer_again, sizeof(outer)) == 0,
+                            "CATALOG_OUTER_CHANGED");
+                    outer_index = outer.index; outer_serial = outer_item.serial;
+                }
+            }
             if (invoke_proof || observe_proof || runtime_session || console_construction) {
                 if (name == "Default__Actor" && class_name == "Actor") {
                     require(proof_object == -1, "AMBIGUOUS_PROOF_OBJECT"); proof_object = i; proof_object_serial = item.serial;
@@ -302,6 +358,8 @@ int main(int argc, char** argv) {
                       << ",\"object_flags\":" << quote(hex(object.flags)) << ",\"item_flags\":" << quote(hex(item.flags))
                       << ",\"class_name\":" << quote(class_name) << ",\"metaclass_name\":" << quote(meta_name)
                       << ",\"class_index\":" << cls.index;
+            if (catalog) std::cout << ",\"outer_index\":" << outer_index
+                                  << ",\"outer_serial\":" << outer_serial;
             if (reflection) {
                 // Candidate slot corroborated by two name-lookup callers.
                 // Expose research evidence only; never invoke it here.
