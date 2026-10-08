@@ -33,3 +33,11 @@ Installation requested D:/HobbyDevelopment/Tools/VSBuildTools, shared D:/HobbyDe
 PROVEN: Isolated D:/HobbyDevelopment/Python/expedition33-tools environment installs/imports pefile and Ghidra MCP bridge 7.0.0. Exact packages in tooling-requirements.lock.txt. This is NOT proof of an operational MCP-to-Ghidra connection.
 
 OBSERVED in Ghidra ApplicationUtilities.java: JVM system properties application.settingsdir, application.cachedir, application.tempdir can redirect user state to D:. Use these when launching.
+
+## 2026-10-08 native build validation
+
+PROVEN: Visual Studio Build Tools installer completed with exit code 0. Repository fixture native/fixtures/mcp_smoke.c compiled using MSVC 14.44.35207, x64 vcvarsall environment, and installed Windows SDK; build/mcp-smoke/mcp_smoke.exe executed and printed `Expedition 33 research fixture: 42`, exit 0. Earlier missing stdio.h result is superseded: SDK installation had not finished at that time.
+
+PROVEN: Existing Ghidra source dependency-fetch task completed successfully (Gradle 9.8.0, Java 25), exit 0. Distribution compilation is running; this does not yet prove a launchable Ghidra or operational backend.
+
+OBSERVED: Computer Use window enumeration now succeeds after the earlier Escape interruption. No further intervention requested.

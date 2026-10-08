@@ -14,9 +14,9 @@ Record source or command, artifact path, game fingerprint, confidence, and repro
 
 ## Current state: 1/12 (build fingerprint established; inventory follow-ups remain)
 
-0. Environment inventoried — initial D: tree and installed app inspection complete; native compiler not yet located.
+0. Environment inventoried — D: tree and installed apps inspected; MSVC 14.44.35207 and Windows SDK 10.0.26100.0 installed; x64 fixture compilation and execution proven.
 1. Target game/build fingerprinted — SHA256, x64 PE headers, local Steam build identified.
-2. Ghidra MCP operational — pending; existing Ghidra is unbuilt source, dependency fetch running.
+2. Ghidra MCP operational — pending; dependency fetch succeeded, existing Ghidra source distribution compiling. MCP bridge handshake alone is proven; backend validation still pending.
 3. Expedition 33 binary analyzed — pending Ghidra.
 4. Unreal runtime anchors identified — pending.
 5. Name/object infrastructure understood — pending.

@@ -39,3 +39,11 @@ PROVEN by pefile 2024.8.26 independently of inspect_pe.py: machine 0x8664, prefe
 OBSERVED version resource: ProductVersion ++streams+ProjectW-release-CL-68322; CompanyName Sandfall Interactive. No anti-cheat DLL name appeared in the ordinary import table; delay imports and dynamically loaded modules are not covered by that statement.
 
 OBSERVED exact ASCII-range UTF-16 validation retains Unreal Engine 5.4.4 at 0x817f328. INFERRED engine minor version 5.4.4, pending corroboration by engine initialization/version paths. Date-like string 5.11.25-21.28.50:803][376] is not an engine version and must not be used as one.
+
+## Module inventory follow-up
+
+PROVEN: All 36 installed .exe/.dll files were parsed with pefile; none had a nonzero CLR metadata directory. No ILSpy target established. No Unity IL2CPP metadata/native-module pairing found in installation inventory; Cpp2IL remains unused.
+
+OBSERVED: Launcher Expedition33_Steam.exe contains .bind; shipping image does not. HYPOTHESIS: launcher may contain Steam wrapper/protection metadata. Do not unpack, patch, bypass, or use a direct-launch workaround. Current static research is isolated to the untouched shipping image. Use the normal authorized Steam launch for any eventual runtime experiment; reassess before interacting with any protection.
+
+Reproduce with scripts/inventory_modules.py; complete ordinary/delay import and section inventory is ../evidence/all-pe-module-inventory.json. File/import-name absence cannot establish absence of dynamically loaded or embedded protection.

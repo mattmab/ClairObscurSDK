@@ -1,0 +1,9 @@
+// Compile the MCP extension against the Java level used by our existing Ghidra.
+// Keep upstream build.gradle unchanged. Pass with -I <this file>.
+gradle.projectsEvaluated {
+    allprojects {
+        plugins.withId('java') {
+            java.toolchain.languageVersion = JavaLanguageVersion.of(25)
+        }
+    }
+}
