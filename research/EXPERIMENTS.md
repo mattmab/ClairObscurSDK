@@ -31,3 +31,7 @@ Repeat live query: 96,053 objects in 1.980 seconds, same PID and max index. Firs
 PROVEN: native/Python metadata queries for Actor/HUD/Object pass inheritance, inherited-property equality, distinct-name and bounds checks. Absent class returns NO_VALID_OBJECTS. Enumeration regression still reports96053.
 
 OBSERVED: Ghidra set_comment succeeded on registration/name routines and comments are returned in subsequent decompilation. save_program timed out with outcome unknown while whole-image analysis remained active; persistent save is not yet proven. GUI shows Constant Reference Analyzer progressing. No analysis cancellation or repeat save issued.
+
+## Stored property values
+
+PROVEN: scripts/verify_live_bools.py reads Default__Actor and Default__HUD through Python/native reflection, validates33/39 observations with true/false shared-byte specimens and repeated Actor equality. Metadata and object enumeration regressions also passed. All game access remains read-only; no invocation, injection, hooks, writes or save loading performed.

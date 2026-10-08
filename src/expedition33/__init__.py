@@ -2,8 +2,8 @@
 
 Every objects() call invokes our native reader against the running game.
 Returned values are observations, not durable UObject handles. Native class
-metadata is supported; property values, invocation, hooks and mod loading remain
-unimplemented.
+metadata and stored boolean observations are supported; invocation, hooks and
+mod loading remain unimplemented.
 """
 from dataclasses import dataclass
 import json
@@ -44,6 +44,27 @@ class ClassMetadata:
     hierarchy: tuple[str, ...]
     sizes: tuple[int, ...]
     properties: tuple[PropertyMetadata, ...]
+
+
+@dataclass(frozen=True)
+class StoredBool:
+    owner: str
+    name: str
+    element: int
+    value: bool
+    raw_byte: int
+    mask: int
+    byte_offset: int
+
+
+@dataclass(frozen=True)
+class BoolSnapshot:
+    pid: int
+    object_name: str
+    class_name: str
+    index: int
+    serial: int
+    values: tuple[StoredBool, ...]
 
 
 def objects(*, limit: int = 0) -> list[ObjectSnapshot]:
@@ -92,6 +113,41 @@ def reflect_class(name: str) -> ClassMetadata:
         raise RuntimeQueryError(f'Invalid reflection response: {error}') from error
 
 
+def stored_bools(object_name: str) -> BoolSnapshot:
+    """Observe stored BoolProperty values on a uniquely named native object.
+
+    Reads backing storage, without calling custom getters or pinning objects.
+    Values are individually checked observations, not an atomic object snapshot.
+    """
+    if not isinstance(object_name, str) or not object_name or len(object_name) > 1023 or '\x00' in object_name:
+        raise ValueError('object_name must be a nonempty object name')
+    start, samples = _query(['--read-bools', object_name])
+    try:
+        targets = [row for row in samples if row['event'] == 'object']
+        if len(targets) != 1 or targets[0]['name'] != object_name:
+            raise ValueError('Expected one matching native object')
+        values = []
+        keys = set()
+        for row in samples:
+            if row['event'] in ('object', 'class_metadata', 'property_metadata'):
+                continue
+            if row['event'] != 'stored_bool' or type(row['value']) is not bool:
+                raise ValueError('Invalid stored boolean event')
+            key = (row['owner'], row['name'], row['element'])
+            if key in keys or not 0 < row['mask'] <= 255 or not 0 <= row['raw_byte'] <= 255:
+                raise ValueError('Invalid boolean identity or encoding')
+            if bool(row['raw_byte'] & row['mask']) != row['value']:
+                raise ValueError('Boolean value disagrees with raw mask')
+            keys.add(key)
+            values.append(StoredBool(**{k: row[k] for k in
+                          ('owner', 'name', 'element', 'value', 'raw_byte', 'mask', 'byte_offset')}))
+        target = targets[0]
+        return BoolSnapshot(start['pid'], object_name, target['class_name'], target['index'],
+                            target['serial'], tuple(values))
+    except (ValueError, KeyError, TypeError) as error:
+        raise RuntimeQueryError(f'Invalid stored boolean response: {error}') from error
+
+
 def _query(arguments: list[str]) -> tuple[dict, list[dict]]:
     root = Path(__file__).resolve().parents[2]
     executable = root / 'build' / 'research-probe' / 'research_probe.exe'
@@ -121,5 +177,5 @@ def _query(arguments: list[str]) -> tuple[dict, list[dict]]:
         raise RuntimeQueryError(f'Invalid native bridge response: {error}') from error
 
 
-__all__ = ['objects', 'reflect_class', 'ObjectSnapshot', 'ClassMetadata',
-           'PropertyMetadata', 'RuntimeQueryError']
+__all__ = ['objects', 'reflect_class', 'stored_bools', 'ObjectSnapshot', 'ClassMetadata',
+           'PropertyMetadata', 'StoredBool', 'BoolSnapshot', 'RuntimeQueryError']

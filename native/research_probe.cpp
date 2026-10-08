@@ -157,11 +157,16 @@ int main(int argc, char** argv) {
     try {
         uint32_t limit = 32;
         std::string reflect_class;
+        std::string bool_object;
         if (argc == 3 && std::string(argv[1]) == "--limit") limit = std::stoul(argv[2]);
         else if (argc == 3 && std::string(argv[1]) == "--reflect-class") {
             reflect_class = argv[2]; limit = 0;
         }
-        else require(argc == 1, "USAGE: research_probe.exe [--limit N | --reflect-class NAME]");
+        else if (argc == 3 && std::string(argv[1]) == "--read-bools") {
+            bool_object = argv[2]; limit = 0;
+        }
+        else require(argc == 1, "USAGE: research_probe.exe [--limit N | --reflect-class NAME | --read-bools OBJECT]");
+        const bool reflection = !reflect_class.empty() || !bool_object.empty();
         DWORD pid = discover_process();
         Handle process(OpenProcess(PROCESS_VM_READ | PROCESS_QUERY_LIMITED_INFORMATION, FALSE, pid));
         require(process.value != nullptr, "OPEN_PROCESS_FAILED win32=" + std::to_string(GetLastError()));
@@ -223,7 +228,9 @@ int main(int argc, char** argv) {
             auto class_name = read_name(reader, pool, cls.name_id, cls.name_number);
             auto meta_name = read_name(reader, pool, meta.name_id, meta.name_number);
             if (!reflect_class.empty() && (name != reflect_class || class_name != "Class")) continue;
-            if (!reflect_class.empty()) require(emitted == 0, "AMBIGUOUS_NATIVE_CLASS_NAME");
+            if (!bool_object.empty() && name != bool_object) continue;
+            if (!bool_object.empty()) require(meta_name == "Class", "NATIVE_OBJECT_REQUIRED");
+            if (reflection) require(emitted == 0, "AMBIGUOUS_QUERY_NAME");
             auto again = item_at(i);
             auto object_again = reader.get<ObjectHeader>(item.object);
             if (again.object != item.object || again.serial != item.serial ||
@@ -233,10 +240,10 @@ int main(int argc, char** argv) {
                       << ",\"class_name\":" << quote(class_name) << ",\"metaclass_name\":" << quote(meta_name)
                       << ",\"class_index\":" << cls.index << "}\n";
             ++emitted;
-            if (!reflect_class.empty()) {
+            if (reflection) {
                 // Derived from target routines 1412792f0, 1412813d0, 14134c3b0,
                 // 1412ab240 and 1412aca00. Research metadata, not callable handles.
-                uint64_t owner = item.object;
+                uint64_t owner = bool_object.empty() ? item.object : object.cls;
                 std::unordered_set<uint64_t> owners;
                 while (owner) {
                     require(owners.size() < 128 && owners.insert(owner).second, "CLASS_CHAIN_CYCLE_OR_LIMIT");
@@ -277,6 +284,28 @@ int main(int argc, char** argv) {
                                   << ",\"name\":" << quote(field_name) << ",\"type\":" << quote(type)
                                   << ",\"offset\":" << p.offset << ",\"element_size\":" << p.element_size
                                   << ",\"dimension\":" << p.dimension << "}\n";
+                        if (!bool_object.empty() && type == "BoolProperty") {
+                            // Target export routine 14136a160 confirms this stored-value
+                            // truth test; this does not call custom property accessors.
+                            const uint32_t encoding = reader.get<uint32_t>(field + 0x70);
+                            const uint8_t byte_offset = uint8_t(encoding >> 8);
+                            const uint8_t mask = uint8_t(encoding >> 24);
+                            require(mask && byte_offset < p.element_size &&
+                                    p.dimension <= 1024, "BOOL_ENCODING_INVALID");
+                            for (int32_t element = 0; element < p.dimension; ++element) {
+                                uint64_t at = item.object + p.offset +
+                                              uint64_t(element) * p.element_size + byte_offset;
+                                uint8_t raw = reader.get<uint8_t>(at);
+                                require(reader.get<uint8_t>(at) == raw &&
+                                        reader.get<uint32_t>(field + 0x70) == encoding,
+                                        "BOOL_OBSERVATION_CHANGED");
+                                std::cout << "{\"event\":\"stored_bool\",\"owner\":" << quote(owner_name)
+                                          << ",\"name\":" << quote(field_name) << ",\"element\":" << element
+                                          << ",\"value\":" << ((raw & mask) ? "true" : "false")
+                                          << ",\"raw_byte\":" << unsigned(raw) << ",\"mask\":" << unsigned(mask)
+                                          << ",\"byte_offset\":" << unsigned(byte_offset) << "}\n";
+                            }
+                        }
                         field = p.next;
                     }
                     auto owner_again = item_at(header.index);
@@ -285,6 +314,11 @@ int main(int argc, char** argv) {
                             reader.get<uint64_t>(owner + 0x50) == first, "REFLECTION_OWNER_CHANGED");
                     owner = super;
                 }
+                auto final_item = item_at(i);
+                auto final_header = reader.get<ObjectHeader>(item.object);
+                require(final_item.object == item.object && final_item.serial == item.serial &&
+                        std::memcmp(&final_header, &object, sizeof(object)) == 0,
+                        "REFLECTION_TARGET_CHANGED");
             }
         }
         require(emitted != 0, "NO_VALID_OBJECTS");

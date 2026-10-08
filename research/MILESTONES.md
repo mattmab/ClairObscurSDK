@@ -12,7 +12,7 @@ Stages 0-2 are established; the object/name subset and first live Python capston
 
 Record source or command, artifact path, game fingerprint, confidence, and reproduction steps with each finding. Reference SDK behavior is not target-game evidence.
 
-## Current state: 7/12 frontier (live enumeration proven; whole-image analysis still running)
+## Current state: 8/12 frontier (live enumeration, reflection metadata and stored booleans proven; full analysis still running)
 
 0. Environment inventoried — D: tree and installed apps inspected; MSVC 14.44.35207 and Windows SDK 10.0.26100.0 installed; x64 fixture compilation and execution proven.
 1. Target game/build fingerprinted — SHA256, x64 PE headers, local Steam build identified.
@@ -22,7 +22,7 @@ Record source or command, artifact path, game fingerprint, confidence, and repro
 5. Name/object infrastructure: chunk traversal, identity fields, name decoding proven; GC lifetime and reflection pending.
 6. Native live enumeration: PROVEN with our read-only external process reader.
 7. Python live queries: PROVEN, 96,053 objects across two registry chunks in 1.967 seconds.
-8. Reflection/property reads: native class inheritance and property metadata PROVEN; actual property values pending.
+8. Reflection/property reads: native class inheritance and property metadata PROVEN; stored BoolProperty reads PROVEN; other value types and GC-safe handles pending.
 9. Safe invocation — pending.
 10. Hooks/callbacks — pending.
 11. Minimal mod loader — pending.

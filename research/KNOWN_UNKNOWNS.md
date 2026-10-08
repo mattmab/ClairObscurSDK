@@ -6,7 +6,7 @@ Evidence labels: OBSERVED = directly seen; PROVEN = reproduced with a stated tes
 
 ## Status
 
-Live object/name enumeration and native class metadata are validated for the recorded build. Property values, invocation, callbacks, GC-safe lifetime and mod lifecycle remain open.
+Live object/name enumeration and native class metadata are validated for the recorded build. Stored boolean values now work; other value types, invocation, callbacks, GC-safe lifetime and mod lifecycle remain open.
 
 ## Evidence discipline
 
