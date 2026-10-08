@@ -38,6 +38,10 @@ class PropertyMetadata:
     offset: int
     element_size: int
     dimension: int
+    struct_name: str | None = None
+    enum_name: str | None = None
+    inner_type: str | None = None
+    inner_element_size: int | None = None
 
 
 @dataclass(frozen=True)
@@ -155,7 +159,9 @@ def reflect_class(name: str) -> ClassMetadata:
         return ClassMetadata(start['pid'], name, tuple(row['name'] for row in classes),
                              tuple(row['size'] for row in classes),
                              tuple(PropertyMetadata(**{k: row[k] for k in
-                                   ('owner', 'name', 'type', 'offset', 'element_size', 'dimension')})
+                                   ('owner', 'name', 'type', 'offset', 'element_size', 'dimension')},
+                                   **{k: row.get(k) for k in
+                                   ('struct_name', 'enum_name', 'inner_type', 'inner_element_size')})
                                    for row in properties))
     except (ValueError, KeyError, TypeError) as error:
         raise RuntimeQueryError(f'Invalid reflection response: {error}') from error

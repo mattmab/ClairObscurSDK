@@ -22,7 +22,7 @@ Record source or command, artifact path, game fingerprint, confidence, and repro
 5. Name/object infrastructure: chunk traversal, identity fields, name decoding proven; GC lifetime and broader reflection remain pending.
 6. Native live enumeration: PROVEN with our read-only external process reader.
 7. Python live queries: PROVEN, 96,053 objects across two registry chunks in 1.967 seconds.
-8. Reflection/property reads: native class inheritance and property metadata PROVEN; stored BoolProperty reads PROVEN; other value types and GC-safe handles pending.
+8. Reflection/property reads: native class inheritance, property metadata and nested struct/enum/array type descriptors PROVEN; stored BoolProperty reads PROVEN; other value types and GC-safe handles pending.
 9. Safe invocation: PROVEN Python -> native -> game-thread reflected dispatch -> boolean return on Default__Actor; general marshalling remains pending.
 10. Hooks/callbacks — persistent UFunction observer and public sdk.Session handles PROVEN on the harmless getter, including Python SystemExit containment, ten enable/disable cycles, normal close, controller death cleanup and reopen. Independent native fixture proves concurrent removal/late-entry lifetime. Normal game shutdown with observer and console active exited0; a relaunched game passed isolated package smoke validation.
 11. Minimal mod loader — PROVEN through three live ExampleMod load/enable/disable/unload cycles; import and lifecycle failure cleanup and module/instance release covered by unit tests. Explicit trusted local mods only; one enabled mod at a time.

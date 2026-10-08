@@ -18,6 +18,14 @@ hud_fields = {(p.owner, p.name): p for p in hud.properties}
 assert actor_fields and actor_fields.items() <= hud_fields.items()
 assert actor_fields['Actor', 'PrimaryActorTick'].type == 'StructProperty'
 assert actor_fields['Actor', 'RootComponent'].type == 'ObjectProperty'
+assert actor_fields['Actor', 'PrimaryActorTick'].struct_name == 'ActorTickFunction'
+assert actor_fields['Actor', 'RemoteRole'].enum_name == 'ENetRole'
+enum_field = actor_fields['Actor', 'UpdateOverlapsMethodDuringLevelStreaming']
+assert enum_field.enum_name == 'EActorUpdateOverlapsMethod'
+assert enum_field.inner_type == 'ByteProperty' and enum_field.inner_element_size == 1
+assert actor_fields['Actor', 'Tags'].inner_type == 'NameProperty'
+assert actor_fields['Actor', 'Tags'].inner_element_size == 8
+assert actor_fields['Actor', 'Children'].inner_type == 'ObjectProperty'
 for cls in (actor, hud, root):
     sizes = dict(zip(cls.hierarchy, cls.sizes))
     assert len({(p.owner, p.name) for p in cls.properties}) == len(cls.properties)

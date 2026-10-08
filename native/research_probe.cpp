@@ -371,6 +371,49 @@ int main(int argc, char** argv) {
                         if (type == "BoolProperty") {
                             std::cout << ",\"bool_encoding\":" << quote(hex(reader.get<uint32_t>(field + 0x70)));
                         }
+                        // Target virtual type paths 14136f810 / 1412aa430 /
+                        // 14136e840 and child traversal 14133f630 / 1412abb90.
+                        // Metadata only; do not treat these pointers as lasting handles.
+                        if (type == "StructProperty" || type == "EnumProperty" || type == "ByteProperty") {
+                            const auto reference_offset = type == "EnumProperty" ? 0x78 : 0x70;
+                            const auto reference = reader.get<uint64_t>(field + reference_offset);
+                            require(reference || type == "ByteProperty", "PROPERTY_TYPE_REFERENCE_NULL");
+                            if (reference) {
+                                const auto target = reader.get<ObjectHeader>(reference);
+                                const auto target_item = item_at(target.index);
+                                require(target_item.object == reference, "PROPERTY_TYPE_NOT_REGISTERED");
+                                const auto target_class = reader.get<ObjectHeader>(target.cls);
+                                const auto target_kind = read_name(reader, pool, target_class.name_id, target_class.name_number);
+                                require(target_kind == (type == "StructProperty" ? "ScriptStruct" : "Enum"),
+                                        "PROPERTY_TYPE_CLASS_MISMATCH");
+                                const auto target_name = read_name(reader, pool, target.name_id, target.name_number);
+                                const auto target_again = reader.get<ObjectHeader>(reference);
+                                const auto item_again = item_at(target.index);
+                                require(std::memcmp(&target, &target_again, sizeof(target)) == 0 &&
+                                        item_again.object == reference && item_again.serial == target_item.serial &&
+                                        reader.get<uint64_t>(field + reference_offset) == reference,
+                                        "PROPERTY_TYPE_CHANGED");
+                                std::cout << (type == "StructProperty" ? ",\"struct_name\":" : ",\"enum_name\":")
+                                          << quote(target_name);
+                            }
+                        }
+                        if (type == "ArrayProperty" || type == "EnumProperty") {
+                            const auto inner_offset = type == "ArrayProperty" ? 0x78 : 0x70;
+                            const auto inner = reader.get<uint64_t>(field + inner_offset);
+                            require(inner && inner != field, "INNER_PROPERTY_INVALID");
+                            const auto child = reader.get<PropertyPrefix>(inner);
+                            require(child.owner == field && child.dimension == 1 && child.offset == 0 &&
+                                    child.element_size > 0 && child.element_size <= 16 * 1024 * 1024 &&
+                                    (reader.get<uint64_t>(child.type + 0x10) & 0x8000),
+                                    "INNER_PROPERTY_LAYOUT_INVALID");
+                            const auto child_type = reader.get<uint64_t>(child.type);
+                            const auto child_name = read_name(reader, pool, uint32_t(child_type), uint32_t(child_type >> 32));
+                            const auto child_again = reader.get<PropertyPrefix>(inner);
+                            require(std::memcmp(&child, &child_again, sizeof(child)) == 0 &&
+                                    reader.get<uint64_t>(field + inner_offset) == inner, "INNER_PROPERTY_CHANGED");
+                            std::cout << ",\"inner_type\":" << quote(child_name)
+                                      << ",\"inner_element_size\":" << child.element_size;
+                        }
                         std::cout << "}\n";
                         if (!bool_object.empty() && type == "BoolProperty") {
                             // Target export routine 14136a160 confirms this stored-value
