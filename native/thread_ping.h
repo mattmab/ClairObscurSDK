@@ -67,9 +67,9 @@ inline void run_thread_ping(DWORD pid, DWORD thread, DWORD action = 0,
     require(completed, "PING_CALLBACK_TIMEOUT");
     require(packet.error == 0, "FIXED_INVOCATION_REJECTED code=" + std::to_string(packet.error));
     require(packet.observed_pid == pid && packet.observed_tid == thread &&
-            (action == 0 ? packet.result == 42 : packet.result <= 1) && packet.callbacks == 1,
+            (action == 0 ? packet.result == 42 : action == 2 ? packet.result >= 0x10000 : packet.result <= 1) && packet.callbacks == 1,
             "PING_IDENTITY_OR_RESULT_MISMATCH");
-    std::cout << "{\"event\":" << quote(action == 0 ? "thread_ping" : "fixed_invocation") << ",\"observed_pid\":" << packet.observed_pid
+    std::cout << "{\"event\":" << quote(action == 0 ? "thread_ping" : action == 2 ? "console_construction" : "fixed_invocation") << ",\"observed_pid\":" << packet.observed_pid
               << ",\"observed_tid\":" << packet.observed_tid << ",\"result\":" << packet.result << ",\"callbacks\":1"
               << ",\"hook_removed\":true,\"remote_module_unloaded\":true}\n";
 }

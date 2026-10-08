@@ -1,5 +1,6 @@
 #include "scheduling_protocol.h"
 #include "fixed_invocation.h"
+#include "console_construction.h"
 
 extern "C" __declspec(dllexport) LRESULT CALLBACK ResearchScheduleHook(int code, WPARAM removed, LPARAM data) {
     if (code == HC_ACTION && removed == PM_REMOVE && data) {
@@ -21,6 +22,7 @@ extern "C" __declspec(dllexport) LRESULT CALLBACK ResearchScheduleHook(int code,
                         packet->error = 0; packet->result = 0;
                         if (packet->action == 0) packet->result = 19 + 23;
                         else if (packet->action == 1) packet->error = invoke_fixed_guarded(packet);
+                        else if (packet->action == 2) packet->error = construct_console_guarded(packet);
                         else packet->error = 1;
                         InterlockedIncrement(&packet->callbacks);
                         // Consume only a validated request belonging to this protocol.
