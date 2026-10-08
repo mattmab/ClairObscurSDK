@@ -6,7 +6,7 @@ Evidence labels: OBSERVED = directly seen; PROVEN = reproduced with a stated tes
 
 ## Status
 
-Fixture persistence and targeted game findings are proven. After both 16 GB and 32 GB analysis failures, the recovered baseline and reduced analyzer configuration saved successfully. The new GUI pass is running with address-table discovery, ASCII scanning and variadic-signature analysis disabled. Completion is not yet claimed; see the recovery entries below.
+Fixture persistence and targeted game findings are proven. After both 16 GB and 32 GB analysis failures, the recovered baseline and reduced analyzer configuration saved successfully. The reduced GUI pass completed with address-table discovery, ASCII scanning and variadic-signature analysis disabled. Save and close/reopen checks passed; see the final recovery entry below.
 
 ## Evidence discipline
 
@@ -88,3 +88,12 @@ PROVEN 2026-10-08: the 32 GB pass also exhausted memory in AddressTableAnalyzer 
 PROVEN: reopened database reports 288,589 functions and 290,529 symbols (evidence/recovery2-metadata.json). Disabled Create Address Tables, ASCII Strings, Variadic Function Signature Override, Data Reference.Create Address Tables and Reference.Create Address Tables. Each configuration request succeeded, and save_program returned saved=true (recovery2-config-saved.json). This confirms the recovered baseline is saveable; the failed pass's later findings were not retained.
 
 OBSERVED: restarted analysis through the GUI with these saved settings. recovery2-analysis-started.json reports analyzing=true and 290,732 functions. Completion and post-analysis save remain pending. Do not call MCP save while analysis runs: its implicit wait can obscure progress and disable normal cancellation.
+
+
+## 2026-10-08 recovered analysis completed and persisted
+
+PROVEN: application.log reports Auto Analysis completed at18:23:16 in3437.01 seconds. MCP analysis_status confirms analyzing=false with306134 functions. No new heap exhaustion occurred during this reduced pass. Warnings remain: no appropriate matching PDB; two Microsoft demangler failures creating data at146c5e130; exception-function creation failure at141004490; localized decompiler/pcode/read warnings. Completion means the configured reduced pass finished, not every byte or type was recovered. Disabled analyzers remain as recorded above.
+
+Seven build-scoped plate annotations were written for console command/output/state, SpawnObject, struct/array descriptors and startup-loop findings. save_program confirmed saved=true. close_program confirmed closed_count=1 (released_cache=false); open_program reopened /game/SandFall-Win64-Shipping.exe with auto_analyze=false. Metadata returned306134 functions and2182806 symbols; get_comment returned all7 exact expected annotations. This is save/close/reopen verification in the same JVM, not a full JVM restart test.
+
+Evidence: recovery2-analysis-progress.json, recovery2-final-saved.json, recovery2-final-closed.json, recovery2-final-reopened.json, recovery2-final-metadata.json, recovery2-final-comments.json, release-annotation-*-written.json. Previous failure/recovery records remain chronological evidence. The private v0.1 runtime archive is unchanged.

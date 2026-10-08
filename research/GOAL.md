@@ -6,7 +6,7 @@ Evidence labels: OBSERVED = directly seen; PROVEN = reproduced with a stated tes
 
 ## Status
 
-PROVEN: our native reader and Python API enumerate live objects in Steam build 23765773. Native reflection and nested type descriptors, stored booleans, fixed reflected invocation, persistent getter observation, mod lifecycle and native-console persistent Python have live proof. Broader APIs and final research validation remain unfinished.
+PROVEN: our native reader and Python API enumerate live objects in Steam build 23765773. Native reflection and nested type descriptors, stored booleans, fixed reflected invocation, persistent getter observation, mod lifecycle and native-console persistent Python have live proof. The requested private v0.1 scope and final analysis persistence are validated. Broader APIs remain explicitly unsupported.
 
 ## Evidence discipline
 
@@ -20,4 +20,4 @@ USER REQUIREMENT: Follow stages 0-12 in MILESTONES.md; no gameplay features firs
 
 The complete request is preserved locally in USER_REQUEST.txt and USER_REQUEST_CONTINUED.txt (excluded from Git).
 
-PROVEN checkpoint (2026-10-08): independent Python live enumeration, useful reflection/bool reads, reflected getter invocation, persistent getter hooks, copied Python callbacks and a trivial mod lifecycle now work against the fingerprinted build. Stage 11/12 frontier; whole-image Ghidra analysis and release validation/packaging remain unfinished. See MILESTONES.md for limits rather than interpreting this checkpoint as project completion.
+PROVEN checkpoint (2026-10-08): independent Python live enumeration, useful reflection/bool reads, reflected getter invocation, persistent getter hooks, copied Python callbacks and a trivial mod lifecycle now work against the fingerprinted build. Stages 0-12 are complete within the documented private v0.1 boundaries. Release packaging and reduced whole-image analysis save/reopen verification passed. See MILESTONES.md and RELEASE_AUDIT.md for evidence and unsupported capabilities.

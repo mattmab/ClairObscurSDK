@@ -6,18 +6,18 @@ Evidence labels: OBSERVED = directly seen; PROVEN = reproduced with a stated tes
 
 ## Status
 
-Stages 0-2 are established; the object/name subset and first live Python capstone are proven. Whole-image analysis and later SDK stages remain active.
+Stages 0-12 are established within the documented private v0.1 scope, including live Python objects, console/mod control, packaging and completed analysis persistence.
 
 ## Evidence discipline
 
 Record source or command, artifact path, game fingerprint, confidence, and reproduction steps with each finding. Reference SDK behavior is not target-game evidence.
 
-## Current state: 11/12 frontier (trivial public-API mod lifecycle proven)
+## Current state: private v0.1 scope complete
 
 0. Environment inventoried — D: tree and installed apps inspected; MSVC 14.44.35207 and Windows SDK 10.0.26100.0 installed; x64 fixture compilation and execution proven.
 1. Target game/build fingerprinted — SHA256, x64 PE headers, local Steam build identified.
 2. Ghidra MCP operational — proven by fixture import, metadata/function queries, decompilation, and exact annotation persistence after save/close/reopen. See GHIDRA_MCP.md.
-3. Expedition 33 binary analyzed — whole-image autoanalysis failed at16GB and again at32GB (Address Table analyzer,16:27:56). MCP reports306925functions/analyzing=false, but this is not successful completion. After explicit user recovery approval, the stuck JVM was restarted; the recovered 288,589-function baseline and disabled problematic analyzer settings saved successfully. A reduced GUI analysis pass is running. Targeted analysis and runtime findings remain preserved separately.
+3. Expedition 33 binary analyzed: reduced pass completed at18:23:16 after3437.01 seconds, following recovery from two failed passes. Saved successfully; close/reopen returned306134 functions and2182806 symbols with all7 new annotations exact. Missing matching PDB, localized demangler/exception/decompiler warnings and disabled analyzers remain documented in GHIDRA_MCP.md.
 4. Unreal runtime anchors: object registry and name pool proven; dispatcher and GameThread ID corroborated; engine/viewport/world/game-instance relationships observed by console runtime probes. Main-menu LocalPlayer/viewport/controller reciprocal links, GameInstance.LocalPlayers membership, and controller/root-component/Outer links are observed by a bounded read-only probe. Gameplay/map transitions remain unvalidated.
 5. Name/object infrastructure: chunk traversal, identity fields, name decoding proven; GC lifetime and broader reflection remain pending.
 6. Native live enumeration: PROVEN with our read-only external process reader.
@@ -28,7 +28,7 @@ Record source or command, artifact path, game fingerprint, confidence, and repro
 11. Minimal mod loader — PROVEN through three live ExampleMod load/enable/disable/unload cycles; import and lifecycle failure cleanup and module/instance release covered by unit tests. Explicit trusted local mods only; one enabled mod at a time.
 12. Private SDK package/docs/trivial mod — isolated v4 candidate smoke and native console Python/mod execution passed after normal game relaunch. Native commands, persistent external Python output/state/errors/SDK calls, custom command registration/removal and console-specific controller-death cleanup are live-proven. Working v5 adds F1-F12 configuration; F10 opening/closing/reopening and retained Python state are live-proven. The isolated v5 package passed smoke and console/Python/mod execution after relaunch; F10 removal and normal-close cleanup passed. Game exit with console/F10/observer active returned0 and cleared Python state. Native Python history/completion navigation remains unsupported; dispatcher APIs exist. See CONSOLE.md for boundaries.
 
-Offsets are scoped to the recorded SHA256, checked against unique code signatures and live identity invariants. Private v0.1 is packaged and validated below; the overall research goal remains active until the recovered Ghidra pass completes and persists.
+Offsets are scoped to the recorded SHA256, checked against unique code signatures and live identity invariants. Private v0.1 is packaged and validated below; the reduced Ghidra pass has now completed and passed save/close/reopen verification.
 
 
 
@@ -43,4 +43,4 @@ PROVEN: dist/expedition33-0.1.0-private-20261008T221641Z.zip, SHA256 72765fe1d89
 
 Isolated -I -S -B smoke in PID34604 enumerated96053 objects, read80 Actor fields/33 booleans, invoked the fixed reflected getter, delivered its observer callback and unloaded ExampleMod. A separate bounded console launch with F10 loaded ConsoleExample, attached the native console and detached normally, exit0. This release uses the exact native v5 DLL already validated visually for native/Python/mod commands, F10/Tilde, cleanup and relaunch; hash equality was verified. The final Python output escaping fix additionally has unit and live transport/session-continuity evidence. Local result: evidence/private-v0.1-package.json; logs are in the extracted bundle's logs/sdk.log.
 
-This earns the user's functional private v0.1 release criteria. It does not claim exhaustive binary understanding or completion of the separate whole-image analysis requirement. The active goal still includes finishing, saving and reopening that analysis database.
+This earns the user's functional private v0.1 release criteria. The subsequent reduced whole-image pass also completed and passed save/close/reopen verification. This does not claim exhaustive binary understanding, warning-free analysis or broader unsupported APIs. The immutable release archive predates that final research-only update; its runtime payload remains validated.

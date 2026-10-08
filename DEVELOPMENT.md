@@ -164,6 +164,6 @@ The compatibility verifier uses the preserved analysis input on D: and alters on
 a build fixture copy. Live verifiers require the supported running game and do not
 fall back to saved dumps. `verify_game_exit.py` arms a hook and waits for normal
 GUI quit; run it only when deliberately testing shutdown. Research scripts write
-local ignored evidence. Ghidra autoanalysis completion and broader research remain
+local ignored evidence. The reduced Ghidra pass completed and passed save/reopen checks; broader research remains
 tracked separately. The private v0.1 release covers the validated functionality
 and explicit boundaries above; it does not claim exhaustive binary analysis.
