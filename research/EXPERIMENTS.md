@@ -6,7 +6,7 @@ Evidence labels: OBSERVED = directly seen; PROVEN = reproduced with a stated tes
 
 ## Status
 
-Not yet investigated. No Expedition 33 layouts, offsets, or runtime APIs are validated.
+Live enumeration, reflection and stored bool reads, fixed invocation, removable persistent observation, trivial mod lifecycle and native-console Python have successful experiments. The topic journals and RELEASE_AUDIT.md identify exact evidence and boundaries. Failed analysis passes and corrected assumptions are retained rather than treated as successes.
 
 ## Evidence discipline
 
