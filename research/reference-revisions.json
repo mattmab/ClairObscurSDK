@@ -1,0 +1,38 @@
+[
+  {
+    "Name": "bethington--ghidra-mcp",
+    "Commit": "9cc29c0f1efb6c63a7d6898c9a23aff39397f992"
+  },
+  {
+    "Name": "bl-sdk--pyunrealsdk",
+    "Commit": "cb5fc362ea228727f334d94b64eb9538d8778bc6"
+  },
+  {
+    "Name": "bl-sdk--unrealsdk",
+    "Commit": "ac31716b2b462e78f0a841b6d352aa2fa56c7f92"
+  },
+  {
+    "Name": "HexRaysSA--ida-mcp",
+    "Commit": "2e62361d4c472fde93365613fd4fdcd2c1f6a4cb"
+  },
+  {
+    "Name": "icsharpcode--ILSpy",
+    "Commit": "b379738b7fae10027bd3c30cc2190677aea48e3b"
+  },
+  {
+    "Name": "morluto--rea",
+    "Commit": "3b2ec69c54fc9cf65bf8441edbb96e9619c3a37e"
+  },
+  {
+    "Name": "rehan-remade--universal-modder",
+    "Commit": "8370faa8e114baf33acdb23079aff552a7728c4b"
+  },
+  {
+    "Name": "SamboyCoding--Cpp2IL",
+    "Commit": "b5ad444b82267cb1e4b88b8b373c008105bdea52"
+  },
+  {
+    "Name": "trevaintdead--ai-game-modding-guides",
+    "Commit": "1c8df26a64f3d8604fa05ac2b3d3b65c0dde31ef"
+  }
+]

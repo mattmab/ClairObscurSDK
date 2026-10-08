@@ -31,3 +31,11 @@ OBSERVED: Debug manifest lists shipping PDB but no actual PDB appears in filesys
 HYPOTHESIS: Engine 5.4.4 based on embedded text at file offset 0x817f328; independently validate actual UTF-16 bytes and version metadata before treating as firm build identification. Initial extractor searches every other byte and may admit false positives.
 
 OBSERVED: No obvious standalone anti-cheat loader or existing mod-loader files in initial inventory. This does NOT prove protection absent; imports, embedded indicators, and target provenance remain to investigate before runtime attachment.
+
+## Independent PE validation
+
+PROVEN by pefile 2024.8.26 independently of inspect_pe.py: machine 0x8664, preferred base 0x140000000, mapped image size 166776832. CLR directory is zero, so the shipping executable is not a normal managed .NET assembly. Evidence: ../evidence/shipping-pe-independent.json (includes imports/exports/version resource).
+
+OBSERVED version resource: ProductVersion ++streams+ProjectW-release-CL-68322; CompanyName Sandfall Interactive. No anti-cheat DLL name appeared in the ordinary import table; delay imports and dynamically loaded modules are not covered by that statement.
+
+OBSERVED exact ASCII-range UTF-16 validation retains Unreal Engine 5.4.4 at 0x817f328. INFERRED engine minor version 5.4.4, pending corroboration by engine initialization/version paths. Date-like string 5.11.25-21.28.50:803][376] is not an engine version and must not be used as one.
