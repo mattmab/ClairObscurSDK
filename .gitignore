@@ -1,0 +1,16 @@
+evidence/
+build/
+dist/
+.venv/
+__pycache__/
+*.pyc
+*.exe
+*.dll
+*.pdb
+*.dmp
+*.pak
+*.ucas
+*.utoc
+*.gpr
+*.rep/
+research/USER_REQUEST*.txt
