@@ -10,7 +10,7 @@ All live results below apply only to the recorded executable fingerprint.
 | Native class/property/function metadata | Implemented and live-tested; nested struct/enum names and array element descriptors included. |
 | Property values | Stored booleans implemented and live-tested; general values and writes unsupported. |
 | Reflected calls and persistent observation | Implemented and live-tested for the fixed default Actor getter; arbitrary functions unsupported. |
-| Python mod lifecycle | Original single-mod lifecycle live-tested. Current checkout adds shared-session resource scopes; scope hooks/commands live-tested, full multi-mod loader lifecycle pending. |
+| Python mod lifecycle | Original single-mod lifecycle live-tested. Current checkout adds shared-session scopes and management; console load/enable/action/unload/reload tested on a borrowed live session. Integrated startup/relaunch pending. |
 | Native Unreal console UI | Constructed and attached through verified engine paths; Tilde open/close/reopen tested. |
 | Unreal commands | Normal engine path preserved; supported diagnostic commands and CVars tested. Shipping-disabled commands remain unavailable. |
 | In-game persistent Python | `py` dispatch, imports/variables, SDK/mod calls, output, expression results and tracebacks implemented and live-tested. |
@@ -20,6 +20,7 @@ All live results below apply only to the recorded executable fingerprint.
 | Disconnect/relaunch | Normal close, controller death, game shutdown and packaged operation after relaunch tested. |
 | Gameplay/map transitions | Not validated; current live console/relationship evidence is from the main menu. |
 | Private v0.1 | Functional release criteria passed; package verification is recorded in research/MILESTONES.md. The recovered Ghidra research pass is tracked separately. |
+| Unified management (current checkout) | Registry, typed settings/actions and console menu implemented; console lifecycle/setting restoration live-tested. Native UMG and general keybinds pending. Not included in the existing v0.1 archive. |
 
 ## Interactive native console
 
@@ -143,8 +144,89 @@ game exit with an active observer and subsequent relaunch have been tested.
 
 Mods are trusted local Python, not sandboxed. `ModLoader` discovers `Name/mod.py`;
 the module defines `Mod.enable(session)` and `Mod.disable()`. The loader closes its
-owned session even when lifecycle code raises. One enabled mod is supported at a
-time. Imports or threads created by a mod are its own responsibility.
+owned session even when lifecycle code raises. The original v0.1 archive supports
+one enabled mod; the current checkout shares one session across mod scopes.
+Imports or threads created by a mod are its own responsibility.
+
+## Shared management API (current checkout)
+
+`launch.cmd management` starts SDKManagement and IntrospectionHarness on one
+loader. This startup path still needs its own live/relaunch validation; the console
+frontend has been tested on a temporary loader borrowing the existing live session.
+Do not start a second controller while one already owns the game attachment.
+
+The menu uses `mods` to list loaded mods and installed folders. Every navigation
+command starts with `mods`, so normal Unreal and `py` input keeps its routing:
+
+```text
+mods select sdk.introspection
+mods actions
+mods action status
+mods action request {"op":"roots"}
+mods back
+mods load ManagementExample
+mods select example.management
+mods enable
+mods set label "My observation"
+mods action observe
+mods disable
+mods unload
+mods quit
+```
+
+`mods help` lists commands; `mods options` shows values, types, bounds and defaults.
+Use `mods reset OPTION_ID` to restore a default. `load` imports trusted local
+Python to register metadata; it does not enable the mod. SDKManagement is protected
+from menu disable/unload so recovery remains available. UMG and keybind registration,
+capture, conflict handling and remapping are not implemented yet.
+
+A mod can supply one definition for all management frontends:
+
+```python
+from expedition33.management import ModDefinition, Option, Action
+
+class Mod:
+    def management(self):
+        return ModDefinition(
+            'my_mod', 'My Mod', description='Example metadata', version='1.0',
+            options=(Option('verbose', 'Verbose logging', 'bool', False,
+                            on_change=self.set_verbose),),
+            actions=(Action('status', 'Show status', self.status),))
+
+    def enable(self, session):
+        self.session = session
+
+    def set_verbose(self, value):
+        self.verbose = value
+
+    def status(self, argument):
+        return {'verbose': self.verbose}
+
+    def disable(self):
+        self.session = None
+```
+
+Options support `bool`, `int`, `float`, `choice` and `text`; numeric options accept
+minimum/maximum and choices use a tuple of scalar values. IDs must be stable
+lowercase identifiers. Saved option callbacks run after `enable`. Actions take
+one JSON-compatible argument (`None` when omitted), require an enabled mod and run
+on the external controller thread. Use the supplied session for engine operations.
+Grouped/hidden options and UI widgets are pending.
+
+Management preferences use `settings/management.json`, a versioned store with
+atomic replacement and previous-generation recovery. Edits persist before runtime
+application. If a callback fails, the error reports that the preference was saved
+but could not be applied; there is no automatic retry or rollback claim. Disk
+failure prevents the callback. Disabled mods receive their saved settings on next
+enable. Enabled preferences are not automatically restored at startup yet.
+
+Other frontends use `session.mods` (or `loader.registry`), obtain a selection with
+`select(mod_id)`, then call `view`, `option`, `set_option`, `invoke` or `set_enabled`.
+Views are copies. Lifecycle changes invalidate old selections; refresh them rather
+than retrying an old queued action. Unload removes definitions/callbacks. Resource
+scopes remove native hooks and console registrations; trusted mods must still stop
+their own threads and external work. See `research/MANAGEMENT_PORT.md` for the live
+evidence and remaining acceptance gates.
 
 ## Rebuild on this machine
 

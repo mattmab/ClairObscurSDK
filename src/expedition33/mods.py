@@ -12,6 +12,7 @@ import uuid
 
 from .sdk import Session
 from ._scope import SessionScope
+from .management import ModDefinition, Registry
 
 
 class ModError(RuntimeError):
@@ -33,13 +34,17 @@ def _error(phase, error):
 
 
 class ModLoader:
-    def __init__(self, root):
+    def __init__(self, root, *, settings=None, session=None):
         self.root = Path(root).resolve(strict=True)
         self._loaded = {}
         self._owner = threading.get_ident()
-        self._session = None
+        # An explicitly borrowed Session remains owned by its original host.
+        self._session = session
+        self._borrowed = session is not None
         self._polling = False
         self._disabling = set()
+        self._enabling = set()
+        self.registry = Registry(self, settings)
 
     def _check_thread(self):
         if threading.get_ident() != self._owner:
@@ -68,6 +73,9 @@ class ModLoader:
             instance = module.Mod()
             if not callable(getattr(instance, 'enable', None)) or not callable(getattr(instance, 'disable', None)):
                 raise TypeError('Mod must define enable(session) and disable()')
+            describe = getattr(instance, 'management', None)
+            definition = describe() if describe is not None else ModDefinition(name.lower(), name)
+            self.registry.register(name, definition)
         except BaseException as error:
             sys.modules.pop(key, None)
             raise _error('load', error) from None
@@ -75,12 +83,17 @@ class ModLoader:
 
     def enable(self, name, *, console=False, console_key=None):
         record = self._record(name)
+        if name in self._enabling or name in self._disabling:
+            raise ModError('Recursive mod lifecycle transition is not supported')
         if record[2] is not None:
             return
         if self._session is None:
             self._session = Session()
         session = SessionScope(self._session)
+        session.mods = self.registry
         record[2] = session
+        self.registry.changed(name)
+        self._enabling.add(name)
         try:
             if console:
                 self._session.console.enable()
@@ -91,22 +104,27 @@ class ModLoader:
                 if 'my_mod' not in self._session.console.dispatcher.namespace:
                     session.console.expose('my_mod', record[1])
             record[1].enable(session)
+            self.registry.apply_options(name)
         except BaseException as error:
             failure = _error('enable', error)
+            self._enabling.discard(name)
             try:
                 self.disable(name)
             except ModError as cleanup:
                 failure = ModError(f'{failure}; cleanup: {cleanup}')
             raise failure from None
+        finally:
+            self._enabling.discard(name)
 
     def disable(self, name):
         record = self._record(name)
-        if name in self._disabling:
+        if name in self._disabling or name in self._enabling:
             raise ModError('Recursive mod disable is not supported')
         session = record[2]
         if session is None:
             return
         self._disabling.add(name)
+        self.registry.changed(name)
         failure = None
         try:
             record[1].disable()
@@ -119,7 +137,7 @@ class ModLoader:
                 close_error = _error('session cleanup', error)
                 failure = ModError(f'{failure}; {close_error}') if failure else close_error
             record[2] = None
-            if not any(value[2] is not None for value in self._loaded.values()):
+            if not self._borrowed and not any(value[2] is not None for value in self._loaded.values()):
                 shared, self._session = self._session, None
                 try:
                     shared.close()
@@ -167,12 +185,15 @@ class ModLoader:
 
     def unload(self, name):
         self._check_thread()
+        if name in self._disabling or name in self._enabling:
+            raise ModError('Recursive mod lifecycle transition is not supported')
         if name not in self._loaded:
             return
         try:
             self.disable(name)
         finally:
             key, _, _ = self._loaded.pop(name)
+            self.registry.unregister(name)
             sys.modules.pop(key, None)
 
     def _record(self, name):
@@ -184,7 +205,8 @@ class ModLoader:
 
     def status(self):
         self._check_thread()
-        return tuple(ModStatus(name, record[2] is not None) for name, record in self._loaded.items())
+        return tuple(ModStatus(name, record[2] is not None and name not in self._enabling
+                               and name not in self._disabling) for name, record in self._loaded.items())
 
     def close(self):
         self._check_thread()

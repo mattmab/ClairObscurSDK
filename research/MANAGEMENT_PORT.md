@@ -1,7 +1,7 @@
 # Unified management harness: source audit and feature matrix
 
-Updated2026-10-08. Status: source audit and design; no E33 native menu or general
-keybind implementation is claimed. The existing E33 console and Introspection
+Updated2026-10-08. Status: shared registry/settings/actions and console frontend
+implemented; no E33 native menu or general keybind implementation is claimed. The existing E33 console and Introspection
 Harness remain operational. The full additional request, including all17 live
 acceptance tests, is preserved locally in USER_REQUEST_MANAGEMENT.txt.
 
@@ -95,15 +95,15 @@ capture contexts and reliable focus filtering require additional verified work.
 
 | Capability | Reference behavior | E33 implementation requirement/status |
 | --- | --- | --- |
-| Registry | mods_base.mod_list shared by native and console UI | Pending stable-ID registry attached to one runtime; do not duplicate enabled state |
+| Registry | mods_base.mod_list shared by native and console UI | Stable-ID registry attached to loader; generations revoke stale selections; console path live-tested |
 | Installed/loaded mods | Startup discovery plus registered mod objects | Existing folder loader is minimal; expose discovery separately from loaded/enabled status |
 | Lifecycle | Enable/disable hooks, keys, commands; protected core/library entries | Shared loader Session with per-mod resource scopes implemented; resource sharing live-tested, full multi-mod loader/relaunch validation pending |
-| Metadata | Name, author, version, description, type, custom status | One definition and immutable UI views for both frontends |
-| Values | Bool, slider, selections, hidden/grouped/nested settings | Pending shared typed validation, defaults, change callbacks and stable option IDs |
-| Buttons/actions | Option callbacks, native workspace actions | Pending one action dispatcher for UI, console, keybind and introspection adapters |
+| Metadata | Name, author, version, description, type, custom status | ModDefinition and copied UI views; name/author/version/description/protected policy/error status implemented |
+| Values | Bool, slider, selections, hidden/grouped/nested settings | Typed bool/int/float/choice/text values, bounds/defaults/callbacks implemented; grouping/hidden/nested presentation pending |
+| Buttons/actions | Option callbacks, native workspace actions | Shared owner-thread dispatcher with generation/enabled checks; Introspection status/roots/request adapter implemented |
 | Persistence | Per-mod JSON, enabled/options/key mappings | Versioned store, atomic writes, previous-generation recovery and stale-writer rejection unit-tested; runtime integration/migrations pending |
-| Console entry | mods command with screen stack | Pending UMG-independent management component; use owned `mods ...` navigation to avoid capturing arbitrary engine/py lines |
-| Console controls | Selection, enable/disable, edit, button, bind, back, quit | Preserve capabilities with clear help/errors and stale-selection rejection |
+| Console entry | mods command with screen stack | SDKManagement registers UMG-independent `mods ...` navigation; opened live in native console |
+| Console controls | Selection, enable/disable, edit, button, bind, back, quit | Selection/load/unload/enable/disable/options/actions/back/quit implemented; rebinding pending native input work |
 | Native presentation | Search/filter/inspector, scrolling, themes, scale, launcher placement | Pending E33 UMG backend using shared definitions; preserve reference usability where practical |
 | Native widgets | Runtime-built one-tree overlay | Verify construction/viewport/GC ownership; evaluate asset-backed fallback using CONSOLE_DUMPS.md leads |
 | Focus | Cursor, move/look suppression, UI-mode/context restoration | Pending owned focus lease; close/failure/travel must release it without resetting unrelated owners |
@@ -146,9 +146,9 @@ Next implementation sequence:
    deliberate UMG failure independently from console availability.
 6. Complete all17 user acceptance tests, lifecycle/relaunch and isolated packaging.
 
-All17 new acceptance tests remain unproven for the unified harness. Existing
-console/introspection tests establish their previous scopes only. The earlier
-Introspection parity requirements remain active alongside this matrix.
+The complete17-test unified acceptance gate remains incomplete. The borrowed-session
+console milestone below proves a limited subset, not UMG or relaunch behavior.
+The earlier Introspection parity requirements remain active alongside this matrix.
 
 ## Shared resource ownership milestone
 
@@ -207,3 +207,55 @@ defensive copies, corruption recovery/preservation, future versions, stale/locke
 writers, failed replacement and invalid/duplicate-key data. This primitive has no
 engine dependency and was not claimed as live UI or relaunch validation. Registry
 option callbacks, keybind application and console/UMG integration remain pending.
+
+## Shared registry and live console milestone
+
+IMPLEMENTED: ModDefinition, Option and Action in expedition33.management. ModLoader
+registers metadata after trusted import, rejects duplicate stable IDs, and removes
+registry entries on unload. Enabled state is derived from the loader; actions are
+unavailable during enable/disable transitions. Each lifecycle transition changes
+a generation token. A frontend must reselect after another owner changes a mod.
+Callbacks execute on the external controller owner thread, with bounded JSON
+arguments, exception containment and recursive dispatch rejection. Engine-facing
+work still goes through the existing verified Session APIs.
+
+Settings validation supports bool, bounded int/float, scalar choices and text.
+Saved options apply after enable. A failed application triggers enable cleanup.
+While enabled, an edit persists before calling the mod: disk failure leaves the
+runtime untouched; callback failure reports that the preference was saved but
+application failed. There is no automatic replay or claimed runtime rollback.
+Disabled mods can have preferences edited without invoking their callbacks.
+Automatic enabled-preference restoration, migrations and grouped option UI remain
+pending; loading metadata executes trusted Python but does not enable the mod.
+
+SDKManagement is the protected management mod. It uses ConsoleMenu on the same
+registry and supports list/select/load/enable/disable/unload/options/set/reset/
+actions/action/back/quit/help. Only `mods` is intercepted; every navigation line
+must start with it. There is no next-line capture. The Introspection mod exposes
+status, roots and the existing JSON request handler through Action definitions;
+its Explorer core remains unchanged and management has no Explorer dependency.
+
+PROVEN2026-10-08 on live PID34604 using scripts/verify_live_management.py:
+the temporary candidate loader borrowed the existing host Session (no reattach,
+host reload or native rebuild). Real native-console input opened `mods`, selected
+ManagementExample, enabled its native getter hook, saved label "Live menu
+persistence", invoked the getter action, unloaded the mod, loaded a fresh instance,
+restored its setting and invoked the action again. The original instance received
+one event and the fresh instance one event: no duplicate/stale callback delivery.
+An invalid numeric label was rejected visibly, preserving the prior setting.
+Persistent `py` input remained available with a mod selected. Final verification
+rejected the original stale selection, removed the temporary harness, restored
+the original command/hook sets and called the getter on the original host again.
+
+Evidence: evidence/management-live/443843224acf496683598f262b874ded/result.json,
+preferences.json and logs/persistent-console.stderr.log at19:42:01. Console output
+and errors were also inspected in game. The old Introspection host continued its
+heartbeat; it was intentionally outside this temporary loader's registry. This
+test does not prove full startup integration of that older running instance.
+
+All63 Python tests pass. `launch.cmd management` adds the new integrated startup
+path with SDKManagement and Introspection on one loader and settings/management.json.
+That new launcher path, native UMG, key dispatch/rebinding, fresh-process relaunch,
+controller reconnection, and an isolated updated bundle still require live tests.
+The existing private v0.1 archive is unchanged. General key support is not inferred
+from stored strings, and the console help explicitly identifies the missing backend.

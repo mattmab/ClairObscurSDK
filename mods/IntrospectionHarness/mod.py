@@ -3,6 +3,7 @@ import json
 from pathlib import Path
 from expedition33.introspection import Harness
 from expedition33.introspection.service import FileService
+from expedition33.management import ModDefinition, Action
 
 
 class Mod:
@@ -10,6 +11,14 @@ class Mod:
         self.harness = None
         self._commands = []
         self.service = None
+
+    def management(self):
+        return ModDefinition('sdk.introspection', 'Introspection Harness',
+            description='Original Explorer core with verified Expedition 33 adapters; parity is incomplete.',
+            version='e33-port-1.3-stage1', actions=(
+                Action('status', 'Port status', lambda _: self.request({'op': 'status'})),
+                Action('roots', 'Live roots', lambda _: self.request({'op': 'roots'})),
+                Action('request', 'Explorer JSON request', self.request)))
 
     def enable(self, session):
         self.harness = Harness()

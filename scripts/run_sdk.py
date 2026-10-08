@@ -26,13 +26,14 @@ if manifest.exists():
 sys.path.insert(0, str(ROOT / 'src'))
 import expedition33
 from expedition33.mods import ModLoader
+from expedition33.settings import SettingsStore
 
 if not Path(expedition33.__file__).resolve().is_relative_to(ROOT):
     raise SystemExit('SDK import resolved outside this bundle')
 
 def main():
     parser = argparse.ArgumentParser(description='Expedition 33 development SDK')
-    parser.add_argument('command', choices=['objects', 'example', 'smoke', 'console', 'introspection'])
+    parser.add_argument('command', choices=['objects', 'example', 'smoke', 'console', 'introspection', 'management'])
     parser.add_argument('--seconds', type=float, default=0, help='Console duration; 0 runs until Ctrl+C')
     parser.add_argument('--console-key', choices=[f'F{i}' for i in range(1, 13)], help='Optional additional console toggle')
     args = parser.parse_args()
@@ -42,19 +43,26 @@ def main():
         handlers=[logging.StreamHandler(), RotatingFileHandler(log_dir / 'sdk.log', maxBytes=2_000_000, backupCount=3, encoding='utf-8')])
     log = logging.getLogger('expedition33.launcher')
     try:
-        if args.command in ('console', 'introspection'):
-            mod_name = 'IntrospectionHarness' if args.command == 'introspection' else 'ConsoleExample'
-            with ModLoader(ROOT / 'mods') as loader:
+        if args.command in ('console', 'introspection', 'management'):
+            mod_name = 'IntrospectionHarness' if args.command in ('introspection', 'management') else 'ConsoleExample'
+            store = SettingsStore(ROOT / 'settings/management.json') if args.command == 'management' else None
+            if store is not None and store.recovery:
+                log.warning('Management settings recovery: %s', store.recovery)
+            with ModLoader(ROOT / 'mods', settings=store) as loader:
+                if args.command == 'management':
+                    loader.load('SDKManagement')
+                    loader.enable('SDKManagement', console=True, console_key=args.console_key)
+                    log.info('Console management ready: mods. Native UMG and general key dispatch remain pending.')
                 loader.load(mod_name)
                 loader.enable(mod_name, console=True, console_key=args.console_key)
-                if args.command == 'introspection':
+                if args.command in ('introspection', 'management'):
                     log.info('Introspection stage 1 ready: e33i.status, e33i.roots, e33i.request JSON, or py introspection.request(...). Ctrl+C stops the controller.')
                 else:
                     log.info('Native console ready. Press Tilde; use py help(), py my_mod.some_function(), or sdk.hello. Ctrl+C stops the controller.')
                 deadline = time.monotonic() + args.seconds if args.seconds > 0 else float('inf')
                 try:
                     while time.monotonic() < deadline:
-                        loader.poll(mod_name)
+                        loader.poll()
                         time.sleep(.05)
                 except KeyboardInterrupt:
                     log.info('Closing console session')
