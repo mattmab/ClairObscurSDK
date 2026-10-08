@@ -6,6 +6,7 @@ import logging
 from logging.handlers import RotatingFileHandler
 from pathlib import Path
 import sys
+import time
 
 ROOT = Path(__file__).resolve().parents[1]
 if sys.version_info[:3] != (3, 13, 15):
@@ -31,7 +32,8 @@ if not Path(expedition33.__file__).resolve().is_relative_to(ROOT):
 
 def main():
     parser = argparse.ArgumentParser(description='Expedition 33 development SDK')
-    parser.add_argument('command', choices=['objects', 'example', 'smoke'])
+    parser.add_argument('command', choices=['objects', 'example', 'smoke', 'console'])
+    parser.add_argument('--seconds', type=float, default=0, help='Console duration; 0 runs until Ctrl+C')
     args = parser.parse_args()
     log_dir = ROOT / 'logs'
     log_dir.mkdir(exist_ok=True)
@@ -39,6 +41,19 @@ def main():
         handlers=[logging.StreamHandler(), RotatingFileHandler(log_dir / 'sdk.log', maxBytes=2_000_000, backupCount=3, encoding='utf-8')])
     log = logging.getLogger('expedition33.launcher')
     try:
+        if args.command == 'console':
+            with ModLoader(ROOT / 'mods') as loader:
+                loader.load('ConsoleExample')
+                loader.enable('ConsoleExample', console=True)
+                log.info('Native console ready. Press Tilde; use py help(), py my_mod.some_function(), or sdk.hello. Ctrl+C stops the controller.')
+                deadline = time.monotonic() + args.seconds if args.seconds > 0 else float('inf')
+                try:
+                    while time.monotonic() < deadline:
+                        loader.poll('ConsoleExample')
+                        time.sleep(.05)
+                except KeyboardInterrupt:
+                    log.info('Closing console session')
+            log.info('ConsoleExample unloaded and console detached')
         if args.command in ('objects', 'smoke'):
             observed = expedition33.objects()
             if not observed:

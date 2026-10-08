@@ -69,7 +69,7 @@ class ModLoader:
             raise _error('load', error) from None
         self._loaded[name] = [key, instance, None]
 
-    def enable(self, name):
+    def enable(self, name, *, console=False):
         record = self._record(name)
         if record[2] is not None:
             return
@@ -78,6 +78,9 @@ class ModLoader:
         session = Session()
         record[2] = session
         try:
+            if console:
+                session.console.enable()
+                session.console.expose('my_mod', record[1])
             record[1].enable(session)
         except BaseException as error:
             failure = _error('enable', error)
@@ -111,6 +114,7 @@ class ModLoader:
         record = self._record(name)
         if record[2] is None:
             raise ModError(f'Mod {name!r} is disabled')
+        record[2].console.poll()
         return record[2].poll()
 
     def unload(self, name):

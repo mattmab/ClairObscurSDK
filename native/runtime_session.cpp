@@ -36,6 +36,10 @@ uint32_t backend_open(SessionPacket* packet) {
 uint32_t backend_command(SessionPacket* packet) {
     if (!lifetime_valid()) return 61;
     switch (packet->request.action) {
+    case SessionConsoleNames:
+        if (!attachment_valid(runtime_base)) return 132;
+        if (!set_console_names(packet->console_text)) return 134;
+        packet->request.result=0; return 0;
     case SessionConsolePoll:
         if (!attachment_valid(runtime_base)) return 132;
         packet->request.result=poll_console_command(packet->console_text)?1:0;

@@ -1,5 +1,39 @@
 # Private development SDK
 
+## Interactive native console
+
+Run `launch.cmd console` after the game reaches its main menu. Press the existing
+Tilde/grave key once for the prompt, twice for expanded output, and again to close.
+The controller remains external and must stay running; Ctrl+C closes its session.
+`launch.cmd console --seconds 120` is a bounded example run.
+
+Try `stat fps` (repeat to turn it off), `py print("Hello World")`, `py help()`,
+`py count = 1`, `py count += 1; count`, `py sdk.console.execute("stat fps")`,
+`py my_mod.some_function()`, or `sdk.hello your text`. Variables, imports and the
+loaded ConsoleExample instance persist until the controller session ends.
+Output, expression values and tracebacks appear in the native console and SDK log.
+
+Mods can register a callback with `session.console.register("mod.command", callback,
+owner=self)`; it receives the argument string. Remove the returned handle during
+disable, or use `remove_owner(self)`. Session close clears every registration.
+Choose a mod-specific command name: registered names intentionally intercept that
+name before Unreal. Updating registrations discards already-queued SDK commands
+so they cannot reach a replacement owner. `ModLoader.enable(name, console=True)`
+exposes the enabled mod instance as `my_mod` and `ModLoader.poll(name)` services
+its console and existing observer callbacks. Standalone sessions call
+`session.console.poll()` explicitly on their owning Python thread.
+
+Limits: one controller/session and one enabled mod; one-line Python,4096 UTF-16
+units per input,16 queued commands,32768 output characters. Long Python work can
+block the controller (not the game loop); queue overflow rejects new SDK commands.
+Only native commands included and enabled by this shipping build can work.
+Native history remains available for Unreal commands. Python/custom history is
+available through `sdk.console.history` and lexical suggestions through
+`sdk.console.complete(prefix)`; native Up/Tab integration for these is unsupported.
+The game's existing Tilde mapping is verified; SDK key remapping is unsupported.
+No arbitrary stock Unreal layouts or missing shipping commands are supplied.
+See research/CONSOLE.md for target-specific evidence and remaining validation.
+
 This is an independently implemented, build-specific Windows x64 research SDK.
 It supports Steam build 23765773, shipping SHA256
 `218a2478aad5b3a1674b5d7097ec1ac4f994abb95466f9da1407fcd39d639618`.

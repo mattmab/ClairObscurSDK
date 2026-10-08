@@ -66,11 +66,12 @@ class Registration:
 
 
 class CommandDispatcher:
-    def __init__(self, sdk, native_execute):
+    def __init__(self, sdk, native_execute, commands_changed=None):
         self._owner = threading.get_ident()
         self._closed = False
         self._executing = False
         self._native_execute = native_execute
+        self._commands_changed = commands_changed
         self._commands = {}
         self._next_token = 1
         self.history = deque(maxlen=100)
@@ -102,18 +103,28 @@ class CommandDispatcher:
             raise RuntimeError('Console registration limit reached')
         token = self._next_token
         self._next_token += 1
-        self._commands[key] = (token, owner, callback)
+        self._replace_commands({**self._commands, key: (token, owner, callback)})
         return Registration(self, token)
+
+    def _replace_commands(self, updated):
+        if self._commands_changed is not None:
+            self._commands_changed(tuple(updated))
+        self._commands = updated
+
+    @property
+    def command_names(self):
+        self._check()
+        return tuple(self._commands)
 
     def _remove(self, token):
         if self._closed:
             return
         self._check()
-        self._commands = {name: value for name, value in self._commands.items() if value[0] != token}
+        self._replace_commands({name: value for name, value in self._commands.items() if value[0] != token})
 
     def remove_owner(self, owner):
         self._check()
-        self._commands = {name: value for name, value in self._commands.items() if value[1] is not owner}
+        self._replace_commands({name: value for name, value in self._commands.items() if value[1] is not owner})
 
     def complete(self, prefix):
         self._check()
@@ -123,7 +134,7 @@ class CommandDispatcher:
             return tuple('py '+key for key in sorted(self.namespace) if key.startswith(word) and not key.startswith('__'))[:50]
         return tuple(name for name in sorted(['py', *self._commands]) if name.startswith(prefix.lower()))[:50]
 
-    def execute(self, line):
+    def execute(self, line, *, native_fallback=True):
         self._check()
         if self._executing:
             raise RuntimeError('Recursive console dispatch is not supported')
@@ -152,6 +163,8 @@ class CommandDispatcher:
                         if value is not None:
                             print(repr(value))
                     else:
+                        if not native_fallback:
+                            raise RuntimeError('SDK console command registration is no longer active')
                         value = self._native_execute(line)
                         if value is not None:
                             print(value)
@@ -174,3 +187,4 @@ class CommandDispatcher:
         self.namespace.clear()
         self.history.clear()
         self._native_execute = None
+        self._commands_changed = None

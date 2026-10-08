@@ -1,5 +1,13 @@
 # Native console and persistent Python command integration
 
+## Latest status: mod commands (v4)
+
+PROVEN in game9552: ModLoader.enable(name, console=True) creates the native console before enabling the mod and exposes its instance as `my_mod`. ConsoleExample registers `sdk.hello`. Entering `sdk.hello native console` returned its greeting with call1; `py my_mod.some_function()` returned the same instance's greeting with call2. `py my_mod.greeting.remove()` removed registration; entering `sdk.hello removed` then produced the engine's ordinary Command not recognized response. Native registration replacement discards queued SDK commands (counted as dropped) so a queued command cannot transfer to a new owner. Native names are bounded to256 ASCII names of64characters; commands remain bounded to4096 UTF-16 units and16 queued entries. Python never runs on the GameThread.
+
+PROVEN local fixture: native passthrough, Python/custom routing, queue overflow rejection, failed registration parsing preserving the previous table, stale queue clearing, and late-call fallback after detachment. Seventeen Python tests pass, including registration transport failure not publishing a new callback and disable/re-enable preserving namespace while resynchronizing command names. Live normal close, game exit/relaunch and candidate packaging validation of v4 are next.
+
+Public entry points now include `console.register(name, callback, owner=mod)` returning an idempotent removable handle, `remove_owner`, `expose`, `history`, and `complete`. Mod disable should remove its handles; session close clears all registrations and Python references even if a mod's disable fails. ConsoleExample illustrates this. `launch.cmd console` runs it in the isolated controller; `--seconds N` provides a bounded run. Python results also use the SDK logger, with rotating files in the launcher. These APIs are trusted local Python, not a sandbox.
+
 ## Latest status: live Python integration (v3)
 
 PROVEN on PID9552/GameThread36408, same recorded executable SHA256: the per-instance UConsole command slot +0x2c8 intercepts `py` into a bounded 16-entry queue. The controller polls copied UTF-16 text, executes in its persistent Python namespace, and schedules native output through +0x2d8. Original native commands pass through unchanged. The primary vtable clone retains its RTTI locator and 123 slots; only the command slot changes. Native code/storage remain pinned for late calls. Queue access is confined to the owning GameThread; atomic context checks reject other threads.

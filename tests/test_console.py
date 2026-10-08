@@ -1,0 +1,57 @@
+import unittest
+from expedition33._console import Console
+
+
+class Transport:
+    def __init__(self):
+        self.calls = []
+        self.fail_names = False
+    def command(self, command, payload=None):
+        if command == 'console-names' and self.fail_names:
+            raise RuntimeError('disconnected')
+        self.calls.append((command, payload))
+        return {'result': 0, 'console_dropped': 0}
+
+
+class Session:
+    def __init__(self):
+        self._transport = Transport()
+    def _check(self):
+        pass
+
+
+class ConsoleTests(unittest.TestCase):
+    def test_registration_sync_failure_does_not_publish_callback(self):
+        session = Session()
+        console = Console(session)
+        console.enable()
+        owner = object()
+        handle = console.register('sdk.hello', lambda text: text, owner=owner)
+        self.assertEqual(session._transport.calls[-1], ('console-names', 'sdk.hello'))
+        session._transport.fail_names = True
+        with self.assertRaisesRegex(RuntimeError, 'disconnected'):
+            console.register('sdk.other', lambda text: text, owner=owner)
+        self.assertEqual(console.dispatcher.command_names, ('sdk.hello',))
+        session._transport.fail_names = False
+        handle.remove()
+        self.assertEqual(session._transport.calls[-1], ('console-names', ''))
+        self.assertTrue(console.dispatcher.execute('sdk.hello', native_fallback=False).failed)
+        console._close()
+
+    def test_disable_reenable_preserves_namespace_and_resyncs_commands(self):
+        session = Session()
+        console = Console(session)
+        owner = object()
+        console.register('sdk.test', lambda _: 42, owner=owner)
+        console.expose('my_mod', owner)
+        console.enable()
+        console.dispatcher.execute('py value = 17')
+        console.disable()
+        console.enable()
+        self.assertEqual(session._transport.calls[-1], ('console-names', 'sdk.test'))
+        self.assertEqual(console.dispatcher.execute('py value').output, '17\n')
+        self.assertEqual(console.complete('py my'), ('py my_mod',))
+        console.remove_owner(owner)
+        self.assertEqual(console.dispatcher.command_names, ())
+        console._close()
+        self.assertFalse(console.dispatcher.namespace)
