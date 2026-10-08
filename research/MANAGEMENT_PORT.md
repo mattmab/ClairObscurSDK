@@ -101,7 +101,7 @@ capture contexts and reliable focus filtering require additional verified work.
 | Metadata | Name, author, version, description, type, custom status | One definition and immutable UI views for both frontends |
 | Values | Bool, slider, selections, hidden/grouped/nested settings | Pending shared typed validation, defaults, change callbacks and stable option IDs |
 | Buttons/actions | Option callbacks, native workspace actions | Pending one action dispatcher for UI, console, keybind and introspection adapters |
-| Persistence | Per-mod JSON, enabled/options/key mappings | Pending versioned atomic writes, last-good recovery, invalid-data reporting and migrations |
+| Persistence | Per-mod JSON, enabled/options/key mappings | Versioned store, atomic writes, previous-generation recovery and stale-writer rejection unit-tested; runtime integration/migrations pending |
 | Console entry | mods command with screen stack | Pending UMG-independent management component; use owned `mods ...` navigation to avoid capturing arbitrary engine/py lines |
 | Console controls | Selection, enable/disable, edit, button, bind, back, quit | Preserve capabilities with clear help/errors and stale-selection rejection |
 | Native presentation | Search/filter/inspector, scrolling, themes, scale, launcher placement | Pending E33 UMG backend using shared definitions; preserve reference usability where practical |
@@ -178,3 +178,32 @@ scope resource behavior on its existing Session, not a complete multi-mod loader
 relaunch or packaged-runtime pass. The loader changes apply to a future host
 start. Registry/settings/actions, general keybinds and both management frontends
 remain next work; no unified-menu acceptance gate is claimed by this milestone.
+
+## Shared settings primitive
+
+IMPLEMENTED and unit-tested: expedition33.settings.SettingsStore supplies the
+single persistence path for future management frontends. Version1 records contain
+stable lowercase mod/option/action IDs, a revision, option values, key mappings
+and an enabled preference. Preferences do not themselves change runtime state.
+Unregistered mods' records survive writes to another mod. Getters return defensive
+copies so a UI cannot mutate stored state by editing a returned dictionary.
+
+save(mod_id, record) validates finite bounded JSON, writes and flushes a temporary
+file, then atomically replaces the destination. The last accepted generation is
+stored as .bak. Malformed primary data recovers that previous generation when
+valid; recovery is reported and the damaged primary is preserved as .corrupt.UUID
+before a subsequent save. A future format version is rejected without downgrade.
+This is previous-generation recovery, not a promise that the latest failed write
+survived. Oversized files and unreadable files fail rather than bypassing bounds.
+
+An exclusive short-lived writer lock plus disk fingerprint prevents cooperating
+controllers from silently overwriting stale snapshots. An abandoned lock is not
+silently removed or replayed; later runtime recovery must verify writer state.
+No migration from existing BL4 settings or future-version migration is implemented.
+Key-name strings remain preferences, not evidence of supported engine inputs.
+
+All54 Python tests pass, including seven filesystem tests for round-trip records,
+defensive copies, corruption recovery/preservation, future versions, stale/locked
+writers, failed replacement and invalid/duplicate-key data. This primitive has no
+engine dependency and was not claimed as live UI or relaunch validation. Registry
+option callbacks, keybind application and console/UMG integration remain pending.
