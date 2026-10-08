@@ -6,7 +6,7 @@ Evidence labels: OBSERVED = directly seen; PROVEN = reproduced with a stated tes
 
 ## Status
 
-PROVEN: temporary Windows scheduling hooks run on the intended fixture/game thread and are removed; the DLL unloads. Unreal-function hooks and Python callback delivery are not implemented yet.
+PROVEN: a scoped Unreal UFunction entry observer reaches Python with copied object identity and return values. Repeated removal/restoration and Python exception isolation work. Persistent hook sessions and mod-facing handles remain pending. Temporary scheduling hooks still have independently verified removal/unload.
 
 ## Evidence discipline
 
@@ -43,3 +43,15 @@ PROVEN: scripts/build-observer-fixture.cmd compiles with MSVC /W4 /WX. Three fre
 PROVEN in unit tests, not against game events: src/expedition33/_callbacks.py implements owner-thread delivery of copied immutable context, bounded subscriptions/diagnostics, explicit handles, removal during dispatch, and callback release on close. Exceptions including SystemExit disable only the failing subscription; traceback text is retained without keeping exception frames or mod instances alive. Recursive dispatch fails within the callback isolation boundary. Seven tests pass via python -m unittest discover -s tests -v, including 1,000 enable/disable cycles, weak-reference lifetime checks, hostile exception formatting, and wrong-thread rejection.
 
 This is an internal component, not yet exposed as sdk.hook. It has no game transport or native installation authority. Callback execution will be asynchronous on the external Python owner thread and cannot cancel/modify an engine call. Native event connection and real game observation remain the next experiment.
+
+## Live scoped UFunction observer: 2026-10-08 19:45 UTC
+
+PROVEN against the recorded SHA256, PID25988, GameThread27548: scripts/verify_live_observer.py observed real calls to Actor.IsActorBeingDestroyed through the UFunction native entry at +0xd8. The target was Default__Actor index28233/serial1010. Two captured events per run report this exact object address (checked natively and against the separately enumerated Python snapshot), game thread and false return. These events originate in the native pass-through hook after the original thunk returns; they are not notifications synthesized from a read-only result or merely from calling invoke_proof.
+
+Mechanism: fixed_observer_v1.dll uses the validated scheduling path, performs the full fixed-invocation validation/baseline call, atomically replaces only the known getter's entry, invokes reflected dispatch twice, and restores the original entry in a native finally block. It then invokes the getter again with the hook absent and verifies the event count remains two. The observer core is shared with the concurrent fixture. Engine machine code and game files are untouched; the one UFunction pointer is temporarily changed in live memory. The versioned observer DLL is pinned until game exit; storage is detached under the writer lock on removal. This is distinct from scheduling_hook.dll, which still unloads after ordinary invocation.
+
+Python observe_proof validates every event and cleanup field before delivery, then calls the user callback on the external caller's Python thread. Context contains immutable identity observations, target, sequence, GameThread ID and bool result. The getter has no input parameters, so there are no argument fields to marshal in this specimen. Native collection finishes and restores the entry before Python runs; Python cannot modify, block or cancel the original call.
+
+Three live observer runs proved normal delivery, intentional RuntimeError isolation (one invocation of the failing callback, disabled thereafter), and successful later delivery without duplicates. Independent before/after stored-bool snapshots and function metadata matched. A subsequent ordinary reflected invocation succeeded and its scheduling DLL unloaded. Computer Use then showed the normal game main menu/build68322. Evidence: evidence/python-live-observer.json. Reproduction: build-fixed-observer.cmd, build-research-probe.cmd and build-scheduling-fixture.cmd, then verify_live_observer.py. Existing fixture was rebuilt against the shared core and passed its concurrent/lifetime sequence again.
+
+LIMITS: this is a scoped, user-triggered getter observation proof, not a persistent sdk.hook API. Game shutdown/relaunch integration, session-owned subscriptions, general targets and mod lifecycle still need implementation and live testing. Native faults are guarded around the experiment but no arbitrary-state rollback is claimed. If restoration cannot be verified, the command reports failure instead of publishing events. A pinned DLL cannot be rebuilt in-place while that game process holds it; the SDK must document and version this lifetime explicitly.

@@ -154,6 +154,7 @@ std::string read_name(const Reader& reader, uint64_t pool, uint32_t id, uint32_t
 }
 
 #include "thread_ping.h"
+#include "fixed_observer_controller.h"
 
 int main(int argc, char** argv) {
     try {
@@ -163,7 +164,8 @@ int main(int argc, char** argv) {
         std::string function_owner, function_name;
         bool thread_ping = argc == 2 && std::string(argv[1]) == "--thread-ping";
         bool invoke_proof = argc == 2 && std::string(argv[1]) == "--invoke-proof";
-        if (invoke_proof) limit = 0;
+        bool observe_proof = argc == 2 && std::string(argv[1]) == "--observe-proof";
+        if (invoke_proof || observe_proof) limit = 0;
         int32_t proof_object = -1, proof_object_serial = 0, proof_function = -1, proof_function_serial = 0;
         if (argc == 3 && std::string(argv[1]) == "--limit") limit = std::stoul(argv[2]);
         else if (argc == 3 && std::string(argv[1]) == "--reflect-class") {
@@ -178,7 +180,7 @@ int main(int argc, char** argv) {
                     "FUNCTION_NAME_REQUIRES_OWNER_DOT_NAME");
             function_owner = qualified.substr(0, dot); function_name = qualified.substr(dot + 1); limit = 0;
         }
-        else require(argc == 1 || thread_ping || invoke_proof, "USAGE: research_probe.exe [--limit N | --reflect-class NAME | --read-bools OBJECT | --reflect-function OWNER.NAME | --thread-ping | --invoke-proof]");
+        else require(argc == 1 || thread_ping || invoke_proof || observe_proof, "USAGE: research_probe.exe [--limit N | --reflect-class NAME | --read-bools OBJECT | --reflect-function OWNER.NAME | --thread-ping | --invoke-proof | --observe-proof]");
         const bool reflection = !reflect_class.empty() || !bool_object.empty() || !function_name.empty();
         DWORD pid = discover_process();
         Handle process(OpenProcess(PROCESS_VM_READ | PROCESS_QUERY_LIMITED_INFORMATION, FALSE, pid));
@@ -252,7 +254,7 @@ int main(int argc, char** argv) {
             auto name = read_name(reader, pool, object.name_id, object.name_number);
             auto class_name = read_name(reader, pool, cls.name_id, cls.name_number);
             auto meta_name = read_name(reader, pool, meta.name_id, meta.name_number);
-            if (invoke_proof) {
+            if (invoke_proof || observe_proof) {
                 if (name == "Default__Actor" && class_name == "Actor") {
                     require(proof_object == -1, "AMBIGUOUS_PROOF_OBJECT"); proof_object = i; proof_object_serial = item.serial;
                 } else if (name == "IsActorBeingDestroyed" && class_name == "Function") {
@@ -388,9 +390,10 @@ int main(int argc, char** argv) {
             }
         }
         require(emitted != 0, "NO_VALID_OBJECTS");
-        if (invoke_proof) {
+        if (invoke_proof || observe_proof) {
             require(proof_object >= 0 && proof_function >= 0 && emitted == 2, "PROOF_TARGETS_MISSING_OR_UNSTABLE");
-            run_thread_ping(pid, game_thread, 1, proof_object, proof_object_serial, proof_function, proof_function_serial);
+            if (observe_proof) run_fixed_observer(pid, game_thread, proof_object, proof_object_serial, proof_function, proof_function_serial);
+            else run_thread_ping(pid, game_thread, 1, proof_object, proof_object_serial, proof_function, proof_function_serial);
         }
         std::cout << "{\"event\":\"snapshot_end\",\"emitted\":" << emitted
                   << ",\"null_slots\":" << null_slots << ",\"changing_slots\":" << changing_slots << "}\n";

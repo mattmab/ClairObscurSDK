@@ -1,15 +1,16 @@
-"""Independent, read-only Expedition 33 research API.
+"""Independent Expedition 33 runtime research API.
 
 Every objects() call invokes our native reader against the running game.
 Returned values are observations, not durable UObject handles. Native class
-metadata, stored boolean observations and a fixed reflected invocation proof
-are supported. General invocation, engine-function hooks and mod loading remain
-unimplemented.
+metadata, stored boolean observations, a fixed reflected invocation and a scoped
+native function observer are supported. Persistent hook sessions, general
+invocation and mod loading remain unimplemented.
 """
 from dataclasses import dataclass
 import json
 from pathlib import Path
 import subprocess
+from ._callbacks import CallbackDispatcher, CallbackFailure, ObservedIdentity, ObserverContext
 
 
 class RuntimeQueryError(RuntimeError):
@@ -102,6 +103,15 @@ class InvocationProof:
     result: bool
     hook_removed: bool
     remote_module_unloaded: bool
+
+
+@dataclass(frozen=True)
+class ObserverProof:
+    pid: int
+    contexts: tuple[ObserverContext, ...]
+    callback_failures: tuple[CallbackFailure, ...]
+    entry_restored: bool
+    module_resident: bool
 
 
 def objects(*, limit: int = 0) -> list[ObjectSnapshot]:
@@ -261,6 +271,52 @@ def invoke_proof() -> InvocationProof:
         raise RuntimeQueryError(f'Invalid invocation proof response: {error}') from error
 
 
+def observe_proof(callback) -> ObserverProof:
+    """Observe two real Default__Actor.IsActorBeingDestroyed calls.
+
+    Native observation is scoped to this experiment and removed before Python
+    delivery. The callback receives copied context on the caller's Python
+    thread. A failing callback is disabled and recorded, not raised into game
+    code. The native observer DLL remains inert until game exit for late-entry
+    safety. This is not yet the persistent sdk.hook API.
+    """
+    if not callable(callback):
+        raise TypeError('callback must be callable')
+    start, samples = _query(['--observe-proof'])
+    try:
+        objects_seen = [row for row in samples if row['event'] == 'object']
+        observed = [row for row in samples if row['event'] == 'observed_getter']
+        proofs = [row for row in samples if row['event'] == 'observer_proof']
+        if len(objects_seen) != 2 or len(observed) != 2 or len(proofs) != 1 or len(samples) != 5:
+            raise ValueError('Incomplete observer response')
+        targets = {row['name']: row for row in objects_seen}
+        obj, fn = targets['Default__Actor'], targets['IsActorBeingDestroyed']
+        proof = proofs[0]
+        if (obj['class_name'] != 'Actor' or fn['class_name'] != 'Function' or
+                any(proof[k] is not True for k in ('entry_restored', 'scheduling_hook_removed', 'module_resident')) or
+                proof['events'] != 2 or proof['after_remove_count'] != 2 or proof['dropped'] != 0):
+            raise ValueError('Observer identity or restoration mismatch')
+        contexts = []
+        identity = ObservedIdentity(start['pid'], obj['index'], obj['serial'], obj['name'], obj['class_name'])
+        for sequence, row in enumerate(observed, 1):
+            if (row['sequence'] != sequence or row['object_index'] != obj['index'] or
+                    row['object_serial'] != obj['serial'] or int(row['object_address'], 16) != int(obj['address'], 16) or
+                    row['thread'] != start['game_thread_id'] or type(row['result']) is not int or row['result'] not in (0, 1)):
+                raise ValueError('Observer event does not match the validated object')
+            contexts.append(ObserverContext(sequence, 'Actor.IsActorBeingDestroyed', identity,
+                                            row['thread'], bool(row['result'])))
+    except (ValueError, KeyError, TypeError) as error:
+        raise RuntimeQueryError(f'Invalid observer proof response: {error}') from error
+    dispatcher = CallbackDispatcher()
+    dispatcher.subscribe('Actor.IsActorBeingDestroyed', callback)
+    try:
+        for context in contexts:
+            dispatcher.deliver(context)
+        return ObserverProof(start['pid'], tuple(contexts), dispatcher.failures(), True, True)
+    finally:
+        dispatcher.close()
+
+
 def _query(arguments: list[str]) -> tuple[dict, list[dict]]:
     root = Path(__file__).resolve().parents[2]
     executable = root / 'build' / 'research-probe' / 'research_probe.exe'
@@ -290,5 +346,5 @@ def _query(arguments: list[str]) -> tuple[dict, list[dict]]:
         raise RuntimeQueryError(f'Invalid native bridge response: {error}') from error
 
 
-__all__ = ['objects', 'reflect_class', 'stored_bools', 'reflect_function', 'invoke_proof', 'ObjectSnapshot', 'ClassMetadata',
+__all__ = ['objects', 'reflect_class', 'stored_bools', 'reflect_function', 'invoke_proof', 'observe_proof', 'ObserverProof', 'ObserverContext', 'ObjectSnapshot', 'ClassMetadata',
            'PropertyMetadata', 'StoredBool', 'BoolSnapshot', 'FunctionParameter', 'FunctionMetadata', 'InvocationProof', 'RuntimeQueryError']

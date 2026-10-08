@@ -6,7 +6,7 @@ Evidence labels: OBSERVED = directly seen; PROVEN = reproduced with a stated tes
 
 ## Status
 
-PROVEN: our native reader and Python API enumerate live objects in Steam build 23765773. Reflection, invocation, hooks, and the full SDK remain unfinished.
+PROVEN: live enumeration, native reflection/bool reads, fixed reflected invocation and scoped native observer callbacks in Steam build23765773. The full SDK and persistent hook/mod lifecycle remain unfinished.
 
 ## Evidence discipline
 
@@ -16,7 +16,7 @@ Record source or command, artifact path, game fingerprint, confidence, and repro
 
 `expedition33.objects(*, limit: int = 0) -> list[ObjectSnapshot]` queries a running game. Zero means all occupied slots; positive limits bound returned objects. Each immutable record contains pid, index, serial, address, name, class_name, metaclass_name, and class_index. `RuntimeQueryError` reports native/protocol failure. Addresses and index/serial pairs are observations, not persistent validated handles.
 
-PROVEN by live integration check: 96,053 objects including `/Script/CoreUObject` (Package), `Object` (Class), and the self-metaclass `Class`. Stored BoolProperty values are supported below; other value types, calls, and hooks remain unimplemented. Native class metadata is available below.
+PROVEN by live integration check: 96,053 objects including `/Script/CoreUObject` (Package), `Object` (Class), and the self-metaclass `Class`. Stored BoolProperty values, fixed calls and scoped hooks are supported below; general calls and other property value types remain pending.
 
 ## Native class metadata
 
@@ -37,3 +37,7 @@ PROVEN: Default__Actor index28233 exposes33 booleans; Default__HUD index29206 ex
 ## Fixed invocation proof
 
 `invoke_proof() -> InvocationProof` performs the actual reflected call Default__Actor.IsActorBeingDestroyed on the game thread, returning process/thread IDs, live registry indices, boolean result and verified hook-removal/module-unload status. It accepts no target/function arguments. This is a controlled invocation experiment, not a general call API or gameplay feature. A skipped dispatcher leaves a0xcc sentinel and fails rather than returning a fabricated result.
+
+## Scoped observer proof
+
+`observe_proof(callback) -> ObserverProof` captures two real native getter hook events, restores the entry, then delivers immutable ObserverContext values to Python. Each includes sequence, qualified target, observed object pid/index/serial/name/class, GameThread ID and bool return. Callback exceptions disable that callback and appear in callback_failures without unwinding into the game. The native observer module remains resident until game exit; successful entry restoration and storage detachment are separate from code unloading. This is not a persistent subscription or GC-pinned object handle. scripts/verify_live_observer.py proves live delivery, contained failure, repeated operation, unchanged metadata/storage, and subsequent ordinary invocation.
