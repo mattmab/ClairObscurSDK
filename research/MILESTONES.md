@@ -31,3 +31,7 @@ Record source or command, artifact path, game fingerprint, confidence, and repro
 Offsets are scoped to the recorded SHA256, checked against unique code signatures and live identity invariants. No SDK release exists.
 
 
+
+## Nested-metadata candidate validation
+
+PROVEN 2026-10-08: expedition33-0.1.0-candidate-20261008T213251Z.zip (SHA256 b716dd34742ab73149e6c826ba63701862f468c22aca479b661394b1ca8d179d, source c204cbb) was extracted to a fresh D: package-validation directory and launched with CPython -I -S -B. Manifest checks passed. PID34604 returned96053 live objects,80 Actor fields and33 stored booleans; ExampleMod made the fixed game-thread call, received its observer callback, and unloaded normally. Native session/console DLL is unchanged from the earlier v5 lifecycle tests. This candidate adds the validated nested descriptors in the external reader/Python API; later documentation-only edits are in the repository.
