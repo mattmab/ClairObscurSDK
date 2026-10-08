@@ -234,6 +234,10 @@ int main(int argc, char** argv) {
                   << ",\"game_thread_id\":" << game_thread
                   << ",\"module_base\":" << quote(hex(base)) << ",\"sha256\":" << quote(fingerprint)
                   << ",\"registry_rva\":" << quote(hex(registry.global_rva))
+                  << ",\"registry_prefix_0\":" << reader.get<int32_t>(base + registry.global_rva)
+                  << ",\"registry_prefix_4\":" << reader.get<int32_t>(base + registry.global_rva + 4)
+                  << ",\"registry_prefix_8\":" << reader.get<int32_t>(base + registry.global_rva + 8)
+                  << ",\"registry_prefix_c\":" << reader.get<uint32_t>(base + registry.global_rva + 12)
                   << ",\"name_pool_rva\":" << quote(hex(names.global_rva))
                   << ",\"num_elements\":" << array.num_elements << ",\"num_chunks\":" << array.num_chunks << "}\n";
         if (thread_ping) {
@@ -280,6 +284,7 @@ int main(int argc, char** argv) {
                 std::memcmp(&object, &object_again, sizeof(object)) != 0) { ++changing_slots; continue; }
             std::cout << "{\"event\":\"object\",\"index\":" << i << ",\"serial\":" << item.serial
                       << ",\"address\":" << quote(hex(item.object)) << ",\"name\":" << quote(name)
+                      << ",\"object_flags\":" << quote(hex(object.flags)) << ",\"item_flags\":" << quote(hex(item.flags))
                       << ",\"class_name\":" << quote(class_name) << ",\"metaclass_name\":" << quote(meta_name)
                       << ",\"class_index\":" << cls.index;
             if (reflection) {
