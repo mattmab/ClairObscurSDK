@@ -22,7 +22,7 @@ Record source or command, artifact path, game fingerprint, confidence, and repro
 5. Name/object infrastructure: chunk traversal, identity fields, name decoding proven; GC lifetime and reflection pending.
 6. Native live enumeration: PROVEN with our read-only external process reader.
 7. Python live queries: PROVEN, 96,053 objects across two registry chunks in 1.967 seconds.
-8. Reflection/property reads — pending.
+8. Reflection/property reads: native class inheritance and property metadata PROVEN; actual property values pending.
 9. Safe invocation — pending.
 10. Hooks/callbacks — pending.
 11. Minimal mod loader — pending.

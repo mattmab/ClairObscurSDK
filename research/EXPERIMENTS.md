@@ -23,4 +23,11 @@ STALE/DISPROVEN candidate: short name-pool instruction signature matched 13 loca
 PROVEN: MSVC compiled our native reader without warnings. Absent-game test returned GAME_NOT_RUNNING. Normal Steam launch followed by native first-32 enumeration succeeded. Editable Python module installation required setuptools/wheel in the D: environment; initial missing-backend failure was resolved there.
 
 PROVEN: scripts/verify_live_enumeration.py called the real native runtime reader and returned 96,053 live objects in 1.967 seconds, max index96,604, PID25988. It verified core class identities and traversal beyond the 65,536-slot chunk boundary. Computer Use confirmed the game remained healthy at its main menu. This fulfills the first capstone, not reflection/invocation/hooks or the complete goal.
-`nRepeat live query: 96,053 objects in 1.980 seconds, same PID and max index. First evidence preserved as python-live-enumeration-first.json.
+
+Repeat live query: 96,053 objects in 1.980 seconds, same PID and max index. First evidence preserved as python-live-enumeration-first.json.
+
+## Reflection and annotation experiments
+
+PROVEN: native/Python metadata queries for Actor/HUD/Object pass inheritance, inherited-property equality, distinct-name and bounds checks. Absent class returns NO_VALID_OBJECTS. Enumeration regression still reports96053.
+
+OBSERVED: Ghidra set_comment succeeded on registration/name routines and comments are returned in subsequent decompilation. save_program timed out with outcome unknown while whole-image analysis remained active; persistent save is not yet proven. GUI shows Constant Reference Analyzer progressing. No analysis cancellation or repeat save issued.

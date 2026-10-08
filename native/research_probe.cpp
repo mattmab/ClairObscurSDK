@@ -14,6 +14,7 @@
 #include <stdexcept>
 #include <string>
 #include <vector>
+#include <unordered_set>
 
 struct Handle {
     HANDLE value;
@@ -155,8 +156,12 @@ std::string read_name(const Reader& reader, uint64_t pool, uint32_t id, uint32_t
 int main(int argc, char** argv) {
     try {
         uint32_t limit = 32;
+        std::string reflect_class;
         if (argc == 3 && std::string(argv[1]) == "--limit") limit = std::stoul(argv[2]);
-        else require(argc == 1, "USAGE: research_probe.exe [--limit N]; 0 means all occupied slots");
+        else if (argc == 3 && std::string(argv[1]) == "--reflect-class") {
+            reflect_class = argv[2]; limit = 0;
+        }
+        else require(argc == 1, "USAGE: research_probe.exe [--limit N | --reflect-class NAME]");
         DWORD pid = discover_process();
         Handle process(OpenProcess(PROCESS_VM_READ | PROCESS_QUERY_LIMITED_INFORMATION, FALSE, pid));
         require(process.value != nullptr, "OPEN_PROCESS_FAILED win32=" + std::to_string(GetLastError()));
@@ -217,6 +222,8 @@ int main(int argc, char** argv) {
             auto name = read_name(reader, pool, object.name_id, object.name_number);
             auto class_name = read_name(reader, pool, cls.name_id, cls.name_number);
             auto meta_name = read_name(reader, pool, meta.name_id, meta.name_number);
+            if (!reflect_class.empty() && (name != reflect_class || class_name != "Class")) continue;
+            if (!reflect_class.empty()) require(emitted == 0, "AMBIGUOUS_NATIVE_CLASS_NAME");
             auto again = item_at(i);
             auto object_again = reader.get<ObjectHeader>(item.object);
             if (again.object != item.object || again.serial != item.serial ||
@@ -226,6 +233,59 @@ int main(int argc, char** argv) {
                       << ",\"class_name\":" << quote(class_name) << ",\"metaclass_name\":" << quote(meta_name)
                       << ",\"class_index\":" << cls.index << "}\n";
             ++emitted;
+            if (!reflect_class.empty()) {
+                // Derived from target routines 1412792f0, 1412813d0, 14134c3b0,
+                // 1412ab240 and 1412aca00. Research metadata, not callable handles.
+                uint64_t owner = item.object;
+                std::unordered_set<uint64_t> owners;
+                while (owner) {
+                    require(owners.size() < 128 && owners.insert(owner).second, "CLASS_CHAIN_CYCLE_OR_LIMIT");
+                    auto header = reader.get<ObjectHeader>(owner);
+                    auto owner_item = item_at(header.index);
+                    require(owner_item.object == owner, "REFLECTION_OWNER_NOT_REGISTERED");
+                    auto owner_name = read_name(reader, pool, header.name_id, header.name_number);
+                    uint64_t super = reader.get<uint64_t>(owner + 0x40);
+                    uint64_t first = reader.get<uint64_t>(owner + 0x50);
+                    int32_t size = reader.get<int32_t>(owner + 0x58);
+                    require(size >= 40 && size <= 16 * 1024 * 1024, "CLASS_SIZE_INVALID");
+                    std::cout << "{\"event\":\"class_metadata\",\"name\":" << quote(owner_name)
+                              << ",\"index\":" << header.index << ",\"size\":" << size
+                              << ",\"super\":" << quote(hex(super)) << "}\n";
+                    std::unordered_set<uint64_t> fields;
+                    for (uint64_t field = first; field;) {
+                        require(fields.size() < 4096 && fields.insert(field).second, "FIELD_CHAIN_CYCLE_OR_LIMIT");
+                        struct PropertyPrefix {
+                            uint64_t vtable, type, owner, next;
+                            uint32_t name_id, number, field_flags, pad;
+                            int32_t dimension, element_size;
+                            uint64_t flags;
+                            uint32_t rep_info; int32_t offset;
+                        };
+                        static_assert(sizeof(PropertyPrefix) == 0x48);
+                        auto p = reader.get<PropertyPrefix>(field);
+                        require((p.owner & 1) && (p.owner & ~1ULL) == owner, "FIELD_OWNER_MISMATCH");
+                        require((reader.get<uint64_t>(p.type + 0x10) & 0x8000) != 0, "FIELD_NOT_PROPERTY");
+                        auto type_name = reader.get<uint64_t>(p.type);
+                        require(p.dimension > 0 && p.element_size > 0 && p.offset >= 0 &&
+                                int64_t(p.offset) + int64_t(p.dimension) * p.element_size <= size,
+                                "PROPERTY_EXTENT_INVALID");
+                        auto field_name = read_name(reader, pool, p.name_id, p.number);
+                        auto type = read_name(reader, pool, uint32_t(type_name), uint32_t(type_name >> 32));
+                        auto p_again = reader.get<PropertyPrefix>(field);
+                        require(std::memcmp(&p, &p_again, sizeof(p)) == 0, "PROPERTY_CHANGED");
+                        std::cout << "{\"event\":\"property_metadata\",\"owner\":" << quote(owner_name)
+                                  << ",\"name\":" << quote(field_name) << ",\"type\":" << quote(type)
+                                  << ",\"offset\":" << p.offset << ",\"element_size\":" << p.element_size
+                                  << ",\"dimension\":" << p.dimension << "}\n";
+                        field = p.next;
+                    }
+                    auto owner_again = item_at(header.index);
+                    require(owner_again.object == owner && owner_again.serial == owner_item.serial &&
+                            reader.get<uint64_t>(owner + 0x40) == super &&
+                            reader.get<uint64_t>(owner + 0x50) == first, "REFLECTION_OWNER_CHANGED");
+                    owner = super;
+                }
+            }
         }
         require(emitted != 0, "NO_VALID_OBJECTS");
         std::cout << "{\"event\":\"snapshot_end\",\"emitted\":" << emitted

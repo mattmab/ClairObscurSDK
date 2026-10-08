@@ -6,7 +6,7 @@ Evidence labels: OBSERVED = directly seen; PROVEN = reproduced with a stated tes
 
 ## Status
 
-Not yet investigated. No Expedition 33 layouts, offsets, or runtime APIs are validated.
+Live object/name enumeration and native class metadata are validated for the recorded build. Property values, invocation, callbacks, GC-safe lifetime and mod lifecycle remain open.
 
 ## Evidence discipline
 
