@@ -1,4 +1,4 @@
-"""Find exact string leads for later Ghidra xref analysis; never assign identities."""
+"""Find byte-substring leads and enclosing printable spans; never assign identities."""
 import argparse
 import hashlib
 import json
@@ -12,7 +12,26 @@ TARGETS = (
     'None', '/Script/CoreUObject', '/Script/Engine', 'GameEngine',
     'Object', 'Class', 'Function', 'ByteProperty', '.?AVUObject@@',
     'EasyAntiCheat', 'BattlEye', 'Denuvo', 'WinLicense',
+    'UObjectGlobals.cpp', 'UObjectArray.cpp', 'UObjectBase.cpp',
+    'UObjectHash.cpp', 'UnrealNames.cpp', 'ScriptCore.cpp',
+    'GarbageCollection.cpp', 'NameTypes.h',
 )
+
+
+def printable_span(data, offset, encoding, max_chars=2048):
+    width = 2 if encoding == 'utf-16le' else 1
+
+    def printable(at):
+        unit = data[at:at + width]
+        return (len(unit) == width and 32 <= unit[0] <= 126
+                and (width == 1 or unit[1] == 0))
+
+    start = end = offset
+    while start >= width and offset - start < max_chars * width and printable(start - width):
+        start -= width
+    while end < len(data) and end - offset < max_chars * width and printable(end):
+        end += width
+    return start, data[start:end].decode(encoding), data[end:end + width] == bytes(width)
 
 
 def scan(path):
@@ -30,14 +49,20 @@ def scan(path):
                 if len(hits) < 32:
                     section = pe.get_section_by_offset(offset)
                     rva = pe.get_rva_from_offset(offset) if section else None
+                    start, context, terminated = printable_span(data, offset, encoding)
+                    start_rva = pe.get_rva_from_offset(start) if pe.get_section_by_offset(start) else None
                     hits.append({'file_offset': hex(offset),
                                  'rva': hex(rva) if rva is not None else None,
                                  'preferred_va': hex(pe.OPTIONAL_HEADER.ImageBase+rva) if rva is not None else None,
-                                 'section': section.Name.rstrip(b'\0').decode() if section else None})
+                                 'section': section.Name.rstrip(b'\0').decode() if section else None,
+                                 'printable_span': context,
+                                 'span_file_offset': hex(start),
+                                 'span_preferred_va': hex(pe.OPTIONAL_HEADER.ImageBase + start_rva) if start_rva is not None else None,
+                                 'span_null_terminated': terminated})
                 offset += len(needle)
             results.append({'text': target, 'encoding': encoding, 'count': count, 'first_hits': hits})
     return {'binary': str(path), 'sha256': hashlib.sha256(data).hexdigest(),
-            'status': 'OBSERVED exact byte matches only; no global/function identity established',
+            'status': 'OBSERVED byte substring matches and bounded printable spans only; no global/function identity established',
             'queries': results}
 
 
