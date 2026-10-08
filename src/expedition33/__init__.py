@@ -4,8 +4,8 @@ Every objects() call invokes our native reader against the running game.
 Returned values are observations, not durable UObject handles. Native class
 metadata, stored boolean observations, a fixed reflected invocation and a scoped
 native function observer are supported. The sdk submodule exposes persistent
-sessions for the validated getter. General invocation and mod loading remain
-unimplemented.
+sessions for the validated getter. The mods submodule provides a minimal trusted
+local mod lifecycle. General invocation remains unimplemented.
 """
 from dataclasses import dataclass
 import json

@@ -12,7 +12,7 @@ Stages 0-2 are established; the object/name subset and first live Python capston
 
 Record source or command, artifact path, game fingerprint, confidence, and reproduction steps with each finding. Reference SDK behavior is not target-game evidence.
 
-## Current state: 10/12 frontier (persistent hook sessions and public handles proven)
+## Current state: 11/12 frontier (trivial public-API mod lifecycle proven)
 
 0. Environment inventoried — D: tree and installed apps inspected; MSVC 14.44.35207 and Windows SDK 10.0.26100.0 installed; x64 fixture compilation and execution proven.
 1. Target game/build fingerprinted — SHA256, x64 PE headers, local Steam build identified.
@@ -25,7 +25,7 @@ Record source or command, artifact path, game fingerprint, confidence, and repro
 8. Reflection/property reads: native class inheritance and property metadata PROVEN; stored BoolProperty reads PROVEN; other value types and GC-safe handles pending.
 9. Safe invocation: PROVEN Python -> native -> game-thread reflected dispatch -> boolean return on Default__Actor; general marshalling remains pending.
 10. Hooks/callbacks — persistent UFunction observer and public sdk.Session handles PROVEN on the harmless getter, including Python SystemExit containment, ten enable/disable cycles, normal close, controller death cleanup and reopen. Independent native fixture proves concurrent removal/late-entry lifetime. Actual game shutdown/relaunch validation remains pending.
-11. Minimal mod loader — pending.
+11. Minimal mod loader — PROVEN through three live ExampleMod load/enable/disable/unload cycles; import and lifecycle failure cleanup and module/instance release covered by unit tests. Explicit trusted local mods only; one enabled mod at a time.
 12. Private SDK package/docs/trivial mod — pending.
 
 Offsets are scoped to the recorded SHA256, checked against unique code signatures and live identity invariants. No SDK release exists.

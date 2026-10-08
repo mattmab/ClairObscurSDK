@@ -29,3 +29,13 @@ This external reader minimizes the first experiment's lifecycle requirements. It
 ## First game-thread execution path
 
 PROVEN: external CPython -> native controller subprocess -> Windows thread-specific scheduling DLL -> validated reflected dispatcher -> shared-memory response -> Python InvocationProof. Python stays outside the game. The temporary bridge closes after each fixed call and verifies remote DLL unload. This is an execution bridge now, but persistent callback delivery and mod teardown remain unimplemented.
+
+## First public-API mod: 2026-10-08
+
+PROVEN: mods/ExampleMod/mod.py uses only sdk.Session.find_object/call/hook/poll and the public handle.remove method. It identifies Default__Actor, invokes the harmless getter, observes its native hook result, logs the copied context, then removes its subscription on disable. It contains no offsets, addresses, signatures or native layout knowledge.
+
+PROVEN: scripts/verify_live_mod.py performed three load/enable/disable/unload cycles against PID25988. Each cycle produced one invocation log and one observed native event; duplicate lifecycle calls did not duplicate callbacks. Independent function metadata matched the baseline after every unload. Evidence: evidence/python-live-mod.json.
+
+The loader imports only explicitly selected local root/Name/mod.py entries, assigns unique module names, makes no sys.path modifications, and removes its own sys.modules entry on unload. Mods define Mod.enable(session) and Mod.disable(). Each enabled mod owns a Session which the loader closes even if disable raises. Callback failures are already isolated by the session dispatcher. Unit tests additionally prove import SystemExit cleanup, enable SystemExit plus disable RuntimeError cleanup, and weak-reference release of the unloaded instance. Ten total Python tests pass.
+
+LIMITS: this is trusted Python execution, not a security sandbox. A malicious or runaway mod cannot be contained by lifecycle exception handling. Arbitrary import side effects and threads spawned by mod code cannot be automatically rolled back. Only one enabled mod is currently supported because the native transport owns one fixed getter session. Startup/runtime packaging, a documented launcher and process-shutdown/relaunch integration remain pending; no v0.1 release claimed yet.
