@@ -6,7 +6,7 @@ Evidence labels: OBSERVED = directly seen; PROVEN = reproduced with a stated tes
 
 ## Status
 
-Operational and fixture-validated. Expedition 33 analysis is beginning; no game runtime layouts or offsets are validated.
+Fixture persistence was proven and game runtime findings were obtained. Current backend is stalled after whole-image analysis exhausted its 16 GB heap; recovery is pending. See the dated recovery entry below and the runtime journals for already-proven layouts.
 
 ## Evidence discipline
 
@@ -63,4 +63,12 @@ MCP imported build/mcp-smoke/mcp_smoke.exe into /fixtures, auto-analyzed it, and
 set_comment wrote a unique plate annotation at 0x140007280. save_program succeeded; close_program returned closed_count 1 and released_cache true; open_program reopened /fixtures/mcp_smoke.exe without reanalysis. get_comment returned the exact annotation. This proves metadata, enumeration, decompilation, write and database persistence through the actual MCP path.
 
 Evidence files under evidence/: mcp-connected-tools.json, mcp-import-fixture-result.json, mcp-fixture-metadata.json, mcp-fixture-functions.json, mcp-fixture-decompile.json, mcp-fixture-comment-written.json, mcp-fixture-saved.json, mcp-fixture-closed.json, mcp-fixture-reopened.json, mcp-fixture-persisted-comment.json. Corresponding argument JSON and scripts/ghidra_mcp_client.py reproduce each request. Game layouts remain unvalidated; this proves the research instrument only.
+
+## 2026-10-08 heap exhaustion and recovery
+
+OBSERVED: application.log at 15:18:56-15:19:01 reports Java heap space OutOfMemoryError and Auto Analysis command failure, maximum heap 17,179,869,184 bytes. Whole-image analysis did not complete. A stale progress indicator is not evidence that it is still progressing. GUI normal cancellation was attempted; analysis then remained waiting for a database write lock in ProgramRegisterContextDB.flushProcessorContextWriteCache during endTransaction. A later GUI Save attempt did not complete; the EDT also waits on that lock. The exact source of the retained lock is not proven.
+
+Preservation: copied the .gpr/.rep into D:/HobbyDevelopment/Analysis/ClairObscurSDK/recovery-20261008-oom while the process remained open. This diagnostic copy is not claimed transaction-consistent. jcmd 21416 GC.heap_dump -all -gz=1 completed successfully in 77.721 seconds, producing ghidra21416.hprof.gz (9,024,382,398 bytes). The heap snapshot is diagnostic evidence, not a directly reopenable Ghidra project. Log and thread dumps: evidence/ghidra-oom-20261008.log, ghidra-oom-threads.txt, ghidra-after-save-threads.txt.
+
+User approval requested before terminating the stuck process, because unsaved analysis may need rerunning. No termination performed as of this entry. scripts/launch-ghidra.ps1 is prepared for a 32 GB heap and rejects a duplicate running Ghidra instance; its actual launch/recovery remains untested. Machine has approximately 64 GB RAM. Runtime enumeration, reflected invocation and their evidence remain independent of this analysis failure.
 
