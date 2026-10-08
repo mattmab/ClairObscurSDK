@@ -44,6 +44,13 @@ def main():
                 assert response['ok'] == (request['op'] != 'not_an_operation')
             assert results[1]['response']['result']['PlayerController']
             assert len(results[2]['response']['result']['properties']) == 3
+            inspected_request = {'op': 'inspect', 'target': results[1]['response']['result']['PlayerController'][0],
+                                 'members': ['Player', 'bShowMouseCursor', 'NetUpdateFrequency']}
+            inspected = send(inspected_request, data, timeout=15)
+            results.append({'request': inspected_request, 'response': inspected})
+            assert inspected['ok'] and inspected['session'] == status['session']
+            assert type(inspected['result']['values']['bShowMouseCursor']) is bool
+            assert inspected['result']['values']['Player'] == results[1]['response']['result']['LocalPlayer'][0]
             assert process.wait(timeout=35) == 0
             closed = json.loads((data / 'status.json').read_text())
             assert not closed['enabled'] and closed['session'] == status['session']
@@ -51,7 +58,7 @@ def main():
             (evidence / 'introspection-file-service-live.json').write_text(json.dumps(
                 {'heartbeat': status, 'requests': results, 'shutdown': closed, 'exit_code': 0}, indent=2),
                 encoding='utf-8')
-            print('Live file protocol passed: roots/schema, error recovery, matching session, clean host shutdown.')
+            print('Live file protocol passed: roots/schema/values, error recovery, matching session, clean host shutdown.')
         finally:
             if process.poll() is None:
                 # Only our external host, never the game. Native owner-death

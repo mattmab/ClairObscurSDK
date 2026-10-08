@@ -1,6 +1,6 @@
 """Port of Mattmab's BL4 Introspection core, using independent E33 primitives.
 
-This incremental adapter currently validates status/roots/search/schema. The original
+This adapter supports discovery, schema and an expanding set of stored values. The original
 core is preserved verbatim; remaining operations are explicit pending work.
 """
 import threading
@@ -8,7 +8,8 @@ from types import SimpleNamespace
 
 from ..catalog import capture
 from ..reflection import describe
-from .. import RuntimeQueryError
+from ..values import read_values
+from .. import ObjectSnapshot, RuntimeQueryError
 from .core import Explorer
 
 
@@ -34,6 +35,23 @@ class _Object:
 
     def _path_name(self):
         return self._backend.catalog.path_name(self._observed)
+
+    def __getattr__(self, name):
+        if name.startswith('_'):
+            raise AttributeError(name)
+        if self._observed.index not in self._backend.observations:
+            self._backend.observations[self._observed.index] = read_values(self._backend.catalog, self._observed)
+        observation = self._backend.observations[self._observed.index]
+        key = next((key for key in observation.types if key[1] == name), None)
+        if key is None:
+            raise AttributeError(name)
+        if key in observation.errors:
+            raise UnsupportedCapability(observation.errors[key])
+        def adapt(value):
+            if isinstance(value, ObjectSnapshot): return self._backend.wrap(value)
+            if isinstance(value, tuple): return tuple(adapt(item) for item in value)
+            return value
+        return adapt(observation.values[key])
 
 
 class _Struct(_Object):
@@ -75,10 +93,12 @@ class _Backend:
     def __init__(self):
         self.catalog = None
         self.descriptors, self.properties, self.function_children = {}, {}, {}
+        self.observations = {}
 
     def refresh(self):
         self.catalog = capture()
         self.descriptors, self.properties, self.function_children = {}, {}, {}
+        self.observations = {}
         self._struct_class = self.catalog.find_class('Struct').index
         self._function_class = self.catalog.find_class('Function').index
         for obj in self.catalog.objects:
@@ -88,6 +108,7 @@ class _Backend:
     def clear(self):
         self.catalog = None
         self.descriptors.clear(); self.properties.clear(); self.function_children.clear()
+        self.observations.clear()
 
     def wrap(self, obj):
         lineage = self.catalog.ancestors(obj.class_index)
@@ -135,7 +156,7 @@ class _Backend:
 
 class Harness:
     """Persistent original Explorer with an external owner-thread SDK adapter."""
-    SUPPORTED = frozenset(('status', 'roots', 'search', 'schema'))
+    SUPPORTED = frozenset(('status', 'roots', 'search', 'schema', 'inspect', 'snapshot', 'diff'))
 
     def __init__(self):
         self._owner = threading.get_ident()
@@ -156,7 +177,7 @@ class Harness:
                 f"{request['op']!r} is not ported yet; see research/INTROSPECTION_PORT.md")
         self._running = True
         try:
-            if request['op'] != 'status':
+            if request['op'] not in ('status', 'diff'):
                 self._backend.refresh()
             if request['op'] == 'schema':
                 cls = (self._backend.find_object('Struct', request['struct']) if 'struct' in request
@@ -177,7 +198,8 @@ class Harness:
                 result['original_argument_types'] = result['argument_types']
                 result['argument_types'] = []
                 result['parity_complete'] = False
-                result['limitations'] = ['Value reads, writes, invocation, traces and agent bridge pending',
+                result['limitations'] = ['Value reads currently cover stored bool/byte/int32/uint16/float/name/object references; other types pending',
+                    'Writes, invocation, traces and agent bridge pending',
                     'Object-class, map/set and delegate type references pending',
                     'Function pages use registry identity order within each declaring class']
                 result['execution'] = 'external Python owner thread; read-only native catalog'

@@ -17,6 +17,9 @@
 #include <unordered_set>
 #include <unordered_map>
 #include <functional>
+#include <cmath>
+#include <limits>
+#include "stored_value_format.h"
 
 struct Handle {
     HANDLE value;
@@ -185,6 +188,7 @@ int main(int argc, char** argv) {
         std::string bool_object;
         std::string function_owner, function_name;
         DWORD descriptor_pid = 0;
+        bool read_values = false;
         std::unordered_map<int32_t, std::pair<int32_t, uint64_t>> descriptors;
         bool thread_ping = argc == 2 && std::string(argv[1]) == "--thread-ping";
         bool invoke_proof = argc == 2 && std::string(argv[1]) == "--invoke-proof";
@@ -208,7 +212,8 @@ int main(int argc, char** argv) {
                     "FUNCTION_NAME_REQUIRES_OWNER_DOT_NAME");
             function_owner = qualified.substr(0, dot); function_name = qualified.substr(dot + 1); limit = 0;
         }
-        else if (argc == 4 && std::string(argv[1]) == "--describe") {
+        else if (argc == 4 && (std::string(argv[1]) == "--describe" || std::string(argv[1]) == "--read-values")) {
+            read_values = std::string(argv[1]) == "--read-values";
             descriptor_pid = std::stoul(argv[2]);
             std::istringstream tokens(argv[3]); std::string token;
             while (std::getline(tokens, token, ',')) {
@@ -364,7 +369,7 @@ int main(int argc, char** argv) {
             auto class_name = read_name(reader, pool, cls.name_id, cls.name_number);
             auto meta_name = read_name(reader, pool, meta.name_id, meta.name_number);
             bool descriptor_function = false;
-            if (!descriptors.empty()) {
+            if (!descriptors.empty() && !read_values) {
                 // Validate UStruct membership through the observed metaclass chain;
                 // never reinterpret arbitrary UObject bytes as reflection metadata.
                 std::unordered_set<uint64_t> seen_types;
@@ -467,7 +472,7 @@ int main(int argc, char** argv) {
             if (reflection) {
                 // Derived from target routines 1412792f0, 1412813d0, 14134c3b0,
                 // 1412ab240 and 1412aca00. Research metadata, not callable handles.
-                uint64_t owner = bool_object.empty() ? item.object : object.cls;
+                uint64_t owner = bool_object.empty() && !read_values ? item.object : object.cls;
                 std::unordered_set<uint64_t> owners;
                 while (owner) {
                     require(owners.size() < 128 && owners.insert(owner).second, "CLASS_CHAIN_CYCLE_OR_LIMIT");
@@ -510,6 +515,8 @@ int main(int argc, char** argv) {
                                   << ",\"name\":" << quote(field_name) << ",\"type\":" << quote(type)
                                   << ",\"offset\":" << p.offset << ",\"element_size\":" << p.element_size
                                   << ",\"dimension\":" << p.dimension << ",\"flags\":" << quote(hex(p.flags));
+                        if (p.vtable >= base && p.vtable < base + module.modBaseSize)
+                            std::cout << ",\"vtable_rva\":" << quote(hex(p.vtable - base));
                         if (type == "BoolProperty") {
                             std::cout << ",\"bool_encoding\":" << quote(hex(reader.get<uint32_t>(field + 0x70)));
                         }
@@ -561,7 +568,57 @@ int main(int argc, char** argv) {
                                       << ",\"inner_element_size\":" << child.element_size;
                         }
                         std::cout << "}\n";
-                        if (!bool_object.empty() && type == "BoolProperty") {
+                        if (read_values && type != "BoolProperty") {
+                            // Target exports: 14136b3e0 -> numeric vt+200,
+                            // 141370ac0 float, 141370a60 signed32, 141370a30
+                            // unsigned16; 14136a290 byte; 14136b200 FName;
+                            // 14133c740 stored object reference. No custom getters.
+                            const int width = type == "FloatProperty" || type == "IntProperty" ? 4 :
+                                type == "UInt16Property" ? 2 : type == "ByteProperty" ? 1 :
+                                type == "NameProperty" || type == "ObjectProperty" ? 8 : 0;
+                            if (width) {
+                                try {
+                                    require(p.element_size == width && p.dimension <= 1024, "VALUE_LAYOUT_INVALID");
+                                    for (int32_t element = 0; element < p.dimension; ++element) {
+                                        const auto at = item.object + p.offset + uint64_t(element) * width;
+                                        uint64_t raw = 0, value_again = 0;
+                                        reader.read(at, &raw, width);
+                                        std::ostringstream value;
+                                        if (type == "FloatProperty") {
+                                            float number; std::memcpy(&number, &raw, 4);
+                                            value << stored_float_json(number);
+                                        } else if (type == "IntProperty") value << static_cast<int32_t>(raw);
+                                        else if (type == "UInt16Property") value << static_cast<uint16_t>(raw);
+                                        else if (type == "ByteProperty") value << static_cast<unsigned>(static_cast<uint8_t>(raw));
+                                        else if (type == "NameProperty") value << quote(read_name(reader, pool, uint32_t(raw), uint32_t(raw >> 32)));
+                                        else if (!raw) value << "null";
+                                        else {
+                                            const auto target = reader.get<ObjectHeader>(raw);
+                                            const auto slot = item_at(target.index);
+                                            require(slot.object == raw, "VALUE_REFERENCE_NOT_REGISTERED");
+                                            const auto target_name = read_name(reader, pool, target.name_id, target.name_number);
+                                            const auto target_again = reader.get<ObjectHeader>(raw);
+                                            const auto slot_again = item_at(target.index);
+                                            require(slot_again.object == raw && slot_again.serial == slot.serial &&
+                                                std::memcmp(&target, &target_again, sizeof(target)) == 0, "VALUE_REFERENCE_CHANGED");
+                                            value << "{\"$reference\":{\"index\":" << target.index << ",\"serial\":" << slot.serial
+                                                  << ",\"address\":" << quote(hex(raw)) << ",\"name\":" << quote(target_name) << "}}";
+                                        }
+                                        reader.read(at, &value_again, width);
+                                        const auto property_again = reader.get<PropertyPrefix>(field);
+                                        require(raw == value_again && std::memcmp(&p, &property_again, sizeof(p)) == 0, "STORED_VALUE_CHANGED");
+                                        std::cout << "{\"event\":\"stored_value\",\"owner_index\":" << header.index
+                                                  << ",\"name\":" << quote(field_name) << ",\"element\":" << element
+                                                  << ",\"value\":" << value.str() << "}\n";
+                                    }
+                                } catch (const std::exception& error) {
+                                    std::cout << "{\"event\":\"stored_value_error\",\"owner_index\":" << header.index
+                                              << ",\"name\":" << quote(field_name) << ",\"error\":" << quote(error.what()) << "}\n";
+                                }
+                            }
+                        }
+                        if ((!bool_object.empty() || read_values) && type == "BoolProperty") {
+                            try {
                             // Target export routine 14136a160 confirms this stored-value
                             // truth test; this does not call custom property accessors.
                             const uint32_t encoding = reader.get<uint32_t>(field + 0x70);
@@ -577,10 +634,16 @@ int main(int argc, char** argv) {
                                         reader.get<uint32_t>(field + 0x70) == encoding,
                                         "BOOL_OBSERVATION_CHANGED");
                                 std::cout << "{\"event\":\"stored_bool\",\"owner\":" << quote(owner_name)
+                                          << ",\"owner_index\":" << header.index
                                           << ",\"name\":" << quote(field_name) << ",\"element\":" << element
                                           << ",\"value\":" << ((raw & mask) ? "true" : "false")
                                           << ",\"raw_byte\":" << unsigned(raw) << ",\"mask\":" << unsigned(mask)
                                           << ",\"byte_offset\":" << unsigned(byte_offset) << "}\n";
+                            }
+                            } catch (const std::exception& error) {
+                                if (!read_values) throw;
+                                std::cout << "{\"event\":\"stored_value_error\",\"owner_index\":" << header.index
+                                          << ",\"name\":" << quote(field_name) << ",\"error\":" << quote(error.what()) << "}\n";
                             }
                         }
                         field = p.next;

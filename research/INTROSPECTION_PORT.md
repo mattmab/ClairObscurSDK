@@ -213,3 +213,49 @@ directly. That failed verifier is not counted as a protocol pass.
 38 Python tests pass, including seven protocol tests and mod-poll exception
 cleanup. The protocol is working for currently ported read operations; mutations,
 agent actions, retained values and full gameplay/relaunch parity are still pending.
+
+## Stored values, original inspection and snapshots
+
+PROVEN: `expedition33.values.read_values(catalog, observed)` now uses identity-
+selected native reads on generated-class instances. It returns stored BoolProperty,
+ByteProperty, IntProperty (signed32), UInt16Property, FloatProperty, NameProperty
+and registered ObjectProperty references. Static-array elements are bounded to
+1024; unsupported dynamic/container/struct types remain explicit per-field errors.
+This is stored backing data, not custom getter execution. It neither pins objects
+nor makes the external snapshot GC-atomic. Reference changes since the catalog
+become field errors; native process/slot/header changes reject the observation.
+
+Target evidence: numeric export 14136b3e0 adds the reflected offset and calls
+vtable+0x200. Live property vtables lead to 141370ac0 (float load), 141370a60
+(32-bit value, `%d` at146d9da10) and 141370a30 (16-bit value, `%u` at146da3090).
+Byte export14136a290 loads an unsigned byte. Name export14136b200 copies the
+8-byte name before the independently derived formatter. Object export14133c740
+reads the stored reference; our reader accepts only null or a registered, stable
+UObject identity. Existing BoolProperty export evidence remains applicable.
+Vtable mappings/decompilations are preserved in evidence/introspection-property-
+vtables.json, introspection-value-export*.json and introspection-scalar-conversion*.json.
+
+The unchanged original Explorer now services inspect, snapshot and diff through
+the adapter, including member selection, per-field errors, object references and
+its existing snapshot limits. Live controller specimens include Player resolving
+to the independently discovered LocalPlayer, bShowMouseCursor=true,
+SmoothTargetViewRotationSpeed=20.0, LastCompletedSeamlessTravelCount=0,
+RemoteRole=1, NetDriverName=GameNetDriver, NetTag=0 and NetUpdateFrequency=100.0.
+These are observations at the main menu, not fixed SDK assumptions. Tags reports
+an ArrayProperty conversion error until that decoder is implemented.
+
+`scripts/verify_live_introspection_values.py` compares all33 legacy Actor boolean
+observations, checks reference/name/numeric specimens and checks the original
+snapshot diff against the returned pages. The repeated selected pages had no
+changes. A large-float formatting regression (225000000. is invalid JSON) was
+caught during verification and corrected; the formatter now preserves float type
+and negative zero without a trailing decimal point. Four parser regression tests
+cover element duplication, partial array failure, stale references and target
+identity. This does not establish arbitrary property conversion or writing.
+
+The updated file-client verifier also passed roots/schema/inspect through a
+separate isolated host, including the live Player reference and boolean result,
+error recovery and normal shutdown. Evidence remains in
+evidence/introspection-file-service-live.json. All42 Python tests pass. Neither
+this protocol check nor the read tests claim native UI typing, gameplay travel,
+mutations or general retained-value ownership.
