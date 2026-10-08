@@ -548,6 +548,39 @@ int main(int argc, char** argv) {
                                           << target_item.serial;
                             }
                         }
+                        // Target type-name virtuals: 14136e440 reads the class
+                        // at +70; 14136ea40 reads the class constraint at +78.
+                        // Multicast type formatting 14136f160 reads a nullable
+                        // signature UObject at +70. Validate live metatypes too.
+                        const bool object_type = type == "ObjectProperty" || type == "WeakObjectProperty";
+                        const bool class_type = type == "ClassProperty" || type == "SoftClassProperty";
+                        const bool delegate_type = type == "MulticastInlineDelegateProperty" ||
+                                                   type == "MulticastSparseDelegateProperty";
+                        if (object_type || class_type || delegate_type) {
+                            const auto reference_offset = class_type ? 0x78 : 0x70;
+                            const auto reference = reader.get<uint64_t>(field + reference_offset);
+                            require(reference || delegate_type, "PROPERTY_REFERENCE_NULL");
+                            if (reference) {
+                                const auto target = reader.get<ObjectHeader>(reference);
+                                const auto target_item = item_at(target.index);
+                                require(target_item.object == reference, "PROPERTY_REFERENCE_NOT_REGISTERED");
+                                require(derives_from_core_type(target.cls, delegate_type ? "Function" : "Class"),
+                                        "PROPERTY_REFERENCE_CLASS_MISMATCH");
+                                const auto target_name = read_name(reader, pool, target.name_id, target.name_number);
+                                const auto target_again = reader.get<ObjectHeader>(reference);
+                                const auto item_again = item_at(target.index);
+                                require(std::memcmp(&target, &target_again, sizeof(target)) == 0 &&
+                                        item_again.object == reference && item_again.serial == target_item.serial &&
+                                        reader.get<uint64_t>(field + reference_offset) == reference,
+                                        "PROPERTY_REFERENCE_CHANGED");
+                                const std::string prefix = delegate_type ? "signature_function" :
+                                                           class_type ? "meta_class" : "property_class";
+                                std::cout << "," << quote(prefix + "_name") << ":" << quote(target_name)
+                                          << "," << quote(prefix + "_index") << ":" << target.index
+                                          << "," << quote(prefix + "_serial") << ":" << target_item.serial
+                                          << "," << quote(prefix + "_address") << ":" << quote(hex(reference));
+                            }
+                        }
                         if (type == "ArrayProperty" || type == "EnumProperty") {
                             const auto inner_offset = type == "ArrayProperty" ? 0x78 : 0x70;
                             const auto inner = reader.get<uint64_t>(field + inner_offset);

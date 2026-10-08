@@ -56,11 +56,13 @@ def describe(catalog, observed):
                         raise ValueError('Reflected owner changed since catalog')
                     current['owners'].append(MappingProxyType(dict(row)))
                 elif kind == 'property_metadata':
-                    for kind_name in ('struct', 'enum'):
+                    for kind_name in ('struct', 'enum', 'property_class', 'meta_class', 'signature_function'):
                         if kind_name + '_index' in row:
                             reference = catalog.by_index[row[kind_name + '_index']]
                             if (reference.serial != row[kind_name + '_serial'] or
-                                    reference.name != row[kind_name + '_name']):
+                                    reference.name != row[kind_name + '_name'] or
+                                    (kind_name + '_address' in row and
+                                     reference.address != int(row[kind_name + '_address'], 16))):
                                 raise ValueError('Property type changed since catalog')
                     row = dict(row, flags=int(row['flags'], 16))
                     current['properties'].append(MappingProxyType(row))

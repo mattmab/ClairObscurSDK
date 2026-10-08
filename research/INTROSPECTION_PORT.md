@@ -294,3 +294,39 @@ verified. No new physical keypress/UI validation is claimed by this milestone.
 Future validation must preserve this user session instead of replacing it with a
 bounded controller. Recursive types, writes, general calls/traces, agent actions,
 retained native values and full harness relaunch/reload parity remain pending.
+
+## Class and delegate schema references
+
+PROVEN 2026-10-08 in a separate candidate reader: the unchanged original core
+now exposes PropertyClass for ObjectProperty/WeakObjectProperty, MetaClass for
+ClassProperty/SoftClassProperty, and SignatureFunction for multicast inline and
+sparse delegate properties. This is metadata; it does not add weak-reference
+value resolution, delegate invocation or binding.
+
+The target vtables' +0x68 type-formatting slot resolves to 14136e440 (class
+reference at +0x70), 14136ea40 (class constraint at +0x78), or 14136e730 calling
+14136f160 (nullable multicast signature at +0x70). The reader validates each
+reference's registry identity, Class/Function ancestry and repeated header/slot
+observations. Python rejects name, serial or address changes since catalog
+capture. Evidence is preserved in introspection-reference-vtable-slots.json,
+introspection-reference-types-decompile.json and
+introspection-delegate-types-decompile.json.
+
+`scripts/verify_live_introspection_references.py --probe
+build/research-probe-schema/research_probe.exe` passed actual reads through the
+production catalog/parser and original schema algorithm. The launch substitution
+selects a separate compiled executable; it does not supply mock game responses.
+Observed references include Actor.RootComponent -> SceneComponent,
+Actor.ParentComponent -> ChildActorComponent,
+PlayerController.OverridePlayerInputClass -> PlayerInput,
+InputSettings.DefaultInputComponentClass -> InputComponent, and both Actor and
+Controller delegate signatures with complete paths. Evidence:
+evidence/introspection-reference-schema-live.json. All44 Python tests pass,
+including rejection of recycled descriptor references.
+
+Deployment boundary: the running user's console controller still owns the prior
+default research_probe.exe. It was not stopped, rebuilt in place or reloaded.
+These additional descriptors are verified in the candidate build and source;
+they become available to that persistent session only after a normal controller
+restart with the newly built default reader. Map/set references, nested inner
+descriptors and unverified property variants remain pending.

@@ -78,7 +78,9 @@ class _Property:
     def __init__(self, backend, row):
         self.Name, self.Class = row['name'], SimpleNamespace(Name=row['type'])
         self.PropertyFlags, self.ArrayDim, self.Offset_Internal = row['flags'], row['dimension'], row['offset']
-        for key, attr in (('struct_index', 'Struct'), ('enum_index', 'Enum')):
+        for key, attr in (('struct_index', 'Struct'), ('enum_index', 'Enum'),
+                          ('property_class_index', 'PropertyClass'), ('meta_class_index', 'MetaClass'),
+                          ('signature_function_index', 'SignatureFunction')):
             if key in row:
                 setattr(self, attr, backend.wrap(backend.catalog.by_index[row[key]]))
         if row.get('inner_type'):
@@ -200,7 +202,7 @@ class Harness:
                 result['parity_complete'] = False
                 result['limitations'] = ['Value reads cover stored bool/byte/int32/uint16/float/double/name/string/object references; recursive types pending',
                     'Writes, invocation, traces and agent bridge pending',
-                    'Object-class, map/set and delegate type references pending',
+                    'Map/set, nested inner descriptors and additional property variants pending',
                     'Function pages use registry identity order within each declaring class']
                 result['execution'] = 'external Python owner thread; read-only native catalog'
             return result
