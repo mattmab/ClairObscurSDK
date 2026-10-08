@@ -74,7 +74,7 @@ class SessionTransport:
         self._check_thread()
         if self._closed:
             raise RuntimeQueryError('Native session is closed')
-        if command not in ('enable', 'disable', 'invoke', 'drain', 'ping', 'close'):
+        if command not in ('enable', 'disable', 'invoke', 'drain', 'ping', 'close', 'console-attach', 'console-detach', 'console-status'):
             raise ValueError('Unsupported native session command')
         try:
             self._process.stdin.write(command + '\n')

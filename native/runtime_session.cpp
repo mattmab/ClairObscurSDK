@@ -1,6 +1,7 @@
 #include "session_protocol.h"
 #include "fixed_invocation.h"
 #include "observer_core.h"
+#include "console_attachment.h"
 
 static SchedulePacket target{};
 static ObserverBuffer session_events{};
@@ -35,6 +36,16 @@ uint32_t backend_open(SessionPacket* packet) {
 uint32_t backend_command(SessionPacket* packet) {
     if (!lifetime_valid()) return 61;
     switch (packet->request.action) {
+    case SessionConsoleAttach: {
+        if (observing) return 120;
+        uint32_t error=attach_console(runtime_base,&target);
+        packet->request.result=attached_console;
+        return error;
+    }
+    case SessionConsoleDetach: return detach_console(runtime_base,false);
+    case SessionConsoleStatus:
+        if (attached_console && !attachment_valid(runtime_base)) return 128;
+        packet->request.result=attached_console; return 0;
     case SessionEnable:
         if (observing) return 0;
         { uint32_t error = invoke_fixed_guarded(&target); if (error) return error; }
@@ -55,7 +66,7 @@ uint32_t backend_command(SessionPacket* packet) {
     }
 }
 uint32_t backend_close() {
-    uint32_t result = 0;
+    uint32_t result = detach_console_guarded(runtime_base,backend_shutting_down());
     if (observing) {
         if (backend_shutting_down()) detach_observer_storage();
         else if (!lifetime_valid()) { detach_observer_storage(); result = 65; }

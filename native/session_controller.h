@@ -55,7 +55,7 @@ inline void run_runtime_session(DWORD pid, DWORD thread, int32_t object_index, i
     packet.request.object_index = object_index; packet.request.object_serial = object_serial;
     packet.request.function_index = function_index; packet.request.function_serial = function_serial;
     wchar_t executable[32768]; require(GetModuleFileNameW(nullptr, executable, 32768) != 0, "SESSION_SELF_PATH");
-    auto path = std::filesystem::path(executable).parent_path().parent_path() / L"runtime-session" / L"runtime_session_v1.dll";
+    auto path = std::filesystem::path(executable).parent_path().parent_path() / L"runtime-session" / L"runtime_session_v2.dll";
     connection.module = LoadLibraryW(path.c_str()); require(connection.module != nullptr, "SESSION_DLL_LOAD_FAILED");
     auto callback = reinterpret_cast<HOOKPROC>(GetProcAddress(connection.module, "SessionScheduleHook"));
     require(callback != nullptr, "SESSION_EXPORT_MISSING");
@@ -69,7 +69,9 @@ inline void run_runtime_session(DWORD pid, DWORD thread, int32_t object_index, i
     while (std::getline(std::cin, command)) {
         DWORD action = command == "enable" ? SessionEnable : command == "disable" ? SessionDisable :
             command == "invoke" ? SessionInvoke : command == "drain" ? SessionDrain :
-            command == "ping" ? SessionPing : command == "close" ? SessionClose : 0;
+            command == "ping" ? SessionPing : command == "close" ? SessionClose :
+            command == "console-attach" ? SessionConsoleAttach : command == "console-detach" ? SessionConsoleDetach :
+            command == "console-status" ? SessionConsoleStatus : 0;
         require(action != 0, "SESSION_UNKNOWN_COMMAND");
         connection.command(action);
         std::cout << "{\"event\":\"session_response\",\"command\":" << quote(command)
