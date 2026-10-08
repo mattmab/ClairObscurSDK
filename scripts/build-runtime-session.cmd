@@ -8,7 +8,7 @@ if not exist "%BUILD_DIR%" mkdir "%BUILD_DIR%"
 call D:\HobbyDevelopment\Tools\VSBuildTools\VC\Auxiliary\Build\vcvarsall.bat x64
 if errorlevel 1 exit /b %errorlevel%
 pushd "%BUILD_DIR%"
-cl /nologo /W4 /WX /EHsc /std:c++17 /O2 /Zi /LD /Fe:runtime_session_v4.dll /Fd:runtime_session_v4.pdb "%PROJECT_ROOT%\native\runtime_session.cpp" /link /DEBUG user32.lib
+cl /nologo /W4 /WX /EHsc /std:c++17 /O2 /Zi /LD /Fe:runtime_session_v5.dll /Fd:runtime_session_v5.pdb "%PROJECT_ROOT%\native\runtime_session.cpp" /link /DEBUG user32.lib
 set "SESSION_BUILD_RESULT=%errorlevel%"
 popd
 exit /b %SESSION_BUILD_RESULT%

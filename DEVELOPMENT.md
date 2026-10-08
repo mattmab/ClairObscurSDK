@@ -30,7 +30,12 @@ Only native commands included and enabled by this shipping build can work.
 Native history remains available for Unreal commands. Python/custom history is
 available through `sdk.console.history` and lexical suggestions through
 `sdk.console.complete(prefix)`; native Up/Tab integration for these is unsupported.
-The game's existing Tilde mapping is verified; SDK key remapping is unsupported.
+The game's existing Tilde mapping is verified. Add an SDK toggle with
+`launch.cmd console --console-key F10`, or call
+`session.console.set_toggle_key("F10")` after enabling the console. F1 through F12
+are accepted; `None` removes the additional toggle. F10 opening, closing and
+reopening were tested live. Tilde remains available. Modified key chords are
+ignored, and the extra binding ends on console detach/session close.
 No arbitrary stock Unreal layouts or missing shipping commands are supplied.
 See research/CONSOLE.md for target-specific evidence and remaining validation.
 

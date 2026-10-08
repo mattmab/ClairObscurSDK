@@ -7,6 +7,7 @@ uint32_t backend_open(SessionPacket*);
 uint32_t backend_command(SessionPacket*);
 uint32_t backend_close();
 bool backend_shutting_down();
+void backend_message(MSG*);
 extern "C" __declspec(dllexport) LRESULT CALLBACK SessionScheduleHook(int, WPARAM, LPARAM);
 
 namespace session_transport {
@@ -71,6 +72,10 @@ static uint32_t guarded_command(SessionPacket* value) {
     __try { return backend_command(value); }
     __except(EXCEPTION_EXECUTE_HANDLER) { return 86; }
 }
+static void guarded_message(MSG* value) {
+    __try { backend_message(value); }
+    __except(EXCEPTION_EXECUTE_HANDLER) { close(BackendFailure); }
+}
 static bool open(MSG* message) {
     wchar_t name[96];
     DWORD requested_controller = static_cast<DWORD>(message->lParam);
@@ -130,6 +135,7 @@ extern "C" __declspec(dllexport) LRESULT CALLBACK SessionScheduleHook(int code, 
         if (packet && GetCurrentThreadId() == target_thread && watch &&
             InterlockedCompareExchange(&watch->disconnected, 0, 0)) close(ControllerExited);
         if (packet && GetCurrentThreadId() == target_thread && backend_shutting_down()) close(TargetShuttingDown);
+        if (packet && GetCurrentThreadId() == target_thread) guarded_message(message);
         if (request_message && !message->hwnd && message->message == request_message) {
             bool consumed = false;
             if (!packet) consumed = open(message);

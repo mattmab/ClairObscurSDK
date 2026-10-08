@@ -41,6 +41,8 @@ def select(name):
     return matches[0]
 try:
     output = {'pid': start['pid'], 'base': hex(base), 'sha256': start['sha256'], 'objects': {}}
+    output['console_state_names'] = {hex(rva): {'raw': hex(u64(base+rva)),
+        'name': name(u64(base+rva) & 0xffffffff)} for rva in (0x94dfb50,0x94dfb58)}
     targets = [select('Default__Console'), select('Default__InputSettings'), select('Default__PlayerController')]
     targets += [r for r in objects if r['class_name'] in ('CustomGameViewportClient', 'GameEngine') and not r['name'].startswith('Default__')]
     for row in targets:

@@ -6,6 +6,7 @@ static bool enabled = false;
 alignas(8) static void* volatile fixture_slot = nullptr;
 static void __fastcall fixture_target(void*, void*, void* output) { *static_cast<uint8_t*>(output) = 42; }
 bool backend_shutting_down() { return false; }
+void backend_message(MSG*) {}
 uint32_t backend_open(SessionPacket*) {
     fixture_thread = GetCurrentThreadId();
     if (!fixture_slot) InterlockedExchangePointer(&fixture_slot, reinterpret_cast<void*>(&fixture_target));

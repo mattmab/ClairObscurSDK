@@ -69,7 +69,7 @@ class ModLoader:
             raise _error('load', error) from None
         self._loaded[name] = [key, instance, None]
 
-    def enable(self, name, *, console=False):
+    def enable(self, name, *, console=False, console_key=None):
         record = self._record(name)
         if record[2] is not None:
             return
@@ -80,6 +80,8 @@ class ModLoader:
         try:
             if console:
                 session.console.enable()
+                if console_key is not None:
+                    session.console.set_toggle_key(console_key)
                 session.console.expose('my_mod', record[1])
             record[1].enable(session)
         except BaseException as error:

@@ -74,11 +74,11 @@ class SessionTransport:
         self._check_thread()
         if self._closed:
             raise RuntimeQueryError('Native session is closed')
-        if command not in ('enable', 'disable', 'invoke', 'drain', 'ping', 'close', 'console-attach', 'console-detach', 'console-status', 'console-poll', 'console-execute', 'console-print', 'console-names'):
+        if command not in ('enable', 'disable', 'invoke', 'drain', 'ping', 'close', 'console-attach', 'console-detach', 'console-status', 'console-poll', 'console-execute', 'console-print', 'console-names', 'console-key'):
             raise ValueError('Unsupported native session command')
         suffix = ''
         if payload is not None:
-            if command not in ('console-execute', 'console-print', 'console-names') or not isinstance(payload, str) or '\0' in payload:
+            if command not in ('console-execute', 'console-print', 'console-names', 'console-key') or not isinstance(payload, str) or '\0' in payload:
                 raise ValueError('Invalid console payload')
             encoded = payload.encode('utf-16le')
             if len(encoded) > (8192 if command == 'console-execute' else 65536):

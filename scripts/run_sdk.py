@@ -34,6 +34,7 @@ def main():
     parser = argparse.ArgumentParser(description='Expedition 33 development SDK')
     parser.add_argument('command', choices=['objects', 'example', 'smoke', 'console'])
     parser.add_argument('--seconds', type=float, default=0, help='Console duration; 0 runs until Ctrl+C')
+    parser.add_argument('--console-key', choices=[f'F{i}' for i in range(1, 13)], help='Optional additional console toggle')
     args = parser.parse_args()
     log_dir = ROOT / 'logs'
     log_dir.mkdir(exist_ok=True)
@@ -44,7 +45,7 @@ def main():
         if args.command == 'console':
             with ModLoader(ROOT / 'mods') as loader:
                 loader.load('ConsoleExample')
-                loader.enable('ConsoleExample', console=True)
+                loader.enable('ConsoleExample', console=True, console_key=args.console_key)
                 log.info('Native console ready. Press Tilde; use py help(), py my_mod.some_function(), or sdk.hello. Ctrl+C stops the controller.')
                 deadline = time.monotonic() + args.seconds if args.seconds > 0 else float('inf')
                 try:

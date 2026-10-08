@@ -1,5 +1,13 @@
 # Native console and persistent Python command integration
 
+## Current status: lifecycle, packaged relaunch, configurable toggle
+
+PROVEN v4: game9552 exited normally with console and observer active (exit code0); controller reported SESSION_TARGET_EXITED and cleared the console namespace and Python session. See local evidence/console-game-exit.json. A normal Steam relaunch produced game21820. The isolated extracted package at package-validation-20261008T205309Z enumerated96056 objects, passed reflection/bool/mod smoke checks, and displayed `Hello after relaunch` and the loaded mod's return value in the native console. Native `t.MaxFPS` returned120. The packaged host closed normally. This supersedes pending lifecycle/package statements in the chronological sections below.
+
+PROVEN v5 in game21820: `console_research_host.py --mod --key F10 --seconds 240` opened the native expanded console with F10. Entering `py print("F10 console works"); key_counter = 17; my_mod.some_function()` displayed the print and mod call1 result. F10 closed and reopened the console; `py key_counter += 1; key_counter` returned18. F10 closed it again. Screenshots from Computer Use preserve these observations in the task. Nineteen Python unit tests and native session fixtures passed before this UI test. Package refresh, binding cleanup input check, and v5 relaunch coverage remain pending.
+
+IMPLEMENTED key API: `console.set_toggle_key("F10")`, None to remove, F1-F12 accepted. The additional binding uses the existing owned GameThread message hook, ignores modified chords and repeated keydown, validates console identity/vtable and independently decoded Typing/Open FNames, then invokes the verified native state transition. Detach/close resets the binding. It does not change the engine's Tilde mapping. Arbitrary key chords and native Up/Tab integration for intercepted Python commands remain unsupported; dispatcher history/completion APIs are available.
+
 ## Latest status: mod commands (v4)
 
 PROVEN in game9552: ModLoader.enable(name, console=True) creates the native console before enabling the mod and exposes its instance as `my_mod`. ConsoleExample registers `sdk.hello`. Entering `sdk.hello native console` returned its greeting with call1; `py my_mod.some_function()` returned the same instance's greeting with call2. `py my_mod.greeting.remove()` removed registration; entering `sdk.hello removed` then produced the engine's ordinary Command not recognized response. Native registration replacement discards queued SDK commands (counted as dropped) so a queued command cannot transfer to a new owner. Native names are bounded to256 ASCII names of64characters; commands remain bounded to4096 UTF-16 units and16 queued entries. Python never runs on the GameThread.

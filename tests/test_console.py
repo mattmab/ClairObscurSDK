@@ -21,6 +21,20 @@ class Session:
 
 
 class ConsoleTests(unittest.TestCase):
+    def test_toggle_key_is_explicit_and_bounded(self):
+        session = Session()
+        console = Console(session)
+        with self.assertRaisesRegex(RuntimeError, 'disabled'):
+            console.set_toggle_key('F10')
+        console.enable()
+        console.set_toggle_key('F10')
+        self.assertEqual(session._transport.calls[-1], ('console-key', '121'))
+        with self.assertRaises(ValueError):
+            console.set_toggle_key('Alt+F4')
+        console.set_toggle_key(None)
+        self.assertEqual(session._transport.calls[-1], ('console-key', '0'))
+        console._close()
+
     def test_registration_sync_failure_does_not_publish_callback(self):
         session = Session()
         console = Console(session)

@@ -52,6 +52,16 @@ class Console:
             raise RuntimeError('Enable the console before executing engine commands')
         self._session._transport.command('console-execute', command)
 
+    def set_toggle_key(self, key=None):
+        """Add an F1–F12 toggle; None removes it. Native Tilde remains available."""
+        self._session._check()
+        if not self._enabled:
+            raise RuntimeError('Console is disabled')
+        keys = {f'F{index}': 111+index for index in range(1, 13)}
+        if key is not None and key not in keys:
+            raise ValueError('Toggle key must be F1 through F12, or None')
+        self._session._transport.command('console-key', str(keys[key] if key else 0))
+
     def write(self, text):
         self._session._check()
         if not self._enabled:
