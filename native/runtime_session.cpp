@@ -8,6 +8,9 @@
 #ifdef E33_LEASE_SESSION
 #include "target_strong_reference.h"
 #include "strong_lease_pool.h"
+#ifdef E33_STABLE_SESSION
+#include "stable_identity.h"
+#endif
 static StrongLeasePool<> session_leases;
 static uint64_t lease_session=0;
 #endif
@@ -21,7 +24,7 @@ static unsigned console_toggle_key=0;
 static uint32_t retain_preflight(void*,const CallPacket& call) {
     return static_cast<uint32_t>(session_leases.preflight(lease_session,retained_call_slots(call)));
 }
-static uint32_t retain_output(void* context,uint32_t offset,const CallIdentity& identity) {
+static uint32_t retain_output(void* context,uint32_t offset,CallIdentity& identity) {
     auto& retained=*static_cast<RetainedCallPacket*>(context);
     if(retained.count>=kCallObjects) return 401;
     TargetStrongReferenceOps ops{runtime_base,identity};
@@ -29,6 +32,10 @@ static uint32_t retain_output(void* context,uint32_t offset,const CallIdentity& 
     auto result=session_leases.acquire(ops,lease_session,identity.address,token);
     if(result!=StrongLeaseResult::Ok) return static_cast<uint32_t>(result);
     retained.leases[retained.count++]={offset,token};
+#ifdef E33_STABLE_SESSION
+    // The pool already owns this object before any serial-allocation side effect.
+    if(!stabilize_retained_identity(ops,identity)) return 413;
+#endif
     return 0;
 }
 #endif

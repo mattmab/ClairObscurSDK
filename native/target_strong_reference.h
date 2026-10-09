@@ -4,8 +4,7 @@
 #include "fixed_invocation.h"
 #include "reflected_invocation.h"
 
-// Experimental adapter, not wired into the session protocol yet. The containing
-// runtime must verify the exact supported executable before constructing this.
+// The containing runtime verifies the exact executable before constructing this.
 // Evidence: strong-holder-creation-body/paths and gc-guard-detail/name-bodies.
 struct TargetStrongReferenceOps {
     uint64_t base;
@@ -21,6 +20,16 @@ struct TargetStrongReferenceOps {
         return can_release() && !local_read<uint8_t>(base+0x9272cea) &&
             object==identity.address && call_identity(base,identity)==object &&
             !(local_read<uint32_t>(object+8)&0x40000000);
+    }
+    bool can_assign() const {
+        return can_release() && !local_read<uint8_t>(base+0x9272cea);
+    }
+    CallIdentity capture(uint64_t object) const { return call_capture(base,object); }
+    int32_t allocate_serial(int32_t index) const {
+        // 1413c5c50 assembly: RCX=&GUObjectArray, EDX=object index, EAX=serial.
+        // 1413ab8b0 owns the counter increment and item compare-exchange.
+        return reinterpret_cast<int32_t(__fastcall*)(void*,int32_t)>(base+0x13ab8b0)
+            (reinterpret_cast<void*>(base+0x9361b60),index);
     }
     TargetStrongReference* allocate() const {
         return reinterpret_cast<TargetStrongReference*(*)(size_t)>(base+0x4a98010)(24);

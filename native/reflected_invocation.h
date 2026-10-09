@@ -45,7 +45,7 @@ inline bool call_is_class(uint64_t base,uint64_t object) {
 struct CallRetention {
     void* context;
     uint32_t (*preflight)(void*,const CallPacket&);
-    uint32_t (*capture)(void*,uint32_t,const CallIdentity&);
+    uint32_t (*capture)(void*,uint32_t,CallIdentity&);
 };
 inline uint32_t reflected_call(uint64_t base,CallPacket& packet,const CallRetention* retention=nullptr) {
     if(auto invalid=validate_call_packet(packet)) return invalid;
@@ -162,11 +162,11 @@ inline uint32_t reflected_call(uint64_t base,CallPacket& packet,const CallRetent
                 auto constraint=call_identity(base,field.constraint);
                 if(!constraint || (field.kind==CallClass && !call_is_class(base,value)) ||
                    !call_derives(base,field.kind==CallClass ? value : local_read<uint64_t>(value+0x10),constraint)) return 224;
-                packet.objects[packet.object_count++]={offset,identity};
                 if(retention && (field.flags&0x500)) {
                     auto error=retention->capture(retention->context,offset,identity);
                     if(error) return error; // Session still owns every acquired holder.
                 }
+                packet.objects[packet.object_count++]={offset,identity};
             }
             std::memset(arguments+offset,0,8);
         }

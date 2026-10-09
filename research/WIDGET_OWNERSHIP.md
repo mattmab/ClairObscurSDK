@@ -59,6 +59,32 @@ under local evidence/. Ghidra's verified constructor definition was saved.
 Native menu rendering, child construction/property writes, focus recovery and
 key dispatch remain unfinished; this blank widget is not a Mods Menu.
 
+### Isolated stable-return candidate (not yet live-tested)
+
+`scripts/build-stable-call-candidate.cmd` builds a separate v9 DLL/controller
+under runtime-session-v9/research-probe-v9. The loaded v8 files were not replaced.
+Assembly of1413c5c50 confirms RCX=object array, EDX=object index, EAX=serial for
+1413ab8b0. The new retained-output callback first acquires the existing strong
+lease, then invokes that allocator only for an exactly matching zero serial.
+It publishes the recaptured identity only after validating index/address, the
+returned positive serial and game-thread/GC/exit guards again. Error413 retains
+unknown outcome and leaves any acquired holder in the session cleanup pool.
+It neither treats zero as a wildcard nor relaxes the existing target checks.
+
+The wire envelope remains unchanged. v9 has its own message/mapping/DLL names
+and advertises stable_identity_protocol=1. Older builds do not allocate serials.
+This currently applies only to retained output object identities; it does not
+repair arbitrary input/target serial transitions during a call.
+
+Build with /W4 /WX passed. `scripts/verify-stable-identity.cmd` passed the native
+fixture covering first assignment, existing serials without reallocation, stale
+zero observations, unavailable/lost context, returned-serial mismatch, replaced
+identity and invalid identities. v8 and default v5 runtime compatibility objects
+also compile with /W4 /WX. These are compile/fixture proofs, not game validation.
+Next: expose an explicit experimental v9 session, hand over cooperatively, run
+the complete guarded widget specimen, confirm removal/holder cleanup, and restore
+the persistent host. No new release or package validation is claimed yet.
+
 Target: Steam23765773, SHA256
 218a2478aad5b3a1674b5d7097ec1ac4f994abb95466f9da1407fcd39d639618.
 Addresses below use Ghidra image base140000000; they are not portable offsets.

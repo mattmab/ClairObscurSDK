@@ -7,7 +7,11 @@
 #include "lease_protocol.h"
 #ifdef E33_RETAINED_SESSION
 #include "retained_call_protocol.h"
+#ifdef E33_STABLE_SESSION
+constexpr wchar_t kSessionMessage[] = L"E33SDK.Session.v9";
+#else
 constexpr wchar_t kSessionMessage[] = L"E33SDK.Session.v8";
+#endif
 #else
 constexpr wchar_t kSessionMessage[] = L"E33SDK.Session.v7";
 #endif
@@ -50,7 +54,9 @@ struct SessionPacket {
 #endif
 };
 inline void session_mapping_name(wchar_t (&name)[96], DWORD controller, uint64_t nonce) {
-#ifdef E33_RETAINED_SESSION
+#ifdef E33_STABLE_SESSION
+    swprintf_s(name, L"Local\\E33Session9_%lu_%016llx", controller, nonce);
+#elif defined(E33_RETAINED_SESSION)
     swprintf_s(name, L"Local\\E33Session8_%lu_%016llx", controller, nonce);
 #elif defined(E33_LEASE_SESSION)
     swprintf_s(name, L"Local\\E33Session7_%lu_%016llx", controller, nonce);
