@@ -3,12 +3,26 @@ import hashlib
 from pathlib import Path
 import threading
 import unittest
+from types import SimpleNamespace
 from unittest.mock import patch
 
 from expedition33.introspection import Harness, UnsupportedCapability, core
 
 
 class IntrospectionTests(unittest.TestCase):
+    def test_inner_schema_preserves_verified_type_identity(self):
+        from expedition33.introspection import _Explorer
+        explorer = _Explorer(SimpleNamespace())
+        explorer.ref = lambda obj: {'$object': obj.path}
+        prop = SimpleNamespace(Name='ConsoleKeys', Class=SimpleNamespace(Name='ArrayProperty'),
+            PropertyFlags=0, ArrayDim=1, Offset_Internal=100,
+            Inner=SimpleNamespace(Name='ConsoleKeys', Class=SimpleNamespace(Name='StructProperty'),
+                ElementSize=24, Struct=SimpleNamespace(path='/Script/InputCore.Key')))
+        schema = explorer.prop_schema(prop)
+        self.assertEqual(schema['Inner']['property_type'], 'StructProperty')
+        self.assertEqual(schema['Inner']['element_size'], 24)
+        self.assertEqual(schema['Inner']['Struct'], {'$object': '/Script/InputCore.Key'})
+
     def test_original_core_preserved(self):
         self.assertEqual(hashlib.sha256(Path(core.__file__).read_bytes().replace(b'\r\n', b'\n')).hexdigest(),
             '6c043cb1664e71daa6a6b3a50f9d04f284854101d071ac0b21ce18b1469fe543')

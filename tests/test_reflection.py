@@ -12,7 +12,8 @@ class DescriptorTests(unittest.TestCase):
     def test_reference_identity_checks(self):
         catalog = Catalog(123, *fixture())
         obj, reference = catalog.by_index[2], catalog.by_index[3]
-        for prefix in ('property_class', 'meta_class', 'signature_function'):
+        for prefix in ('property_class', 'meta_class', 'signature_function',
+                       'inner_struct', 'inner_enum', 'inner_property_class', 'inner_meta_class'):
             prop = dict(event='property_metadata', name='Reference', flags='0x0')
             prop.update({prefix + '_index': reference.index, prefix + '_serial': reference.serial,
                          prefix + '_name': reference.name, prefix + '_address': hex(reference.address)})

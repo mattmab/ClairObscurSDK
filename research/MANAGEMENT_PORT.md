@@ -286,3 +286,37 @@ logs/management-host-1.stderr.log / management-host-3.stderr.log.
 All68 Python tests pass. Same-process controller restart is now proven; native
 UMG, general key dispatch/rebinding, game relaunch and updated isolated packaging
 remain pending. Console action output currently needs more readable formatting.
+
+## Live widget/input schemas and call-path audit — 2026-10-08
+
+The dump leads were resolved against the identity-checked live catalog on34604.
+All12 targeted UStructs were present: Widget, UserWidget, WidgetBlueprintLibrary,
+WidgetTree, PlayerController, InputSettings, EnhancedInputUserSettings,
+CommonUIActionRouterBase, InputCore.Key, and the game ControlsPage,
+MappingOptionEntry and InvisibleModalInputBlocker generated widget classes.
+Fifteen relevant UFunctions were described, including creation, viewport add/remove,
+focus/input-mode setters, key events and IsInputKeyDown. Evidence:
+evidence/management-live-schemas.json. None was invoked by this investigation.
+Presence of a loaded generated class does not prove safe widget construction.
+
+The exact live UFunction entries were matched to Ghidra code:
+
+| Function | Entry RVA | Observed parameter contract and path |
+| --- | --- | --- |
+| WidgetBlueprintLibrary.Create | 31361b0 | 32-byte parameters: WorldContextObject0, WidgetType8 constrained to UserWidget, OwningPlayer16, return24. Thunk parses FFrame arguments, checks the class, and chooses ownership/context-specific creation paths. It is not a plain C++ function taking that parameter buffer. |
+| UserWidget.AddToViewport | 31355b0 | int32 ZOrder,4-byte parameters. Thunk resolves a viewport subsystem and forwards widget/slot information. |
+| SetInputMode_GameAndUIEx | 31401e0 |19-byte parameters inside a24-byte reflected extent; PlayerController0, widget8, lock-mode enum16, bools17/18. Thunk obtains a Slate widget reference, dispatches controller virtuals and conditionally flushes input. |
+| PlayerController.IsInputKeyDown | 3b27180 |25-byte parameters inside a32-byte extent:24-byte Key then bool return24. Thunk copies reference-counted key state, reads controller+408 and calls143ddc5b0 when non-null. |
+
+These are static code observations correlated with live metadata, not callable
+SDK contracts or validated new offsets. Ghidra responses are preserved in
+evidence/management-function-thunks.json. In particular, InputCore.Key reflects
+only the8-byte KeyName within24 bytes; the thunk's reference-count operations
+show why an arbitrary copied/zero-filled FKey cannot yet be treated as a valid
+owned argument. Parameter size and allocation extent also need distinct handling.
+
+Next primitives: bounded reflected struct observations (for key/mapping data),
+verified FKey construction/destruction or engine-owned key lookup, general
+identity-checked game-thread invocation, then widget creation/retention and focus
+restoration. Continue with CommonUI routing evidence before input suppression.
+No game settings, input modes, widget instances or mappings were changed here.

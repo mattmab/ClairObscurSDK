@@ -599,6 +599,41 @@ int main(int argc, char** argv) {
                             std::cout << ",\"inner_type\":" << quote(child_name)
                                       << ",\"inner_name\":" << quote(child_field_name)
                                       << ",\"inner_element_size\":" << child.element_size;
+                            // The same verified FProperty subclasses occur under
+                            // ArrayProperty.Inner. Preserve their referenced type
+                            // identities; element size alone does not identify FKey.
+                            const bool inner_struct = child_name == "StructProperty";
+                            const bool inner_enum = child_name == "EnumProperty" || child_name == "ByteProperty";
+                            const bool inner_class = child_name == "ClassProperty" || child_name == "SoftClassProperty";
+                            const bool inner_object = child_name == "ObjectProperty" || child_name == "WeakObjectProperty";
+                            if (inner_struct || inner_enum || inner_class || inner_object) {
+                                const auto ref_offset = inner_class || child_name == "EnumProperty" ? 0x78 : 0x70;
+                                const auto reference = reader.get<uint64_t>(inner + ref_offset);
+                                require(reference || child_name == "ByteProperty", "INNER_TYPE_REFERENCE_NULL");
+                                if (reference) {
+                                    const auto target = reader.get<ObjectHeader>(reference);
+                                    const auto target_item = item_at(target.index);
+                                    require(target_item.object == reference, "INNER_TYPE_NOT_REGISTERED");
+                                    require(derives_from_core_type(target.cls, inner_struct ? "ScriptStruct" :
+                                            inner_enum ? "Enum" : "Class"), "INNER_TYPE_CLASS_MISMATCH");
+                                    const auto target_name = read_name(reader, pool, target.name_id, target.name_number);
+                                    const auto target_again = reader.get<ObjectHeader>(reference);
+                                    const auto item_again = item_at(target.index);
+                                    const auto final_child = reader.get<PropertyPrefix>(inner);
+                                    require(std::memcmp(&target, &target_again, sizeof(target)) == 0 &&
+                                            item_again.object == reference && item_again.serial == target_item.serial &&
+                                            std::memcmp(&child, &final_child, sizeof(child)) == 0 &&
+                                            reader.get<uint64_t>(inner + ref_offset) == reference &&
+                                            reader.get<uint64_t>(field + inner_offset) == inner,
+                                            "INNER_TYPE_CHANGED");
+                                    const std::string prefix = inner_struct ? "inner_struct" : inner_enum ? "inner_enum" :
+                                                               inner_class ? "inner_meta_class" : "inner_property_class";
+                                    std::cout << "," << quote(prefix + "_name") << ":" << quote(target_name)
+                                              << "," << quote(prefix + "_index") << ":" << target.index
+                                              << "," << quote(prefix + "_serial") << ":" << target_item.serial
+                                              << "," << quote(prefix + "_address") << ":" << quote(hex(reference));
+                                }
+                            }
                         }
                         std::cout << "}\n";
                         const auto scalar_json = [&](const std::string& value_type, uint64_t raw) {

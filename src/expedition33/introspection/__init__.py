@@ -85,7 +85,28 @@ class _Property:
             if key in row:
                 setattr(self, attr, backend.wrap(backend.catalog.by_index[row[key]]))
         if row.get('inner_type'):
-            self.Inner = SimpleNamespace(Name=row['inner_name'], Class=SimpleNamespace(Name=row['inner_type']))
+            self.Inner = SimpleNamespace(Name=row['inner_name'], Class=SimpleNamespace(Name=row['inner_type']),
+                                         ElementSize=row['inner_element_size'])
+            for key, attr in (('inner_struct_index', 'Struct'), ('inner_enum_index', 'Enum'),
+                              ('inner_property_class_index', 'PropertyClass'), ('inner_meta_class_index', 'MetaClass')):
+                if key in row:
+                    setattr(self.Inner, attr, backend.wrap(backend.catalog.by_index[row[key]]))
+
+
+class _Explorer(Explorer):
+    """Add copied inner-type metadata without modifying the preserved core."""
+    def prop_schema(self, prop):
+        result = super().prop_schema(prop)
+        inner = getattr(prop, 'Inner', None)
+        if inner is not None:
+            detail = result['Inner']
+            detail['property_type'] = inner.Class.Name
+            detail['element_size'] = inner.ElementSize
+            for attr in ('Struct', 'Enum', 'PropertyClass', 'MetaClass'):
+                reference = getattr(inner, attr, None)
+                if reference is not None:
+                    detail[attr] = self.ref(reference)
+        return result
 
 
 class _Backend:
@@ -164,7 +185,7 @@ class Harness:
     def __init__(self):
         self._owner = threading.get_ident()
         self._backend = _Backend()
-        self._explorer = Explorer(self._backend)
+        self._explorer = _Explorer(self._backend)
         self._closed = False
         self._running = False
 

@@ -395,3 +395,29 @@ SHA256:7a53f78b2a5048678d941c5172df317b5752b0b357c7c8297651aeee11babc8e.
 The integrated management host attached and served live roots before and after
 a cooperative controller restart. The pinned native v5 DLL was not replaced.
 The historical deployment deferral above is resolved; game relaunch remains pending.
+
+## Inner property reference identities — 2026-10-08
+
+The candidate native reader now follows the verified StructProperty/EnumProperty/
+ByteProperty/ObjectProperty/WeakObjectProperty/ClassProperty/SoftClassProperty
+type-reference contracts when those properties occur as ArrayProperty.Inner.
+It checks the child owner/layout, registered reference identity and metatype,
+then rereads reference, child and parent pointers. Python rejects references
+changed since catalog capture. Size alone is never used to infer an element type.
+
+The adapter extends Explorer.prop_schema via a subclass; original core.py remains
+unchanged. Inner adds property_type, element_size and supported referenced object
+paths. Existing schema fields remain present. This does not recursively describe
+nested containers, implement struct value reads, or introduce native ownership.
+
+PROVEN with scripts/verify_live_inner_schema.py and candidate
+build/research-probe-inner/research_probe.exe on34604:
+ConsoleKeys -> /Script/InputCore.Key; ActionMappings -> InputActionKeyMapping;
+AxisMappings -> InputAxisKeyMapping; LocalPlayers -> /Script/Engine.LocalPlayer.
+Both raw descriptors and original-core schema requests with the adapter extension
+agree. Evidence: evidence/inner-schema-live.json. All69 Python tests pass, including
+recycled child-reference rejection; native /W4 build has no warnings.
+
+This candidate is not deployed to the persistent host yet. The existing console
+and host were preserved. Deployment should use the tested cooperative handover;
+no need to overwrite an executable held by the live transport or replace its DLL.
