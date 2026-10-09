@@ -547,3 +547,13 @@ session6c7548d8fdf54980a5dd6199fa9458c0. Live roots and Python console output
 worked after restoration; this is same-game reconnect proof, not game relaunch.
 The first restore launch used an incorrect script path and exited before attach;
 the corrected scripts/run_sdk.py launch is the validated persistent host.
+
+## Retained-object research — 2026-10-09
+
+WIDGET_OWNERSHIP.md records target-specific GC holder registration, traversal and
+unregistration paths, corroborated against live engine-owned widget holders.
+These are prerequisites for reusable session-owned UObject leases, not an
+implementation of Explorer retain. Retain remains rejected before invocation.
+Verify the complete collector/lifetime contract before adding leases; ordinary
+object observations and returned identities remain non-owning. Native FKey and
+other owned value types require separate construction/destruction support.

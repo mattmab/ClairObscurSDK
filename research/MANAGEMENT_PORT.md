@@ -358,3 +358,13 @@ FKey ownership. The existing v5 `mods` fallback and Python console were restored
 and checked after the candidate closed. Native UMG and key dispatch acceptance
 gates remain open. Next: typed output handling and object ownership, then a
 bounded widget lifecycle specimen before connecting shared management actions.
+
+## Native ownership follow-up — 2026-10-09
+
+See WIDGET_OWNERSHIP.md for target-derived Create/viewport/Slate/GC paths and
+the read-only live corroboration of1,124 SObjectWidget holders. A separate
+SDK-owned GC holder is the next retention candidate. Its collector ABI,
+synchronization and teardown contract still require verification; no widget
+creation, retention, focus change or key dispatch is claimed. Keep ownership
+registration inside the eventual create operation to avoid a Python round-trip
+GC gap. Shared console management remains usable while this work continues.
