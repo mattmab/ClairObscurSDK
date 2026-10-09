@@ -616,3 +616,33 @@ proves these regressions after relaunch; it does not prove this host's shutdown,
 keyboard activation, gameplay/map transitions, or a complete native Mods Menu.
 The next implementation gate is routing owned native controls into the existing
 management registry, then validating keyboard ownership before general keybinds.
+
+## Multiple-control owner core (candidate, not loaded)
+
+The v16 single-button limit spans TargetButtonActions, TargetMenuData.child_slate,
+the child-lease-correlated protocol, and NativeMenu._action. MenuActionEvents
+already supports64 routes; increasing that queue alone cannot enable another
+control. The next runtime must own one retained SButton reference per control,
+route thunks by verified delegate instance, drain a shared queue once per session,
+and revoke all routes before releasing any protected control or menu lease.
+
+`button_delegate_pool.h` adds a bounded stable-address pool over the verified
+OwnedButtonDelegate core. Individual removal preserves other registrations and
+queued events. Whole-pool close revokes delivery before deferred restores; slot
+reuse waits for successful cleanup. Quarantine retains ownership, and registration
+generations survive reopen. The containing adapter must gate all access on the
+game thread/permanent foreign-thread latch, contain SEH, and retain stable Slate
+references. It is deliberately not wired into the resident v16 runtime.
+
+`test-button-delegate-pool.cmd` passes under MSVC /W4 /WX. Its native fixture
+covers two concurrent controls, capacity and alias rejection, selective event
+purging, stale completion after slot reuse, deferred close while executing,
+wrong-thread close, destroyed-instance cleanup without dereference, and permanent
+fault/quarantine behavior. No native DLL was rebuilt or injected for this step.
+
+Remaining integration: bounded per-control retained references and identity/lease
+checks; pinned instance-routed thunks; a separately versioned runtime/transport;
+Python menu control ownership and one shared event drain; two visible controls
+with independent mod actions; disconnect/destruction/relaunch cleanup. Keyboard
+routing remains a separate gate. This core is not evidence of a working multi-
+control Mods Menu.
