@@ -14,6 +14,18 @@ if errorlevel 1 goto failed
 cl /nologo /W4 /WX /EHsc /std:c++17 /Fe:text_call_fixture.exe "%PROJECT_ROOT%\native\text_call_fixture.cpp"
 if errorlevel 1 goto failed
 text_call_fixture.exe
+if errorlevel 1 goto failed
+cl /nologo /W4 /WX /EHsc /std:c++17 /Fe:text_frame_fixture.exe "%PROJECT_ROOT%\native\text_frame_fixture.cpp"
+if errorlevel 1 goto failed
+text_frame_fixture.exe
+if errorlevel 1 goto failed
+cl /nologo /W4 /WX /EHsc /std:c++17 /Fe:text_dispatch_gate_fixture.exe "%PROJECT_ROOT%\native\text_dispatch_gate_fixture.cpp"
+if errorlevel 1 goto failed
+text_dispatch_gate_fixture.exe
+if errorlevel 1 goto failed
+cl /nologo /W4 /WX /EHsc /std:c++17 /Fe:target_text_type_fixture.exe "%PROJECT_ROOT%\native\target_text_type_fixture.cpp"
+if errorlevel 1 goto failed
+target_text_type_fixture.exe
 :failed
 set "TEST_RESULT=%errorlevel%"
 popd

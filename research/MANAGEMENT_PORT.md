@@ -64,6 +64,13 @@ object-result lease correlation. All163 Python tests pass. It remains disconnect
 from the public session and running game; native dispatch/lifecycle integration
 and live labels are the next gates. No new menu capability is advertised yet.
 
+The native candidate now connects an ownership-aware durable text frame to the
+actual reflected dispatcher through an explicit optional callback table. Offline
+fault/quarantine tests and v5/v11 compile compatibility pass, as do163 Python
+tests. The runtime has not opted in yet: the next step is session/controller and
+planner integration, followed by live text round trips and TextBlock labels.
+Existing console, packaged lifecycle and numeric layout behavior are unchanged.
+
 ## Preserved implementation references
 
 Primary source is the installed BL4 sdk_mods directory. Nineteen original files

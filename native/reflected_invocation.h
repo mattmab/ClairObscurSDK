@@ -1,10 +1,12 @@
 #pragma once
 #include "invocation_protocol.h"
+#include "text_call_protocol.h"
 #include <cmath>
 
-// Uses the target's own dispatcher. No thunk ABI emulation, nontrivial native
-// values, cached callable addresses or promise that an RPC body ran. The optional
-// retention sink owns object outputs before this game-thread operation returns.
+// Uses the target's own dispatcher, with no thunk ABI emulation or promise that
+// an RPC body ran. The optional retention sink owns object outputs before return.
+// Nontrivial text requires a separate explicit callback table and durable frame;
+// existing session callers do not opt in to that candidate path.
 inline uint64_t call_identity(uint64_t base, const CallIdentity& id) {
     auto value=fixed_slot(base,id.index,id.serial);
     return value && value==id.address ? value : 0;
@@ -50,12 +52,28 @@ struct CallRetention {
 struct CallPodValidation {
     bool (*validate)(uint64_t,uint64_t,PodValueKind,const CallIdentity&);
 };
+struct CallTextHandling {
+    TextCallPacket* packet;
+    uint8_t* arguments; // Durable native-session storage, not the wire buffer.
+    void* context;
+    bool (*available)(void*);
+    uint32_t (*prepare)(void*);
+    uint32_t (*begin)(void*);
+    uint32_t (*returned)(void*);
+    uint32_t (*finish)(void*);
+};
 inline uint32_t reflected_call(uint64_t base,CallPacket& packet,const CallRetention* retention=nullptr,
-                               const CallPodValidation* pod=nullptr) {
+                               const CallPodValidation* pod=nullptr,const CallTextHandling* text=nullptr) {
     const bool pod_enabled=pod && pod->validate;
-    if(auto invalid=validate_call_packet(packet,pod_enabled)) return invalid;
+    const bool text_enabled=text && text->packet && &text->packet->retained.call==&packet &&
+        text->arguments && text->context && text->available && text->prepare && text->begin && text->returned && text->finish &&
+        pod_enabled && retention && retention->preflight && retention->capture;
+    if(text && !text_enabled) return 227;
+    // Never overwrite a frame still owning uncertain native arguments.
+    if(text_enabled && !text->available(text->context)) return 230;
+    if(auto invalid=text_enabled ? validate_text_call(*text->packet) : validate_call_packet(packet,pod_enabled)) return invalid;
     packet.outcome=CallNotDispatched;
-    if((packet.version!=kCallVersion && !(pod_enabled && packet.version==kPodCallVersion)) || packet.parameter_size>kCallBytes ||
+    if((packet.version!=kCallVersion && !(pod_enabled && packet.version==kPodCallVersion) && !(text_enabled && packet.version==kTextCallVersion)) || packet.parameter_size>kCallBytes ||
        packet.parameter_size>packet.allocation_extent || packet.allocation_extent>65536 ||
        packet.field_count>kCallFields || packet.object_count>kCallObjects) return 200;
     if(local_read<DWORD>(base+0x9272d30)!=GetCurrentThreadId() ||
@@ -76,21 +94,22 @@ inline uint32_t reflected_call(uint64_t base,CallPacket& packet,const CallRetent
     if(!(packet.function_flags&0x400)) return 205;
     auto dispatch=local_read<uint64_t>(local_read<uint64_t>(object)+0x268);
     if(dispatch!=base+0x1393330 && dispatch!=base+0x332bb90) return 206;
-    alignas(16) uint8_t arguments[kCallBytes]{};
+    alignas(16) uint8_t local_arguments[kCallBytes]{};
+    auto arguments=text_enabled ? text->arguments : local_arguments;
     uint8_t used[kCallBytes]{};
     std::memcpy(arguments,packet.data,packet.parameter_size);
     auto property=local_read<uint64_t>(function+0x50);
     unsigned seen=0, walked=0, returns=0;
     const char* kinds[]={"", "BoolProperty","ByteProperty","UInt16Property","IntProperty",
                          "FloatProperty","DoubleProperty","ObjectProperty","ClassProperty",
-                         "StructProperty","StructProperty","StructProperty","StructProperty"};
+                         "StructProperty","StructProperty","StructProperty","StructProperty","TextProperty"};
     for(;property;property=local_read<uint64_t>(property+0x18)) {
         if(++walked>4096) return 207;
         auto flags=local_read<uint64_t>(property+0x38);
         if(!(flags&0x80)) continue;
         if(seen>=packet.field_count) return 208;
         const auto& field=packet.fields[seen++];
-        if(field.kind<CallBool || field.kind>(pod_enabled && packet.version==kPodCallVersion ? CallAnchors : CallClass) || !field.name[0] || field.name[95] ||
+        if(field.kind<CallBool || field.kind>(text_enabled ? kTextCallKind : pod_enabled && packet.version==kPodCallVersion ? CallAnchors : CallClass) || !field.name[0] || field.name[95] ||
            field.flags!=flags || local_read<uint64_t>(property+0x10)!=(function|1) ||
            !exact_name(base,property+0x20,field.name) ||
            !exact_name(base,local_read<uint64_t>(property+8),kinds[field.kind]) ||
@@ -100,6 +119,10 @@ inline uint32_t reflected_call(uint64_t base,CallPacket& packet,const CallRetent
         if(flags&0x400) { ++returns; if(field.offset!=packet.return_offset || field.dimension!=1) return 210; }
         unsigned width=field.kind==CallByte ? 1 : field.kind==CallUInt16 ? 2 :
             field.kind==CallInt32 || field.kind==CallFloat ? 4 : 8;
+        if(field.kind==kTextCallKind) {
+            width=16;
+            if(!text_enabled || local_read<uint64_t>(property)!=base+0x6e1ba00 || field.dimension!=1) return 228;
+        }
         if(call_pod_kind(field.kind)) {
             width=pod_value_width(call_pod_profile(field.kind));
             if(!pod->validate(base,property,call_pod_profile(field.kind),field.constraint)) return 225;
@@ -152,9 +175,24 @@ inline uint32_t reflected_call(uint64_t base,CallPacket& packet,const CallRetent
         auto error=retention->preflight(retention->context,packet);
         if(error) return error;
     }
+    if(text_enabled) {
+        if(auto error=text->prepare(text->context)) return error;
+        // Native constructors may allocate. Revalidate identities and context
+        // before placing owned text values into the actual invocation frame.
+        if(call_identity(base,packet.target)!=object || call_identity(base,packet.function)!=function ||
+           local_read<DWORD>(base+0x9272d30)!=GetCurrentThreadId() || local_read<uint8_t>(base+0x9272cfc) ||
+           local_read<uint8_t>(base+0x934e968) || local_read<uint8_t>(base+0x9272cea) ||
+           (local_read<uint32_t>(object+8)&0x40000000) ||
+           local_read<uint64_t>(function+0xd8)!=base+packet.entry_rva ||
+           local_read<uint64_t>(local_read<uint64_t>(object)+0x268)!=dispatch) return 229;
+        for(unsigned i=0;i<packet.object_count;++i)
+            if(!call_identity(base,packet.objects[i].identity)) return 229;
+        if(auto error=text->begin(text->context)) return error;
+    }
     packet.outcome=CallOutcomeUnknown; // A fault/timeout after this point cannot be retried safely.
     using Dispatch=void(__fastcall*)(void*,void*,void*);
     reinterpret_cast<Dispatch>(dispatch)(reinterpret_cast<void*>(object),reinterpret_cast<void*>(function),arguments);
+    if(text_enabled) if(auto error=text->returned(text->context)) return error;
     // Capture and scrub all pointer slots, including input references. Never
     // publish raw pointer bytes as return values. Only the explicit retention
     // sink acquires ownership; the established v6/v7 path remains observational.
@@ -186,6 +224,7 @@ inline uint32_t reflected_call(uint64_t base,CallPacket& packet,const CallRetent
         }
     }
     if(!call_identity(base,packet.target) || !call_identity(base,packet.function)) return 223;
+    if(text_enabled) if(auto error=text->finish(text->context)) return error;
     std::memcpy(packet.data,arguments,packet.parameter_size);
     packet.outcome=CallDispatchReturned;
     return 0;

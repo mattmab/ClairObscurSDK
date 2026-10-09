@@ -53,7 +53,7 @@ OwnedTextResult create_owned_text(Ops& ops,OwnedTextStorage& storage,
     storage.state=OwnedTextState::ConstructionUnknown;
     ops.construct(storage.value,view);
     // Keep uncertainty if an unexpected type appears after construction.
-    if(!ops.known_text(storage.value)) return OwnedTextResult::UnsupportedValue;
+    if(storage.value.flags!=2 || !ops.known_text(storage.value)) return OwnedTextResult::UnsupportedValue;
     storage.state=OwnedTextState::Live;
     return OwnedTextResult::Ok;
 }

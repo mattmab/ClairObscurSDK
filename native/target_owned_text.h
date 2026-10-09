@@ -17,9 +17,9 @@ struct TargetOwnedTextOps {
         return can_release() && !local_read<uint8_t>(base+0x9272cea);
     }
     bool known_text(const TargetTextValue& text) const {
-        // This candidate owns only values produced by verified FromString.
-        // It deliberately does not adopt arbitrary TextProperty output values.
-        if(!text.data || text.flags!=2 || text.padding) return false;
+        // Exact base text data only: default text uses flags0; FromString sets2.
+        // Other localized/history implementations remain unverified.
+        if(!text.data || (text.flags&~uint32_t(2)) || text.padding) return false;
         auto table=local_read<uint64_t>(text.data);
         return table==base+0x6da8c78 && local_read<int32_t>(text.data+8)>0 &&
             local_read<uint64_t>(table)==base+0x10abe30 &&

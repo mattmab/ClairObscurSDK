@@ -247,8 +247,9 @@ silently retry. A wrong-context release defers while preserving ownership.
 The containing native session must own this storage before calling the helper,
 keep it alive after faults, verify the fingerprint and supply its SEH boundary.
 `target_owned_text.h` checks thread/GC/shutdown state and the exact target vtable
-and known lifetime methods. It currently accepts only text constructed by the
-verified FromString path, not arbitrary localized TextProperty returns.
+and known lifetime methods. It accepts only the verified base text-data type
+with default flags0 or FromString flags2; creation separately requires flags2.
+Arbitrary localized/history implementations remain unsupported.
 
 `verify-owned-text.cmd` passes43 input/copy/context/lifetime/fault checks and
 compiles the actual target adapter/templates with MSVC/W4/WX. The fixture injects
@@ -303,3 +304,42 @@ command or game-thread text dispatcher is installed. The current v11 game and
 packaged console host remain running unchanged. Next connect the envelope to a
 new explicit capability, ownership-aware dispatch and cleanup, then validate live
 round trips and native TextBlock labels against this build.
+
+## Durable text call frame and dispatcher integration
+
+The candidate now has a session-owned `TextCallFrame` and an optional explicit
+`CallTextHandling` path in the actual reflected dispatcher. Before construction,
+the dispatcher validates the complete live function/property schema, including
+the exact TextProperty vtable at RVA6e1ba00, scalar dimension and16-byte width.
+After construction it rechecks target/function/object identities and the
+game-thread/GC/shutdown context before dispatch. Existing callers supply no text
+table and continue to reject the version3 envelope.
+
+Input and output text slots are initialized with owned values. Ownership moves
+into the durable argument buffer before dispatch and is adopted back only after
+a normal engine return. Native text bytes are scrubbed before publication. Text
+display values are copied into bounded staging buffers and become publishable
+only after all native text references were released. A dispatch fault preserves
+the uncertain argument frame; construction/read/release faults preserve their
+individual ownership state and forbid retry or reuse. Invalid cleanup context
+defers release. No destructor calls the engine implicitly.
+
+`TargetTextCall` supplies the target callbacks but is not yet instantiated by
+the runtime. Integration must keep it alive in native session storage, attempt
+cleanup on every normal early failure, contain SEH faults, and prevent reuse or
+unload while ownership is deferred/uncertain. No controller command, handshake,
+public planner support or live text call is claimed by this checkpoint.
+
+Offline validation passes43 primitive checks,22 envelope checks,34 frame
+ownership/fault checks,7 actual dispatcher capability/quarantine gates, and13
+checks of the actual target type predicate against synthetic memory. The target
+adapter and v5/v11 runtimes plus v11 controller compile with MSVC/W4/WX; compile
+outputs are isolated and do not replace the running package. All163 Python tests
+pass, including the native cross-language envelope fixture. Evidence:
+`evidence/text-frame-native-tests.log`, `evidence/text-frame-compatibility.log`,
+and `evidence/text-frame-python-tests.log`.
+
+Next wire the durable context into a separate session capability and the existing
+Python planner/transport, validate Unicode and empty text round trips live, then
+render native TextBlock labels. These fixtures prove ownership bookkeeping and
+rejection behavior; they do not prove live FText output lifetime or menu behavior.
