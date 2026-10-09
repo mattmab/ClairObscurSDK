@@ -1178,3 +1178,29 @@ native hook-cleanup guarantee, or a lock adopted by older running SDK versions.
 The currently resident source controller predates this change. No live or
 packaged validation of this revision is claimed. Offline restore/recovery will
 use the same root ownership boundary; that operation remains to be implemented.
+
+### Explicit offline install recovery — 2026-10-09
+
+Added recover_transaction and scripts/mod_recovery.py inspect/restore. Restore
+requires the freshly inspected journal SHA256 and exclusive mod-root ownership.
+It preserves the prepared/rejected candidate, restores the original installed
+folder from its backup where needed, and records rolled_back without importing
+or enabling any mod. The loader accepts that terminal recovery phase. Successful
+committed installs and the servicing core mods are excluded. Multiple unresolved
+transactions for one mod or ambiguous folder states are not guessed through.
+
+Recovery journals each rename boundary. A newly authorized request with a fresh
+digest can continue after a rename succeeded but its next journal write failed;
+it observes source/destination presence rather than blindly repeating a rename.
+Journal writes now also reject redirected temporary/journal files. The journal
+digest identifies inspected state, not trusted integrity of externally edited
+files, and filesystem recovery does not prove native cleanup. Controller stop
+is required; uncertain native cleanup additionally requires game exit.
+
+All348 tests pass in evidence/mod-recovery-tests.log. Coverage includes preserving
+non-executed rejected code, pre-swap and post-backup restoration, competing-owner
+and stale-digest rejection, fault injection at both recovery journal boundaries,
+missing-backup/committed rejection, real isolated CLI inspection/restoration,
+and a fresh loader enabling the old version after a failed replacement import.
+No new live failure injection, controller/game relaunch or release archive was
+performed for this revision. Those gates and full Harness/menu/keybind work remain.

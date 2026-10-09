@@ -1,11 +1,14 @@
 import json
 from pathlib import Path
 import tempfile
+import subprocess
+import sys
 import unittest
 from unittest.mock import patch
 
 from expedition33.mod_archive import build_bytes
-from expedition33.mod_install import PreparedInstall, InstallError, inspect_transaction
+from expedition33.mod_install import PreparedInstall, InstallError, inspect_transaction, recover_transaction
+from expedition33.mod_lock import ModRootLock
 
 
 class InstallTests(unittest.TestCase):
@@ -27,6 +30,98 @@ class InstallTests(unittest.TestCase):
 
     def prepare(self):
         return PreparedInstall(self.mods, 'Example', self.archive, self.digest)
+
+    def recover(self, transaction):
+        return recover_transaction(self.mods, transaction.directory.name,
+                                   expected_journal_sha256=transaction.inspect()['journal_sha256'])
+
+    def test_offline_recovery_preserves_rejected_candidate_without_importing_it(self):
+        transaction = self.prepare()
+        transaction.activate(lambda: True)
+        (self.target / 'mod.py').write_text('raise RuntimeError("must not execute")')
+        result = self.recover(transaction)
+        self.assertEqual(result['phase'], 'rolled_back')
+        self.assertEqual((self.target / 'mod.py').read_text(), 'VERSION=1')
+        self.assertIn('must not execute', (transaction.directory / 'rejected/mod.py').read_text())
+        with self.assertRaisesRegex(InstallError, 'not an unresolved'):
+            self.recover(transaction)
+
+    def test_recovery_before_swap_keeps_installed_folder_and_candidate(self):
+        transaction = self.prepare()
+        with self.assertRaises(InstallError): transaction.activate(lambda: False)
+        result = self.recover(transaction)
+        self.assertEqual(result['recovery'], 'kept_original')
+        self.assertEqual(result['phase'], 'rolled_back')
+        self.assertIn('installation_error', result)
+        self.assertTrue(transaction.prepared.is_dir())
+        self.assertEqual((self.target / 'mod.py').read_text(), 'VERSION=1')
+
+    def test_recovery_after_backup_rename_restores_original(self):
+        transaction = self.prepare()
+        transaction._record('backup_pending')
+        self.target.rename(transaction.backup)
+        self.assertEqual(self.recover(transaction)['phase'], 'rolled_back')
+        self.assertTrue(transaction.prepared.is_dir())
+        self.assertEqual((self.target / 'mod.py').read_text(), 'VERSION=1')
+
+    def test_recovery_requires_current_journal_and_exclusive_root(self):
+        transaction = self.prepare()
+        old = transaction.inspect()['journal_sha256']
+        transaction._record('cleanup_pending')
+        with self.assertRaisesRegex(InstallError, 'digest changed'):
+            recover_transaction(self.mods, transaction.directory.name, expected_journal_sha256=old)
+        lock = ModRootLock(self.mods)
+        try:
+            with self.assertRaisesRegex(RuntimeError, 'already owned'): self.recover(transaction)
+        finally:
+            lock.close()
+        self.assertEqual(transaction.inspect()['phase'], 'cleanup_pending')
+
+    def test_interrupted_recovery_resumes_from_observed_rename_outcomes(self):
+        import expedition33.mod_install as implementation
+        for failed_phase in ('recovery_restore_pending', 'rolled_back'):
+            transaction = self.prepare()
+            transaction.activate(lambda: True)
+            writer = implementation._write_journal
+            def fail(directory, state):
+                if state['phase'] == failed_phase:
+                    raise OSError('simulated journal write failure')
+                return writer(directory, state)
+            with patch.object(implementation, '_write_journal', fail):
+                with self.assertRaisesRegex(OSError, 'write failure'): self.recover(transaction)
+            result = self.recover(transaction)
+            self.assertEqual(result['phase'], 'rolled_back')
+            self.assertEqual((self.target / 'mod.py').read_text(), 'VERSION=1')
+            self.assertTrue((transaction.directory / 'rejected/helper.py').is_file())
+
+    def test_committed_and_missing_backup_fail_without_file_changes(self):
+        transaction = self.prepare()
+        transaction.activate(lambda: True)
+        transaction._record('committed')
+        with self.assertRaisesRegex(InstallError, 'not an unresolved'): self.recover(transaction)
+        transaction._record('installed')
+        transaction.backup.rename(transaction.directory / 'displaced-backup')
+        with self.assertRaisesRegex(InstallError, 'No original'): self.recover(transaction)
+        self.assertTrue((self.target / 'helper.py').is_file())
+
+    def test_cli_inspects_then_requires_digest_before_restoring(self):
+        transaction = self.prepare()
+        transaction.activate(lambda: True)
+        script = Path(__file__).resolve().parents[1] / 'scripts/mod_recovery.py'
+        def run(operation, *extra):
+            return subprocess.run([sys.executable, '-I', '-S', '-B', str(script), operation,
+                                   str(self.mods), transaction.directory.name, *extra],
+                                  capture_output=True, text=True, timeout=10)
+        inspected = run('inspect')
+        self.assertEqual(inspected.returncode, 0, inspected.stderr)
+        digest = json.loads(inspected.stdout)['journal_sha256']
+        denied = run('restore')
+        self.assertEqual(denied.returncode, 1)
+        self.assertIn('requires', json.loads(denied.stdout)['error'])
+        restored = run('restore', '--expected-journal-sha256', digest)
+        self.assertEqual(restored.returncode, 0, restored.stderr)
+        self.assertEqual(json.loads(restored.stdout)['phase'], 'rolled_back')
+        self.assertEqual((self.target / 'mod.py').read_text(), 'VERSION=1')
 
     def test_prepare_does_not_execute_or_change_installed_source_and_swap_retains_backup(self):
         transaction = self.prepare()

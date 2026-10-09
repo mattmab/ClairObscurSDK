@@ -547,3 +547,41 @@ repeated reopen, candidate shutdown, travel/GC, or complete Harness parity.
 General keybinds, native numeric/text/JSON editors, broader tracing/reload and
 acceptable menu startup performance remain unfinished. The candidate is not a
 finished release; its archive and manifest were not modified.
+
+## Interrupted staged-install recovery (source checkout)
+
+Stop the controller before restoring files. If lifecycle cleanup was uncertain,
+exit the game as well: file restoration cannot remove stale native resources.
+Older controllers predate the root lock and must also be stopped. The recovery
+script does not attach to the game, import a mod, or enable restored code.
+
+Inspect the transaction ID reported by the failed install:
+
+```powershell
+D:\HobbyDevelopment\Python\expedition33-tools\Scripts\python.exe -I -S -B scripts\mod_recovery.py inspect D:\HobbyDevelopment\ClairObscurSDK\mods TRANSACTION_ID
+```
+
+Review the phase and folder-presence fields. To explicitly restore, supply the
+`journal_sha256` returned by that inspection:
+
+```powershell
+D:\HobbyDevelopment\Python\expedition33-tools\Scripts\python.exe -I -S -B scripts\mod_recovery.py restore D:\HobbyDevelopment\ClairObscurSDK\mods TRANSACTION_ID --expected-journal-sha256 JOURNAL_SHA256
+```
+
+Recovery acquires exclusive mod-root ownership. Before the installed folder was
+moved, it keeps that original folder and the prepared candidate. After a swap,
+it preserves the rejected replacement at `.transactions/TRANSACTION_ID/rejected`
+and moves the retained backup back to the installed path. It never deletes either
+version or automatically executes the restored mod. Success records `rolled_back`;
+a subsequent loader can load the original version. Completed installations and
+SDK core mods are not eligible for this recovery operation.
+
+A changed journal is rejected. If recovery itself fails, inspect again; a fresh
+explicit restore request can continue from recorded recovery rename phases.
+Ambiguous/missing folders remain blocked. Do not delete lock files, edit a failed
+journal to say committed, or retry an install automatically. The digest checks
+the inspected journal, not the integrity of externally edited mod files.
+
+Source tests cover real filesystem renames, interrupted journal writes, the CLI,
+and loading restored code through a fresh loader. Recovery has not yet been
+validated with a live failed installation or included in a new release archive.

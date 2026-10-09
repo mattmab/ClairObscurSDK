@@ -4,6 +4,7 @@ import unittest
 from unittest.mock import Mock
 from expedition33.mods import ModLoader, ModError
 from expedition33.mod_archive import build_bytes
+from expedition33.mod_install import inspect_transaction, recover_transaction
 from test_mods import FakeSession
 
 SOURCE = '''class Mod:
@@ -54,6 +55,14 @@ class StagedLoaderTests(unittest.TestCase):
         with ModLoader(self.mods) as fresh:
             with self.assertRaisesRegex(ModError, 'Unresolved installation'):
                 fresh.load('Example')
+        transaction_id = next((self.mods / '.transactions').iterdir()).name
+        state = inspect_transaction(self.mods, transaction_id)
+        recovered = recover_transaction(self.mods, transaction_id,
+                                        expected_journal_sha256=state['journal_sha256'])
+        self.assertEqual(recovered['phase'], 'rolled_back')
+        with ModLoader(self.mods, session=FakeSession()) as fresh:
+            fresh.load('Example'); fresh.enable('Example')
+            self.assertEqual(fresh.actions.dispatch({'op':'action', 'name':'test.value'})['result'], 1)
 
     def test_cleanup_failure_preserves_old_files_and_blocks_restart_load(self):
         self.loader._loaded['Example'][1].disable = Mock(side_effect=RuntimeError('cleanup failed'))

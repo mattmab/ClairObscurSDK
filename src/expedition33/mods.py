@@ -199,7 +199,7 @@ class ModLoader:
             if index >= 1024:
                 raise ModError('Transaction history exceeds inspection limit')
             state = inspect_transaction(self.root, directory.name)
-            if state['mod'] == name and (state['phase'] not in ('preparing', 'prepared', 'committed') or
+            if state['mod'] == name and (state['phase'] not in ('preparing', 'prepared', 'committed', 'rolled_back') or
                                          state['phase'] == 'committed' and state.get('error')):
                 raise ModError('Unresolved installation requires inspection: ' + state['journal'])
 
