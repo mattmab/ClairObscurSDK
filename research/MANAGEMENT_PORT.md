@@ -51,6 +51,13 @@ passed the original Harness typed-value probe with exact holder cleanup. The
 persistent management/console host now runs from that package. See DEVELOPMENT.md
 for the source revision, hashes, process identities and evidence.
 
+Owned-text follow-up: target constructor/copy/reference-count/destructor paths
+are now correlated with the text conversion thunks. A reusable candidate native
+ownership helper passes43 offline lifecycle/fault checks and its actual adapter
+compiles with/W4/WX. It is not yet connected to transport or live widgets. See
+WIDGET_LAYOUT_VALUES.md for the exact boundary and integration gates. The running
+v11 package and its console remain unchanged during this work.
+
 ## Preserved implementation references
 
 Primary source is the installed BL4 sdk_mods directory. Nineteen original files

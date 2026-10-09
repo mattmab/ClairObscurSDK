@@ -215,3 +215,51 @@ destroy native parameters on the game thread, copy only bounded textual results
 back to Python, and explicitly own any retained native text. It must preserve
 unknown-outcome handling and avoid retrying calls after ambiguous dispatch.
 No text/font support, string conversion or label rendering is claimed yet.
+
+## Candidate owned-text lifecycle helper
+
+Further target inspection resolved the ownership operations. Assembly1410add50
+takes the result inRCX and a borrowed FString view inRDX, copies all UTF-16 units
+through engine string allocation, publishes one owned text reference and sets
+flag bit2. It does not retain/free the input view. String-copy141027170 also uses
+the engine allocator; free14107c7d0 calls the active allocator's virtual48.
+
+The text-data vtable146da8c78 has add-reference1410acdb0 at+8 and release1410cbce0
+at+10. The former atomically increments data+8; the latter atomically decrements
+and calls deleting destructor1410abe30 when the former count was1. That destructor
+cleans its display/source string allocations through engine free and then frees
+the data allocation when requested. Virtual+28,1410baa50, returns a borrowed
+display-string header;1410bab10 performs the engine refresh before that access.
+`owned-text-core.json`, `owned-text-vtable.json`, `owned-text-abi.json` and
+`owned-text-lifetime.json` preserve the correlated code and assembly.
+
+`native/owned_text_value.h` now supplies a reusable candidate storage/lifecycle
+helper. It is non-copyable, has no native-calling C++ destructor and requires
+explicit game-thread release. The constructor accepts at most4096 UTF-16 units
+including NUL; it rejects embedded NUL, unpaired surrogates and oversized input.
+Reads return bounded copies and never a target pointer. Empty engine strings are
+normalized to a single terminator; malformed headers, unreadable content and
+insufficient output capacity fail without publishing a partial result.
+
+Construction, display refresh and destruction each mark storage uncertain before
+calling the engine. A fault leaves it quarantined: create/read/release cannot
+silently retry. A wrong-context release defers while preserving ownership.
+The containing native session must own this storage before calling the helper,
+keep it alive after faults, verify the fingerprint and supply its SEH boundary.
+`target_owned_text.h` checks thread/GC/shutdown state and the exact target vtable
+and known lifetime methods. It currently accepts only text constructed by the
+verified FromString path, not arbitrary localized TextProperty returns.
+
+`verify-owned-text.cmd` passes43 input/copy/context/lifetime/fault checks and
+compiles the actual target adapter/templates with MSVC/W4/WX. The fixture injects
+faults after allocation and after release to check the no-retry boundary, and
+tests unexpected constructed types and copied input independence. Evidence is
+`evidence/owned-text-native-tests.log`. These are offline tests; no text value
+was constructed in the game and the running v11 DLL was not rebuilt or changed.
+
+Next integrate durable text storage and bounded wire strings with reflected-call
+parameter construction, result copying and cleanup. Gate it behind a new native
+capability, retain v11 compatibility, and validate a live Unicode/empty/invalid
+input round trip before TextBlock labels. Generic TextProperty output adoption
+still needs its own lifetime/type validation; this helper alone does not provide
+Harness text invocation, text retention or a functioning Mods Menu.
