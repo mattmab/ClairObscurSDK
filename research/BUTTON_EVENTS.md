@@ -267,3 +267,37 @@ Ops validating the retained live delegate, game-thread guards and SEH/finally
 boundaries, transport/Python routing and real mouse/keyboard/lifecycle tests.
 These headers are candidates, not installed capabilities. Existing runtime
 v13/v14/v15 binaries were not rebuilt or changed.
+
+## Native forwarding and real SEH fixture
+
+`button_delegate_forward.h` now supplies the candidate forwarding implementations
+for both execution slots and destruction. Normal execute forwards the original
+instance/reply arguments and returns the original pointer without reading or
+copying the reply. Optional execute forwards the bool result and queues only on
+true. Both use Windows `__try`/`__finally` to unwind the captured registration
+ticket; an abnormal original return revokes delivery and quarantines ownership
+while the original exception propagates. Destructor bookkeeping happens before
+forwarding and contains only its own SDK faults: the original destructor runs
+once outside that exception handler and its exception semantics are preserved.
+
+Foreign-thread calls forward to the immutable engine entries without touching
+the game-thread queue and atomically latch a permanent fault. Runtime integration
+must check that latch on EVERY owner-thread control/drain operation and quarantine
+before inspecting any possibly freed delegate. This is a required integration
+contract, not a claim that current runtimes already enforce it. Thunks, table and
+original entries must remain pinned/immutable even after explicit unregistration.
+
+The Windows fixture passes /W4 /WX, including all192 sentinel reply bytes, exact
+return pointer, one event for successful execution, no event for optional false,
+reentrant close, late-thunk passthrough, original execute/optional/destructor SEH,
+SDK pre-destructor exchange SEH and exactly-once original destructor forwarding.
+A real worker thread verifies foreign-thread passthrough and fault latching.
+Unlike the earlier lifecycle model, these tests raise actual Windows structured
+exceptions through the forwarding functions. They still use fixture delegates,
+not the live game. Evidence: `button-forward-fixture.log`.
+
+Windows compilation also exposed `max` macro collisions in the queue/lifecycle
+headers; parenthesized numeric_limits calls now compile correctly with Windows.h.
+All three action fixtures pass. No pinned game DLL was rebuilt or live delegate
+changed. Remaining work is target-validated Ops, process-pinned publication,
+runtime lifecycle/IPC/Python integration, and real input/cleanup validation.

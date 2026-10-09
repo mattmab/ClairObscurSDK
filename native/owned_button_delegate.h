@@ -51,7 +51,7 @@ public:
     // registration after calling Unreal: callbacks can synchronously replace it.
     MenuActionTicket enter(uint64_t instance) {
         if(state_!=ButtonDelegateState::Active || instance!=instance_ ||
-           executing_==std::numeric_limits<uint32_t>::max()) return {};
+           executing_==(std::numeric_limits<uint32_t>::max)()) return {};
         ++executing_;
         return ticket_;
     }

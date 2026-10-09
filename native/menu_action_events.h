@@ -52,7 +52,7 @@ public:
     }
     MenuActionTicket bind(uint64_t session,uint64_t owner,uint64_t action,uint64_t instance) {
         if(!session_ || session!=session_ || !owner || !action || !instance ||
-           generation_==std::numeric_limits<uint64_t>::max()) return {};
+           generation_==(std::numeric_limits<uint64_t>::max)()) return {};
         for(const auto& route:routes_) if(route.instance==instance) return {};
         for(auto& route:routes_) if(!route.instance) {
             route={instance,{session_,++generation_,owner,action}};
@@ -71,8 +71,8 @@ public:
         for(const auto& route:routes_)
             if(route.instance && same(route.ticket,ticket)) { active=true; break; }
         if(!active) return false;
-        if(count_==Capacity || sequence_==std::numeric_limits<uint64_t>::max()) {
-            if(dropped_!=std::numeric_limits<uint64_t>::max()) ++dropped_;
+        if(count_==Capacity || sequence_==(std::numeric_limits<uint64_t>::max)()) {
+            if(dropped_!=(std::numeric_limits<uint64_t>::max)()) ++dropped_;
             return false;
         }
         events_[count_++]={ticket,++sequence_};

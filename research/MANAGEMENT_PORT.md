@@ -693,3 +693,12 @@ preserving all original clone slots. Next supply pinned forwarding callbacks and
 the retained-delegate target adapter in an isolated runtime version. IPC/Python
 action routing and actual input validation remain required before registry UI
 controls can be considered usable. Existing loaded runtime binaries are unchanged.
+
+Native forwarding candidates now pass Windows fixtures for unchanged reply bytes
+and return pointer, optional-execute success filtering, reentrant revocation,
+late-thunk passthrough, real SEH and exactly-once destructor forwarding. A worker
+thread verifies passthrough with an atomic fault latch rather than unsafe queue
+access. Target Ops and every runtime control/drain path must honor that permanent
+latch before this is publishable. Live input, transport/Python action delivery and
+the shared-registry UI remain unimplemented; fixture success does not establish
+live menu functionality.
