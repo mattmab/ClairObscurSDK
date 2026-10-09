@@ -32,6 +32,9 @@ for relative in ['build/research-probe/research_probe.exe', 'build/runtime-sessi
                  'build/research-probe-v10/research_probe.exe', 'build/runtime-session-v10/runtime_session_v10.dll',
                  'build/research-probe-v11/research_probe.exe', 'build/runtime-session-v11/runtime_session_v11.dll',
                  'build/research-probe-v12/research_probe.exe', 'build/runtime-session-v12/runtime_session_v12.dll',
+                 'build/research-probe-v13/research_probe.exe', 'build/runtime-session-v13/runtime_session_v13.dll',
+                 'build/research-probe-v14/research_probe.exe', 'build/runtime-session-v14/runtime_session_v14.dll',
+                 'build/research-probe-v15/research_probe.exe', 'build/runtime-session-v15/runtime_session_v15.dll',
                  'build/scheduling-fixture/scheduling_hook.dll', 'build/fixed-observer/fixed_observer_v1.dll']:
     files.append(root / relative)
 hashes = {}

@@ -665,3 +665,13 @@ viewport restoration and exact holder cleanup. The Python opt-in is
 tests pass. Next validate the additional reference during controller loss and
 relaunch, then implement a callback mechanism with verified cloning/revocation.
 No click action, general key dispatch or completed Mods Menu is claimed.
+
+The v15 controller-loss gate now passes with Python cleanup deliberately bypassed:
+native cleanup restores the exact viewport/holder baseline, and a fresh v15
+session has an empty menu and Empty0 SButton reference. Game relaunch remains a
+separate gate. The launcher exposes `--menu-ownership` and `--button-references`,
+and development candidates include the v13/v14/v15 DLL/controller pairs.
+Candidate byte/manifest/isolated-help validation does not establish live bundle
+acceptance. Next implement cloning-aware callback revocation and bounded action
+delivery before connecting native controls to the shared registry. General key
+dispatch still needs verified FKey ownership and input/focus policy.

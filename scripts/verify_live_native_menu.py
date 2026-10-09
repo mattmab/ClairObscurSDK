@@ -5,6 +5,7 @@ from pathlib import Path
 import runpy
 import secrets
 import sys
+import argparse
 
 ROOT = Path(__file__).resolve().parents[1]
 sys.path.insert(0, str(ROOT/'src'))
@@ -14,13 +15,16 @@ from expedition33.catalog import capture
 from expedition33.invocation import prepare_call
 
 
-def run(session, *, disconnect=False):
+def run(session, *, disconnect=False, button_references=False):
     observe = runpy.run_path(str(ROOT/'scripts/inspect_slate_focus_dispatch.py'))['observe']
     before = observe()
     assert before['pid'] == session.pid and len(before['users']) == 1
     assert before['users'][0]['matches_game_viewport']
     progress = dict(pid=session.pid, before=before, passed=False, operations=[])
     stem = 'native-menu-disconnect' if disconnect else 'native-menu'
+    if button_references:
+        assert session._transport.button_reference_protocol==1
+        stem = 'button-reference-disconnect' if disconnect else 'button-reference-native'
     path = ROOT/f'evidence/{stem}-progress.json'
     def save(): path.write_text(json.dumps(progress, indent=2), encoding='utf-8')
     save()
@@ -35,6 +39,10 @@ def run(session, *, disconnect=False):
             reply = _menu_wire.decode(sent, response['menu_packet'])
             progress['operations'].append(dict(operation=operation, error=reply.error,
                                                outcome=reply.outcome, active=reply.active))
+            if button_references:
+                state=response.get('button_reference_state')
+                progress['operations'][-1]['button_reference_state']=state
+                assert type(state) is int and state==(2 if operation in ('attach','focus') else 0)
             progress.pop('pending', None)
             save()
             assert reply.error == 0 and reply.outcome == 'returned', repr(reply)
@@ -116,6 +124,10 @@ def run(session, *, disconnect=False):
 
 
 if __name__ == '__main__':
-    with sdk.Session(menu_ownership=True) as session:
-        run(session, disconnect=sys.argv[1:]==['--disconnect-worker'])
-    print('Native v14 menu prepare/attach/focus/protected release/close and exact holder cleanup passed.')
+    parser=argparse.ArgumentParser()
+    parser.add_argument('--disconnect-worker',action='store_true')
+    parser.add_argument('--button-references',action='store_true')
+    args=parser.parse_args()
+    with sdk.Session(menu_ownership=True,button_references=args.button_references) as session:
+        run(session,disconnect=args.disconnect_worker,button_references=args.button_references)
+    print('Native menu prepare/attach/focus/protected release/close and exact holder cleanup passed.')

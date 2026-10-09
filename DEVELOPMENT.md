@@ -3,13 +3,15 @@
 ## v0.1 feature checklist
 
 All live results below apply only to the recorded executable fingerprint.
+The original private v0.1 archive and newer checkout candidates have separate
+validation scopes; original release acceptance does not certify newer runtimes.
 
 | Capability | Implementation and validation |
 | --- | --- |
 | Live Unreal object/name enumeration | Implemented; repeatedly tested in the real game and isolated bundles. |
 | Native class/property/function metadata | Implemented and live-tested; nested struct/enum names and array element descriptors included. |
-| Property values | v0.1 stored booleans live-tested. Current checkout adds bounded stored scalars/strings/references, selected dynamic arrays and reflected structs. Scalar/array reader deployed; newer struct/inner-schema candidate live-tested separately. Writes and native value ownership remain unsupported. See research/INTROSPECTION_PORT.md. |
-| Reflected calls and persistent observation | Implemented and live-tested for the fixed default Actor getter; arbitrary functions unsupported. |
+| Property values | Original v0.1 stored booleans live-tested. Current checkout adds bounded reads, retained object outputs, expected-old scalar ObjectProperty assignment and owned text/typed enums. These are constrained primitives, not arbitrary property writes. See research/INTROSPECTION_PORT.md. |
+| Reflected calls and persistent observation | Fixed Actor observer live-tested; current checkout adds bounded identity/schema-checked reflected calls and selected value kinds. Arbitrary ABI marshalling remains unsupported. |
 | Python mod lifecycle | Original single-mod lifecycle live-tested. Shared scopes, console load/enable/action/unload/reload, integrated startup and orderly controller restart tested live. Game relaunch with the integrated host remains pending. |
 | Native Unreal console UI | Constructed and attached through verified engine paths; Tilde open/close/reopen tested. |
 | Unreal commands | Normal engine path preserved; supported diagnostic commands and CVars tested. Shipping-disabled commands remain unavailable. |
@@ -17,11 +19,15 @@ All live results below apply only to the recorded executable fingerprint.
 | Mod console commands | Registration, dispatch, explicit removal and owner/session cleanup implemented and live-tested. |
 | Configurable toggle | Additional F1-F12 binding implemented; F10 tested, including removal, shutdown and relaunch. |
 | History/autocomplete | Python dispatcher history and lexical completion APIs implemented; native Up/Tab integration for intercepted commands unsupported. |
-| Disconnect/relaunch | Normal close, controller death, game shutdown and packaged operation after relaunch tested. |
+| Disconnect/relaunch | Original console/observer runtime: normal close, controller death, shutdown and packaged relaunch tested. Newer menu runtimes: normal close/controller death tested; game relaunch pending. |
 | Gameplay/map transitions | Not validated; current live console/relationship evidence is from the main menu. |
 | Private v0.1 | Functional release criteria passed; package verification is recorded in research/MILESTONES.md. The recovered Ghidra research pass is tracked separately. |
 | Unified management (current checkout) | Registry, typed settings/actions and console menu implemented; console lifecycle/setting restoration live-tested. Native UMG and general keybinds pending. Not included in the existing v0.1 archive. |
-| Numeric UMG struct calls (opt-in v11) | Vector2D position/size and Margin effects verified live; a disabled UMG Button rendered and cleaned up exactly. Original Harness `$struct`/`$value` passed from an isolated v11 package after fresh game launch. Normal v11 shutdown passed. Functional Mods Menu, owned text and focus/key dispatch remain pending. |
+| Numeric UMG struct calls (opt-in v11) | Vector2D position/size and Margin effects verified live; disabled UMG Button rendered and cleaned up exactly. Original Harness `$struct`/`$value` passed from an isolated v11 package after fresh game launch. Normal v11 shutdown passed. |
+| Owned text / typed enums (v12/v13) | Constrained owned FText and exact-UEnum byte values implemented and live-tested; general native value types unsupported. |
+| Native menu ownership (opt-in v14) | Scope-owned prepare/attach/focus/close, controller-death cleanup and preserving unrelated widget focus live-tested. General per-user/UMG focus baselines and relaunch pending. |
+| SButton ownership (opt-in v15) | Independent reference retention, normal release and controller-death cleanup live-tested. Callback binding, cloning-aware revocation and action delivery remain unimplemented. |
+| Current candidate packaging | Includes v13/v14/v15 binaries and launcher opt-ins. Manifest/ZIP bytes and isolated launcher help checked separately from live package acceptance; no new release claim. |
 
 ## Interactive native console
 

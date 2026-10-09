@@ -156,6 +156,15 @@ Controller SHA256:
 Do not overwrite/rebuild the DLL while PID21804 remains alive. The existing v13
 persistent controller and v14 runtime artifact were preserved.
 
-Remaining: v15 controller-loss and relaunch tests; callback binding/observation,
+The v15 controller-loss test now passes independently of v14:
+`verify_live_menu_disconnect.py --button-references` terminated only its own
+controller after focus and bypassed Python cleanup. The native runtime restored
+the same viewport and exact UObject holder baseline; a fresh v15 session reported
+an empty menu and Empty0 button reference. Evidence:
+`button-reference-disconnect-{progress,live,result}.json` and
+`button-reference-disconnect-run.log`.
+
+Remaining: v15 game-relaunch testing; callback binding/observation,
 cloning-aware revocation, transport queue and persistent Python action dispatch.
-The v14 controller-loss result does not prove the additional v15 reference path.
+Controller replacement does not establish game-relaunch behavior or exercise the
+final-strong-owner destructor branch.
