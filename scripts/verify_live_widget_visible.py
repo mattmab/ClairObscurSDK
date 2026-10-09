@@ -20,11 +20,16 @@ ROOT = Path(__file__).resolve().parents[1]
 
 
 def run(session, *, hold_seconds=30, label_text=None, activatable=False,
-        button_enabled=False, on_display=None, evidence_name=None, native_lifecycle=None):
+        button_enabled=False, on_display=None, evidence_name=None, native_lifecycle=None,
+        label_hit_test_invisible=False):
     if type(hold_seconds) is not int or not 0 <= hold_seconds <= 45:
         raise ValueError('Observation delay must be an integer from 0 through 45')
     if type(activatable) is not bool or type(button_enabled) is not bool:
         raise ValueError('Widget activation and enabled options must be boolean')
+    if type(label_hit_test_invisible) is not bool:
+        raise ValueError('Label hit testing option must be boolean')
+    if label_hit_test_invisible and (label_text is None or not session.supports_enum_values):
+        raise ValueError('Non-interactive label requires text and verified enum support')
     if on_display is not None and not callable(on_display):
         raise ValueError('Display probe must be callable')
     if evidence_name is not None and (type(evidence_name) is not str or Path(evidence_name).name != evidence_name):
@@ -93,6 +98,19 @@ def run(session, *, hold_seconds=30, label_text=None, activatable=False,
             label_attached = True
             evidence['objects'].update(label=asdict(label),label_slot=asdict(label_slot))
             mutate(scope.invoke, label, enabled, bInIsEnabled=False)
+            if label_hit_test_invisible:
+                from expedition33.enums import describe_enums
+                enum = catalog.find_path('/Script/UMG.ESlateVisibility', 'Enum')
+                descriptor = describe_enums(catalog, [enum])[enum.index]
+                member = one(m for m in descriptor.members
+                             if m.name.rsplit('::', 1)[-1] == 'HitTestInvisible')
+                visibility = descriptor.value(member.name)
+                with mutate(scope.invoke_retained, label, fn('Widget', 'SetVisibility'),
+                            InVisibility=visibility):
+                    pass
+                with scope.invoke_retained(label, fn('Widget', 'GetVisibility')) as result:
+                    assert result.return_value == visibility
+                evidence['label_visibility'] = asdict(visibility)
             with mutate(scope.invoke_retained, label, fn('TextBlock','SetText'), InText=label_text):
                 pass
             for name,parameter,value in (

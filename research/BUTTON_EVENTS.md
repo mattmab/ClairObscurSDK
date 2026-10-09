@@ -479,3 +479,49 @@ explicit removal/rebinding and menu-driven teardown, not a real click or success
 forwarding of an engine-triggered action. No input was simulated. Next test actual
 mouse/keyboard activation, persistent Python callback behavior and cleanup after
 controller death/relaunch. General keybinds and multiple controls remain pending.
+
+## Real mouse delivery and label isolation
+
+The first real-input specimen received no events from a mouse click over its
+overlapping disabled TextBlock or from Space. It timed out, then removed the menu,
+restored viewport focus, cleared the WidgetTree root and removed both children.
+Its post-finally exact-holder assertion was not reached on the failure path;
+do not describe that failed run as a complete holder-baseline proof.
+Evidence: `button-input-progress.json`, `button-input-live.json` and
+`button-input-run.log`.
+
+`verify_live_button_input.py --without-label` passed on the same PID21804 and
+unchanged pinned v16 runtime. Three separate mouse clicks on the visible blue
+SDK-owned Button delivered sequence1,2,3 to the same Python session/registration4.
+The second callback deliberately raised RuntimeError; the traceback was retained
+and the third callback still arrived. An additional click after explicit removal
+produced no fourth event during the bounded observation. Menu close restored the
+same game viewport, removed the root/child, restored the exact holder baseline,
+and the session closed normally. The process exited0.
+
+A Space press between mouse activations produced no additional event. Keyboard
+activation is not proven; focus acquisition alone does not establish keyboard
+routing. Removing the overlapping label isolated the mouse issue, but does not
+by itself prove the precise Slate hit-test path. The next targeted check uses the
+live reflected ESlateVisibility HitTestInvisible member on that label, with a
+GetVisibility readback, instead of treating disabled state as non-hit-testable.
+
+Evidence: `button-input-unlabelled-progress.json`,
+`button-input-unlabelled-live.json`, `button-input-unlabelled-run.log`.
+No game menu item or save was selected. General keybinds, multiple buttons and
+v16 controller-death/relaunch validation remain pending.
+
+The follow-up `--noninteractive-label` run resolved the native enum by reflected
+path/member (ESlateVisibility::HitTestInvisible, observed value3), called the
+verified Widget.SetVisibility and read the same typed value back. Clicking
+directly over the visible text delivered sequence4,5,6 under fresh registration5.
+The intentional second callback failure was contained again; a fourth click after
+removal did not deliver another event. No runtime patch or input-mode change was
+needed. Decorative siblings over a control must have explicit hit-test visibility;
+SetIsEnabled(false) alone was insufficient in the original specimen.
+The labelled run also restored the same viewport and exact holder baseline,
+removed its root and both children, closed normally and exited0. Both successful
+runs used separate session nonces and monotonically advancing registrations and
+event sequences; no old event was delivered into the new session.
+Evidence: `button-input-label-hit-test-progress.json`,
+`button-input-label-hit-test-live.json`, `button-input-label-hit-test-run.log`.

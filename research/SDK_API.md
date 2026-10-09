@@ -246,6 +246,9 @@ Callback exceptions, including SystemExit, are contained and retained as up to32
 traceback strings in `action.failures`; `action.dropped_events` reports overflow.
 Long Python callbacks can block the external controller, so keep them short.
 
-This API is experimental. Offline callback lifecycle tests pass; see
-BUTTON_EVENTS.md for the precise live validation status. It does not imply a
+This API is experimental. Real mouse delivery, contained Python exceptions and
+explicit unregistration have passed live on an SDK-owned Button, with exact
+focus/object-holder cleanup. Decorative labels overlapping controls need explicit
+hit-test visibility; the reflected HitTestInvisible value passed the labelled
+specimen. See BUTTON_EVENTS.md for the precise live validation status. This does not imply a
 finished Mods Menu, multiple controls, keyboard activation or general keybinds.
