@@ -416,8 +416,12 @@ class Harness:
 
     def __init__(self, session=None):
         self._owner = threading.get_ident()
+        actions = getattr(session, 'actions', None)
+        self._agent = actions._bridge if actions is not None else None
         enabled = session is not None and session.supports_reflected_invocation
         self.SUPPORTED = type(self).SUPPORTED | (frozenset(('invoke',)) if enabled else frozenset())
+        if self._agent is not None:
+            self.SUPPORTED |= self._agent.OPERATIONS
         self._backend = _Backend(session if enabled else None)
         if self._backend.retained:
             self.SUPPORTED |= frozenset(('release_value',))
@@ -444,6 +448,8 @@ class Harness:
         self._backend.mutation_completed = False
         try:
             self._explorer.expire()
+            if self._agent is not None and request['op'] in self._agent.OPERATIONS:
+                return self._agent.dispatch(request)
             if request['op'] not in ('status', 'diff', 'release_value'):
                 self._backend.refresh()
             if request['op'] == 'schema':
@@ -475,7 +481,7 @@ class Harness:
                 result['write_types'] = ['ObjectProperty'] if self._backend.assignment else []
                 result['limitations'] = ['Stored scalars, strings, references, selected arrays and bounded reflected structs; opaque native state is not owned',
                     ('Set supports scalar ObjectProperty only; other writes pending' if self._backend.assignment else 'Writes pending') +
-                    '; traces and agent bridge pending; invocation requires opt-in v6 and supported parameter types',
+                    '; general traces and staged mod reload pending; invocation requires opt-in v6 and supported parameter types',
                     ('Retain supports copied primitives and leased object outputs; opaque native values unsupported'
                      if self._backend.retained else 'Invocation retain and opaque native values unsupported') +
                     '; out parameters use named return/out result fields',
@@ -510,6 +516,7 @@ class Harness:
         finally:
             self._backend.clear()
             self._closed = True
+            self._agent = None
 
     def __enter__(self):
         return self

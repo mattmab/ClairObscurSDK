@@ -84,6 +84,7 @@ class SessionScope:
         self._leases = []
         self._menus = []
         self.console = ScopedConsole(self)
+        self.actions = None
 
     def _check(self):
         if threading.get_ident() != self._owner:
@@ -235,6 +236,11 @@ class SessionScope:
         # Revoke callback access before any transport operation can fail.
         self._closed = True
         errors = []
+        if self.actions is not None:
+            try:
+                self.actions._close()
+            except BaseException as error:
+                errors.append(type(error).__name__)
         for child in reversed(tuple(self._children)):
             try:
                 child.close()

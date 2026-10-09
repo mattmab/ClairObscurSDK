@@ -21,6 +21,8 @@ class Mod:
         self.session = session
         self.actor = session.find_object('Default__Actor')
         session.hook(self.actor, 'Actor.IsActorBeingDestroyed', self.on_event)
+        session.actions.register('example.observe_actor', lambda: self.observe(None),
+            description='Read the verified default Actor getter on the game thread.', mutates=False)
 
     def on_event(self, context):
         self.events += 1

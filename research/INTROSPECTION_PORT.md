@@ -1,5 +1,69 @@
 # BL4 Introspection Harness port
 
+## Original action bridge port — 2026-10-09
+
+The original agent.py's named-action registry, request aliases, small argument
+schema checks and diagnostic envelope now run behind Harness.request and the
+existing local-file protocol. This is an adaptation of Mattmab's MIT source;
+the original Explorer core remains unchanged. Implemented operations are
+dev_status, mod_list, mod_enable, mod_disable, action, call_debug_action,
+run_test_action and logs. Only loaded mods can be enabled/disabled, using the
+same Registry and ModLoader as the native/console frontends. The servicing core
+mods cannot be disabled through their own requests. Lifecycle changes and
+mutating actions require literal allow_mutation:true.
+
+Enabled mods register through session.actions.register(name, callback,
+description=..., schema=..., mutates=True). The loader supplies the owner;
+session.actions.unregister(name) removes an individual registration. Scope close
+revokes registrations even when disable raises. Tokens prevent a stale removal
+from deleting a replacement. There are at most128 actions; duplicate names are
+rejected. No module scan or implicit execution of register_agent_actions occurs.
+Callbacks run on the external Python owner thread; their SDK engine operations
+still use verified game-thread dispatch. Arguments/results are copied JSON,
+with no returned UObject/native-wrapper retention. No raw Python file endpoint
+or request-supplied log/loader path is provided.
+
+The original outer protocol ok and inner action success remain separate.
+Diagnostics include elapsed_ms, over_budget (above2000ms), bounded stdout/stderr,
+and error type/message/traceback. Output capture now bounds UTF-8 bytes to16KiB
+per stream before its truncation marker. Result JSON remains limited to128KiB
+and depth12. BaseException, including SystemExit, is contained; no automatic
+mutation retry occurs. Log reads use the configured bundle's logs/sdk.log,
+at most32KiB from its tail,100 lines and2000 characters per line. Long actions
+can still block controller polling; over_budget reports this, not cancellation.
+
+LIVE PROVEN using scripts/verify_live_agent_bridge.py on game21568 and source
+controller31152/session97e3d5e8ed2a4d98b945d1a02bfc414e: all three action aliases
+called example.observe_actor, which uses the existing verified game-thread Actor
+getter. Missing consent and unknown arguments were rejected. Disabling the real
+ManagementExample removed its action; stale dispatch failed; re-enabling created
+a working new registration; final disable succeeded. Mod listing and bounded log
+retrieval also passed through the local-file protocol. Raw request/response
+evidence: evidence/agent-bridge-live.json; controller log: logs/agent-bridge-host.log.
+
+Unit coverage includes output/result limits, foreign-thread and nested dispatch,
+schema-copy isolation, registry cap, stale removal, disable failure, original
+aliases, consent, Harness routing and original core provenance. Source-only;
+packaged release and fresh-game relaunch validation are pending. Staged digest
+reload, companion agent CLI, world/travel expiry, general traces and BL4-specific
+Kart/GameData adapters remain incomplete or game-specific and are not advertised
+as supported. The independent menu/keybind/editor work also remains unfinished.
+
+Example after loading and enabling ManagementExample in the console:
+
+```python
+py introspection.request({'op': 'action', 'name': 'example.observe_actor'})
+```
+
+Mod registration example inside enable(session):
+
+```python
+session.actions.register('my_mod.status', self.status, mutates=False)
+```
+
+Return plain JSON from self.status. The mod's scope owns cleanup; explicit
+unregister is optional for normal disable and useful when replacing one action.
+
 ## Enum schema follow-up — 2026-10-09
 
 The existing original `schema` request now includes copied enum members under

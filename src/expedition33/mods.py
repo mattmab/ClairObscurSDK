@@ -46,6 +46,8 @@ class ModLoader:
         self._enabling = set()
         self.stop_requested = False
         self.registry = Registry(self, settings)
+        from .introspection.agent import AgentBridge
+        self.actions = AgentBridge(self.registry, self.root.parent / 'logs' / 'sdk.log')
 
     def request_stop(self):
         """Ask the owning host loop to exit after its current dispatch completes."""
@@ -97,6 +99,8 @@ class ModLoader:
             self._session = Session()
         session = SessionScope(self._session)
         session.mods = self.registry
+        from .introspection.agent import ScopedActions
+        session.actions = ScopedActions(self.actions, session, name)
         record[2] = session
         self.registry.changed(name)
         self._enabling.add(name)
@@ -222,6 +226,7 @@ class ModLoader:
                 self.unload(name)
             except ModError as error:
                 failures.append(str(error))
+        self.actions.close()
         if failures:
             raise ModError('; '.join(failures))
 
