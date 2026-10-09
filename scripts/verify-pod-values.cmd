@@ -8,6 +8,10 @@ pushd "%PROJECT_ROOT%\build\pod-value-fixture"
 cl /nologo /W4 /WX /EHsc /std:c++17 /Fe:pod_value_fixture.exe "%PROJECT_ROOT%\native\pod_value_fixture.cpp"
 if errorlevel 1 goto failed
 pod_value_fixture.exe
+if errorlevel 1 goto failed
+cl /nologo /W4 /WX /EHsc /std:c++17 /Fe:pod_schema_fixture.exe "%PROJECT_ROOT%\native\pod_schema_fixture.cpp"
+if errorlevel 1 goto failed
+pod_schema_fixture.exe
 :failed
 set "TEST_RESULT=%errorlevel%"
 popd

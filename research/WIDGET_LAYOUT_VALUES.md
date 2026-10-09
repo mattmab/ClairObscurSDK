@@ -67,6 +67,22 @@ unknown-outcome behavior. Then expose copied struct inputs/results through the
 SDK and original Harness adapter, and test position/size round trips on an
 SDK-owned widget before connecting menu layout to the shared registry.
 
+Native gate follow-up: `pod_schema.h` now implements the exact four-profile
+walker; `target_pod_schema.h` supplies the real game-thread, GC/shutdown, registry,
+name and local-memory operations. It verifies package/type identity, no inherited
+or extra fields, field ownership, exact vtables/flags/types/dimensions/offsets,
+and recursively checks Anchors' two references to the same Vector2D structure.
+The parameter gate binds an FStructProperty's reference and width to that profile.
+The enclosing invocation must still validate parameter ownership/layout and
+contain access faults. No native constructor, setter or dispatcher is called.
+
+`verify-pod-values.cmd` compiles the real adapter/template combination with
+/W4 /WX and runs a synthetic-memory fixture through the actual schema walker.
+Four valid profiles and parameter binding pass; 24 altered-schema, identity and
+context cases are rejected. This is offline validation, not a claim that the
+gate has run on the game's thread. Transport capability negotiation, call-plan
+encoding, dispatcher integration and live position/size round trips remain next.
+
 Local raw evidence: `evidence/widget-layout-schema.json`,
 `evidence/widget-layout-schema.log`, `evidence/widget-layout-thunks.json` and its
 argument/tool files. No functions discovered during this inventory were executed.

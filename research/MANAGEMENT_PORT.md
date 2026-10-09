@@ -31,8 +31,9 @@ package evidence and INTROSPECTION_PORT.md for the exact set boundary.
 
 Layout follow-up: WIDGET_LAYOUT_VALUES.md records live parameter/struct metadata
 and Ghidra thunk evidence for Vector2D, LinearColor, Margin and Anchors. Candidate
-Python/native numeric codecs now exist, but struct invocation is still gated.
-Next integrate game-thread profile validation, then verify a visible widget's
+Python/native numeric codecs and a native schema gate now pass offline fixtures,
+but struct invocation is still gated. Next connect the game-thread validator
+to the transport and dispatcher, then verify a visible widget's
 layout. Text/font ownership, enum input modes and focus restoration remain
 separate required capabilities, not assumed consequences of the numeric codecs.
 
