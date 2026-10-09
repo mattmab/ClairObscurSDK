@@ -805,3 +805,29 @@ set of controls for paging instead of allocating new Slate controls for every
 refresh: focus ownership retains at most16 distinct controls per menu lifetime.
 Native menu acceptance, configurable keybind input routing, and Harness parity
 remain incomplete; these lifecycle probes are not the finished Mods Menu.
+
+### Registry-backed native presentation — 2026-10-09
+
+`management_view.ManagementView` now supplies immutable native-menu frames for
+registered/installed mods, search, details, enable/disable, settings, actions,
+unload and navigation. It reads the existing Registry on every render; it owns
+only selection, paging and presentation status. Editor descriptors carry the
+actual setting kind, value/default, bounds and choices. Submitted values still
+go through Registry validation/persistence/callbacks, as console edits do.
+
+The original preserved BL4 workspace's list/inspector and settings/actions
+behavior informed this presentation. Its scroll widgets, BL4 input resets,
+theme machinery and hit-rectangle fallback have not been copied. The initial
+E33 renderer can page eight rows through at most12 persistent controls, below
+the verified16-control lifetime limit; full layout, scrolling, themes, filters,
+text editors, sliders and key-capture parity remain explicit follow-up work.
+
+Every render/navigation revokes old frame tokens before dispatch. Registry
+generations additionally reject clicks spanning unload/reload. Callback argument
+snapshots are copied, unavailable/core controls reject activation, and failed
+actions produce status text without replacing the console fallback. Six new
+tests exercise real loader/registry/settings behavior, stale events, paging,
+typed editor metadata, reset, callback failures and protected controls. All244
+Python tests pass. This is an offline-tested presenter, not a rendered or live-
+tested management menu. Next connect reusable owned UMG widgets to these frames,
+then validate actual mod selection/actions/settings and reopen/cleanup live.
