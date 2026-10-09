@@ -719,3 +719,10 @@ still unchanged and action IPC is pending. Three fixtures, target compilation,
 v15/action-runtime compilation and v16 layout execution pass. Next expose bounded
 bind/drain operations and persistent Python dispatch, build the isolated runtime,
 then validate actual clicks and cleanup. No live action support is claimed yet.
+
+The native v16 bind/drain/unbind/status packet and runtime command108 are now
+implemented. Binding is restricted to the current attached/focused menu's owned
+button and leases. A close-intent gate prevents re-registration during deferred
+action/menu teardown. Strict packet and lifecycle fixtures pass; the v16 packet
+now includes the action payload. Next add controller serialization, Python
+validation/dispatch and the isolated runtime build before live click testing.

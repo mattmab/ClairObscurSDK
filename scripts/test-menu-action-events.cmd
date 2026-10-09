@@ -11,6 +11,14 @@ cl /nologo /W4 /WX /EHsc /std:c++17 /O2 /Fe:menu_action_events_fixture.exe "%PRO
 if errorlevel 1 (popd & exit /b 1)
 menu_action_events_fixture.exe
 if errorlevel 1 (popd & exit /b 1)
+cl /nologo /W4 /WX /EHsc /std:c++17 /O2 /Fe:menu_session_fixture.exe "%PROJECT_ROOT%\native\menu_session_fixture.cpp"
+if errorlevel 1 (popd & exit /b 1)
+menu_session_fixture.exe
+if errorlevel 1 (popd & exit /b 1)
+cl /nologo /W4 /WX /EHsc /std:c++17 /O2 /Fe:button_action_protocol_fixture.exe "%PROJECT_ROOT%\native\button_action_protocol_fixture.cpp"
+if errorlevel 1 (popd & exit /b 1)
+button_action_protocol_fixture.exe
+if errorlevel 1 (popd & exit /b 1)
 cl /nologo /W4 /WX /EHsc /std:c++17 /O2 /Fe:button_delegate_fixture.exe "%PROJECT_ROOT%\native\button_delegate_fixture.cpp"
 if errorlevel 1 (popd & exit /b 1)
 button_delegate_fixture.exe

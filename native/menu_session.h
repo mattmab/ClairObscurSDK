@@ -5,10 +5,15 @@
 // capture can acquire a Slate reference before MenuLifetime is registered.
 class MenuSession {
     uint64_t session_=0, owner_=0, widget_=0, child_=0;
-    bool preparing_=false, quarantined_=false;
+    bool preparing_=false, quarantined_=false, closing_=false;
     MenuLifetime lifetime_;
 public:
     bool active() const { return session_!=0; }
+    void stop_actions() { if(active()) closing_=true; }
+    bool accepts_actions() const {
+        return active() && !preparing_ && !quarantined_ && !closing_ &&
+            (lifetime_.state()==MenuState::Attached || lifetime_.state()==MenuState::Focused);
+    }
     bool protects(uint64_t session,uint64_t token) const {
         return active() && session==session_ && token && (token==widget_ || token==child_);
     }
@@ -16,10 +21,11 @@ public:
     template<class Ops> MenuResult close(Ops& ops,uint64_t session,uint64_t owner) {
         if(!active()) return MenuResult::Ok;
         if(session!=session_ || owner!=owner_) return MenuResult::Invalid;
+        closing_=true;
         if(quarantined_) return MenuResult::Quarantined;
         auto result=preparing_ ? ops.release_prepared_baseline() : lifetime_.close(ops,session_,owner_);
         if(result==MenuResult::Ok) {
-            session_=owner_=widget_=child_=0; preparing_=false;
+            session_=owner_=widget_=child_=0; preparing_=false; closing_=false;
         } else if(result!=MenuResult::Deferred) quarantined_=true;
         return result;
     }

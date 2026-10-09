@@ -37,6 +37,10 @@ public:
     TargetButtonActions(const TargetButtonActions&)=delete;
     TargetButtonActions& operator=(const TargetButtonActions&)=delete;
     bool protects_owner() const { return binding_.protects_owner(); }
+    ButtonDelegateState state() const { return binding_.state(); }
+    uint64_t registration() const {
+        return retained_ ? queue_.begin(retained_->delegate).registration : 0;
+    }
     void quarantine() { if(table_.ready()) binding_.quarantine(); }
     ButtonDelegateResult gate() {
         if(!table_.ready()) return ButtonDelegateResult::Ok;

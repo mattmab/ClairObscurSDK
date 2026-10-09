@@ -27,5 +27,10 @@ int main() {
                << L",\"menu_plans_offset\":" << offsetof(MenuPacket,plans)
                << L",\"menu_action\":" << SessionMenu;
 #endif
+#ifdef E33_BUTTON_ACTION_SESSION
+    std::wcout << L",\"button_action_offset\":" << offsetof(SessionPacket,button_action)
+               << L",\"button_action_size\":" << sizeof(ButtonActionPacket)
+               << L",\"button_action_command\":" << SessionButtonAction;
+#endif
     std::wcout << L"}\n";
 }

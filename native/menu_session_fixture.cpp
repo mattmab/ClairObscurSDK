@@ -44,13 +44,19 @@ int main() {
         check(o.events==std::vector<std::string>({"capture","release"}),"no attachment on rejected registration");
         o.registration=true;
         check(m.prepare(o,1,2,3,4)==R::Ok,"reuse after fully cleaned failure");
+        check(!m.accepts_actions(),"prepared menu cannot bind actions");
         check(m.protects(1,3) && m.protects(1,4) && !m.protects(2,3),"session lease isolation");
         check(m.close(o,1,99)==R::Invalid && m.active(),"foreign close");
         check(m.attach(o,1,2)==R::Ok && m.focus(o,1,2)==R::Ok,"menu active");
+        check(m.accepts_actions(),"focused menu can bind actions");
+        m.stop_actions();
+        check(!m.accepts_actions(),"action close deferral cannot permit rebind before menu close");
         o.current=MenuContext::Deferred;
         check(m.close_session(o)==R::Deferred && m.protects(1,3),"deferred cleanup pins leases");
+        check(!m.accepts_actions(),"deferred close must reject new actions");
         o.current=MenuContext::Ready;
         check(m.close_session(o)==R::Ok && !m.active() && !o.retained,"close before pool release");
+        check(!m.accepts_actions(),"closed menu cannot bind actions");
         auto events=o.events;
         check(m.close_session(o)==R::Ok && o.events==events,"empty close idempotent");
     }
@@ -67,6 +73,7 @@ int main() {
         try { m.prepare(o,1,2,3,4); } catch(const std::runtime_error&) { m.quarantine(); }
         auto events=o.events;
         check(m.active() && m.protects(1,3) && m.protects(1,4),"interrupted preparation retains lease protection");
+        check(!m.accepts_actions(),"quarantined menu rejects actions");
         check(m.close_session(o)==R::Quarantined && o.events==events,"no replay after interruption");
         check(m.prepare(o,5,6,7,8)==R::Busy,"no new owner after uncertainty");
     }

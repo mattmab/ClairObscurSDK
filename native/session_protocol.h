@@ -2,6 +2,10 @@
 #if defined(E33_BUTTON_ACTION_SESSION) && !defined(E33_BUTTON_REFERENCE_SESSION)
 #error Button action candidate requires retained button ownership
 #endif
+#ifdef E33_BUTTON_ACTION_SESSION
+#include "button_action_protocol.h"
+constexpr uint32_t SessionButtonAction=108;
+#endif
 #if defined(E33_BUTTON_REFERENCE_SESSION) && !defined(E33_MENU_SESSION)
 #error Button reference candidate requires the menu session
 #endif
@@ -118,6 +122,9 @@ struct SessionPacket {
 #endif
 #ifdef E33_MENU_SESSION
     MenuPacket menu;
+#endif
+#ifdef E33_BUTTON_ACTION_SESSION
+    ButtonActionPacket button_action;
 #endif
 };
 inline void session_mapping_name(wchar_t (&name)[96], DWORD controller, uint64_t nonce) {

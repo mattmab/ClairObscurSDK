@@ -77,6 +77,7 @@ static MenuResult menu_command(MenuPacket& wire) {
     case MenuOperation::Attach: return s.menu.attach(ops,lease_session,wire.owner);
     case MenuOperation::Focus: return s.menu.focus(ops,lease_session,wire.owner);
     case MenuOperation::Close: {
+        s.menu.stop_actions();
         auto result=close_menu_actions();
         return result==MenuResult::Ok ? s.menu.close(ops,lease_session,wire.owner) : result;
     }
@@ -102,6 +103,7 @@ static void guarded_menu_command(MenuPacket& wire) {
 }
 static MenuResult guarded_menu_close() {
     __try {
+        session_menu.menu.stop_actions();
         auto result=close_menu_actions();
         if(result!=MenuResult::Ok) return result;
         TargetMenuOps<StrongLeasePool<>> ops{session_menu,session_leases};
@@ -114,6 +116,55 @@ static MenuResult guarded_menu_close() {
         return MenuResult::Quarantined;
     }
 }
+#ifdef E33_BUTTON_ACTION_SESSION
+static ButtonDelegateResult button_action_command(ButtonActionPacket& wire) {
+    auto& s=session_menu;
+    auto allowed=s.actions.gate();
+    if(allowed!=ButtonDelegateResult::Ok) return allowed;
+    // IPC selects an action ID, never an arbitrary object/delegate address.
+    if(!s.menu.active() || s.session!=lease_session || wire.owner!=s.owner ||
+       wire.child_lease!=s.child_lease ||
+       !session_leases.owns_object(lease_session,s.child_lease,s.child.address) ||
+       !session_leases.owns_object(lease_session,s.widget_lease,s.widget.address))
+        return ButtonDelegateResult::Invalid;
+    switch(static_cast<ButtonActionOperation>(wire.operation)) {
+    case ButtonActionOperation::Bind: {
+        TargetMenuOps<StrongLeasePool<>> ops{s,session_leases};
+        if(!s.menu.accepts_actions() || ops.context()!=MenuContext::Ready ||
+           s.child_slate.slate.state!=SlateReferenceState::Live)
+            return ButtonDelegateResult::Invalid;
+        return s.actions.bind(runtime_base,lease_session,wire.owner,wire.action,s.child_slate);
+    }
+    case ButtonActionOperation::Drain: {
+        size_t count=0;
+        uint64_t dropped=0;
+        MenuActionEvent copied[kButtonActionCapacity]{};
+        auto result=s.actions.drain(lease_session,copied,kButtonActionCapacity,count,dropped);
+        wire.count=static_cast<uint32_t>(count);
+        wire.dropped=dropped;
+        std::memcpy(wire.events,copied,count*sizeof(MenuActionEvent));
+        return result;
+    }
+    case ButtonActionOperation::Unbind: return s.actions.close();
+    case ButtonActionOperation::Status: return ButtonDelegateResult::Ok;
+    default: return ButtonDelegateResult::Invalid;
+    }
+}
+static void guarded_button_action(ButtonActionPacket& wire) {
+    if(!valid_button_action_request(wire)) { wire.error=910; return; }
+    wire.outcome=static_cast<uint32_t>(ButtonActionOutcome::Unknown);
+    __try {
+        auto result=button_action_command(wire);
+        wire.error=result==ButtonDelegateResult::Ok ? 0 : 910+static_cast<uint32_t>(result);
+        wire.state=static_cast<uint32_t>(session_menu.actions.state());
+        if(result==ButtonDelegateResult::Ok) wire.registration=session_menu.actions.registration();
+        wire.outcome=static_cast<uint32_t>(ButtonActionOutcome::Returned);
+        if(result==ButtonDelegateResult::Quarantined) session_menu.menu.quarantine();
+    } __except(EXCEPTION_EXECUTE_HANDLER) {
+        session_menu.actions.quarantine(); session_menu.menu.quarantine(); wire.error=916;
+    }
+}
+#endif
 #endif
 static bool observing = false;
 static unsigned console_toggle_key=0;
@@ -198,6 +249,11 @@ uint32_t backend_open(SessionPacket* packet) {
 uint32_t backend_command(SessionPacket* packet) {
     if (!lifetime_valid()) return 61;
     switch (packet->request.action) {
+#ifdef E33_BUTTON_ACTION_SESSION
+    case SessionButtonAction:
+        guarded_button_action(packet->button_action);
+        return 0;
+#endif
 #ifdef E33_MENU_SESSION
     case SessionMenu:
         guarded_menu_command(packet->menu);

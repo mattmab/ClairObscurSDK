@@ -362,3 +362,29 @@ with the current456192-byte packet (`button-action-owner-compile.log`). Native
 integration exposed observer-global name-shadowing warnings, corrected without
 changing the observer implementation. Remaining gates: binding/drain protocol,
 controller/Python integration, isolated v16 build and real input/lifecycle tests.
+
+## Bounded v16 action packet and runtime dispatch
+
+Session command108 now accepts a2632-byte version1 ButtonActionPacket appended
+at offset456188 (v16 SessionPacket total458824 bytes). Operations are Bind1,
+Drain2, Unbind3 and Status4. Requests carry the current menu owner/child lease and
+a nonzero action ID only for Bind; they cannot select a raw object or delegate.
+Output fields must be zero, including all64 event records. Responses report
+outcome, lifecycle state, registration generation, dropped count and copied
+session/registration/owner/action/sequence events. Malformed requests are rejected
+before dispatch; SEH returns Unknown and quarantines both action/menu ownership.
+
+The runtime checks the active menu's session/owner/child lease and both protected
+object leases. Bind additionally requires a successfully attached/focused,
+non-quarantined menu, valid target context and Live retained SButton. Drain copies
+through aligned native temporary storage before writing the packed packet.
+Unbind revokes actions while preserving the menu; explicit menu close separately
+marks close intent BEFORE action cleanup, preventing a new bind during deferred
+action or menu cleanup. Controller-loss cleanup applies the same close intent.
+
+Protocol fixtures reject invalid operations, missing ownership, polluted output
+fields and every nonzero field in every event slot. Menu fixtures verify prepared,
+closing, closed and quarantined menus reject bindings. The five native fixtures,
+target and v15/v16 runtime compilation, and v16 layout execution pass
+(`button-action-protocol-build.log`). The controller and Python transport do not
+yet send this packet; no v16 DLL has been loaded and no live action claim is made.
