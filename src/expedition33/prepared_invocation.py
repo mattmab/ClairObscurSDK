@@ -6,6 +6,10 @@ dispatch. Object outputs still receive same-call native leases and fresh
 identity observations before exposure. An explicit selected-results mode combines
 fresh closures with older planning rows; it does not refresh untouched objects.
 Scalar/text outputs need no new full catalog.
+Function/POD/enum metadata observations are bounded to256entries per planner.
+Explicit refresh or close clears them; selected result adoption preserves them
+while every reuse resolves recorded dependencies against the planning catalog.
+Only the native dispatcher establishes current schema validity.
 """
 import weakref
 import threading
@@ -27,6 +31,8 @@ class InvocationPlanner:
         self._closed = False
         self._generation = 0
         self._catalog = None
+        from ._planning_metadata import MetadataObservations
+        self._metadata = MetadataObservations()
         self.refresh()
 
     def _check(self):
@@ -45,6 +51,7 @@ class InvocationPlanner:
 
     def refresh(self):
         session = self._check()
+        self._metadata.clear()
         # A failed refresh also revokes older plans. Never silently fall back.
         self._generation += 1
         self._catalog = None
@@ -62,6 +69,7 @@ class InvocationPlanner:
         Native dispatch validation remains mandatory.
         """
         session = self._check()
+        self._metadata.clear()
         self._generation += 1
         self._catalog = None
         from .catalog import Catalog
@@ -77,7 +85,8 @@ class InvocationPlanner:
         plan = prepare_call(self._catalog, obj, function, arguments,
             pod_values=session.supports_pod_values, text_values=session.supports_text_values,
             enum_values=session.supports_enum_values,
-            _trace_plan=getattr(session, '_trace_plan_for', lambda _: None)(function))
+            _trace_plan=getattr(session, '_trace_plan_for', lambda _: None)(function),
+            _metadata=self._metadata)
         return PreparedInvocation(self, plan)
 
     def close(self):
@@ -89,6 +98,7 @@ class InvocationPlanner:
         self._closed = True
         self._generation += 1
         self._catalog = None
+        self._metadata.clear()
 
     def __enter__(self):
         self._check()
@@ -117,8 +127,9 @@ class PreparedInvocation:
     def bind(self, **arguments):
         """Make a new argument snapshot using this planner's shared catalog.
 
-        Function metadata is described again; this does not reuse a stale schema
-        as authority. The original prepared call remains unchanged.
+        Metadata observations are reused until explicit refresh/close, with
+        catalog dependency identities checked. Native dispatch revalidates the
+        schema; these observations grant no authority. The original stays unchanged.
         """
         planner, _ = self._check()
         return planner.prepare(self._plan.target, self._plan.function, **arguments)

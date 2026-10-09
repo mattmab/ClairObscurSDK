@@ -76,3 +76,25 @@ while keeping native dispatch schema/identity checks, then remeasure. New output
 identities still require live observation/ownership. The51%baseline is unchanged;
 the critical path is better identified, not yet completed. The menu remains
 owned by the current management service for normal close/cleanup.
+
+## Planner metadata reuse implemented
+
+The existing explicit InvocationPlanner now owns a bounded256-entry metadata
+observation cache for functions, POD descriptors and enums. Reuse checks recorded
+dependency identities against its catalog. Explicit refresh/refresh_from/close
+clear observations; newly observed result closures can extend the catalog without
+forcing repeated reads of unchanged schema observations. Native invocation still
+checks the actual live schema, function entry, identities and execution context.
+There is no cached-result fallback after an identity/read failure and no dispatch
+retry. Ordinary prepare_call remains uncached outside this planner.
+
+Five targeted tests pass for repeated reads, dependency recycling, function
+recycling, read failure, and planner refresh/close revocation. The existing375
+tests also passed after integration. A read-only live planning benchmark on
+KismetMathLibrary.Add_IntInt compared10equal plans:3.4422seconds ordinary versus
+0.3382seconds with reused metadata, including the first cache fill. No engine
+calls were dispatched. Evidence: planning-metadata-benchmark.json and
+planner-metadata-focused.log. This proves the targeted cost reduction, not the
+full-menu acceptance target; a fresh controller/menu measurement is next.
+The current mapped DLL and running controller were not replaced. Frozen release
+completion remains51% until the user-facing performance gate is met.

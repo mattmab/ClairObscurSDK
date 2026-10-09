@@ -159,7 +159,7 @@ _FORMATS = {'ByteProperty': ('B', 1, 0, 255), 'UInt16Property': ('H', 2, 0, 6553
 
 
 def prepare_call(catalog, target, function, arguments, *, pod_values=False, text_values=False, enum_values=False,
-                 _trace_plan=None):
+                 _trace_plan=None, _metadata=None):
     """Describe a current UFunction and prepare named arguments without executing it.
 
 Zeroed object slots have separate identity patches; caller-supplied integer
@@ -175,7 +175,7 @@ Output/return types must also be supported before a plan can be built.
     if function.outer_index not in catalog.ancestors(target.class_index):
         raise ValueError('Function owner is not in the target class hierarchy')
     if _trace_plan is None:
-        descriptor = describe(catalog, (function,))[function.index]
+        descriptor = _describe_observed(catalog, (function,), _metadata)[function.index]
     else:
         # Registered observers retain pre-install metadata because the external
         # reader rejects our DLL thunk as an out-of-image native entry. This is
@@ -183,7 +183,12 @@ Output/return types must also be supported before a plan can be built.
         if catalog.resolve(_trace_plan.function) != function:
             raise ValueError('Trace plan belongs to a different function')
         descriptor = _trace_plan.descriptor
-    return _prepare(catalog, target, function, descriptor, arguments, pod_values=pod_values, text_values=text_values, enum_values=enum_values)
+    return _prepare(catalog, target, function, descriptor, arguments, pod_values=pod_values, text_values=text_values, enum_values=enum_values, _metadata=_metadata)
+
+
+def _describe_observed(catalog, objects, metadata):
+    return (describe(catalog, objects) if metadata is None else
+            metadata.read('struct', catalog, objects, describe))
 
 
 def _struct_reference(catalog, row):
@@ -195,7 +200,7 @@ def _struct_reference(catalog, row):
     return obj
 
 
-def _observed_pod_profile(catalog, row, descriptors):
+def _observed_pod_profile(catalog, row, descriptors, metadata=None):
     obj = _struct_reference(catalog, row)
     pending = {obj.index: obj}
     # Only Anchors -> Vector2D nesting is allowed. Bound metadata acquisition;
@@ -204,7 +209,7 @@ def _observed_pod_profile(catalog, row, descriptors):
         pending = {index: value for index, value in pending.items() if index not in descriptors}
         if not pending:
             break
-        current = describe(catalog, pending.values())
+        current = _describe_observed(catalog, pending.values(), metadata)
         descriptors.update(current)
         nested = [_struct_reference(catalog, field) for d in current.values()
                   for field in d.properties if field['type'] == 'StructProperty']
@@ -213,7 +218,7 @@ def _observed_pod_profile(catalog, row, descriptors):
     return obj, profile
 
 
-def _parameter_schema(catalog, function, descriptor, *, pod_values=False, text_values=False, enum_values=False):
+def _parameter_schema(catalog, function, descriptor, *, pod_values=False, text_values=False, enum_values=False, _metadata=None):
     info = descriptor.function
     if info is None or not descriptor.owners or descriptor.owners[0]['index'] != function.index:
         raise ValueError('Function metadata is missing or inconsistent')
@@ -249,7 +254,7 @@ def _parameter_schema(catalog, function, descriptor, *, pod_values=False, text_v
         else:
             expected = _FORMATS[kind][1] if kind in _FORMATS else 8 if kind in ('ObjectProperty', 'ClassProperty') else None
             if kind == 'StructProperty' and pod_values:
-                constraint, profile = _observed_pod_profile(catalog, row, pod_descriptors)
+                constraint, profile = _observed_pod_profile(catalog, row, pod_descriptors, _metadata)
                 pod_profile, expected = profile.path, profile.width
             if kind == 'TextProperty' and text_values:
                 if dimension != 1:
@@ -261,7 +266,9 @@ def _parameter_schema(catalog, function, descriptor, *, pod_values=False, text_v
                 constraint = catalog.by_index[row['enum_index']]
                 if constraint.serial != row['enum_serial'] or constraint.name != row['enum_name']:
                     raise ValueError('Enum parameter identity changed')
-                enum_members = describe_enums(catalog, [constraint])[constraint.index].members
+                enum_rows = (describe_enums(catalog, [constraint]) if _metadata is None else
+                             _metadata.read('enum', catalog, [constraint], describe_enums))
+                enum_members = enum_rows[constraint.index].members
                 expected = 1
             if expected is None:
                 raise UnsupportedInvocation(f'{name}: {kind} needs an additional verified codec/lifetime contract')
@@ -285,11 +292,11 @@ def _parameter_schema(catalog, function, descriptor, *, pod_values=False, text_v
     return size, extent, returned, tuple(parameters)
 
 
-def _prepare(catalog, target, function, descriptor, arguments, *, pod_values=False, text_values=False, enum_values=False):
+def _prepare(catalog, target, function, descriptor, arguments, *, pod_values=False, text_values=False, enum_values=False, _metadata=None):
     if type(arguments) is not dict or any(type(key) is not str for key in arguments):
         raise ValueError('Arguments must be a dictionary of parameter names')
     size, extent, returned, parameters = _parameter_schema(
-        catalog, function, descriptor, pod_values=pod_values, text_values=text_values, enum_values=enum_values)
+        catalog, function, descriptor, pod_values=pod_values, text_values=text_values, enum_values=enum_values, _metadata=_metadata)
     info = descriptor.function
     expected_inputs = {parameter.name for parameter in parameters if parameter.input}
     if set(arguments) != expected_inputs:
