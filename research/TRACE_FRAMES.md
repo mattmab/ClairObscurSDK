@@ -227,3 +227,34 @@ storage and the record cap. Evidence: evidence/trace-frame-fixture.log. This is
 synthetic fixture validation only. Live frame capture, schema-aware bounded reads,
 native registration/transport and Harness integration remain pending. No mapped
 DLL was rebuilt and the running controller was unchanged.
+
+## Frame-to-payload capture and Python decoding — 2026-10-09
+
+native/trace_capture.h connects resolved storage to an owned Copy payload using
+an injected safe reader. The collector validates all field ranges, destination
+overlaps and address arithmetic before reading. Out fields resolve exact property
+pointers; missing out/result storage is rejected. No raw pointer is dereferenced
+by this component. Failed reads, including readers that partially write before
+failure, never publish a prefix. Padding and unused payload bytes remain zero.
+The caller must independently validate scalar types, reflected property identity,
+thread ownership and lifetime; bounded copying alone is not that authority.
+
+The capture fixture composes resolve_frame, capture_fields and Events: independent
+local/out/result values survive erasure of the synthetic source memory. It also
+checks missing storage, wraparound, overlap, invalid source selectors, short
+source extents and partial-reader failures. scripts/test-trace-capture.cmd passes
+MSVC /W4 /WX; evidence/trace-capture-fixture.log records the run.
+
+Python decode_trace now converts the matching registration plan and owned payload
+into immutable named POST arguments and a return value, including fixed scalar
+arrays and packed booleans. Invalid bool encodings, mutable buffers and wrong
+payload extents are rejected. Transport/session matching remains a separate gate;
+this function does not authenticate an event. All354 source tests pass, including
+the existing invocation/lifecycle suite (evidence/trace-capture-tests.log).
+
+Runtime integration inspection confirms SessionEnable/Disable/Drain still use the
+old fixed observer and backend_close only removes that observer. These primitives
+are not yet wired into the live runtime or original Harness. The next integration
+must introduce a versioned registration/drain path plus close/expiry ownership,
+and independently revalidate schemas before publishing any thunk. No live trace
+capture, general trace API parity or relaunch proof is claimed by these fixtures.
