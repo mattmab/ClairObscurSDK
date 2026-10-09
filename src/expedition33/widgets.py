@@ -8,7 +8,7 @@ import logging
 
 from .catalog import capture, capture_selected
 from .enums import describe_enums
-from .values import read_values
+from .values import read_values, read_object_reference
 from ._scope import SessionScope
 
 
@@ -145,14 +145,18 @@ class OwnedMenuPanel:
             self._default('WidgetBlueprintLibrary'), self._function('WidgetBlueprintLibrary', 'Create'),
             WorldContextObject=self.player, WidgetType=self._class('CommonActivatableWidget'),
             OwningPlayer=self.player).return_value
-        current = capture()
+        if self._selected_results:
+            self.tree, current = read_object_reference(self._planner._catalog,
+                self.widget, self._class('UserWidget'), 'WidgetTree')
+        else:
+            current = capture()
+            self.tree = read_values(current, current.resolve(self.widget)).values[
+                self._class('UserWidget').index, 'WidgetTree']
         if self._planner is not None:
             # Create also initializes WidgetTree, which is a child and therefore
             # outside the returned widget's outer/class dependency closure.
-            # Adopt the full observation already needed for the property read.
+            # Adopt the verified property-reference closure (or full observation).
             self._planner.refresh_from(current)
-        self.tree = read_values(current, current.resolve(self.widget)).values[
-            self._class('UserWidget').index, 'WidgetTree']
         if self.tree is None or self.tree.outer_index != self.widget.index or self._root() is not None:
             raise RuntimeError('New widget does not have the expected empty owned tree')
         self.canvas = self._spawn('CanvasPanel')

@@ -4,11 +4,52 @@ from unittest.mock import patch
 
 from expedition33 import RuntimeQueryError
 from expedition33.catalog import Catalog
-from expedition33.values import read_values, StoredArray
+from expedition33.values import read_values, read_object_reference, StoredArray
 from test_catalog import fixture
 
 
 class ValueTests(unittest.TestCase):
+    def test_direct_reference_adopts_fresh_closure_without_full_scan(self):
+        objects, classes = fixture()
+        initial = Catalog(123, objects[:-1], classes)
+        child = objects[-1]
+        self.property('Child', 'ObjectProperty')
+        self.value('Child', {'$reference': dict(index=child.index, serial=child.serial,
+            address=hex(child.address), name=child.name)})
+        with patch('expedition33.values._query', return_value=({'pid':123}, self.rows)) as query, \
+                patch('expedition33.catalog.capture', side_effect=AssertionError('no full scan')), \
+                patch('expedition33.catalog.capture_selected', return_value=self.catalog) as selected:
+            value, combined = read_object_reference(initial, self.obj, objects[2], 'Child')
+        self.assertEqual(value, child)
+        self.assertIn(child.index, combined.by_index)
+        self.assertNotIn(child.index, initial.by_index)
+        query.assert_called_once()
+        selected.assert_called_once_with(123, ((self.obj.index, self.obj.serial, self.obj.address),
+                                               (child.index, child.serial, child.address)))
+
+    def test_direct_reference_failure_does_not_retry_or_fall_back(self):
+        child = self.catalog.by_index[5]
+        self.property('Child', 'ObjectProperty')
+        self.value('Child', {'$reference': dict(index=child.index, serial=child.serial,
+            address=hex(child.address), name=child.name)})
+        with patch('expedition33.values._query', return_value=({'pid':123}, self.rows)) as query, \
+                patch('expedition33.catalog.capture_selected', side_effect=RuntimeQueryError('recycled')) as selected:
+            with self.assertRaisesRegex(RuntimeQueryError, 'recycled'):
+                read_object_reference(self.catalog, self.obj, self.catalog.by_index[2], 'Child')
+        query.assert_called_once()
+        selected.assert_called_once()
+
+    def test_direct_reference_null_and_wrong_property_type(self):
+        self.property('Child', 'ObjectProperty'); self.value('Child', None)
+        with patch('expedition33.values._query', return_value=({'pid':123}, self.rows)), \
+                patch('expedition33.catalog.capture_selected', side_effect=AssertionError('no selector')):
+            value, catalog = read_object_reference(self.catalog, self.obj, self.catalog.by_index[2], 'Child')
+            self.assertIsNone(value)
+            self.assertIs(catalog, self.catalog)
+            self.rows[1]['type'] = 'IntProperty'
+            with self.assertRaisesRegex(RuntimeQueryError, 'scalar object'):
+                read_object_reference(self.catalog, self.obj, self.catalog.by_index[2], 'Child')
+
     def setUp(self):
         self.catalog = Catalog(123, *fixture())
         self.obj = self.catalog.by_index[4]

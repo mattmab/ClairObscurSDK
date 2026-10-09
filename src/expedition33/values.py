@@ -123,6 +123,52 @@ def _struct_value(catalog, value, depth=0, budget=None):
 def read_values(catalog, observed):
     obj = catalog.resolve(observed)
     start, rows = _query(['--read-values', str(catalog.pid), f'{obj.index}:{obj.serial}:{obj.address:x}'])
+    return _decode_values(catalog, obj, start, rows)
+
+
+def read_object_reference(catalog, observed, owner, name):
+    """Observe one direct object property and its fresh dependency closure.
+
+    Returns (reference_or_none, extended_catalog). No full enumeration, property
+    retry or fabricated object occurs. This is an observation, not a GC lease or
+    a guarantee that the property will still have this value at later dispatch.
+    """
+    from .catalog import capture_selected
+    obj, owner = catalog.resolve(observed), catalog.resolve(owner)
+    start, rows = _query(['--read-values', str(catalog.pid), f'{obj.index}:{obj.serial}:{obj.address:x}'])
+    # Validate the complete original response before using an observed selector.
+    _decode_values(catalog, obj, start, rows)
+    key = (owner.index, name)
+    fields = [r for r in rows if r['event'] == 'property_metadata' and
+              (r['owner_index'], r['name']) == key]
+    entries = [r for r in rows if r['event'] in ('stored_value', 'stored_value_error') and
+               (r['owner_index'], r['name']) == key]
+    if (len(fields) != 1 or fields[0]['type'] != 'ObjectProperty' or fields[0]['dimension'] != 1 or
+            len(entries) != 1 or entries[0]['event'] != 'stored_value' or entries[0]['element'] != 0):
+        raise RuntimeQueryError('Expected one readable scalar object property')
+    value = entries[0]['value']
+    if value is None:
+        return None, catalog
+    try:
+        if type(value) is not dict or set(value) != {'$reference'}:
+            raise ValueError('Expected object reference')
+        ref = value['$reference']
+        if type(ref) is not dict or set(ref) != {'index', 'serial', 'address', 'name'}:
+            raise ValueError('Invalid reference fields')
+        identity = (ref['index'], ref['serial'], int(ref['address'], 16))
+        target_identity = (obj.index, obj.serial, obj.address)
+        identities = (target_identity,) if identity == target_identity else (target_identity, identity)
+        fresh = capture_selected(catalog.pid, identities)
+        combined = catalog.with_observations(fresh)
+        result = _decode_values(combined, combined.resolve(obj), start, rows)
+        if key not in result.values:
+            raise RuntimeQueryError('Object property reference changed during observation')
+        return result.values[key], combined
+    except (KeyError, ValueError, TypeError) as error:
+        raise RuntimeQueryError(f'Invalid object property reference: {error}') from error
+
+
+def _decode_values(catalog, obj, start, rows):
     if start['pid'] != obj.pid:
         raise RuntimeQueryError('Value process changed')
     targets = [row for row in rows if row['event'] == 'object']

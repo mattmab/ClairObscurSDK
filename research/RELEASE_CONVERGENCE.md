@@ -188,3 +188,31 @@ worker-timing-{before,open,after}.json. Refresh is not a measured physical-click
 navigation test. Opening still misses the five-second target. Remaining measured
 cost includes two full captures and per-line cross-thread reader delivery;
 optimize that delivery before considering additional native engine primitives.
+
+## Targeted WidgetTree discovery (2026-10-09)
+
+The operation-scoped queue batching experiment returned an identical 96059-object
+catalog but did not materially reduce full-capture time (ordinary 2.583 seconds,
+batched 2.571 seconds). It was reverted. A separate C++ stream synchronization
+experiment was also reverted after the worker took 2.883 seconds versus 2.608
+seconds for the ordinary capture; evidence: reader-stream-benchmark.json.
+Neither experiment changed the mapped native DLL or earned release credit.
+
+Instead, read_object_reference now reads one reflected scalar ObjectProperty,
+validates the original response, captures the observed target/reference identities
+and their class/outer closure, and decodes against that verified closure. It
+returns an extended observation catalog, not an ownership token. Changed or
+missing identities fail without property retry or full-scan fallback. The menu
+uses this to discover the newly created widget's WidgetTree, avoiding its second
+full catalog capture. The original unselected path remains available.
+
+Live unprofiled opening fell from 9.493 to 7.159 seconds in PID39900. All twelve
+controls rendered. Close took 4.001 seconds. Before/open/after assertions verified
+the shared registry, exact retained-holder baseline, zero child scopes and restored
+focus on the same viewport. The 395-test suite passed, including new direct-reference
+closure, null/type and changed-identity tests. Evidence:
+management-timing-reference-closure-{open,close}.json,
+reference-closure-{before,open,after}.json, reference-closure-regression.log,
+logs/reference-closure-host.log. This still misses the five-second opening target;
+completion remains 51%. The remaining full initial catalog and serialized game-thread
+construction calls are the next costs to address, not per-line queue mechanics.
