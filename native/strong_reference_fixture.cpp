@@ -23,8 +23,8 @@ struct FakeEngine {
         return allocation ? &storage : nullptr;
     }
     void register_holder(TargetStrongReference* h) {
-        require(h->vtable==base_vtable() && !h->registered && !h->conditional && !h->object,
-                "registration receives initialized empty holder");
+        require(h->vtable==strong_vtable() && !h->registered && !h->conditional && h->object==0x1234,
+                "registration receives complete native collector");
         events+='R'; h->registered=registration;
         if(fault_after_registration) throw std::runtime_error("injected native fault");
     }

@@ -5,6 +5,12 @@
 #ifdef E33_REFLECTED_SESSION
 #include "reflected_invocation.h"
 #endif
+#ifdef E33_LEASE_SESSION
+#include "target_strong_reference.h"
+#include "strong_lease_pool.h"
+static StrongLeasePool<> session_leases;
+static uint64_t lease_session=0;
+#endif
 
 static SchedulePacket target{};
 static ObserverBuffer session_events{};
@@ -35,11 +41,43 @@ uint32_t backend_open(SessionPacket* packet) {
     runtime_base = reinterpret_cast<uint64_t>(GetModuleHandleW(nullptr));
     target_object = fixed_slot(runtime_base, target.object_index, target.object_serial);
     target_function = fixed_slot(runtime_base, target.function_index, target.function_serial);
-    return lifetime_valid() ? 0 : 60;
+    if(!lifetime_valid()) return 60;
+#ifdef E33_LEASE_SESSION
+    auto lease_error=session_leases.begin(packet->request.nonce);
+    if(lease_error!=StrongLeaseResult::Ok) return static_cast<uint32_t>(lease_error);
+    lease_session=packet->request.nonce;
+#endif
+    return 0;
 }
 uint32_t backend_command(SessionPacket* packet) {
     if (!lifetime_valid()) return 61;
     switch (packet->request.action) {
+#ifdef E33_LEASE_SESSION
+    case SessionLeaseAcquire:
+    case SessionLeaseRelease:
+    case SessionLeaseStatus: {
+        auto& lease=packet->lease;
+        bool empty=lease.object.index==-1 && !lease.object.serial && !lease.object.address;
+        if(lease.version!=kLeaseVersion || lease.error || lease.outcome || lease.active ||
+           (packet->request.action==SessionLeaseAcquire &&
+               (lease.token || lease.object.index<0 || !lease.object.address)) ||
+           (packet->request.action!=SessionLeaseAcquire && !empty) ||
+           (packet->request.action==SessionLeaseStatus && lease.token)) {
+            lease.error=411; lease.outcome=LeaseNotDispatched; return 0;
+        }
+        TargetStrongReferenceOps ops{runtime_base,lease.object};
+        lease.outcome=LeaseUnknown;
+        StrongLeaseResult result=StrongLeaseResult::Ok;
+        if(packet->request.action==SessionLeaseAcquire)
+            result=session_leases.acquire(ops,lease_session,lease.object.address,lease.token);
+        else if(packet->request.action==SessionLeaseRelease)
+            result=session_leases.release(ops,lease_session,lease.token);
+        lease.error=static_cast<uint32_t>(result);
+        lease.active=session_leases.active();
+        lease.outcome=LeaseCompleted;
+        return 0;
+    }
+#endif
 #ifdef E33_REFLECTED_SESSION
     case SessionReflectedInvoke:
         packet->call.error=reflected_call(runtime_base,packet->call);
@@ -103,9 +141,32 @@ uint32_t backend_command(SessionPacket* packet) {
     default: return 64;
     }
 }
+#ifdef E33_LEASE_SESSION
+static StrongLeaseResult guarded_lease_close() {
+    __try {
+        TargetStrongReferenceOps ops{runtime_base,{-1,0,0}};
+        return session_leases.close(ops,lease_session);
+    } __except(EXCEPTION_EXECUTE_HANDLER) { return StrongLeaseResult::Quarantined; }
+}
+#endif
 uint32_t backend_close() {
+    uint32_t lease_cleanup_error=0;
+#ifdef E33_LEASE_SESSION
+    if(lease_session) {
+        auto result=guarded_lease_close();
+        // A normal GC interval may defer release. Keep the GT cleanup hook and
+        // owner tracking until a subsequent message can finish the close.
+        if(result==StrongLeaseResult::Deferred && !backend_shutting_down())
+            return kSessionCloseDeferred;
+        if(result==StrongLeaseResult::Ok) lease_session=0;
+        else if(!backend_shutting_down()) lease_cleanup_error=static_cast<uint32_t>(result);
+        // During terminal engine teardown, engine-owned vtables remain valid;
+        // quarantined storage is bounded and never reused by another session.
+    }
+#endif
     console_toggle_key=0;
     uint32_t result = detach_console_guarded(runtime_base,backend_shutting_down());
+    if(!result) result=lease_cleanup_error;
     if (observing) {
         if (backend_shutting_down()) detach_observer_storage();
         else if (!lifetime_valid()) { detach_observer_storage(); result = 65; }

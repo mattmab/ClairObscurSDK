@@ -25,6 +25,9 @@ static uint64_t nonce = 0;
 static volatile LONG completed_closes = 0;
 static volatile LONG last_close_reason = 0;
 static volatile LONG owner_tid = 0;
+#ifdef E33_LEASE_SESSION
+static LONG pending_close_reason=0;
+#endif
 inline void release(Watch* value) {
     if (InterlockedDecrement(&value->refs) == 0) {
         if (value->owner) CloseHandle(value->owner);
@@ -51,6 +54,10 @@ static void close(LONG reason) {
     if (!closing) return;
     uint32_t error = reason == BackendFailure ? closing->request.error : 0;
     uint32_t cleanup_error = guarded_close();
+#ifdef E33_LEASE_SESSION
+    if(cleanup_error==kSessionCloseDeferred) { pending_close_reason=reason; return; }
+    pending_close_reason=0;
+#endif
     if (cleanup_error) error = cleanup_error;
     if (owned_hook) { if (!UnhookWindowsHookEx(owned_hook) && !error) error = 88; owned_hook = nullptr; }
     if (watch) { SetEvent(watch->stop); release(watch); watch = nullptr; }
@@ -131,15 +138,25 @@ extern "C" __declspec(dllexport) LRESULT CALLBACK SessionScheduleHook(int code, 
     if (code == HC_ACTION && removed == PM_REMOVE && data) {
         auto* message = reinterpret_cast<MSG*>(data);
         static const UINT request_message = RegisterWindowMessageW(kSessionMessage);
+#ifdef E33_LEASE_SESSION
+        if(packet && pending_close_reason) close(pending_close_reason);
+#endif
         // A watcher only requests cleanup; it never touches backend/engine state.
         if (packet && GetCurrentThreadId() == target_thread && watch &&
             InterlockedCompareExchange(&watch->disconnected, 0, 0)) close(ControllerExited);
         if (packet && GetCurrentThreadId() == target_thread && backend_shutting_down()) close(TargetShuttingDown);
-        if (packet && GetCurrentThreadId() == target_thread) guarded_message(message);
+        if (packet && GetCurrentThreadId() == target_thread
+#ifdef E33_LEASE_SESSION
+            && !pending_close_reason
+#endif
+            ) guarded_message(message);
         if (request_message && !message->hwnd && message->message == request_message) {
             bool consumed = false;
             if (!packet) consumed = open(message);
             else if (GetCurrentThreadId() == target_thread && message->wParam == nonce &&
+#ifdef E33_LEASE_SESSION
+                     !pending_close_reason &&
+#endif
                      static_cast<DWORD>(message->lParam) == controller) {
                 auto& request = packet->request;
                 if (InterlockedCompareExchange(&request.state, kRunning, kRequested) == kRequested) {

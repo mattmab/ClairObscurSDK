@@ -75,7 +75,9 @@ inline void run_runtime_session(DWORD pid, DWORD thread, int32_t object_index, i
     packet.request.object_index = object_index; packet.request.object_serial = object_serial;
     packet.request.function_index = function_index; packet.request.function_serial = function_serial;
     wchar_t executable[32768]; require(GetModuleFileNameW(nullptr, executable, 32768) != 0, "SESSION_SELF_PATH");
-#ifdef E33_REFLECTED_SESSION
+#ifdef E33_LEASE_SESSION
+    auto path = std::filesystem::path(executable).parent_path().parent_path() / L"runtime-session-v7" / L"runtime_session_v7.dll";
+#elif defined(E33_REFLECTED_SESSION)
     auto path = std::filesystem::path(executable).parent_path().parent_path() / L"runtime-session-v6" / L"runtime_session_v6.dll";
 #else
     auto path = std::filesystem::path(executable).parent_path().parent_path() / L"runtime-session" / L"runtime_session_v5.dll";
@@ -92,12 +94,32 @@ inline void run_runtime_session(DWORD pid, DWORD thread, int32_t object_index, i
 #ifdef E33_REFLECTED_SESSION
               << ",\"reflected_protocol\":1"
 #endif
+#ifdef E33_LEASE_SESSION
+              << ",\"lease_protocol\":1"
+#endif
               << "}\n" << std::flush;
     std::string command;
     while (std::getline(std::cin, command)) {
         auto separator=command.find(' ');
         packet.console_text[0]=0; packet.console_dropped=0;
         bool reflected=false;
+        bool leased=false;
+#ifdef E33_LEASE_SESSION
+        auto tag=command.substr(0,separator);
+        DWORD lease_action=tag=="lease-acquire" ? SessionLeaseAcquire :
+            tag=="lease-release" ? SessionLeaseRelease : tag=="lease-status" ? SessionLeaseStatus : 0;
+        leased=lease_action!=0;
+        if(leased) {
+            require(separator!=std::string::npos,"LEASE_PAYLOAD_MISSING");
+            auto encoded=command.substr(separator+1);
+            require(encoded.size()==sizeof(LeasePacket)*2,"LEASE_PAYLOAD_SIZE");
+            auto* destination=reinterpret_cast<uint8_t*>(&packet.lease);
+            auto digit=[](char c)->unsigned { if(c>='0'&&c<='9') return c-'0'; if(c>='a'&&c<='f') return c-'a'+10;
+                throw std::runtime_error("LEASE_PAYLOAD_ENCODING"); };
+            for(size_t i=0;i<sizeof(LeasePacket);++i) destination[i]=static_cast<uint8_t>(digit(encoded[i*2])*16+digit(encoded[i*2+1]));
+            command.resize(separator);
+        }
+#endif
 #ifdef E33_REFLECTED_SESSION
         reflected=command.substr(0,separator)=="reflected-invoke";
         if(reflected) {
@@ -111,7 +133,7 @@ inline void run_runtime_session(DWORD pid, DWORD thread, int32_t object_index, i
             command.resize(separator);
         }
 #endif
-        if(!reflected && separator!=std::string::npos) { decode_console_payload(command.substr(separator+1),packet.console_text); command.resize(separator); }
+        if(!reflected && !leased && separator!=std::string::npos) { decode_console_payload(command.substr(separator+1),packet.console_text); command.resize(separator); }
         DWORD action = command == "enable" ? SessionEnable : command == "disable" ? SessionDisable :
             command == "invoke" ? SessionInvoke : command == "drain" ? SessionDrain :
             command == "ping" ? SessionPing : command == "close" ? SessionClose :
@@ -121,6 +143,9 @@ inline void run_runtime_session(DWORD pid, DWORD thread, int32_t object_index, i
             command == "console-names" ? SessionConsoleNames : command == "console-key" ? SessionConsoleKey : 0;
 #ifdef E33_REFLECTED_SESSION
         if(reflected) action=SessionReflectedInvoke;
+#endif
+#ifdef E33_LEASE_SESSION
+        if(leased) action=lease_action;
 #endif
         require(action != 0, "SESSION_UNKNOWN_COMMAND");
         connection.command(action);
@@ -140,6 +165,15 @@ inline void run_runtime_session(DWORD pid, DWORD thread, int32_t object_index, i
             }
         }
         std::cout << ']';
+#ifdef E33_LEASE_SESSION
+        if(leased) {
+            static const char digits[]="0123456789abcdef";
+            const auto* source=reinterpret_cast<const uint8_t*>(&packet.lease);
+            std::string encoded(sizeof(LeasePacket)*2,'0');
+            for(size_t i=0;i<sizeof(LeasePacket);++i) { encoded[i*2]=digits[source[i]>>4]; encoded[i*2+1]=digits[source[i]&15]; }
+            std::cout << ",\"lease_packet\":" << quote(encoded);
+        }
+#endif
 #ifdef E33_REFLECTED_SESSION
         if(reflected) {
             static const char digits[]="0123456789abcdef";

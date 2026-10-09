@@ -563,3 +563,13 @@ corroborated live. Native creation/release candidate logic and an isolated
 fixture are implemented; public retain, session leases, invocation result
 retention and live ownership validation remain pending. The original Explorer
 core is unchanged. WIDGET_OWNERSHIP.md records exact evidence and limitations.
+
+## Live lease transport — 2026-10-09
+
+The isolated v7 lease primitive now passes live acquire/release, stale-token,
+normal-close, controller-exit and reconnect checks. See OBJECT_LEASES.md. All97
+Python tests and native ownership fixtures pass. The persistent v6 host is
+restored and its console/file-service paths verified. Explorer retain remains
+unavailable until scoped Python ownership and atomic invocation-output retention
+are connected; the original Explorer core remains unchanged. This is progress
+toward full parity, not a replacement of the retained-value requirement.

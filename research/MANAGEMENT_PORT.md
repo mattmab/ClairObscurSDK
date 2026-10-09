@@ -375,3 +375,9 @@ Three live instances corroborate its layout. A native candidate adapter and
 lifecycle fixture now compile/pass; no SDK holder has been registered live.
 Prefer this target mechanism over a custom SObjectWidget-derived holder. See
 WIDGET_OWNERSHIP.md for the remaining lease, fault-recovery and live-test gates.
+
+Follow-up: experimental v7 leases now have live registration/release and
+controller-exit cleanup proof (OBJECT_LEASES.md). Next connect scoped leases and
+retain Create's output before returning it to Python, then test a bounded widget
+lifecycle and input/focus restoration. The UMG-independent console management
+host was restored and Python execution verified after the isolated test.

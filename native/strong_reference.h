@@ -52,7 +52,11 @@ StrongReferenceResult create_strong_reference(Ops& ops, uint64_t object,
     owned=ops.allocate();
     if(!owned) return StrongReferenceResult::AllocationFailed;
     *owned={};
-    owned->vtable=ops.base_vtable();
+    // Register inspects the flags/list membership, not the vtable or object.
+    // Publish a complete native collector before registration, so an interrupted
+    // registration cannot leave a pure-virtual base holder in the engine list.
+    owned->vtable=ops.strong_vtable();
+    owned->object=object;
     // Allocation can invalidate a previously observed identity/context.
     if(!ops.can_create(object)) {
         // Unregistered allocation has no GC-list membership. Destruction is
@@ -67,8 +71,6 @@ StrongReferenceResult create_strong_reference(Ops& ops, uint64_t object,
         destroy_strong_reference(ops,storage);
         return StrongReferenceResult::RegistrationRejected;
     }
-    owned->vtable=ops.strong_vtable();
-    owned->object=object;
     if(ops.barrier_needed()) ops.write_barrier(object);
     return StrongReferenceResult::Ok;
 }

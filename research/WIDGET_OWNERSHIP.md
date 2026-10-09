@@ -1,5 +1,10 @@
 # Native widget ownership investigation — 2026-10-09
 
+Current status: the generic holder is integrated into an experimental v7 lease
+transport with live registration/release and controller-exit cleanup proof. See
+OBJECT_LEASES.md. The earlier investigation stages below preserve their original
+evidence boundaries; public Harness retain and new-widget lifetime remain open.
+
 Target: Steam23765773, SHA256
 218a2478aad5b3a1674b5d7097ec1ac4f994abb95466f9da1407fcd39d639618.
 Addresses below use Ghidra image base140000000; they are not portable offsets.
@@ -141,9 +146,10 @@ acquisition, deferred release, foreign-vtable rejection, idempotent empty releas
 and quarantine after ambiguous registration or destruction. These are lifecycle
 logic tests, not proof that target engine calls work live.
 
-Remaining integration gates: bounded generation-scoped lease storage, SEH fault
-containment and membership reconciliation, controller-death cleanup and a live
-register/release specimen. Quarantine alone is not a complete recovery strategy:
-an interrupted registration can leave a base-vtable holder in the engine list.
-Do not enable this candidate until that state can be reconciled safely. Creation
-must retain returned objects before the invocation response reaches Python.
+At this initial candidate stage, integration gates included bounded
+generation-scoped leases, fault containment, controller-death cleanup and a live
+register/release specimen. The subsequent v7 work in OBJECT_LEASES.md completes
+those normal-path lease and cleanup gates and initializes a complete collector
+before registration to avoid an interrupted base-vtable holder. Arbitrary native
+fault repair is still unsupported. Creation must retain returned objects before
+the invocation response reaches Python.
