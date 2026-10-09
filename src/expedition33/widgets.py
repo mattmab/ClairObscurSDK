@@ -29,6 +29,7 @@ class OwnedMenuPanel:
         self.uncertain = False
         self._text = {}
         self._enabled = {}
+        self._visible = {}
 
     @staticmethod
     def _one(rows):
@@ -76,7 +77,8 @@ class OwnedMenuPanel:
     def _label(self, x, y, width, height):
         label = self._spawn('TextBlock')
         self._place(label, x, y, width, height)
-        self._call(label, 'Widget', 'SetIsEnabled', bInIsEnabled=False)
+        # HitTestInvisible controls input without applying the disabled tint.
+        self._call(label, 'Widget', 'SetIsEnabled', bInIsEnabled=True)
         with self._mutate(self.scope.invoke_retained, label,
                 self._function('Widget', 'SetVisibility'), InVisibility=self.invisible):
             pass
@@ -100,9 +102,13 @@ class OwnedMenuPanel:
                                 if not o.object_flags & 0x10)
         enum = self.catalog.find_path('/Script/UMG.ESlateVisibility', 'Enum')
         descriptor = describe_enums(self.catalog, [enum])[enum.index]
-        member = self._one(m for m in descriptor.members
-                           if m.name.rsplit('::', 1)[-1] == 'HitTestInvisible')
-        self.invisible = descriptor.value(member.name)
+        def visibility(name):
+            member = self._one(m for m in descriptor.members
+                               if m.name.rsplit('::', 1)[-1] == name)
+            return descriptor.value(member.name)
+        self.invisible = visibility('HitTestInvisible')
+        self.visible = visibility('Visible')
+        self.collapsed = visibility('Collapsed')
         self.widget = self._mutate(self.scope.invoke_retained,
             self._default('WidgetBlueprintLibrary'), self._function('WidgetBlueprintLibrary', 'Create'),
             WorldContextObject=self.player, WidgetType=self._class('CommonActivatableWidget'),
@@ -123,6 +129,8 @@ class OwnedMenuPanel:
             self._call(button, 'Button', 'SetBackgroundColor',
                 InBackgroundColor={'R':0.08,'G':0.12,'B':0.18,'A':1.0})
             self.labels.append(self._label(100, 163 + index * 64, 940, 46))
+            self._visible[index] = True
+            self._enabled[index] = True
             log.info('Native menu construction: control %d/%d retained', index + 1, self.count)
         self._mutate(self.scope.assign_object, self.tree, self._class('WidgetTree'),
             'RootWidget', self.canvas, expected=None, allow_mutation=True)
@@ -163,6 +171,20 @@ class OwnedMenuPanel:
             raise RuntimeError('Native panel attachment/focus deferred; close the panel')
         self.state = 'open'
 
+    def set_visible(self, index, visible):
+        if self.state not in ('built', 'open'):
+            raise RuntimeError('Panel is not available for rendering')
+        if type(index) is not int or not 0 <= index < self.count or type(visible) is not bool:
+            raise ValueError('Invalid control visibility')
+        if self._visible.get(index) == visible:
+            return
+        for obj, value in ((self.buttons[index], self.visible if visible else self.collapsed),
+                           (self.labels[index], self.invisible if visible else self.collapsed)):
+            with self._mutate(self.scope.invoke_retained, obj,
+                    self._function('Widget', 'SetVisibility'), InVisibility=value):
+                pass
+        self._visible[index] = visible
+
     def close(self):
         if self.state == 'closed':
             return True
@@ -184,5 +206,6 @@ class OwnedMenuPanel:
         self.scope.close()
         self._text.clear()
         self._enabled.clear()
+        self._visible.clear()
         self.state = 'closed'
         return True

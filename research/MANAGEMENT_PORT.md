@@ -882,3 +882,35 @@ before dispatch, including field offsets/types/extents and argument constraints;
 text allocation triggers further identity/context revalidation. This supports
 investigating reduced external catalog traffic, not skipping native validation.
 Do not retrofit a new dispatch path into the currently running construction.
+
+### First actual native management interaction — 2026-10-09
+
+The first full tree finished construction at14:50:10 and returned an open frame
+at14:51:35 on game21568 / persistent Python33780. This run used the renderer
+from e32fc60. The native panel visibly listed the enabled Introspection Harness
+and SDK Management plus the installed ConsoleExample, ExampleMod and
+ManagementExample folders. Real mouse clicks selected the Harness, opened its
+actions screen and invoked Port status through the same Registry used by the
+console. The status result appeared in the panel. Native Tilde/Python remained
+usable while the panel was open.
+
+`evidence/native-management-action.json` preserves frame revision7, the original
+Harness status result (parity_complete False), panel state open, uncertain False,
+native event sequence9 and empty failure lists for current bindings. It was
+written from the persistent console at14:55:41. The before baseline remains
+`native-management-before.json`. A close-button attempt was interrupted by
+physical user input, followed by the user stopping Computer Use with Escape.
+No after baseline exists. Do not claim that this full renderer's close, exact
+cleanup, reopen, disconnect, relaunch or settings editing has passed live.
+
+Observed defects: first opening took about14 minutes; navigation repainted over
+tens of seconds; descriptions/results overflowed horizontally; labels inherited
+disabled tint; unused buttons remained visible as empty rows. These prevent a
+release-quality menu even though construction, navigation and a Harness action
+are now demonstrated. Source-only follow-up bounds row labels, wraps/caps detail
+text, logs full display content, removes disabled tint from hit-test-invisible
+labels, and collapses unused rows via target-described enum members. Visibility
+updates cache only complete success and preserve unknown outcomes on partial
+failure. These visual changes have NOT been applied to or verified in the live
+instance. Native scrolling/responsive metrics, editors, keybinds and fast planning
+remain open work; text truncation is explicitly indicated rather than hidden.

@@ -4,9 +4,32 @@ Boolean and choice settings support click editing. Numeric/text/JSON editors and
 key capture remain pending; submit() accepts validated typed input from a future
 editor without creating separate state or bypassing Registry validation.
 """
+import logging
+import textwrap
+
 from .management_view import ManagementView
 from .management import ManagementError
 from .widgets import OwnedMenuPanel
+
+
+def display_line(text, width):
+    """Bound a single visual row without changing registry metadata."""
+    text = ' '.join(text.split())
+    return text if len(text) <= width else text[:width - 1] + '…'
+
+
+def display_detail(text, *, width=42, height=18):
+    """Explicit newlines for the current base TextBlock; full results stay logged.
+
+    Character bounds are an initial layout budget, not native font metrics.
+    Responsive sizing and native scrolling remain separate frontend work.
+    """
+    lines = []
+    for paragraph in text.splitlines():
+        lines.extend(textwrap.wrap(paragraph, width=width) or [''])
+    if len(lines) > height:
+        lines = lines[:height - 1] + ['… More text in the SDK log.']
+    return '\n'.join(lines)
 
 
 class NativeManagementMenu:
@@ -17,6 +40,7 @@ class NativeManagementMenu:
         self.actions = []
         self.error = None
         self._accept_input = False
+        self._logged_detail = None
 
     def open(self):
         self.panel.build()
@@ -37,13 +61,17 @@ class NativeManagementMenu:
     def _paint(self):
         frame = self.frame
         self.panel.set_text(self.panel.title,
-            f'{frame.title}   ({frame.page + 1}/{frame.pages})')
-        self.panel.set_text(self.panel.detail, '\n\n'.join(filter(None,
-            (frame.description, frame.status, self.error))))
+            f'{display_line(frame.title, 64)}   ({frame.page + 1}/{frame.pages})')
+        detail = '\n\n'.join(filter(None, (self.error, frame.status, frame.description)))
+        if detail != self._logged_detail:
+            logging.getLogger(__name__).info('Native menu %s: %s', frame.title, detail)
+            self._logged_detail = detail
+        self.panel.set_text(self.panel.detail, display_detail(detail))
         for index in range(self.panel.count):
             control = frame.controls[index] if index < len(frame.controls) else None
-            self.panel.set_text(self.panel.labels[index], control.label if control else '')
+            self.panel.set_text(self.panel.labels[index], display_line(control.label, 48) if control else '')
             self.panel.set_enabled(index, bool(control and control.enabled))
+            self.panel.set_visible(index, control is not None)
 
     def _bind(self):
         frame = self.frame

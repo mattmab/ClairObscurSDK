@@ -4,7 +4,7 @@ from types import SimpleNamespace
 
 import test_management
 from expedition33.management import ManagementError
-from expedition33.management_native import NativeManagementMenu
+from expedition33.management_native import NativeManagementMenu, display_line, display_detail
 
 
 class FakePanel:
@@ -14,12 +14,14 @@ class FakePanel:
         self.buttons = list(range(12))
         self.labels = [f'label{i}' for i in range(12)]
         self.text, self.enabled, self.handles, self.operations = {}, {}, [], []
+        self.visible = {}
         self.menu = SimpleNamespace(bind_control=self.bind)
         self.defer = False
     def build(self): self.operations.append('build')
     def open(self): self.operations.append('open')
     def set_text(self, label, text): self.text[label] = text
     def set_enabled(self, index, enabled): self.enabled[index] = enabled
+    def set_visible(self, index, visible): self.visible[index] = visible
     def bind(self, button, callback):
         handle = SimpleNamespace(button=button, callback=callback, active=True)
         def remove():
@@ -54,6 +56,7 @@ class NativeManagementTests(unittest.TestCase):
     def test_click_navigation_updates_native_labels_and_shared_registry(self):
         self.start()
         self.assertEqual(self.menu.panel.text['label0'], 'Specimen [disabled]')
+        self.assertFalse(self.menu.panel.visible[11])
         stale = self.menu.actions[0]
         self.click('Specimen [disabled]')
         self.assertFalse(stale.active)
@@ -96,6 +99,22 @@ class NativeManagementTests(unittest.TestCase):
         self.assertFalse(self.menu.close())
         self.menu.panel.defer = False
         self.assertTrue(self.menu.close())
+
+    def test_long_text_has_bounded_lines_and_does_not_change_registry(self):
+        self.assertEqual(display_line('one\ntwo', 20), 'one two')
+        self.assertEqual(len(display_line('x' * 100, 48)), 48)
+        detail = display_detail('X' * 2000)
+        self.assertLessEqual(len(detail.splitlines()), 18)
+        self.assertTrue(all(len(line) <= 42 for line in detail.splitlines()))
+        self.assertIn('SDK log', detail)
+        self.start()
+        from dataclasses import replace
+        entry = self.registry._entries['specimen']
+        description = 'Long description ' * 200
+        entry.definition = replace(entry.definition, description=description)
+        self.click('Specimen [disabled]')
+        self.assertEqual(self.registry.view(self.registry.select('specimen'))['description'], description)
+        self.assertLessEqual(len(self.menu.panel.text['detail'].splitlines()), 18)
 
 
 if __name__ == '__main__':

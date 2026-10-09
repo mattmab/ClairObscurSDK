@@ -1,4 +1,5 @@
 import unittest
+from contextlib import nullcontext
 from types import SimpleNamespace
 from unittest.mock import Mock, patch
 
@@ -50,6 +51,30 @@ class OwnedWidgetCleanupTests(unittest.TestCase):
             panel.close()
         self.assertEqual(operations, ['native-close'])
         self.assertTrue(panel.assigned)
+
+    def test_visibility_uses_separate_label_input_policy_and_caches_success(self):
+        panel, _ = self.panel()
+        panel.buttons, panel.labels = ['button'], ['label']
+        panel.visible, panel.invisible, panel.collapsed = 'visible', 'no-hit', 'collapsed'
+        panel._function = lambda *args: args
+        calls = []
+        panel.scope.invoke_retained = lambda obj, fn, **kw: (calls.append((obj, kw['InVisibility'])) or nullcontext())
+        panel.set_visible(0, False)
+        panel.set_visible(0, False)
+        panel.set_visible(0, True)
+        self.assertEqual(calls, [('button', 'collapsed'), ('label', 'collapsed'),
+                                 ('button', 'visible'), ('label', 'no-hit')])
+
+    def test_partial_visibility_failure_preserves_unknown_outcome(self):
+        panel, _ = self.panel()
+        panel.buttons, panel.labels = ['button'], ['label']
+        panel.visible, panel.invisible, panel.collapsed = 'visible', 'no-hit', 'collapsed'
+        panel._function = lambda *args: args
+        panel.scope.invoke_retained = Mock(side_effect=[nullcontext(), RuntimeError('lost reply')])
+        with self.assertRaisesRegex(RuntimeError, 'lost reply'): panel.set_visible(0, False)
+        self.assertNotIn(0, panel._visible)
+        with self.assertRaisesRegex(RuntimeError, 'no retry'): panel.set_visible(0, False)
+        self.assertEqual(panel.scope.invoke_retained.call_count, 2)
 
 
 if __name__ == '__main__':
