@@ -29,6 +29,13 @@ the successful retest). Next implement
 visible control layout and validated focus/key handling. See DEVELOPMENT.md for
 package evidence and INTROSPECTION_PORT.md for the exact set boundary.
 
+Layout follow-up: WIDGET_LAYOUT_VALUES.md records live parameter/struct metadata
+and Ghidra thunk evidence for Vector2D, LinearColor, Margin and Anchors. Candidate
+Python/native numeric codecs now exist, but struct invocation is still gated.
+Next integrate game-thread profile validation, then verify a visible widget's
+layout. Text/font ownership, enum input modes and focus restoration remain
+separate required capabilities, not assumed consequences of the numeric codecs.
+
 ## Preserved implementation references
 
 Primary source is the installed BL4 sdk_mods directory. Nineteen original files
