@@ -44,6 +44,13 @@ static uint64_t runtime_base = 0, target_object = 0, target_function = 0;
 #include "target_menu_ops.h"
 static TargetMenuStorage session_menu;
 static MenuResult close_menu_actions() {
+#ifdef E33_MULTI_BUTTON_SESSION
+    auto multi=session_menu.multi_actions.close();
+    if(multi==ButtonDelegateResult::Deferred) return MenuResult::Deferred;
+    if(multi!=ButtonDelegateResult::Ok) {
+        session_menu.menu.quarantine(); return MenuResult::Quarantined;
+    }
+#endif
 #ifdef E33_BUTTON_ACTION_SESSION
     auto result=session_menu.actions.close();
     if(result==ButtonDelegateResult::Deferred) return MenuResult::Deferred;
@@ -57,6 +64,11 @@ static MenuResult menu_command(MenuPacket& wire) {
     auto& s=session_menu;
     TargetMenuOps<StrongLeasePool<>> ops{s,session_leases};
     const auto operation=static_cast<MenuOperation>(wire.operation);
+#ifdef E33_MULTI_BUTTON_SESSION
+    const auto multi_gate=s.multi_actions.gate();
+    if(multi_gate==ButtonDelegateResult::Deferred) return MenuResult::Deferred;
+    if(multi_gate!=ButtonDelegateResult::Ok) { s.menu.quarantine(); return MenuResult::Quarantined; }
+#endif
 #ifdef E33_BUTTON_ACTION_SESSION
     const auto gate=s.actions.gate();
     if(gate==ButtonDelegateResult::Deferred) return MenuResult::Deferred;
@@ -93,6 +105,9 @@ static void guarded_menu_command(MenuPacket& wire) {
         wire.error=result==MenuResult::Ok ? 0 : 810+static_cast<uint32_t>(result);
         wire.outcome=static_cast<uint32_t>(MenuOutcome::Returned);
     } __except(EXCEPTION_EXECUTE_HANDLER) {
+#ifdef E33_MULTI_BUTTON_SESSION
+        session_menu.multi_actions.quarantine();
+#endif
 #ifdef E33_BUTTON_ACTION_SESSION
         session_menu.actions.quarantine();
 #endif
@@ -109,6 +124,9 @@ static MenuResult guarded_menu_close() {
         TargetMenuOps<StrongLeasePool<>> ops{session_menu,session_leases};
         return session_menu.menu.close_session(ops);
     } __except(EXCEPTION_EXECUTE_HANDLER) {
+#ifdef E33_MULTI_BUTTON_SESSION
+        session_menu.multi_actions.quarantine();
+#endif
 #ifdef E33_BUTTON_ACTION_SESSION
         session_menu.actions.quarantine();
 #endif
@@ -119,6 +137,10 @@ static MenuResult guarded_menu_close() {
 #ifdef E33_BUTTON_ACTION_SESSION
 static ButtonDelegateResult button_action_command(ButtonActionPacket& wire) {
     auto& s=session_menu;
+#ifdef E33_MULTI_BUTTON_SESSION
+    auto multi_gate=s.multi_actions.gate();
+    if(multi_gate!=ButtonDelegateResult::Ok) return multi_gate;
+#endif
     auto allowed=s.actions.gate();
     if(allowed!=ButtonDelegateResult::Ok) return allowed;
     // IPC selects an action ID, never an arbitrary object/delegate address.
@@ -161,12 +183,73 @@ static void guarded_button_action(ButtonActionPacket& wire) {
         wire.outcome=static_cast<uint32_t>(ButtonActionOutcome::Returned);
         if(result==ButtonDelegateResult::Quarantined) session_menu.menu.quarantine();
     } __except(EXCEPTION_EXECUTE_HANDLER) {
+#ifdef E33_MULTI_BUTTON_SESSION
+        session_menu.multi_actions.quarantine();
+#endif
         session_menu.actions.quarantine(); session_menu.menu.quarantine(); wire.error=916;
     }
 }
 #endif
 #endif
 static bool observing = false;
+#ifdef E33_MULTI_BUTTON_SESSION
+static ButtonDelegateResult multi_button_command(MultiButtonPacket& packet) {
+    auto& s=session_menu;
+    auto& wire=packet.action;
+    auto single_gate=s.actions.gate();
+    if(single_gate!=ButtonDelegateResult::Ok) return single_gate;
+    auto allowed=s.multi_actions.gate();
+    if(allowed!=ButtonDelegateResult::Ok) return allowed;
+    if(!s.menu.active() || s.session!=lease_session || wire.owner!=s.owner ||
+       !session_leases.owns_object(lease_session,s.widget_lease,s.widget.address))
+        return ButtonDelegateResult::Invalid;
+    switch(static_cast<ButtonActionOperation>(wire.operation)) {
+    case ButtonActionOperation::Bind: {
+        TargetMenuOps<StrongLeasePool<>> ops{s,session_leases};
+        const auto& child=packet.child;
+        if(!s.menu.accepts_actions() || ops.context()!=MenuContext::Ready ||
+           !session_leases.owns_object(lease_session,wire.child_lease,child.address) ||
+           !call_identity(runtime_base,child) ||
+           !ops.exact_class(child.address,"Button","/Script/UMG") ||
+           (local_read<uint32_t>(child.address+8)&(0x10|0x40000000)))
+            return ButtonDelegateResult::Invalid;
+        auto tree=local_read<uint64_t>(child.address+0x20);
+        if(!ops.exact_class(tree,"WidgetTree","/Script/UMG") ||
+           local_read<uint64_t>(tree+0x20)!=s.widget.address) return ButtonDelegateResult::Invalid;
+        return s.multi_actions.bind(runtime_base,lease_session,wire.owner,wire.action,wire.child_lease,child);
+    }
+    case ButtonActionOperation::Drain: {
+        size_t count=0; uint64_t dropped=0;
+        MenuActionEvent copied[kButtonActionCapacity]{};
+        auto result=s.multi_actions.drain(lease_session,copied,kButtonActionCapacity,count,dropped);
+        wire.count=static_cast<uint32_t>(count); wire.dropped=dropped;
+        std::memcpy(wire.events,copied,count*sizeof(MenuActionEvent));
+        return result;
+    }
+    case ButtonActionOperation::Unbind: return s.multi_actions.remove(lease_session,wire.child_lease);
+    case ButtonActionOperation::Status:
+        return s.multi_actions.protects_lease(wire.child_lease) ? ButtonDelegateResult::Ok : ButtonDelegateResult::Invalid;
+    default: return ButtonDelegateResult::Invalid;
+    }
+}
+static void guarded_multi_button(MultiButtonPacket& packet) {
+    auto& wire=packet.action;
+    if(!valid_multi_button_request(packet)) { wire.error=1010; return; }
+    wire.outcome=static_cast<uint32_t>(ButtonActionOutcome::Unknown);
+    __try {
+        auto result=multi_button_command(packet);
+        wire.error=result==ButtonDelegateResult::Ok ? 0 : 1010+static_cast<uint32_t>(result);
+        wire.state=static_cast<uint32_t>(session_menu.multi_actions.state(wire.child_lease));
+        if(result==ButtonDelegateResult::Ok)
+            wire.registration=session_menu.multi_actions.registration(wire.child_lease);
+        wire.outcome=static_cast<uint32_t>(ButtonActionOutcome::Returned);
+        if(result==ButtonDelegateResult::Quarantined) session_menu.menu.quarantine();
+    } __except(EXCEPTION_EXECUTE_HANDLER) {
+        session_menu.multi_actions.quarantine(); session_menu.actions.quarantine();
+        session_menu.menu.quarantine(); wire.error=1016;
+    }
+}
+#endif
 static unsigned console_toggle_key=0;
 #ifdef E33_TEXT_SESSION
 #include "target_text_call.h"
@@ -250,6 +333,11 @@ uint32_t backend_command(SessionPacket* packet) {
     if (!lifetime_valid()) return 61;
     switch (packet->request.action) {
 #ifdef E33_BUTTON_ACTION_SESSION
+#ifdef E33_MULTI_BUTTON_SESSION
+    case SessionMultiButton:
+        guarded_multi_button(packet->multi_button);
+        return 0;
+#endif
     case SessionButtonAction:
         guarded_button_action(packet->button_action);
         return 0;
@@ -335,7 +423,11 @@ uint32_t backend_command(SessionPacket* packet) {
             result=session_leases.acquire(ops,lease_session,lease.object.address,lease.token);
         else if(packet->request.action==SessionLeaseRelease) {
 #ifdef E33_MENU_SESSION
-            if(session_menu.menu.protects(lease_session,lease.token)) result=StrongLeaseResult::Busy;
+            if(session_menu.menu.protects(lease_session,lease.token)
+#ifdef E33_MULTI_BUTTON_SESSION
+               || session_menu.multi_actions.protects_lease(lease.token)
+#endif
+            ) result=StrongLeaseResult::Busy;
             else
 #endif
             result=session_leases.release(ops,lease_session,lease.token);

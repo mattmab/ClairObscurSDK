@@ -1,4 +1,11 @@
 #pragma once
+#ifdef E33_MULTI_BUTTON_SESSION
+#ifndef E33_BUTTON_ACTION_SESSION
+#error Multi-button runtime requires the v16 capability chain
+#endif
+#include "multi_button_protocol.h"
+constexpr uint32_t SessionMultiButton=109;
+#endif
 #if defined(E33_BUTTON_ACTION_SESSION) && !defined(E33_BUTTON_REFERENCE_SESSION)
 #error Button action candidate requires retained button ownership
 #endif
@@ -43,7 +50,11 @@ constexpr uint32_t SessionMenu=107;
 #ifdef E33_MENU_SESSION
 #ifdef E33_BUTTON_REFERENCE_SESSION
 #ifdef E33_BUTTON_ACTION_SESSION
+#ifdef E33_MULTI_BUTTON_SESSION
+constexpr wchar_t kSessionMessage[] = L"E33SDK.Session.v17";
+#else
 constexpr wchar_t kSessionMessage[] = L"E33SDK.Session.v16";
+#endif
 #else
 constexpr wchar_t kSessionMessage[] = L"E33SDK.Session.v15";
 #endif
@@ -125,11 +136,18 @@ struct SessionPacket {
 #endif
 #ifdef E33_BUTTON_ACTION_SESSION
     ButtonActionPacket button_action;
+#ifdef E33_MULTI_BUTTON_SESSION
+    MultiButtonPacket multi_button;
+#endif
 #endif
 };
 inline void session_mapping_name(wchar_t (&name)[96], DWORD controller, uint64_t nonce) {
 #ifdef E33_BUTTON_ACTION_SESSION
+#ifdef E33_MULTI_BUTTON_SESSION
+    swprintf_s(name, L"Local\\E33Session17_%lu_%016llx", controller, nonce);
+#else
     swprintf_s(name, L"Local\\E33Session16_%lu_%016llx", controller, nonce);
+#endif
 #elif defined(E33_BUTTON_REFERENCE_SESSION)
     swprintf_s(name, L"Local\\E33Session15_%lu_%016llx", controller, nonce);
 #elif defined(E33_MENU_SESSION)

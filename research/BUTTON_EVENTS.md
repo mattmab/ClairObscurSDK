@@ -668,3 +668,29 @@ layout check pass. test-button-delegate-pool.cmd now compiles the target adapter
 as well as running the portable pool fixture. No DLL was rebuilt or loaded.
 Transport, Python multi-control lifecycle and live two-control validation remain
 unimplemented; this is target integration source, not a callable SDK capability.
+
+### v17 runtime command candidate
+
+The opt-in E33_MULTI_BUTTON_SESSION compile path adds command109 with a separate
+2648-byte MultiButtonPacket and distinct Session.v17 message/mapping names. Bind
+carries a copied current UObject identity and lease ID. Runtime checks require
+an active matching menu/session, an owned root lease, an owned live Button lease,
+and the Button's WidgetTree outer chain ending at the owned menu. No raw delegate
+address is accepted. Drain is menu-wide with no child selector; unbind/status are
+control-specific and reject identity/argument payloads. Output fields and all event
+slots must be zero on input. Errors1010..1016 distinguish validation, ownership,
+deferred work, quarantine and unknown SEH outcomes.
+
+The runtime now closes the multi-control owner before the existing action/menu
+cleanup, blocks explicit release of every retained control lease, and propagates
+SEH quarantine across both action backends. Shared gates prevent one backend from
+continuing after the other faults. Existing v16 command/layout behavior stays
+behind its original feature flags.
+
+Validation: multi-control lifecycle and strict packet fixtures pass; the v17
+runtime object compiles with /W4 /WX. Existing queue, session, packet, delegate
+and forwarding fixtures pass, alongside v15/v16 runtime/controller object builds
+and the unchanged v16 layout check. No new DLL or controller was built/loaded.
+Controller command serialization, feature negotiation, isolated v17 build scripts,
+Python control ownership/shared drain, and live two-control validation remain
+pending. These compile checks do not establish runtime behavior or feature parity.

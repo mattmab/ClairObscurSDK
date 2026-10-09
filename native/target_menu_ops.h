@@ -4,6 +4,9 @@
 #include "target_menu_focus.h"
 #include "strong_lease_pool.h"
 #include "menu_session.h"
+#ifdef E33_MULTI_BUTTON_SESSION
+#include "target_multi_button_actions.h"
+#endif
 #ifdef E33_BUTTON_REFERENCE_SESSION
 #include "target_button_reference.h"
 #endif
@@ -30,6 +33,9 @@ struct TargetMenuStorage {
 #endif
     CallIdentity engine{-1,0,0};
     MenuSession menu;
+#ifdef E33_MULTI_BUTTON_SESSION
+    TargetMultiButtonActions multi_actions;
+#endif
 };
 template<class Pool>
 struct TargetMenuOps {

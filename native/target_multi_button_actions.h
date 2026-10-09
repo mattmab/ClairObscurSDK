@@ -75,6 +75,16 @@ public:
         for(const auto& c:controls_) if(lease && c.lease==lease) return true;
         return false;
     }
+    ButtonDelegateState state(uint64_t lease) {
+        auto* c=control(lease);
+        if(!c) return ButtonDelegateState::Empty;
+        auto* binding=pool_.find(c->retained.delegate);
+        return binding ? binding->state() : ButtonDelegateState::Revoked;
+    }
+    uint64_t registration(uint64_t lease) {
+        auto* c=control(lease);
+        return c ? pool_.ticket(c->retained.delegate).registration : 0;
+    }
     void quarantine() { closing_=true; table_.foreign_call(); pool_.quarantine(); }
     ButtonDelegateResult gate() {
         if(!table_.ready()) return ButtonDelegateResult::Ok;
@@ -142,13 +152,13 @@ public:
         }
         session_=0; closing_=false; return ButtonDelegateResult::Ok;
     }
-    ButtonDelegateResult drain(uint64_t session,MenuActionEvent* events,size_t capacity,
+    ButtonDelegateResult drain(uint64_t session,MenuActionEvent* output,size_t capacity,
                                size_t& count,uint64_t& dropped) {
         count=0; dropped=0;
         auto allowed=gate(); if(allowed!=ButtonDelegateResult::Ok) return allowed;
-        if(!session_ || session!=session_ || closing_ || !events || !capacity || capacity>64)
+        if(!session_ || session!=session_ || closing_ || !output || !capacity || capacity>64)
             return ButtonDelegateResult::Invalid;
-        while(count<capacity && pool_.pop(session,events[count])) ++count;
+        while(count<capacity && pool_.pop(session,output[count])) ++count;
         dropped=pool_.take_dropped(session); return ButtonDelegateResult::Ok;
     }
 };

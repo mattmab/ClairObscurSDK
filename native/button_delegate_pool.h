@@ -92,4 +92,5 @@ public:
     }
     bool pop(uint64_t session,MenuActionEvent& event) { return queue_.pop(session,event); }
     uint64_t take_dropped(uint64_t session) { return queue_.take_dropped(session); }
+    MenuActionTicket ticket(uint64_t instance) const { return queue_.begin(instance); }
 };
