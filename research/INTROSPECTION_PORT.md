@@ -1128,3 +1128,30 @@ explicit recovery and concurrent-process policy, live archive replacement with
 resources and helpers, controller/game relaunch checks, and packaged validation.
 Full Introspection Harness parity, general tracing, menu performance and the
 keybind/editor work remain incomplete.
+
+### Live staged archive replacement — 2026-10-09
+
+PROVEN in the live main-menu game session after cooperative source-controller
+replacement: verify_live_staged_install.py created an isolated research mod,
+installed its digest-verified ZIP through mod_install_staged, preserved the old
+folder as a backup, and loaded the replacement helper module and JSON resource.
+The operation without literal allow_mutation:true was rejected. Both versions
+called the verified Actor.IsActorBeingDestroyed getter successfully. The old
+scope closed, exactly one replacement hook remained while enabled, and closing
+the test loader restored the zero-hook baseline. A fresh loader read the installed
+version and called the same real getter; closing it again restored zero hooks.
+The journal reached committed with the backup retained.
+
+Raw requests, archive, sources, retained backup and result are under
+ evidence/staged-live-6932be5b275d4f459b1142aa1db9a200/.
+Controller log: logs/staged-install-host.log. Archive SHA256:
+b7c1b09c8ed79c58369457fd71f2953213fe39bfce237e2ed477d38a885de8d1.
+The install request took2414.99ms and correctly reported over_budget:true;
+this is not a responsiveness guarantee. The external controller performed the
+lifecycle operation using its borrowed shared Session. No native DLL was rebuilt.
+
+This validates a fresh ModLoader within one live game/controller session, not
+full controller/game relaunch of the installed archive. Explicit failure recovery,
+concurrent-process policy, relaunch and updated packaged validation remain open.
+The prior338 source tests remain the source baseline; this addition is the live
+verification script and evidence, not a new SDK release or full parity claim.
