@@ -10,6 +10,7 @@ from . import RuntimeQueryError, ObjectSnapshot, objects
 from ._callbacks import CallbackDispatcher, ObservedIdentity, ObserverContext
 from ._session import SessionTransport
 from ._console import Console
+from ._pod_values import NumericStructValue
 
 TARGET = 'Actor.IsActorBeingDestroyed'
 

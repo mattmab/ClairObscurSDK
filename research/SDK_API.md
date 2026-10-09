@@ -155,7 +155,11 @@ integrated launcher use `launch.cmd management --pod-values`.
 Only the target-derived Vector2D, LinearColor, Margin and Anchors profiles are
 accepted. Pass plain dictionaries containing every reflected field; Anchors has
 nested Minimum/Maximum dictionaries. No default components are guessed.
-Results are immutable copied mappings. All components must be finite and within
+Results are immutable `NumericStructValue` mappings, exported from
+`expedition33.sdk`, carrying their supported full type path. They can be reused
+as arguments of the same type; wrong-type reuse is rejected. Nested values are
+copied, so changing a source dictionary does not alter an existing value.
+All components must be finite and within
 float range because the verified UMG setters may narrow doubles to floats.
 The native dispatcher revalidates exact struct identity and schema on the game
 thread. Older backends reject these packets before dispatch.
@@ -163,8 +167,10 @@ thread. Older backends reject these packets before dispatch.
 Live SDK-owned CanvasPanelSlot position/size round trips and margin effects
 passed with scoped cleanup. Anchor/color dispatch returned without a rendered
 or independent-readback claim. This does not support arbitrary structs, FText,
-font state, FKey, enum parameters or the original Harness's typed `$struct`
-adapter yet. See WIDGET_LAYOUT_VALUES.md for evidence and boundaries.
+font state, FKey or enum parameters. The original Harness now adapts the four
+numeric types through `$struct`, including typed results and retained `$value`
+reuse. See INTROSPECTION_PORT.md and WIDGET_LAYOUT_VALUES.md for evidence and
+boundaries.
 
 ### Confirmed target exit
 

@@ -70,8 +70,9 @@ Native schema rejection is not dispatched; invalid numeric results after a call
 leave its outcome unknown and must not be retried. Existing object-output
 retention and pointer scrubbing remain in place.
 
-Python requires exact named dictionaries, validates live descriptors, and returns
-immutable copied mappings. For example, with observed slot/function identities:
+Python accepts exact named dictionaries or same-type NumericStructValue copies,
+validates live descriptors, and returns immutable typed mappings. For example,
+with observed slot/function identities:
 
 ```python
 sdk.invoke(slot, set_position, InPosition={'X': 160.25, 'Y': 32.5})
@@ -79,8 +80,8 @@ position = sdk.invoke(slot, get_position).return_value
 ```
 
 `launch.cmd management --pod-values` exposes this opt-in backend. The original
-Harness's typed `$struct` construction/result adaptation remains separate pending
-work; its core is unchanged. Arbitrary structs, FText/font/FKey ownership,
+Harness's typed `$struct` adapter is now implemented; see INTROSPECTION_PORT.md
+for its separate validation. Its core is unchanged. Arbitrary structs, FText/font/FKey ownership,
 EnumProperty input modes and visible/focused menu behavior remain unsupported.
 
 Native gate follow-up: `pod_schema.h` now implements the exact four-profile

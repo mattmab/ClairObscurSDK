@@ -34,8 +34,9 @@ and Ghidra thunk evidence for Vector2D, LinearColor, Margin and Anchors. Candida
 The opt-in v11 transport now invokes these profiles through its game-thread
 schema gate. Position/size round trips and margin effects passed live on an
 SDK-owned child; anchors/color dispatch returned and holder cleanup passed.
-Next adapt the original Harness's `$struct` interface and verify visible widget
-layout. Text/font ownership, enum input modes and focus restoration remain
+The original Harness's typed `$struct` adapter is implemented separately; see
+INTROSPECTION_PORT.md for validation. Next verify visible widget layout.
+Text/font ownership, enum input modes and focus restoration remain
 separate required capabilities, not assumed consequences of the numeric codecs.
 
 ## Preserved implementation references

@@ -7,14 +7,52 @@ retained-value semantics; see the current ownership checkpoint below and
 OBJECT_LEASES.md for validation. Full Expedition 33 Harness parity remains
 incomplete. Updated 2026-10-09. Earlier dated sections describe prior boundaries.
 
-## v10 original set integration — 2026-10-09
+## v11 original typed struct integration — 2026-10-09
 
-Latest reusable primitive: v11 adds verified numeric struct invocation for
-Vector2D, LinearColor, Margin and Anchors. Position/size round trips and margin
-effects passed live with scoped holder cleanup. The preserved Explorer core is
-unchanged; its `make_struct` adapter and typed returned-struct representation are
-the next integration step, so `$struct` parity is not yet claimed. See
-WIDGET_LAYOUT_VALUES.md for the exact proof and unsupported owned-value types.
+The adapter now supplies `make_struct` and WrappedStruct-compatible copied
+results for Vector2D, LinearColor, Margin and Anchors. The original decoder,
+encoder, invocation consent gate, retained `$value` lookup, 16-name limit,
+60-second expiry and release operations remain unchanged. Status exposes
+`$struct` only with v11 and lists the exact four full paths in `struct_types`.
+Short names and those exact full paths are accepted; every field is required.
+Nested values use nested `$struct` objects. This constructs Python numeric
+copies, not arbitrary native values; the invocation gates still verify current
+metadata and the game-thread schema before dispatch.
+
+Example argument in an original `invoke` request with `allow_mutation:true`:
+
+```json
+{"InPosition":{"$struct":"/Script/CoreUObject.Vector2D","fields":{"X":144.25,"Y":72.5}}}
+```
+
+GetPosition returns `{"$struct":"Vector2D","fields":{"X":144.25,"Y":72.5}}`.
+An invocation with `"retain":"position"` can supply a later argument as
+`{"$value":{"name":"position"}}`, using the original retained-value machinery.
+No native holder is needed for numeric copies. Object outputs retain their
+existing native lease behavior. Unsupported owned/opaque structs (FKey, FText,
+font state, game-data handles and arbitrary reflected structures) remain gated.
+
+All 156 source tests pass, including nested original decode/encode, input copy
+isolation, typed results/out parameters, retained reuse/expiry and capability
+reporting. The original core's normalized SHA256 remains
+`6c043cb1664e71daa6a6b3a50f9d04f284854101d071ac0b21ce18b1469fe543`.
+Live adapter validation passed at 03:50:34 local on game PID 25560, persistent
+Python PID 28004/native controller PID 39856. Original `$struct` SetPosition
+returned, GetPosition encoded `{X:144.25,Y:72.5}` as a typed Vector2D, and retained
+`$value` restored that position after a second setter changed it. The post-reuse
+getter matched. After release, reuse raised KeyError without dispatch; an FKey
+construction request was rejected before dispatch. Nested Anchors dispatch
+returned. The SDK-owned child was removed and the exact native holder baseline
+restored. No viewport, focus or menu visibility behavior was exercised.
+
+Evidence: `evidence/harness-pod-live.json`,
+`logs/management-v11-harness.stderr.log`, `evidence/harness-pod-python-tests.log`.
+The preceding host was closed through its existing management action before
+loading the updated adapter. The replacement persistent host remains running.
+The native v11 DLL was reused, not rebuilt while loaded. Packaging and relaunch
+of this adapter revision remain separate pending validation.
+
+## v10 original set integration — 2026-10-09
 
 The preserved Explorer core now reaches the reusable `assign_object` primitive
 through the adapter's reflected-property lookup and object setter. Scalar

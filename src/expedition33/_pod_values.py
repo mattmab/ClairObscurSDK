@@ -4,6 +4,7 @@ The opt-in v11 dispatcher independently validates the schema on the game thread.
 No arbitrary struct serialization or native-owned value construction.
 """
 from dataclasses import dataclass
+from collections.abc import Mapping
 import math
 import struct
 from types import MappingProxyType
@@ -28,6 +29,34 @@ PROFILES = MappingProxyType({
     ANCHORS: Profile(ANCHORS, 32, (('Minimum', 0, VECTOR), ('Maximum', 16, VECTOR))),
 })
 _FLOAT_MAX = float.fromhex('0x1.fffffep+127')
+
+
+@dataclass(frozen=True, eq=False)
+class NumericStructValue(Mapping):
+    """Immutable numeric field copies with their exact supported struct path.
+
+    This owns no native allocation or UObject. Calls still revalidate the current
+    parameter schema; retaining this value retains only Python numbers.
+    """
+    path: str
+    _fields: object
+
+    def __post_init__(self):
+        fields = dict(self._fields)
+        encode(self.path, fields)
+        for name, _, kind in PROFILES[self.path].fields:
+            if kind in PROFILES:
+                fields[name] = decode(kind, encode(kind, fields[name]))
+        object.__setattr__(self, '_fields', MappingProxyType(fields))
+
+    def __getitem__(self, key):
+        return self._fields[key]
+
+    def __iter__(self):
+        return iter(self._fields)
+
+    def __len__(self):
+        return len(self._fields)
 
 
 def validate_profile(catalog, descriptor, descriptors):
@@ -65,6 +94,10 @@ def validate_profile(catalog, descriptor, descriptors):
 def encode(path, value):
     """Copy exact named fields; constrain numbers to the verified UI conversion range."""
     profile = PROFILES[path]
+    if type(value) is NumericStructValue:
+        if value.path != path:
+            raise ValueError('Numeric struct type does not match the parameter profile')
+        value = dict(value)
     if type(value) is not dict or set(value) != {name for name, _, _ in profile.fields}:
         raise ValueError('POD arguments require exactly the named fields')
     output = bytearray(profile.width)
@@ -98,4 +131,4 @@ def decode(path, data):
             if not math.isfinite(item) or abs(item) > _FLOAT_MAX:
                 raise ValueError('POD result has an invalid numeric component')
         result[name] = item
-    return MappingProxyType(result)
+    return NumericStructValue(path, result)

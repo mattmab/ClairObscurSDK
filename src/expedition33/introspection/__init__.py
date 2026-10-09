@@ -10,6 +10,7 @@ from ..catalog import capture
 from ..reflection import describe
 from ..values import read_values, StoredArray, StoredStruct
 from .. import ObjectSnapshot, RuntimeQueryError
+from .. import _pod_values
 from .core import Explorer
 
 
@@ -34,7 +35,25 @@ class _StructValue:
         return f'Reflected observation of {self._type.Name}; native state is not owned'
 
 
+class _CopiedNumericStruct(_StructValue):
+    """Expose typed numeric copies to the original WrappedStruct encoder."""
+    def __init__(self, backend, value):
+        self._backend, self._value = backend, value
+        self._observation = SimpleNamespace(truncated=False)
+        self._type = SimpleNamespace(Name=value.path.rsplit('.',1)[1],
+            _properties=lambda: (SimpleNamespace(Name=name) for name in value))
+
+    def __getattr__(self, name):
+        if name not in self._value:
+            raise AttributeError(name)
+        return _adapt(self._backend, self._value[name])
+
+    def __str__(self):
+        return f'Copied numeric {self._type.Name}; no native allocation'
+
+
 def _adapt(backend, value):
+    if isinstance(value, _pod_values.NumericStructValue): return _CopiedNumericStruct(backend, value)
     if isinstance(value, ObjectSnapshot): return backend.wrap(value)
     if isinstance(value, StoredStruct): return _StructValue(backend, value)
     if isinstance(value, StoredArray): return StoredArray(tuple(_adapt(backend, item) for item in value.items), value.length)
@@ -92,6 +111,7 @@ class _Object:
                     def invoke(**arguments):
                         def unwrap(value):
                             if isinstance(value, _Object): return value._observed
+                            if isinstance(value, _CopiedNumericStruct): return value._value
                             if type(value) in (list, tuple): return tuple(unwrap(item) for item in value)
                             return value
                         call = (self._backend.session.invoke_retained if self._backend.retained
@@ -251,6 +271,7 @@ class _Backend:
         self.session = session
         self.retained = bool(session is not None and getattr(session, 'supports_retained_invocation', False))
         self.assignment = bool(session is not None and getattr(session, 'supports_object_assignment', False))
+        self.pod_values = bool(session is not None and getattr(session, 'supports_pod_values', False))
         self.mutation_authorized = self.mutation_completed = False
         self.pending_owner = None
         self.pending_value = object()
@@ -295,6 +316,19 @@ class _Backend:
         if name.startswith('/'):
             return self.find_object('Class', name)
         return self.wrap(self.catalog.by_index[self.catalog.find_class(name).index])
+
+    def make_struct(self, name, **fields):
+        if not self.pod_values:
+            raise UnsupportedCapability('Typed numeric structs require the v11 POD capability')
+        matches = [path for path in _pod_values.PROFILES if name in (path, path.rsplit('.',1)[1])]
+        if len(matches) != 1:
+            raise UnsupportedCapability('Only Vector2D, LinearColor, Margin and Anchors have verified value codecs')
+        fields = {key: value._value if isinstance(value, _CopiedNumericStruct) else value
+                  for key, value in fields.items()}
+        # This is a copied Python value, not native construction. Invocation
+        # planning and the game-thread backend revalidate the current schema.
+        value = _pod_values.decode(matches[0], _pod_values.encode(matches[0], fields))
+        return _CopiedNumericStruct(self, value)
 
     def find_object(self, class_name, path):
         matches = [obj for obj in self.find_all(class_name) if obj._path_name() == path]
@@ -374,6 +408,9 @@ class Harness:
                 result['argument_types'] = (['primitive', '$object', 'fixed_array'] if 'invoke' in self.SUPPORTED else [])
                 if self._backend.retained:
                     result['argument_types'].append('$value')
+                if self._backend.pod_values:
+                    result['argument_types'].append('$struct')
+                result['struct_types'] = list(_pod_values.PROFILES) if self._backend.pod_values else []
                 result['parity_complete'] = False
                 result['write_types'] = ['ObjectProperty'] if self._backend.assignment else []
                 result['limitations'] = ['Stored scalars, strings, references, selected arrays and bounded reflected structs; opaque native state is not owned',
