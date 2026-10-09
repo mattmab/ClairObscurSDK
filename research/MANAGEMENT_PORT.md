@@ -387,3 +387,10 @@ one scope removed only its holder; another scope's reflected getter still worked
 The persistent management host runs v7 with `--leases`, and console-driven lease
 creation/context-manager release passed. Next native step remains atomic
 invocation-output ownership, then a widget lifecycle/focus specimen.
+
+The v8 native retained-invocation specimen now retains a real object output before
+Python acknowledgement and removes its holder on explicit release/session close.
+The next integration is a public owned-result wrapper and Harness lifecycle,
+followed by the bounded Create/add/remove/release widget specimen. Native menu,
+focus recovery and actual key dispatch remain unimplemented. The persistent v7
+console management host was restored after testing; see OBJECT_LEASES.md.

@@ -1,4 +1,5 @@
 #include "invocation_protocol.h"
+#include "retained_call_protocol.h"
 #include <cstdio>
 #include <limits>
 #include <fstream>
@@ -52,5 +53,16 @@ int main(int argc,char** argv) {
     float n=std::numeric_limits<float>::infinity(); std::memcpy(p.data,&n,4); if(!check(p,308)) return 1;
     p=baseline(); p.fields[0].dimension=0; if(!check(p,301)) return 1;
     std::printf("%u native packet checks passed; packet bytes=%zu\n",checks,sizeof(CallPacket));
+    RetainedCallPacket retained{};
+    if(!retained_call_empty(retained)) return 1;
+    retained.count=1; if(retained_call_empty(retained)) return 1;
+    retained.count=0; retained.leases[127].token=1; if(retained_call_empty(retained)) return 1;
+    retained={}; retained.call.field_count=4;
+    retained.call.fields[0]={CallObject,0,8,1,0x80,0,"Input",{}};
+    retained.call.fields[1]={CallClass,8,8,1,0x480,0,"Return",{}};
+    retained.call.fields[2]={CallObject,16,8,3,0x8000180,0,"RefOut",{}};
+    retained.call.fields[3]={CallInt32,40,4,1,0x180,0,"ScalarOut",{}};
+    if(retained_call_slots(retained.call)!=4) return 1;
+    std::printf("Retained envelope: %zu bytes; output/refout selection passed.\n",sizeof(retained));
     return 0;
 }

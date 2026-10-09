@@ -580,3 +580,10 @@ peer-scope cleanup and invocation proof. The persistent host runs v7 via
 object-valued results must be retained inside their invocation request before
 the original retain/release protocol can be enabled without a GC gap. The
 Explorer core remains unchanged. See OBJECT_LEASES.md for API and106-test proof.
+
+The isolated v8 native retained-call path now has live existing-object return,
+null-return, stale-target and exact-holder cleanup proof (OBJECT_LEASES.md).
+It closes the native round-trip ownership gap for its bounded supported types;
+the original Explorer retain protocol remains gated until Python result owners,
+scope adoption, replacement, expiry and release_value are connected and tested.
+No original core changes were made.111 Python tests pass.

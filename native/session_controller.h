@@ -75,7 +75,9 @@ inline void run_runtime_session(DWORD pid, DWORD thread, int32_t object_index, i
     packet.request.object_index = object_index; packet.request.object_serial = object_serial;
     packet.request.function_index = function_index; packet.request.function_serial = function_serial;
     wchar_t executable[32768]; require(GetModuleFileNameW(nullptr, executable, 32768) != 0, "SESSION_SELF_PATH");
-#ifdef E33_LEASE_SESSION
+#ifdef E33_RETAINED_SESSION
+    auto path = std::filesystem::path(executable).parent_path().parent_path() / L"runtime-session-v8" / L"runtime_session_v8.dll";
+#elif defined(E33_LEASE_SESSION)
     auto path = std::filesystem::path(executable).parent_path().parent_path() / L"runtime-session-v7" / L"runtime_session_v7.dll";
 #elif defined(E33_REFLECTED_SESSION)
     auto path = std::filesystem::path(executable).parent_path().parent_path() / L"runtime-session-v6" / L"runtime_session_v6.dll";
@@ -97,6 +99,9 @@ inline void run_runtime_session(DWORD pid, DWORD thread, int32_t object_index, i
 #ifdef E33_LEASE_SESSION
               << ",\"lease_protocol\":1"
 #endif
+#ifdef E33_RETAINED_SESSION
+              << ",\"retained_protocol\":1"
+#endif
               << "}\n" << std::flush;
     std::string command;
     while (std::getline(std::cin, command)) {
@@ -104,6 +109,20 @@ inline void run_runtime_session(DWORD pid, DWORD thread, int32_t object_index, i
         packet.console_text[0]=0; packet.console_dropped=0;
         bool reflected=false;
         bool leased=false;
+        bool retained=false;
+#ifdef E33_RETAINED_SESSION
+        retained=command.substr(0,separator)=="retained-invoke";
+        if(retained) {
+            require(separator!=std::string::npos,"RETAINED_PAYLOAD_MISSING");
+            auto encoded=command.substr(separator+1);
+            require(encoded.size()==sizeof(RetainedCallPacket)*2,"RETAINED_PAYLOAD_SIZE");
+            auto* destination=reinterpret_cast<uint8_t*>(&packet.retained);
+            auto digit=[](char c)->unsigned { if(c>='0'&&c<='9') return c-'0'; if(c>='a'&&c<='f') return c-'a'+10;
+                throw std::runtime_error("RETAINED_PAYLOAD_ENCODING"); };
+            for(size_t i=0;i<sizeof(RetainedCallPacket);++i) destination[i]=static_cast<uint8_t>(digit(encoded[i*2])*16+digit(encoded[i*2+1]));
+            command.resize(separator);
+        }
+#endif
 #ifdef E33_LEASE_SESSION
         auto tag=command.substr(0,separator);
         DWORD lease_action=tag=="lease-acquire" ? SessionLeaseAcquire :
@@ -133,7 +152,7 @@ inline void run_runtime_session(DWORD pid, DWORD thread, int32_t object_index, i
             command.resize(separator);
         }
 #endif
-        if(!reflected && !leased && separator!=std::string::npos) { decode_console_payload(command.substr(separator+1),packet.console_text); command.resize(separator); }
+        if(!reflected && !leased && !retained && separator!=std::string::npos) { decode_console_payload(command.substr(separator+1),packet.console_text); command.resize(separator); }
         DWORD action = command == "enable" ? SessionEnable : command == "disable" ? SessionDisable :
             command == "invoke" ? SessionInvoke : command == "drain" ? SessionDrain :
             command == "ping" ? SessionPing : command == "close" ? SessionClose :
@@ -146,6 +165,9 @@ inline void run_runtime_session(DWORD pid, DWORD thread, int32_t object_index, i
 #endif
 #ifdef E33_LEASE_SESSION
         if(leased) action=lease_action;
+#endif
+#ifdef E33_RETAINED_SESSION
+        if(retained) action=SessionRetainedInvoke;
 #endif
         require(action != 0, "SESSION_UNKNOWN_COMMAND");
         connection.command(action);
@@ -165,6 +187,15 @@ inline void run_runtime_session(DWORD pid, DWORD thread, int32_t object_index, i
             }
         }
         std::cout << ']';
+#ifdef E33_RETAINED_SESSION
+        if(retained) {
+            static const char digits[]="0123456789abcdef";
+            const auto* source=reinterpret_cast<const uint8_t*>(&packet.retained);
+            std::string encoded(sizeof(RetainedCallPacket)*2,'0');
+            for(size_t i=0;i<sizeof(RetainedCallPacket);++i) { encoded[i*2]=digits[source[i]>>4]; encoded[i*2+1]=digits[source[i]&15]; }
+            std::cout << ",\"retained_packet\":" << quote(encoded);
+        }
+#endif
 #ifdef E33_LEASE_SESSION
         if(leased) {
             static const char digits[]="0123456789abcdef";

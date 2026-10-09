@@ -127,3 +127,48 @@ Still pending: atomic retention of object-valued invocation outputs, original
 Explorer retain/release semantics, new-widget collection survival and relaunch
 validation. This existing-object API cannot close the gap between Create's return
 and a later Python retain command. It must not be used to claim that gap is solved.
+
+## Retention inside native invocation — isolated v8, 2026-10-09
+
+Implemented and live-tested: a separate `retained-invoke` operation acquires an
+engine holder for each non-null object/class return or out slot before the
+game-thread invocation returns. Input-only references are captured and scrubbed
+but do not acquire leases. Null outputs require no holder. A preflight checks
+the maximum output-slot count against the session's available holder/token
+capacity before calling the target dispatcher. It does not reserve or allocate
+anything; commands run synchronously on the single game thread.
+
+The new26192-byte envelope wraps the unchanged24648-byte CallPacket plus a
+version, count and128 offset/token records. v8 uses its own DLL, message and
+mapping names; the loaded v5/v6/v7 binaries are untouched. Each holder is published
+in the persistent native session pool before registration. Partial failure after
+dispatch remains `unknown`; the test client aborts its controller without retry,
+allowing existing target-owned watcher cleanup. A partial result is never a
+usable returned value. Fault quarantine and GC deferral retain the v7 rules.
+
+Live evidence: `evidence/retained-call-live.json`, test
+`scripts/verify_live_retained_call.py`. The observed GameplayStatics getter has
+WorldContextObject at0, PlayerIndex at8 and ReturnValue at16, extent24. Ghidra
+thunk14373a480 calls143715460, which searches existing controllers and returns
+null when none matches. Source evidence is in `evidence/retained-getter*.json`.
+
+In gamePID34604, the returned controller236646/83421 gained one engine holder
+at0x2b40b603980 before acknowledgement. The input reference at0 acquired none.
+Release restored the exact baseline holder set. Index-1 returned null with zero
+leases. A stale target was rejected before dispatch(error202). A repeated call's
+unreleased holder was removed by normal session close, again restoring baseline.
+
+Validation:111 Python tests,18 existing native packet checks, retained envelope
+layout/output-selection checks, native ownership fixtures and default v5 compile
+checks pass. v8 builds with /W4 /WX. No forced GC, newly created object, widget,
+partial native fault, live fixed-array out parameter or game relaunch is claimed.
+
+This is still an internal native/transport capability. The public retained-result
+wrapper, mod-scope adoption, original Explorer retain/release/expiry contract and
+v8 launcher/package deployment are next. Existing `Session.invoke` and v7 leases
+retain their previous behavior. Persistent v7 host24516/session
+3f57abac7e494be0acd3236d4fa20ca6 was restored after the controlled test; both mods
+report ready. Logs: `logs/management-host-v7-restored.stderr.log`.
+At01:39:53 the restored in-game console executed Python and logged
+`Persistent v7 console restored after retained-call validation`. The console
+closed normally after submission. The private GitHub remote was reverified.

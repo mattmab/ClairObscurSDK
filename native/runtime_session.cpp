@@ -17,6 +17,21 @@ static ObserverBuffer session_events{};
 static uint64_t runtime_base = 0, target_object = 0, target_function = 0;
 static bool observing = false;
 static unsigned console_toggle_key=0;
+#ifdef E33_RETAINED_SESSION
+static uint32_t retain_preflight(void*,const CallPacket& call) {
+    return static_cast<uint32_t>(session_leases.preflight(lease_session,retained_call_slots(call)));
+}
+static uint32_t retain_output(void* context,uint32_t offset,const CallIdentity& identity) {
+    auto& retained=*static_cast<RetainedCallPacket*>(context);
+    if(retained.count>=kCallObjects) return 401;
+    TargetStrongReferenceOps ops{runtime_base,identity};
+    uint64_t token=0;
+    auto result=session_leases.acquire(ops,lease_session,identity.address,token);
+    if(result!=StrongLeaseResult::Ok) return static_cast<uint32_t>(result);
+    retained.leases[retained.count++]={offset,token};
+    return 0;
+}
+#endif
 
 bool backend_shutting_down() {
     return runtime_base && local_read<uint8_t>(runtime_base + 0x9272cfc) != 0;
@@ -52,6 +67,15 @@ uint32_t backend_open(SessionPacket* packet) {
 uint32_t backend_command(SessionPacket* packet) {
     if (!lifetime_valid()) return 61;
     switch (packet->request.action) {
+#ifdef E33_RETAINED_SESSION
+    case SessionRetainedInvoke: {
+        auto& retained=packet->retained;
+        if(!retained_call_empty(retained)) { retained.call.error=412; return 0; }
+        CallRetention retention{&retained,retain_preflight,retain_output};
+        retained.call.error=reflected_call(runtime_base,retained.call,&retention);
+        return 0;
+    }
+#endif
 #ifdef E33_LEASE_SESSION
     case SessionLeaseAcquire:
     case SessionLeaseRelease:

@@ -36,10 +36,14 @@ int main() {
     uint64_t a=99,b=99,c=99;
     check(pool.begin(0)==R::SessionMismatch,"reject empty session");
     check(pool.begin(10)==R::Ok,"begin");
+    check(pool.preflight(11,1)==R::SessionMismatch,"preflight session ownership");
+    check(pool.preflight(10,2)==R::Ok && !pool.active(),"preflight has no side effects");
     check(pool.acquire(engine,11,100,a)==R::SessionMismatch && a==0,"wrong session");
     check(pool.acquire(engine,10,100,a)==R::Ok && a,"first lease");
     check(pool.acquire(engine,10,100,b)==R::Ok && b!=a,"independent ownership for same object");
     check(pool.active()==2 && engine.allocations.size()==2,"two native holders");
+    check(pool.preflight(10,1)==R::Capacity,"preflight rejects before dispatch");
+    check(pool.preflight(10,0)==R::Ok,"scalar calls require no holder slots");
     check(pool.acquire(engine,10,100,c)==R::Capacity && !c,"bounded capacity");
     check(pool.release(engine,11,a)==R::SessionMismatch,"cross-session release rejected");
     check(pool.release(engine,10,a)==R::Ok && pool.active()==1,"release exactly one");

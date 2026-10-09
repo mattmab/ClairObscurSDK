@@ -36,6 +36,13 @@ public:
         return count;
     }
     bool owns(uint64_t session) const { return session && session==session_; }
+    StrongLeaseResult preflight(uint64_t session,uint32_t count) const {
+        if(!owns(session)) return StrongLeaseResult::SessionMismatch;
+        if(count>Capacity-active()) return StrongLeaseResult::Capacity;
+        if(uint64_t(count)>std::numeric_limits<uint64_t>::max()-next_)
+            return StrongLeaseResult::Exhausted;
+        return StrongLeaseResult::Ok;
+    }
     StrongLeaseResult begin(uint64_t session) {
         if(!session) return StrongLeaseResult::SessionMismatch;
         if(session_ || active()) return StrongLeaseResult::Busy;

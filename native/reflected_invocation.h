@@ -3,7 +3,8 @@
 #include <cmath>
 
 // Uses the target's own dispatcher. No thunk ABI emulation, nontrivial native
-// values, GC roots, cached callable addresses or promise that an RPC body ran.
+// values, cached callable addresses or promise that an RPC body ran. The optional
+// retention sink owns object outputs before this game-thread operation returns.
 inline uint64_t call_identity(uint64_t base, const CallIdentity& id) {
     auto value=fixed_slot(base,id.index,id.serial);
     return value && value==id.address ? value : 0;
@@ -41,7 +42,12 @@ inline bool call_is_class(uint64_t base,uint64_t object) {
     }
     return false;
 }
-inline uint32_t reflected_call(uint64_t base,CallPacket& packet) {
+struct CallRetention {
+    void* context;
+    uint32_t (*preflight)(void*,const CallPacket&);
+    uint32_t (*capture)(void*,uint32_t,const CallIdentity&);
+};
+inline uint32_t reflected_call(uint64_t base,CallPacket& packet,const CallRetention* retention=nullptr) {
     if(auto invalid=validate_call_packet(packet)) return invalid;
     packet.outcome=CallNotDispatched;
     if(packet.version!=kCallVersion || packet.parameter_size>kCallBytes ||
@@ -132,11 +138,16 @@ inline uint32_t reflected_call(uint64_t base,CallPacket& packet) {
         }
         if(!matched) return 220;
     }
+    if(retention) {
+        auto error=retention->preflight(retention->context,packet);
+        if(error) return error;
+    }
     packet.outcome=CallOutcomeUnknown; // A fault/timeout after this point cannot be retried safely.
     using Dispatch=void(__fastcall*)(void*,void*,void*);
     reinterpret_cast<Dispatch>(dispatch)(reinterpret_cast<void*>(object),reinterpret_cast<void*>(function),arguments);
     // Capture and scrub all pointer slots, including input references. Never
-    // publish raw pointer bytes as return values or claim to retain the objects.
+    // publish raw pointer bytes as return values. Only the explicit retention
+    // sink acquires ownership; the established v6/v7 path remains observational.
     packet.object_count=0;
     for(unsigned f=0;f<packet.field_count;++f) {
         const auto& field=packet.fields[f];
@@ -152,6 +163,10 @@ inline uint32_t reflected_call(uint64_t base,CallPacket& packet) {
                 if(!constraint || (field.kind==CallClass && !call_is_class(base,value)) ||
                    !call_derives(base,field.kind==CallClass ? value : local_read<uint64_t>(value+0x10),constraint)) return 224;
                 packet.objects[packet.object_count++]={offset,identity};
+                if(retention && (field.flags&0x500)) {
+                    auto error=retention->capture(retention->context,offset,identity);
+                    if(error) return error; // Session still owns every acquired holder.
+                }
             }
             std::memset(arguments+offset,0,8);
         }
