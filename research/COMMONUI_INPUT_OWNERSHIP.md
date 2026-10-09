@@ -94,3 +94,56 @@ This proves an undisplayed base widget's activation lifecycle only. Next add a
 bounded viewport/tree specimen with a real child focus target and demonstrate
 return to the previously focused game widget, including absent router-config
 state, before exposing native menu open/close through shared management actions.
+
+## Focus getter/setter boundary
+
+The live Widget descriptors correlate with HasKeyboardFocus RVA31000d0,
+HasUserFocus31004b0, SetKeyboardFocus3106fc0 and SetUserFocus310c1e0.
+The getter/setter thunks obtain an existing cached Slate reference via30cede0;
+that helper attempts weak-to-shared promotion of widget+108/+110, with a fallback
+at+f8/+100. It does not construct a widget merely to answer a focus query.
+HasKeyboardFocus calls the Slate object's virtual+1a0 and returns false when
+there is no cached widget. HasUserFocus additionally validates a local player
+controller and resolves its Slate user.
+
+The setters can enqueue a deferred request in the local player's focus machinery
+when the immediate Slate request fails. A returned void call therefore does not
+prove focus moved; independent getter readback and stale-target/teardown handling
+are required. Evidence: `widget-focus-thunks.json` and
+`commonui-focus-restoration.json`. The latter also contains deactivation helper
+4759e40: its observed body resets per-action timing/hold state and is not proof
+of restoring a previous Slate focus owner.
+
+`inspect_live_menu_focus.py` scans keyboard/user focus sequentially over a bounded
+TitleScreen subtree, without setters. Its output is a sequence of observations,
+not an atomic snapshot or a global Slate focus inventory. Desired focus is
+recorded separately from actual focus. The first attempt failed at Python scope
+construction before any engine call; explicit scope cleanup corrected that probe.
+
+The corrected scan completed at10:19:08 on game PID21804: all66 sampled widgets
+returned false for both keyboard and user focus. ContinueButton was returned as
+the desired focus target only. This does not establish absence of focus elsewhere
+in Slate, or that opening/closing the native console preserves prior menu focus.
+No focus setter or input-mode change was executed. The prepared transfer probe
+requires both getters to confirm its explicitly supplied prior owner before it
+displays anything; it remains unvalidated. Preserve this distinction when adding
+the menu recovery contract rather than substituting desired focus for current
+focus. Raw observations: `evidence/main-menu-focus.json`.
+
+## Visible CommonUI lifecycle proof
+
+At10:25:26 on2026-10-09, `verify_live_widget_visible.py` completed on the same
+v13 persistent host and game PID21804 with activatable=True, a disabled Button,
+and the label "SDK CommonUI lifecycle test". The SDK-owned
+CommonActivatableWidget was attached to the viewport and activated; IsActivated,
+IsInViewport, text and layout readbacks passed. A live screenshot showed the
+blue panel and label over the main menu. The label overflowed its panel, so this
+is not finished menu layout or interaction acceptance.
+
+After the bounded45-second observation, deactivation/readback, viewport removal,
+RootWidget restoration, label/child removal and exact engine-holder baseline
+restoration all passed. A second screenshot confirmed panel removal. No focus
+callback, input-mode setter, key mapping or enabled control was used. Evidence:
+`evidence/widget-commonui-visible-live.json` and the persistent host log. This
+extends the earlier undisplayed activation proof to a visible owned widget tree;
+it does not establish CommonUI router integration or focus restoration.

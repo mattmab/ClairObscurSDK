@@ -1,8 +1,9 @@
 """Brief visible UMG specimen on the existing persistent v11/v12 console session.
 
-Uses only SDK-owned objects. It never installs actions, changes input mode, or
-requests focus. The button is disabled before viewport attachment. The bounded
-observation delay runs in the external Python controller, never the game thread.
+Uses only SDK-owned objects. By default it installs no actions, changes no input
+mode, requests no focus, and disables the button before viewport attachment.
+An explicit CommonUI/display callback allows separate interaction specimens.
+The bounded observation delay runs in the external controller, never the game thread.
 """
 from dataclasses import asdict
 import json
@@ -18,9 +19,16 @@ from expedition33._scope import SessionScope
 ROOT = Path(__file__).resolve().parents[1]
 
 
-def run(session, *, hold_seconds=30, label_text=None):
+def run(session, *, hold_seconds=30, label_text=None, activatable=False,
+        button_enabled=False, on_display=None, evidence_name=None):
     if type(hold_seconds) is not int or not 0 <= hold_seconds <= 45:
         raise ValueError('Observation delay must be an integer from 0 through 45')
+    if type(activatable) is not bool or type(button_enabled) is not bool:
+        raise ValueError('Widget activation and enabled options must be boolean')
+    if on_display is not None and not callable(on_display):
+        raise ValueError('Display probe must be callable')
+    if evidence_name is not None and (type(evidence_name) is not str or Path(evidence_name).name != evidence_name):
+        raise ValueError('Evidence name must be a filename')
     assert session.supports_pod_values and session.supports_object_assignment
     if label_text is not None:
         from expedition33._text_wire import encode_units
@@ -39,14 +47,15 @@ def run(session, *, hold_seconds=30, label_text=None):
     baseline = holders()
     scope = SessionScope(session)
     evidence = {'pid':session.pid, 'passed':False, 'baseline_holders':baseline,
-                'input_mode_changed':False, 'focus_requested':False,
+                'input_mode_changed':False, 'focus_requested':None if on_display is not None else False,
+                'display_callback':on_display is not None,
                 'visual_confirmation':'requires separate screenshot observation',
                 'hold_seconds':hold_seconds}
-    path = ROOT/'evidence'/('widget-visible-text-live.json' if label_text is not None else 'widget-visible-live.json')
+    path = ROOT/'evidence'/(evidence_name or ('widget-visible-text-live.json' if label_text is not None else 'widget-visible-live.json'))
     def save(): path.write_text(json.dumps(evidence, indent=2), encoding='utf-8')
     widget = tree = canvas = button = label = None
     label_attached = False
-    attached = assigned = added = uncertain = False
+    attached = assigned = added = uncertain = activated = False
     def mutate(callback, *values, **keywords):
         nonlocal uncertain
         uncertain = True
@@ -57,6 +66,8 @@ def run(session, *, hold_seconds=30, label_text=None):
         current = capture()
         return read_values(current, current.resolve(tree)).values[cls('WidgetTree').index, 'RootWidget']
     try:
+        if activatable:
+            args = dict(args, WidgetType=cls('CommonActivatableWidget'))
         widget = scope.invoke_retained(library, functions['Create'], **args).return_value
         current = capture()
         tree = read_values(current, current.resolve(widget)).values[cls('UserWidget').index, 'WidgetTree']
@@ -67,7 +78,7 @@ def run(session, *, hold_seconds=30, label_text=None):
         attached = True
         evidence['objects'] = {name:asdict(obj) for name,obj in
                                (('widget',widget),('tree',tree),('canvas',canvas),('button',button),('slot',slot))}
-        mutate(scope.invoke, button, enabled, bInIsEnabled=False)
+        mutate(scope.invoke, button, enabled, bInIsEnabled=button_enabled)
         for name, parameter, value in (
             ('SetPosition','InPosition',{'X':80.0,'Y':80.0}),
             ('SetSize','InSize',{'X':420.0,'Y':160.0}),
@@ -95,6 +106,11 @@ def run(session, *, hold_seconds=30, label_text=None):
         assert observed.index == canvas.index and observed.serial == canvas.serial
         mutate(scope.invoke, widget, functions['AddToViewport'], ZOrder=1000)
         added = True
+        if activatable:
+            mutate(scope.invoke, widget, fn('CommonActivatableWidget', 'ActivateWidget'))
+            activated = True
+            assert scope.invoke(widget, fn('CommonActivatableWidget', 'IsActivated')).return_value is True
+            evidence['activated'] = True
         assert scope.invoke(widget, functions['IsInViewport']).return_value is True
         assert dict(scope.invoke(slot, fn('CanvasPanelSlot','GetPosition')).return_value) == {'X':80.0,'Y':80.0}
         assert dict(scope.invoke(slot, fn('CanvasPanelSlot','GetSize')).return_value) == {'X':420.0,'Y':160.0}
@@ -105,9 +121,17 @@ def run(session, *, hold_seconds=30, label_text=None):
         evidence['viewport_added'] = evidence['layout_readback'] = True
         evidence['observation_started_unix'] = time.time()
         save()
+        if on_display is not None:
+            evidence['interaction'] = on_display(scope, widget, button, args['OwningPlayer'])
+            save()
         time.sleep(hold_seconds)
     finally:
         try:
+            if activated and not uncertain:
+                activated = False
+                mutate(scope.invoke, widget, fn('CommonActivatableWidget', 'DeactivateWidget'))
+                assert scope.invoke(widget, fn('CommonActivatableWidget', 'IsActivated')).return_value is False
+                evidence['deactivated'] = True
             if added and not uncertain:
                 added = False
                 mutate(scope.invoke, widget, functions['RemoveFromParent'])

@@ -552,3 +552,17 @@ bytes from an absent optional must not be used as a restoration snapshot. Next
 verify viewport/tree integration and a real child focus target with restoration
 to the game's prior focus owner. This is not yet native menu interaction or key
 dispatch acceptance.
+
+The subsequent read-only TitleScreen focus scan completed66 widget observations
+with no keyboard/user focus reported. Its desired ContinueButton is not a proven
+restoration target. Before enabling interactive native controls, establish focus
+outside the console transition and handle an absent/unresolvable prior owner.
+Keep native key-event dispatch gated on this ownership contract; the shared
+registry/console fallback and typed Harness invocation remain the usable paths.
+
+The next bounded specimen passed live: a visible SDK-owned CommonActivatableWidget
+with disabled Button and text activated, displayed, deactivated and removed,
+restoring RootWidget/children and the exact holder baseline. Visual appearance
+and disappearance were observed. Focus restoration, actionable controls, router
+integration and key dispatch remain pending; the label's panel overflow is also
+not a finished layout. See COMMONUI_INPUT_OWNERSHIP.md for evidence and limits.
