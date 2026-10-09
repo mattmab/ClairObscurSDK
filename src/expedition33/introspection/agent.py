@@ -160,7 +160,8 @@ class AgentBridge:
                 actions=[dict(name=n, **{k: v for k, v in a.items()
                     if k not in ('callback', 'token')}) for n, a in self.actions.items()], last=self.last)
         if op == 'mod_list':
-            return [dict(name=v['folder'], enabled=v['enabled'], version=v['version'])
+            return [dict(name=v['folder'], enabled=v['enabled'], version=v['version'],
+                         cleanup_error=v.get('cleanup_error'))
                     for v in self.registry.views()][:128]
         if op in ('mod_enable', 'mod_disable'):
             if request.get('allow_mutation') is not True:

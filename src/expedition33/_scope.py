@@ -250,7 +250,9 @@ class SessionScope:
         menus_closed = True
         for menu in reversed(self._menus):
             try:
-                if not menu.close(): menus_closed = False
+                if not menu.close():
+                    menus_closed = False
+                    errors.append('native menu cleanup deferred')
             except BaseException as error:
                 menus_closed = False
                 errors.append(type(error).__name__)

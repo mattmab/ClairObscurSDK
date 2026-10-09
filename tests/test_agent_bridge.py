@@ -56,7 +56,7 @@ class AgentTests(unittest.TestCase):
         self.assertFalse(self.request(op='action', name='specimen.add', args={'n': 2})['success'])
         self.assertTrue(self.request(op='mod_enable', mod='Specimen', allow_mutation=True)['success'])
         self.assertEqual(self.request(op='mod_list')['result'],
-            [{'name': 'Specimen', 'enabled': True, 'version': 'test'}])
+        [{'name': 'Specimen', 'enabled': True, 'version': 'test', 'cleanup_error': None}])
 
     def test_failure_diagnostics_no_retry_mutation_and_reentry(self):
         scope = self.loader._loaded['Specimen'][2]
@@ -107,6 +107,12 @@ class AgentTests(unittest.TestCase):
         record[1].disable = fail
         with self.assertRaises(ModError): self.loader.disable('Specimen')
         self.assertFalse(self.bridge.actions)
+        reply = self.request(op='mod_enable', mod='Specimen', allow_mutation=True)
+        self.assertFalse(reply['success'])
+        self.assertIn('restart the controller', reply['error']['message'])
+        row = self.request(op='mod_list')['result'][0]
+        self.assertFalse(row['enabled'])
+        self.assertIn('cleanup', row['cleanup_error'])
 
     def test_output_result_limits_logs_and_foreign_thread(self):
         out = BoundedText()

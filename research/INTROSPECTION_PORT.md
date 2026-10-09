@@ -871,3 +871,30 @@ holder cleanup passed. Output was visible in-game. See
 `button-v16-package-harness-progress.json`, `button-v16-package-harness-live.json`
 and `logs/button-v16-package.stderr.log`. This confirms the enum adapter after
 relaunch, not full Harness parity or gameplay transition coverage.
+
+## Reload prerequisite: failed-cleanup guard — 2026-10-09
+
+Auditing the original agent's cleanup-before-replacement rule found that the
+Expedition 33 loader previously allowed re-enable after disable/cleanup failure.
+It also discarded the loaded record on unload, allowing load to bypass that
+failure. The loader now remembers cleanup failures for its lifetime and rejects
+both load and enable for that folder. Unload still releases Python module and
+Registry references, but cannot erase the guard. A fresh controller is required
+before another attempt; the preceding controller must finish normal shutdown.
+A failed mod's callback is not automatically retried.
+
+ModStatus, Registry views and agent mod_list expose cleanup_error. Scope close
+now reports a deferred native-menu close as incomplete cleanup; its menu and
+protected leases remain session-owned for existing transport draining/shutdown.
+Revocation of mod actions/console registrations still runs on error. This does
+not claim rollback of arbitrary mod side effects or that deferred cleanup is
+permanent; the conservative guard avoids inferring safety from a later poll.
+
+All308 source tests pass. Added cases cover disable failure, command revocation,
+blocked enable and unload/load bypass, fresh-loader recovery, and deferred-menu
+ownership. Existing menu tests still verify that pending leases stay protected.
+The bridge test confirms failed enable reports inner success=false and includes
+the cleanup error in mod_list. Evidence: evidence/reload-cleanup-tests.log.
+This is source/test validation, not a live fault-injection claim; the running
+immutable candidate remains on its previously validated code. Staged digest
+reload, dependency replacement and original core reload are still pending.

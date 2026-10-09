@@ -72,6 +72,42 @@ class ModTests(unittest.TestCase):
             self.assertFalse(any(key.startswith('_expedition33_mod_') for key in set(sys.modules) - before))
             self.assertEqual(loader.status(), ())
 
+    def test_cleanup_failure_blocks_replacement_even_after_unload(self):
+        self.source('class Mod:\n def enable(self, session):\n  session.console.register("specimen", lambda _: "old", owner=self)\n def disable(self): raise RuntimeError("cleanup failed")\n')
+        with ModLoader(self.root, session=FakeSession()) as loader:
+            loader.load('Specimen'); loader.enable('Specimen')
+            with self.assertRaisesRegex(ModError, 'cleanup failed'):
+                loader.disable('Specimen')
+            self.assertFalse(loader.status()[0].enabled)
+            self.assertIn('cleanup failed', loader.status()[0].cleanup_error)
+            self.assertIn('cleanup failed', loader.registry.views()[0]['cleanup_error'])
+            self.assertNotIn('specimen', loader._session.console.dispatcher.command_names)
+            with self.assertRaisesRegex(ModError, 'restart the controller'):
+                loader.enable('Specimen')
+            loader.unload('Specimen')
+            # Replacing the file or dropping its module must not erase the failure.
+            self.source('class Mod:\n def enable(self, session): pass\n def disable(self): pass\n')
+            with self.assertRaisesRegex(ModError, 'restart the controller'):
+                loader.load('Specimen')
+        with ModLoader(self.root) as fresh:
+            fresh.load('Specimen'); fresh.enable('Specimen')
+            self.assertTrue(fresh.status()[0].enabled)
+
+    def test_deferred_menu_cleanup_is_not_reported_as_success(self):
+        self.source('class Mod:\n def enable(self, session): pass\n def disable(self): pass\n')
+        with ModLoader(self.root, session=FakeSession()) as loader:
+            loader.load('Specimen'); loader.enable('Specimen')
+            scope = loader._loaded['Specimen'][2]
+            calls = []
+            scope._menus.append(SimpleNamespace(close=lambda: calls.append('close') or False))
+            with self.assertRaisesRegex(ModError, 'native menu cleanup deferred'):
+                loader.disable('Specimen')
+            self.assertEqual(calls, ['close'])
+            self.assertTrue(scope._closed)
+            with self.assertRaisesRegex(ModError, 'restart the controller'):
+                loader.enable('Specimen')
+            self.assertFalse(loader._session.closed)
+
     def test_owner_poll_exception_is_contained_and_cleanup_runs(self):
         self.source('class Mod:\n def enable(self, session): pass\n def poll(self): raise SystemExit("pump")\n def disable(self): pass\n')
         with ModLoader(self.root) as loader:

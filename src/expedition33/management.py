@@ -185,6 +185,8 @@ class Registry:
                 'version': definition.version, 'protected': definition.protected,
                 'enabled': self._enabled(entry), 'generation': entry.generation,
                 'error': entry.error, 'persistence': self._settings is not None,
+                'cleanup_error': next((getattr(s, 'cleanup_error', None)
+                    for s in self._loader.status() if s.name == entry.name), None),
                 'options': [{'id': option.id, 'title': option.title, 'kind': option.kind,
                     'value': option.validate(entry.preferences.get('options', {}).get(option.id, option.default)),
                     'default': copy.deepcopy(option.default), 'minimum': option.minimum,

@@ -94,6 +94,7 @@ class MenuOwnershipTests(unittest.TestCase):
         scope._menus=[m]; s.reply=(813,2,1)
         lease=ObjectLease(s,7,object()); s._leases.add(lease); m._leases=(lease,)
         scope._leases=[lease]
-        scope.close()
+        with self.assertRaisesRegex(RuntimeError, 'native menu cleanup deferred'):
+            scope.close()
         self.assertEqual(lease._state,'pending_release')
         self.assertTrue(m.close_pending and m in s._menus and lease in s._leases)

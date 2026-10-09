@@ -23,6 +23,7 @@ class ModError(RuntimeError):
 class ModStatus:
     name: str
     enabled: bool
+    cleanup_error: str | None = None
 
 
 def _error(phase, error):
@@ -44,6 +45,9 @@ class ModLoader:
         self._polling = False
         self._disabling = set()
         self._enabling = set()
+        # A failed cleanup may have external effects beyond SDK-owned resources.
+        # Keep the failure across unload/load; only a fresh controller can reset it.
+        self._cleanup_failures = {}
         self.stop_requested = False
         self.registry = Registry(self, settings)
         from .introspection.agent import AgentBridge
@@ -65,6 +69,7 @@ class ModLoader:
 
     def load(self, name):
         self._check_thread()
+        self._check_cleanup(name)
         if name in self._loaded:
             return
         if name not in self.discover():
@@ -91,6 +96,7 @@ class ModLoader:
 
     def enable(self, name, *, console=False, console_key=None):
         record = self._record(name)
+        self._check_cleanup(name)
         if name in self._enabling or name in self._disabling:
             raise ModError('Recursive mod lifecycle transition is not supported')
         if record[2] is not None:
@@ -156,7 +162,14 @@ class ModLoader:
                     failure = ModError(f'{failure}; {close_error}') if failure else close_error
             self._disabling.discard(name)
         if failure:
+            self._cleanup_failures[name] = str(failure)
             raise failure from None
+
+    def _check_cleanup(self, name):
+        if name in self._cleanup_failures:
+            raise ModError('Previous cleanup failed for ' + repr(name) +
+                           '; restart the controller before loading/enabling it: ' +
+                           self._cleanup_failures[name])
 
     def poll(self, name=None):
         """Drain shared transport once, then poll selected/all enabled mods."""
@@ -216,7 +229,8 @@ class ModLoader:
     def status(self):
         self._check_thread()
         return tuple(ModStatus(name, record[2] is not None and name not in self._enabling
-                               and name not in self._disabling) for name, record in self._loaded.items())
+                               and name not in self._disabling,
+                               self._cleanup_failures.get(name)) for name, record in self._loaded.items())
 
     def close(self):
         self._check_thread()
