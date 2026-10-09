@@ -17,7 +17,3 @@ cl /nologo /W4 /WX /EHsc /std:c++17 /O2 /Zi /DE33_REFLECTED_SESSION /DE33_LEASE_
 set "BUILD_RESULT=%errorlevel%"
 popd
 exit /b %BUILD_RESULT%
-
-
-
-
