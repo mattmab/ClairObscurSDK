@@ -166,3 +166,36 @@ primitives still require reflected schema/value codecs, identity/lifetime checks
 versioned runtime transport and original Harness integration. Lock order is slot
 storage then queue; queue operations must not call back into slot registration.
 The callback must be detached before destroying its stable queue/context owner.
+
+## Reflected scalar trace planning — 2026-10-09
+
+src/expedition33/tracing.py now prepares immutable observation-only trace plans.
+Invocation parameter metadata validation was extracted into a shared helper,
+preserving its existing width, overlap, ownership and return-offset checks.
+Trace planning routes normal parameters to locals, out/ref parameters to separately
+resolved out records, and return parameters to the independent result pointer.
+Fixed arrays expand into bounded elements. Packed booleans receive independent
+capture destinations with explicit masks, avoiding byte-overlap in trace_copy.
+
+This initial schema supports the existing scalar numeric/bool codecs. Object/class
+fields explicitly require a trace-specific identity codec; other owned values
+remain rejected by shared schema validation. Native functions are required, with
+bounded image RVA, parameter size, normalized fields and capture bytes. A plan
+has no native registration authority and does not establish a readable frame.
+
+All352 source tests pass, including existing invocation regression tests and new
+trace routing, packed-bool, array, overlap, return metadata, bytecode and pointer
+rejection checks. Evidence: evidence/trace-schema-tests.log.
+
+Read-only live verification on game39900 passed via
+scripts/verify_live_trace_plans.py. Observed specimens:
+- Actor:IsActorBeingDestroyed, index10700, RVA333be80: one return byte.
+- Actor:SetActorTickEnabled, index10764, RVA333fe80: one local bool input.
+- PlayerController:GetViewportSize, index17940, RVA3b26b70: two separately resolved
+  int out records, SizeX and SizeY, normalized into8 bytes.
+
+Raw identities/layout plans are in evidence/trace-plans-live.json and its log.
+No functions were executed or hooks installed. These are metadata-backed storage
+plans, not proof of observed frame addresses or general tracing functionality.
+Native schema revalidation, frame/out-chain resolution, transport, value decoding
+and Harness wiring remain pending. The current packaged controller is unchanged.

@@ -204,9 +204,7 @@ def _observed_pod_profile(catalog, row, descriptors):
     return obj, profile
 
 
-def _prepare(catalog, target, function, descriptor, arguments, *, pod_values=False, text_values=False, enum_values=False):
-    if type(arguments) is not dict or any(type(key) is not str for key in arguments):
-        raise ValueError('Arguments must be a dictionary of parameter names')
+def _parameter_schema(catalog, function, descriptor, *, pod_values=False, text_values=False, enum_values=False):
     info = descriptor.function
     if info is None or not descriptor.owners or descriptor.owners[0]['index'] != function.index:
         raise ValueError('Function metadata is missing or inconsistent')
@@ -275,6 +273,15 @@ def _prepare(catalog, target, function, descriptor, arguments, *, pod_values=Fal
     if (len(returns) > 1 or (returned == 65535) != (len(returns) == 0) or
             (returns and (returns[0].offset != returned or returns[0].dimension != 1))):
         raise ValueError('Return property does not match function metadata')
+    return size, extent, returned, tuple(parameters)
+
+
+def _prepare(catalog, target, function, descriptor, arguments, *, pod_values=False, text_values=False, enum_values=False):
+    if type(arguments) is not dict or any(type(key) is not str for key in arguments):
+        raise ValueError('Arguments must be a dictionary of parameter names')
+    size, extent, returned, parameters = _parameter_schema(
+        catalog, function, descriptor, pod_values=pod_values, text_values=text_values, enum_values=enum_values)
+    info = descriptor.function
     expected_inputs = {parameter.name for parameter in parameters if parameter.input}
     if set(arguments) != expected_inputs:
         raise ValueError(f'Argument names mismatch; missing={sorted(expected_inputs - arguments.keys())}, extra={sorted(arguments.keys() - expected_inputs)}')
