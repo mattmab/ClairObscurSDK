@@ -1,9 +1,11 @@
 # Experimental native object leases — 2026-10-09
 
-The v7 transport implements target-derived strong UObject leases, exposed through
-Session and mod scopes for existing objects. Full Explorer result retention is
-unfinished. The initial native proof and subsequent public API proof are recorded
-below. Target: Steam23765773, executable SHA256
+The v7 transport implements target-derived strong UObject leases for existing
+objects. v8 adds public retained invocation, scope ownership and original Explorer
+retained values, with live proof recorded below. New base UserWidget creation and
+retention passed, but its viewport lifecycle exposed lazy registry serial
+assignment: new-object stable identities remain an implementation gate. See
+WIDGET_OWNERSHIP.md. Target: Steam23765773, executable SHA256
 218a2478aad5b3a1674b5d7097ec1ac4f994abb95466f9da1407fcd39d639618.
 
 ## Implementation

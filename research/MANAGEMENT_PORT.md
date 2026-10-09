@@ -5,6 +5,13 @@ implemented; no E33 native menu or general keybind implementation is claimed. Th
 Harness remain operational. The full additional request, including all17 live
 acceptance tests, is preserved locally in USER_REQUEST_MANAGEMENT.txt.
 
+2026-10-09 widget progress: base UserWidget creation and same-operation native
+retention passed live through persistent console Python. The viewport call exposed
+lazy zero-to-assigned registry serials and failed the SDK post-call identity check.
+Explicit fresh-identity removal and lease cleanup passed; no call was retried.
+See WIDGET_OWNERSHIP.md. Stabilizing new-object serials before publication precedes
+the complete UMG lifecycle test; no native menu or general key dispatch is claimed.
+
 ## Preserved implementation references
 
 Primary source is the installed BL4 sdk_mods directory. Nineteen original files

@@ -1,9 +1,63 @@
 # Native widget ownership investigation — 2026-10-09
 
-Current status: the generic holder is integrated into an experimental v7 lease
-transport with live registration/release and controller-exit cleanup proof. See
-OBJECT_LEASES.md. The earlier investigation stages below preserve their original
-evidence boundaries; public Harness retain and new-widget lifetime remain open.
+Current status: v8 public retained invocation and original Harness retained values
+are implemented and live-tested (OBJECT_LEASES.md). A base UserWidget was created
+and retained in the live game, but its first viewport operation exposed lazy
+registry serial assignment. The complete create/add/remove specimen did not pass;
+stable identities for newly created objects are the next implementation gate.
+Earlier investigation stages below preserve their original evidence boundaries.
+
+## Base UserWidget specimen and lazy serial assignment — 2026-10-09
+
+The live read-only probe `scripts/inspect_widget_initialization.py` confirmed
+UserWidget class696, CDO30457, constructor143112f70 and initializer143120090.
+The constructor forwards to143114800. Initializer virtual+318 constructs a
+WidgetTree at widget+278 when missing; its native-class callback virtual+320 is
+the empty function141004480. Virtual+350 is1431231a0, which includes initialized
+event dispatch. Raw class flags30e810a1 were recorded, not interpreted by stock
+UE constants. The original BL4 menu's direct UserWidget/tree construction was
+used as a reference, not as proof that E33 creation would work.
+
+`scripts/verify_live_widget_lifecycle.py` preflight verified exact reflected
+parameters: WidgetBlueprintLibrary.Create32 bytes, UserWidget.AddToViewport4,
+Widget.IsInViewport1 and Widget.RemoveFromParent0. The specimen was entered with
+`py` through the existing native console and persistent v8 host, without a second
+controller. Create returned a new base UserWidget236314, serial0, named
+UserWidget_2147464901. Its native generic holder existed before Python received
+the result; total generic holders increased3 to4. IsInViewport initially returned
+false. No game-specific widget asset, input mode, focus or GC command was used.
+
+AddToViewport dispatched but returned error223/outcome unknown because the strict
+post-dispatch target identity check no longer matched. No add retry was made.
+Read-only observation found the same index/address/class/name, now serial86451,
+with a registered SObjectWidget holder. The SDK test scope released its own holder
+and the generic-holder baseline returned to3. Thus creation/retention is proven,
+but this run is deliberately recorded as a failed end-to-end lifecycle test.
+
+Explicit recovery used a fresh catalog identity, acquired a temporary SDK lease,
+confirmed IsInViewport=true, called RemoveFromParent once, and confirmed false.
+Scope cleanup restored the exact three original generic holders. The first
+recovery preflight stopped before dispatch because it compared mutable registry
+flags too; the corrected preflight compares identity/ownership fields and the
+native operation still performs its full validation. Recovery completed at
+02:06:52 with the same persistent Python host39652/session still active.
+
+The viewport path143049ba0 calls1413c5c50 to make an index/serial weak identity.
+That helper calls1413ab8b0 with the object array and index. The latter reads the
+item's serial at+10; if zero, it atomically increments the array counter at+b0
+and compare-exchanges the new serial into the item, returning the winning value.
+This explains the observed zero-to-assigned transition. Serial0 must not become
+a wildcard, nor should the existing identity guard be relaxed. Next: verify the
+allocator ABI/assembly and establish an engine-managed serial while retaining a
+new return value on the game thread, before publishing its identity to Python.
+Use a fresh candidate DLL path; v8 remains loaded in the running game.
+
+Evidence: widget-initialization-live.json, widget-initializer.json,
+widget-base-callbacks.json, widget-native-ctor.json, widget-lifecycle-preflight.json,
+widget-lifecycle-live.json, widget-weak-assign.json and widget-serial-allocate.json
+under local evidence/. Ghidra's verified constructor definition was saved.
+Native menu rendering, child construction/property writes, focus recovery and
+key dispatch remain unfinished; this blank widget is not a Mods Menu.
 
 Target: Steam23765773, SHA256
 218a2478aad5b3a1674b5d7097ec1ac4f994abb95466f9da1407fcd39d639618.
