@@ -68,9 +68,17 @@ struct CallEnumValidation {
     // Null value validates an output's type without treating zero as an input.
     bool (*validate)(uint64_t,uint64_t,const CallIdentity&,const uint8_t*);
 };
+struct CallEntryValidation {
+    bool (*owned)(uint64_t address, uint64_t expected, uint64_t current);
+};
+inline bool call_entry_matches(uint64_t address, uint64_t expected, const CallEntryValidation* validator) {
+    const auto current = local_read<uint64_t>(address);
+    return current == expected || (validator && validator->owned && validator->owned(address, expected, current));
+}
 inline uint32_t reflected_call(uint64_t base,CallPacket& packet,const CallRetention* retention=nullptr,
                                const CallPodValidation* pod=nullptr,const CallTextHandling* text=nullptr,
-                               const CallEnumValidation* enums=nullptr,bool validate_only=false) {
+                               const CallEnumValidation* enums=nullptr,bool validate_only=false,
+                               const CallEntryValidation* entry_validation=nullptr) {
     const bool pod_enabled=pod && pod->validate;
     const bool enum_enabled=enums && enums->packet && &enums->packet->call==&packet && enums->validate &&
         pod_enabled && retention && retention->preflight && retention->capture && !text;
@@ -99,7 +107,7 @@ inline uint32_t reflected_call(uint64_t base,CallPacket& packet,const CallRetent
        local_read<uint16_t>(function+0xb6)!=packet.parameter_size ||
        local_read<uint16_t>(function+0xb8)!=packet.return_offset ||
        local_read<int32_t>(function+0x58)!=static_cast<int32_t>(packet.allocation_extent) ||
-       packet.entry_rva>=166776832 || local_read<uint64_t>(function+0xd8)!=base+packet.entry_rva) return 204;
+       packet.entry_rva>=166776832 || !call_entry_matches(function+0xd8,base+packet.entry_rva,entry_validation)) return 204;
     // First transport supports native functions. Blueprint frames, latent paths
     // and native value construction are separate implementation gates.
     if(!(packet.function_flags&0x400)) return 205;
@@ -205,7 +213,7 @@ inline uint32_t reflected_call(uint64_t base,CallPacket& packet,const CallRetent
            local_read<DWORD>(base+0x9272d30)!=GetCurrentThreadId() || local_read<uint8_t>(base+0x9272cfc) ||
            local_read<uint8_t>(base+0x934e968) || local_read<uint8_t>(base+0x9272cea) ||
            (local_read<uint32_t>(object+8)&0x40000000) ||
-           local_read<uint64_t>(function+0xd8)!=base+packet.entry_rva ||
+           !call_entry_matches(function+0xd8,base+packet.entry_rva,entry_validation) ||
            local_read<uint64_t>(local_read<uint64_t>(object)+0x268)!=dispatch) return 229;
         for(unsigned i=0;i<packet.object_count;++i)
             if(!call_identity(base,packet.objects[i].identity)) return 229;

@@ -82,5 +82,8 @@ public:
     bool pop(Ticket ticket, Event& event) { return queue_.pop(ticket, event); }
     QueueStatus status(uint64_t now) { return queue_.status(now); }
     uint64_t rejected() const { return rejected_.load(); }
+    bool allows_entry(void* volatile* address, Entry expected, Entry current) const {
+        return handle_ && Slots::matches(handle_, address, expected, current);
+    }
 };
 }

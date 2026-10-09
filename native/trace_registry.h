@@ -43,6 +43,15 @@ public:
                 item->cleanup = item->registration.maintain(storage == Storage::ready, now);
         }
     }
+    bool allows_entry(uint64_t address, uint64_t expected, uint64_t current) const {
+        if (!session_ || thread_ != GetCurrentThreadId()) return false;
+        for (const auto& item : items_) if (item &&
+            reinterpret_cast<uint64_t>(Ops::entry(item->context)) == address &&
+            Ops::storage(item->context) == Storage::ready &&
+            item->registration.allows_entry(reinterpret_cast<void* volatile*>(address),
+                reinterpret_cast<Entry>(expected), reinterpret_cast<Entry>(current))) return true;
+        return false;
+    }
     void command(Packet& packet) {
         if (!valid_request(packet)) { packet.error = 930; return; }
         if (!session_ || thread_ != GetCurrentThreadId()) { packet.error = 931; return; }

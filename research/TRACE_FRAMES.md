@@ -413,3 +413,31 @@ checks still expect the original entry; calls through SDK invocation must accoun
 for our own validated observer entry before using them to trigger a live trace.
 No claim of live trace functionality is made by this build. The mapped v17 binary
 and running controller were not overwritten.
+
+## Invocation compatibility with owned trace entries — 2026-10-09
+
+The reflected invocation entry check now accepts an optional native-only ownership
+validator. The default remains exact original-entry equality. The v18 runtime
+supplies its active registry validator to plain, retained, enum and text invocation
+paths, including the text path's post-construction revalidation. It accepts only
+the exact active registration's engine entry slot, immutable original function,
+and published thunk. The registry additionally requires its current game thread
+and ready storage lifetime. This allowance is not supplied in controller packets
+and does not authorize third-party entries or bypass function/schema checks.
+
+TraceSlots exposes a locked identity match without reading engine storage;
+registration and registry layers limit that check to their active ownership.
+After removal, stale thunk addresses no longer qualify. The executable entry-guard
+fixture uses the production reflected-call helper and checks active, foreign-slot,
+wrong-original, third-party and stale-entry cases. An initial fixture used two
+identical empty functions that the linker folded to one address; giving the foreign
+function distinct behavior corrected that test specimen. The corrected fixture,
+registry ownership checks, v18 build and v17 menu/button regression build all pass.
+Evidence: test-trace-invocation-entry-guard.log, test-trace-registry-entry-guard.log,
+test-button-delegate-pool-entry-guard.log and trace-v18-build.log.
+
+This establishes native entry validation behavior, not live invocation tracing.
+Python planning must still retain the original entry metadata for a function whose
+current reflection entry points outside the executable to our thunk. Session trace
+methods, scoped ownership and Harness integration remain pending. The v18 candidate
+has not been loaded into the game.

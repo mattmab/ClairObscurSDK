@@ -6,6 +6,13 @@
 #include "target_trace_registry.h"
 static e33_trace::Registry<TargetTraceOps> session_traces;
 static uint32_t trace_cleanup_error = 0;
+static bool session_trace_entry(uint64_t address, uint64_t expected, uint64_t current) {
+    return session_traces.allows_entry(address, expected, current);
+}
+static const CallEntryValidation trace_entry_validation{session_trace_entry};
+#define E33_TRACE_ENTRY_VALIDATION (&trace_entry_validation)
+#else
+#define E33_TRACE_ENTRY_VALIDATION nullptr
 #endif
 #ifdef E33_POD_SESSION
 #include "target_pod_schema.h"
@@ -282,7 +289,7 @@ static uint32_t guarded_text_invoke(const CallRetention* retention) {
     __try {
         const auto handling=session_text.handling();
         return reflected_call(session_text.base,session_text_packet.retained.call,
-                              retention,session_pod_validation,&handling);
+                              retention,session_pod_validation,&handling,nullptr,false,E33_TRACE_ENTRY_VALIDATION);
     } __except(EXCEPTION_EXECUTE_HANDLER) { return 708; }
 }
 #endif
@@ -424,11 +431,11 @@ uint32_t backend_command(SessionPacket* packet) {
 #ifdef E33_ENUM_SESSION
         if(retained.call.version==kEnumCallVersion) {
             CallEnumValidation enums{&retained,validate_target_enum};
-            retained.call.error=reflected_call(runtime_base,retained.call,&retention,session_pod_validation,nullptr,&enums);
+            retained.call.error=reflected_call(runtime_base,retained.call,&retention,session_pod_validation,nullptr,&enums,false,E33_TRACE_ENTRY_VALIDATION);
             return 0;
         }
 #endif
-        retained.call.error=reflected_call(runtime_base,retained.call,&retention,session_pod_validation);
+        retained.call.error=reflected_call(runtime_base,retained.call,&retention,session_pod_validation,nullptr,nullptr,false,E33_TRACE_ENTRY_VALIDATION);
         return 0;
     }
 #endif
@@ -469,7 +476,7 @@ uint32_t backend_command(SessionPacket* packet) {
 #endif
 #ifdef E33_REFLECTED_SESSION
     case SessionReflectedInvoke:
-        packet->call.error=reflected_call(runtime_base,packet->call,nullptr,session_pod_validation);
+        packet->call.error=reflected_call(runtime_base,packet->call,nullptr,session_pod_validation,nullptr,nullptr,false,E33_TRACE_ENTRY_VALIDATION);
         return 0; // A rejected plan is a normal response, not a transport failure.
 #endif
     case SessionConsoleKey: {

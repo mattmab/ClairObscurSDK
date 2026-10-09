@@ -88,6 +88,13 @@ public:
         auto previous = InterlockedCompareExchangePointer(slot.address, original_entry, thunk);
         return previous == thunk || previous == original_entry;
     }
+    static bool matches(size_t handle, void* volatile* address, Entry expected, Entry current) {
+        Guard guard;
+        if (!handle || handle > used_) return false;
+        const auto& slot = slots_[handle - 1];
+        return slot.post && slot.address == address &&
+            slot.original.load(std::memory_order_acquire) == expected && entries_[handle - 1] == current;
+    }
     static bool detach(size_t handle) {
         Guard guard;
         if (!handle || handle > used_) return false;
