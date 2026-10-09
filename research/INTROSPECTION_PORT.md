@@ -951,3 +951,53 @@ Example (hash the installed file after editing; never reuse a pre-edit digest):
 python -I -S -B scripts/e33_agent.py --allow-mutation reload MyMod --expected-sha256 <64-lowercase-hex-digest>
 python -I -S -B scripts/e33_agent.py --allow-mutation reload-changed MyMod --expected-sha256 <64-lowercase-hex-digest>
 ```
+
+## Staged archive preflight and authoring — 2026-10-09
+
+The original bridge delegates staged .sdkmod cleanup, backup and cache invalidation
+to a fixed game-specific loader. That loader is not in the preserved Harness
+subset and must not be assumed compatible with Expedition 33. The independent
+adapter now has a reusable preparation layer in expedition33.mod_archive:
+read_candidate verifies the expected archive SHA256, captures all files as an
+immutable tuple of bytes, and compiles Python source without executing it.
+Candidate preparation does not stop a mod, extract files, install code or change
+the running controller. Installation/activation remain pending.
+
+The current archive layout is root mod.py plus relative source/resources. Limits
+are 32 MiB compressed archive, 64 MiB expanded total, 4 MiB per file and512 ZIP
+entries. Preflight rejects missing entry point, digest mismatch, corrupt ZIP,
+encryption, links/special files/reparse entries, path traversal, Windows device
+names and stream syntax, trailing dots/spaces, duplicate/case-colliding paths,
+file/directory conflicts, bytecode/VCS metadata, and invalid Python syntax.
+Digest validation is byte identity, not a signature or execution sandbox.
+
+scripts/mod_archive.py builds deterministic ZIP candidates and inspects them
+with isolated -I -S -B Python. Build excludes .git/__pycache__ and .pyc/.pyo,
+rejects source links/junctions, bounds reads, and preflights the resulting bytes.
+It refuses to overwrite an existing output or place output inside the source.
+The inventory reports the archive hash, file count, expanded size and individual
+file hashes. No candidate is implicitly sent to or activated by the live game.
+
+All321 tests pass. Archive tests cover immutable snapshots despite subsequent
+file changes, no source execution, portable path/alias rejection, symbolic links,
+size limits, corruption, deterministic builds, resource preservation, isolated
+CLI round trips and overwrite refusal. Evidence: evidence/mod-archive-tests.log.
+The isolated CLI also built and inspected the actual ManagementExample source:
+evidence/ManagementExample-staged-preflight.zip,
+evidence/mod-archive-build.json and evidence/mod-archive-inspect.json.
+Archive SHA256: d9e0575ba44fc8d16f24fd8c0a23fda52f75f2eac86b920f9bb973088c73919c.
+
+Usage:
+
+```text
+python -I -S -B scripts/mod_archive.py build mods/MyMod staging/MyMod.zip
+python -I -S -B scripts/mod_archive.py inspect staging/MyMod.zip --expected-sha256 <archive-digest>
+```
+
+Remaining staged-adapter gates: package-local dependency isolation and eviction,
+fixed configured staging paths, same-volume prepared installation with backup and
+recovery journal, cleanup-before-swap, explicit failed-import state, and live
+replacement/cleanup/relaunch verification. These are required before advertising
+staged_archive_install support; installed-entry reload remains the only activated
+reload path. General traces, keybind/editor work and full Harness parity remain
+unfinished.
