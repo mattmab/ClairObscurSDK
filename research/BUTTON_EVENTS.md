@@ -568,3 +568,51 @@ This is an offline-verified candidate, not a new validated release. Live use fro
 this package after a fresh game launch remains required; current source-session
 proof cannot establish which DLL a newly launched packaged controller would load
 while another copy is already resident in the game.
+
+## Fresh-game packaged button proof
+
+The previous game PID21804, source management Python23916 and native controller19188
+all exited0 through the game's normal Quit/Confirm UI. Steam launched PID16344.
+Its module inventory showed only the candidate's runtime_session_v16.dll among
+SDK session runtimes, at the candidate directory above and with the expected
+9334f2b9...372cd8 SHA256. The test controller also ran from that candidate's v16
+directory; the isolated Python traceback identifies the candidate's SDK source.
+
+The packaged `verify_live_button_input.py --noninteractive-label` passed after
+three separate mouse clicks delivered registration1 sequence1,2,3. The second
+Python callback exception was retained and the third delivered normally. A click
+after explicit removal produced no extra event. The same viewport focus and exact
+holder baseline were restored; root and both children were removed and the test
+session closed normally with process exit0. This establishes this button path
+after game relaunch, including package provenance, not merely reconnection to an
+already resident source runtime. No gameplay/save was selected.
+
+Evidence: `button-v16-source-exit.json`, `button-v16-package-relaunch.json`,
+`button-v16-package-input-progress.json`, `button-v16-package-input-live.json`,
+`button-v16-package-input-run.log`. Original probe outputs also remain in the
+candidate's local evidence directory, which was created after archive verification.
+The immutable archive is unchanged.
+
+## Packaged console and Harness regression after relaunch
+
+The same fresh game PID16344 then accepted the candidate's isolated management
+host with `--button-actions` (Python16692, native24140). Native-console Python
+printed its candidate import path and True for button-action capability. Two
+separate commands retained `package_counter`, changing40 to42. The unchanged
+original Harness enum specimen passed in that persistent session at13:13:02:
+named enum input/typed results, retained reuse/release, invalid-value rejection,
+child removal and exact holder cleanup. Its output appeared in the native console.
+
+Native `stat fps` visibly enabled the FPS overlay and a second invocation removed
+it. `mods` listed the enabled Harness and protected management mod through the
+shared registry, without a UMG menu. Tilde opened the small and expanded console;
+closing returned to the main menu. No save or gameplay session was entered.
+
+Evidence: `button-v16-package-harness-progress.json`,
+`button-v16-package-harness-live.json`, `button-v16-package-harness-status.json`,
+`button-v16-package-final-processes.json`, and
+`logs/button-v16-package.stderr.log`. The packaged host remains running. This
+proves these regressions after relaunch; it does not prove this host's shutdown,
+keyboard activation, gameplay/map transitions, or a complete native Mods Menu.
+The next implementation gate is routing owned native controls into the existing
+management registry, then validating keyboard ownership before general keybinds.

@@ -765,3 +765,13 @@ widget fixture removed the child and restored the exact native holder baseline.
 Evidence: `harness-enum-values-progress.json`, `harness-enum-values-live.json`,
 `enum-v13-first-disabled.json`, and `logs/enum-harness-v13.stderr.log`.
 No viewport, input-mode, focus, forced-GC or gameplay-state change was exercised.
+
+Packaged follow-up (2026-10-09): the same enum adapter specimen passed from
+candidate20261009T165925Z in fresh Steam game16344, via the persistent native
+console in the v16 management host. The imported SDK path was inside the bundle;
+original core SHA256 remained6c043cb1664e71daa6a6b3a50f9d04f284854101d071ac0b21ce18b1469fe543.
+Named enum input, typed annotations, retained reuse/release, rejection and exact
+holder cleanup passed. Output was visible in-game. See
+`button-v16-package-harness-progress.json`, `button-v16-package-harness-live.json`
+and `logs/button-v16-package.stderr.log`. This confirms the enum adapter after
+relaunch, not full Harness parity or gameplay transition coverage.
