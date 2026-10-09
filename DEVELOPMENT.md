@@ -418,3 +418,24 @@ and `logs/visible-v11-package.stderr.log`. This validates fresh package startup
 and v11 operation after relaunch, not gameplay/map-transition/forced-GC coverage,
 full Mods Menu behavior or text/font/key ownership. The previous private release
 archive remains unchanged; this is a development candidate.
+
+## v12 text candidate package — 2026-10-09
+
+Candidate `expedition33-0.1.0-candidate-20261009T125943Z` contains clean source
+`8912ef64073688a47463dafbd254b9197b0c7ba3` and the live-tested v12 DLL/controller.
+ZIP SHA256: `9d69255f7a8d575808accad99f598abcdfe618ad85b42859cc65dd018841c907`.
+All253 manifest files match both the directory and archive, archive CRC checks
+pass, and bundled v12 binary bytes match the current source host's binaries.
+Logs, settings and raw evidence are excluded.
+
+Isolated CPython3.13.15 with-I-S-B imported the SDK from this bundle and ran173
+tests successfully, skipping four unbundled native-fixture checks. Those checks
+already passed in the source suite. Evidence: `evidence/text-v12-package.json`,
+`evidence/text-v12-package-validation.json`, `evidence/text-v12-package-tests.log`.
+
+The source v12 host passed TextBlock string round trips, original Harness text
+retain/reuse/release, visible native labels, and exact scoped cleanup. This package
+has not yet undergone a fresh-game handover or relaunch; the persistent source
+host remains running. Those lifecycle checks are next, alongside the remaining
+input/focus and interactive Mods Menu work. This candidate does not replace the
+previous immutable private release archive.
