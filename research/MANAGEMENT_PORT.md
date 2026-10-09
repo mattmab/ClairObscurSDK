@@ -685,3 +685,11 @@ candidate passes offline revocation, overflow, reentrancy-ticket and session
 isolation fixtures. Next connect a verified adapter and transport to persistent
 Python action dispatch, then build shared-registry controls. See BUTTON_EVENTS.md;
 no live menu actions or key dispatch are claimed by this step.
+
+The exact13-slot delegate table and both execution ABIs are now checked against
+target assembly. The new candidate lifecycle core passes offline reentrant-close,
+destructor/free, foreign-replacement and interrupted-mutation tests, while
+preserving all original clone slots. Next supply pinned forwarding callbacks and
+the retained-delegate target adapter in an isolated runtime version. IPC/Python
+action routing and actual input validation remain required before registry UI
+controls can be considered usable. Existing loaded runtime binaries are unchanged.

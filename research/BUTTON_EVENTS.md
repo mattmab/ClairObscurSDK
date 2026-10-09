@@ -220,3 +220,50 @@ owner isolation, revocation during an original call, same-address rebind and a
 reused session ID. Evidence: `menu-action-events-fixture.log`. The queue is not
 yet connected to IPC, Python callbacks or the live delegate. This is not proof
 of mouse/keyboard delivery, native reply preservation or live unregistration.
+
+## Verified table/ABI and reversible lifecycle core
+
+The exact delegate vtable contains13 entries, ending with execute at+58 and a
+second optional-execution entry at+60 (RVA305a2e0); the next table begins with
+destructor RVA1260100. The preceding word is another function pointer, not an
+assumed RTTI locator. `button_delegate_contract.h` records and validates all13
+entries and prepares a shadow changing only destructor/execute/optional-execute.
+It preserves every clone entry and does not write engine memory.
+
+Assembly corroborates execute's RCX=instance/RDX=reply-buffer ABI and return of
+the original buffer in RAX. Destructor takes RCX=instance and flags in EDX,
+conditionally frees48 bytes on flags bit0 and returns the instance in RAX.
+The optional-execute entry resolves the weak object, calls the original method
+using its own192-byte reply buffer, destroys that reply and returns success in
+AL (false when weak resolution returned null). An adapter must forward both
+execution entries and only enqueue the optional path when it succeeds; it must
+not fabricate or shallow-copy FReply. No runtime call to these new adapter
+entrypoints has been made.
+
+Evidence: `button-adapter-table.json`, `button-adapter-abi.json`,
+`button-execute-return.json`, `button-execute-safe.json`, `button-safe-abi.json`.
+Two requested assembly addresses in the first ABI query were not instruction
+boundaries and returned errors; the separate return/safe queries supply the
+actual instruction evidence. These errors are not counted as verification.
+
+`owned_button_delegate.h` adds the candidate lifecycle around the queue:
+Empty/Installing/Active/Revoked/Restoring/Destroyed/Quarantined. It publishes
+mutation states before vtable exchanges, restores only an expected shadow table,
+revokes routing before waiting for active calls and never replays unknown
+install/restore outcomes. A destructor notification revokes and restores before
+forwarding, then prevents any later dereference even while an earlier execute
+unwinds. Close during an original callback defers restoration until that call
+returns, suppressing its revoked ticket. Quarantine keeps the owner protected.
+
+The expanded native fixture passes /W4 /WX for table validation/clone-slot
+preservation, invalid installation, reentrant close, failed execution, destruction
+during execution, no access after free, conflicting table replacement and unknown
+outcomes after both installation and restoration writes. The exception fixtures
+model interrupted operations; they do not prove engine SEH behavior. Evidence:
+`button-delegate-fixture.log`.
+
+Remaining integration gates: pinned immutable forwarding thunks/table, target
+Ops validating the retained live delegate, game-thread guards and SEH/finally
+boundaries, transport/Python routing and real mouse/keyboard/lifecycle tests.
+These headers are candidates, not installed capabilities. Existing runtime
+v13/v14/v15 binaries were not rebuilt or changed.
