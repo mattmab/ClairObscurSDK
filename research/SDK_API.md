@@ -218,3 +218,34 @@ Plain `invoke` retains its earlier scalar/object/numeric boundary; use the
 retained path for text. A transport handshake proves availability of this path,
 not safety of an arbitrary game function or support for all localized text types.
 See WIDGET_LAYOUT_VALUES.md for live evidence and remaining validation gates.
+
+### Experimental owned-button actions (v16)
+
+Use `Session(button_actions=True)` for the action-capable runtime. After a
+scope-owned native menu is attached, `menu.bind_action(callback)` binds its one
+verified owned Button. The callback receives an immutable copied ActionEvent
+(session, registration, owner, action, sequence). It runs on the external Python
+session's owning thread during `Session.poll()` / the existing loader pump,
+never inside the game-thread delegate.
+
+```python
+# menu is an already attached scope.prepare_menu(...) handle.
+action = menu.bind_action(lambda event: print("SDK button action", event.sequence))
+# Keep the existing session/loader poll loop running.
+# Explicit removal returns False if native cleanup must be polled again.
+action.remove()
+```
+
+One action per current menu is supported. Removal immediately revokes Python
+delivery; pending native cleanup prevents rebinding. Menu close, scope cleanup
+and session shutdown revoke callbacks automatically. Native close removes the
+delegate adapter before menu detachment/reference release. Unknown outcomes
+abort ownership and must not be retried. Whole batches are validated against
+saved action/registration IDs and prior sequence before any callback is invoked.
+Callback exceptions, including SystemExit, are contained and retained as up to32
+traceback strings in `action.failures`; `action.dropped_events` reports overflow.
+Long Python callbacks can block the external controller, so keep them short.
+
+This API is experimental. Offline callback lifecycle tests pass; see
+BUTTON_EVENTS.md for the precise live validation status. It does not imply a
+finished Mods Menu, multiple controls, keyboard activation or general keybinds.

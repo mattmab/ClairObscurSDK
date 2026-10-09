@@ -448,3 +448,34 @@ Controller SHA256:
 Prior v13/v14/v15 artifacts were preserved. Next implement scope-owned action
 handles and poll dispatch, then exercise binding, actual input, unbinding,
 controller loss and relaunch. Transport proof does not satisfy those gates.
+
+## Python-owned callbacks and live binding/cleanup proof
+
+`NativeMenu.bind_action(callback)` now returns a menu-owned ButtonAction. Python
+ownership is published before native binding. Each drain is validated as a whole
+against the saved action/registration and previous sequence before delivery.
+`Session.poll()` invokes callbacks on its external owning thread; self-removal or
+menu/session close stops remaining batch delivery. Callback exceptions including
+SystemExit become bounded traceback history in `action.failures`. Removal revokes
+the callable immediately, keeps deferred cleanup pending and blocks rebinding.
+Menu close revokes Python delivery before native close; session close and unknown
+ownership abort revoke all menu callbacks. Interrupted transport calls become
+unknown ownership rather than a retryable clean failure.
+
+All220 Python tests pass, including Session.poll delivery, replay/mixed-batch
+rejection, self-removal, deferred cleanup, interrupted bind and exception handling
+(`button-action-callback-tests.log`). Usage is documented in SDK_API.md.
+
+`verify_live_scoped_menu.py --button-actions` passed on PID21804 using the pinned
+v16 DLL. The verified owned specimen prepared/attached/focused, bound registration1,
+drained zero events, explicitly unbound, rebound registration2 and closed the menu
+while the second action remained bound. Native menu cleanup restored the viewport
+and Empty0 SButton reference; root/children and exact UObject holder baseline were
+restored. The test session then closed normally. Existing v13 host remained live.
+
+Evidence: `button-action-binding-progress.json`, `button-action-binding-live.json`,
+`button-action-binding-run.log`. This proves actual native adapter installation,
+explicit removal/rebinding and menu-driven teardown, not a real click or successful
+forwarding of an engine-triggered action. No input was simulated. Next test actual
+mouse/keyboard activation, persistent Python callback behavior and cleanup after
+controller death/relaunch. General keybinds and multiple controls remain pending.

@@ -1,7 +1,7 @@
 """Experimental single-user viewport-backed native menu ownership.
 
 Only the verified base CommonActivatableWidget/Button specimen is supported.
-This owns lifecycle, not layout, actions, input modes or key dispatch.
+This owns lifecycle and optional v16 button actions, not layout or key dispatch.
 """
 import secrets
 import weakref
@@ -26,6 +26,7 @@ class NativeMenu:
         self._owner = secrets.randbits(64) or 1
         self._state = 'preparing'
         self._button_reference_state = None
+        self._action = None
 
     @property
     def active(self):
@@ -99,7 +100,26 @@ class NativeMenu:
         session = self._session()
         if session is not None: session._transport._check_thread()
         if self._state == 'closed': return True
-        return self._send('close')
+        action = self._action
+        if action is not None: action._revoke('menu_closing')
+        result = self._send('close')
+        if result and action is not None: action._revoke()
+        return result
+
+    def bind_action(self, callback):
+        session = self._session()
+        if session is None: raise MenuError('Menu session unavailable', outcome='unknown')
+        session._check()
+        if not session.supports_button_actions or self._state not in ('attached', 'focused'):
+            raise MenuError('Button actions require an attached v16 menu', outcome='not_started')
+        if not callable(callback): raise TypeError('Button callback must be callable')
+        if self._action is not None and self._action._state != 'closed':
+            raise MenuError('This menu already owns an action', outcome='not_started')
+        from .button_actions import ButtonAction
+        action = ButtonAction(self, callback)
+        self._action = action  # Publish Python ownership before native binding.
+        action._bind()
+        return action
 
     def __enter__(self): return self
     def __exit__(self, *_exc): self.close()

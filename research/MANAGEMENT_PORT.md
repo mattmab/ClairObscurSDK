@@ -742,3 +742,10 @@ close smoke test on PID21804. No callback was bound. The v16 DLL is now pinned a
 must not be rebuilt until that game exits. Next add scoped Python action handles
 and poll dispatch, then validate owned-button input and cleanup live. Packaging
 and release acceptance for v16 remain separate from this transport-only proof.
+
+Menu-owned Python callbacks and Session.poll dispatch are implemented;220 tests
+pass. The live v16 specimen now proves bind/empty-drain/unbind/rebind and closing
+with an active registration, followed by exact viewport/reference/holder cleanup.
+Actual mouse/keyboard action delivery remains untested. Next exercise real input
+and persistent Python callbacks, then controller death/relaunch before using this
+path for shared mod registry controls. The loaded v16 DLL was reused unchanged.

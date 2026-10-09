@@ -27,7 +27,7 @@ validation scopes; original release acceptance does not certify newer runtimes.
 | Owned text / typed enums (v12/v13) | Constrained owned FText and exact-UEnum byte values implemented and live-tested; general native value types unsupported. |
 | Native menu ownership (opt-in v14) | Scope-owned prepare/attach/focus/close, controller-death cleanup and preserving unrelated widget focus live-tested. General per-user/UMG focus baselines and relaunch pending. |
 | SButton ownership (opt-in v15) | Independent reference retention, normal release and controller-death cleanup live-tested. Callback binding, cloning-aware revocation and action delivery remain unimplemented. |
-| Button action transport (opt-in v16) | `Session(button_actions=True)` selects the isolated runtime. Handshake, empty-menu state, absent-owner rejection and normal close live-tested. Native adapter/protocol candidates exist; real click delivery and Python callback ownership remain pending. |
+| Button actions (opt-in v16) | `Session(button_actions=True)` and `menu.bind_action(callback)` implemented. Bind/empty-drain/unbind/rebind/menu-close cleanup live-tested with exact focus/holder restoration. Python dispatch/lifecycle tests pass; real mouse/keyboard delivery, controller death with a bound action and relaunch remain pending. |
 | Current candidate packaging | Includes v13/v14/v15 binaries and launcher opt-ins. Manifest/ZIP bytes and isolated launcher help checked separately from live package acceptance; no new release claim. |
 
 ## Interactive native console

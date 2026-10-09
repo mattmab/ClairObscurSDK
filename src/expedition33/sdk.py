@@ -207,6 +207,9 @@ class Session:
                 self.supports_object_leases and self.supports_reflected_invocation)
 
     def _abort_ownership(self):
+        for menu in getattr(self, '_menus', ()):
+            action = getattr(menu, '_action', None)
+            if action is not None: action._revoke('unknown')
         for lease in self._leases:
             lease._state = 'unknown'
         if not getattr(self._transport, '_closed', False):
@@ -438,6 +441,10 @@ class Session:
                 delivered += self._dispatcher.deliver(ObserverContext(self._sequence, TARGET,
                     identity, event['thread'], bool(event['result'])))
             self._reconcile()
+            for menu in tuple(self._menus):
+                if self._closed: break
+                action = getattr(menu, '_action', None)
+                if action is not None: delivered += action._poll()
             return delivered
         finally:
             self._polling = False
@@ -457,6 +464,8 @@ class Session:
             leases_closed = not transport_was_closed
         finally:
             for menu in getattr(self, '_menus', ()):
+                action = getattr(menu, '_action', None)
+                if action is not None: action._revoke('closed' if leases_closed else 'unknown')
                 menu._state = 'closed' if leases_closed else 'unknown'
             if hasattr(self, '_menus'):
                 self._menus.clear()
