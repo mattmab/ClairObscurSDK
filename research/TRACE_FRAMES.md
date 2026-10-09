@@ -314,3 +314,34 @@ evidence/trace-registration-fixture.log, trace-slots-fixture.log and
 trace-events-fixture.log. These are native executable fixtures, not live-game
 proof. The scheduler, target collector, registration transport and Harness still
 need to be wired to this owner; no runtime DLL was changed or rebuilt.
+
+## Target collector composition — 2026-10-09
+
+target_trace_collector.h connects the prepared native capture plan to the
+registration's Collector signature. Preparation uses the existing guarded schema
+adapter and captures the function's owner class identity. Optional target filters
+are validated separately from the exemplar object. Collection requires the current
+process/game thread, the observed GC/shutdown gates, live function/owner registry
+identities and matching owner pointer, a registered non-destroying observed object,
+class compatibility, and an exact filter match when requested. It then resolves
+the supported native frame path and copies scalar fields with guarded reads.
+Failures clear both event identity and bytes; no raw frame/object pointer is
+published and no engine function is invoked by the collector.
+
+scripts/test-trace-collector.cmd passes MSVC /W4 /WX. Its synthetic registry uses
+the actual build-specific offsets and production registry helpers. Tests cover
+target filters, stale serials/slots, each GC/shutdown gate, destroying objects,
+foreign threads, wrong/bytecode frames, PAGE_NOACCESS frame/result reads and a
+released registry reservation. A composed test installs a real fixture thunk,
+calls its original, collects a scalar result through the target adapter, drains
+the event, restores the entry, and checks that a late thunk emits no further event.
+Evidence: evidence/trace-collector-fixture.log. The schema adapter compile check
+also passes with the collector included (trace-plan-fixture.log).
+
+This is still synthetic validation. Runtime wiring must own the context for the
+entire registration, establish the exact executable profile before preparation,
+and stop registrations on reflection/identity lifetime changes. The collector
+uses the schema established at registration; it does not repeat the complete
+property-schema validation on every POST. Session transport, game-thread scheduler
+maintenance, live frame observations, Harness routing and relaunch validation
+remain outstanding. No deployed DLL or running controller was changed.
