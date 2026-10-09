@@ -717,3 +717,22 @@ v15/v16 compatibility object builds and v16 layout check also pass after control
 changes. Pending: Python session capability negotiation, v17 selection, multi-control
 menu ownership/shared draining and live two-control lifecycle validation. The
 running v16 console/Harness and its binaries were not replaced.
+
+### Python v17 session selection
+
+`Session(multi_controls=True)` now selects the isolated research-probe-v17
+controller and implies the complete prior capability chain. The shared capability
+predicate requires exact integer protocol versions, capacity16 and a valid nonzero
+64-bit action-session identity; booleans do not masquerade as protocol integers.
+Failed negotiation closes the controller. `supports_multi_controls` uses the same
+strict predicate. SessionTransport accepts only clean multi-button packets and
+correlates the returned command before the codec can consume its payload.
+
+Five transport tests cover prerequisite/capacity/nonce rejection before sending,
+invalid packet rejection, response mismatch abort, v17 selection with preserved
+v16 selection, failed-handshake cleanup, and strict capability reporting. The
+full231-test suite passed before adding the final capability-query test; all five
+multi-control transport tests then passed. No live attachment was performed.
+Menu control handles, protected lease bookkeeping, shared event routing and live
+multiple-control validation remain pending; the session opt-in alone exposes no
+new menu frontend.

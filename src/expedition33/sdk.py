@@ -8,7 +8,7 @@ from pathlib import Path
 
 from . import RuntimeQueryError, ObjectSnapshot, objects
 from ._callbacks import CallbackDispatcher, ObservedIdentity, ObserverContext
-from ._session import SessionTransport
+from ._session import SessionTransport, supports_multi_controls
 from ._console import Console
 from ._pod_values import NumericStructValue
 
@@ -48,9 +48,10 @@ class Session:
     thread, build, layout and lifetime checks remain authoritative for each call.
     Close explicitly or use a context manager to remove hooks deterministically.
     """
-    def __init__(self, *, reflected=False, leases=False, retained=False, stable_returns=False, object_assignment=False, pod_values=False, text_values=False, enum_values=False, menu_ownership=False, button_references=False, button_actions=False):
-        if any(type(flag) is not bool for flag in (reflected, leases, retained, stable_returns, object_assignment, pod_values, text_values, enum_values, menu_ownership, button_references, button_actions)):
+    def __init__(self, *, reflected=False, leases=False, retained=False, stable_returns=False, object_assignment=False, pod_values=False, text_values=False, enum_values=False, menu_ownership=False, button_references=False, button_actions=False, multi_controls=False):
+        if any(type(flag) is not bool for flag in (reflected, leases, retained, stable_returns, object_assignment, pod_values, text_values, enum_values, menu_ownership, button_references, button_actions, multi_controls)):
             raise ValueError('Session capability flags must be bools')
+        button_actions = button_actions or multi_controls
         button_references = button_references or button_actions
         menu_ownership = menu_ownership or button_references
         enum_values = enum_values or menu_ownership
@@ -59,7 +60,7 @@ class Session:
         object_assignment = object_assignment or pod_values
         stable_returns = stable_returns or object_assignment
         retained = retained or stable_returns
-        backend = ('research-probe-v16' if button_actions else 'research-probe-v15' if button_references else 'research-probe-v14' if menu_ownership else 'research-probe-v13' if enum_values else 'research-probe-v12' if text_values else 'research-probe-v11' if pod_values else 'research-probe-v10' if object_assignment else 'research-probe-v9' if stable_returns else 'research-probe-v8' if retained
+        backend = ('research-probe-v17' if multi_controls else 'research-probe-v16' if button_actions else 'research-probe-v15' if button_references else 'research-probe-v14' if menu_ownership else 'research-probe-v13' if enum_values else 'research-probe-v12' if text_values else 'research-probe-v11' if pod_values else 'research-probe-v10' if object_assignment else 'research-probe-v9' if stable_returns else 'research-probe-v8' if retained
                    else 'research-probe-v7' if leases else 'research-probe-v6')
         self._transport = (SessionTransport(_executable=Path(__file__).resolve().parents[2] /
                            f'build/{backend}/research_probe.exe') if reflected or leases or retained else SessionTransport())
@@ -107,6 +108,12 @@ class Session:
                     self._transport.close()
                 finally:
                     raise RuntimeQueryError('Button action backend handshake missing')
+        if multi_controls:
+            if not supports_multi_controls(self._transport):
+                try:
+                    self._transport.close()
+                finally:
+                    raise RuntimeQueryError('Multi-control backend handshake missing')
         self._dispatcher = CallbackDispatcher()
         self._hooks = []
         self._leases = set()
@@ -126,6 +133,11 @@ class Session:
         self._transport._check_thread()
         if self._closed:
             raise RuntimeQueryError('SDK session is closed')
+
+    @property
+    def supports_multi_controls(self):
+        self._check()
+        return supports_multi_controls(self._transport)
 
     @property
     def supports_button_actions(self):

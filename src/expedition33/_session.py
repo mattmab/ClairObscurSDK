@@ -7,6 +7,20 @@ import threading
 
 from . import RuntimeQueryError, TargetExitedError
 
+BUTTON_CAPABILITIES = ('button_action_protocol', 'button_reference_protocol', 'menu_protocol',
+                       'enum_value_protocol', 'text_value_protocol', 'pod_value_protocol',
+                       'object_assignment_protocol', 'stable_identity_protocol', 'retained_protocol',
+                       'lease_protocol', 'reflected_protocol')
+
+
+def supports_multi_controls(transport):
+    protocols = BUTTON_CAPABILITIES + ('multi_button_protocol',)
+    nonce = getattr(transport, 'button_action_session', 0)
+    capacity = getattr(transport, 'multi_button_capacity', 0)
+    return (all(type(getattr(transport, name, 0)) is int and getattr(transport, name, 0) == 1
+                for name in protocols) and type(nonce) is int and 0 < nonce < 2**64 and
+            type(capacity) is int and capacity == 16)
+
 
 class SessionTransport:
     def __init__(self, *, _executable=None):
@@ -46,6 +60,8 @@ class SessionTransport:
             self.button_reference_protocol = ready.get('button_reference_protocol', 0)
             self.button_action_protocol = ready.get('button_action_protocol', 0)
             self.button_action_session = ready.get('button_action_session', 0)
+            self.multi_button_protocol = ready.get('multi_button_protocol', 0)
+            self.multi_button_capacity = ready.get('multi_button_capacity', 0)
             if (self.start.get('event') != 'snapshot_start' or
                 any(row.get('event') != 'object' for row in self.objects) or
                 ready.get('event') != 'session_ready' or ready['pid'] != self.start['pid'] or
@@ -99,11 +115,12 @@ class SessionTransport:
         text = command == 'text-invoke'
         menu = command == 'menu'
         button_action = command == 'button-action'
-        if button_action:
-            capabilities = ('button_action_protocol', 'button_reference_protocol', 'menu_protocol',
-                            'enum_value_protocol', 'text_value_protocol', 'pod_value_protocol',
-                            'object_assignment_protocol', 'stable_identity_protocol', 'retained_protocol',
-                            'lease_protocol', 'reflected_protocol')
+        multi_button = command == 'multi-button'
+        if multi_button:
+            if not supports_multi_controls(self):
+                raise ValueError('Native session does not support multiple controls')
+        if button_action or multi_button:
+            capabilities = BUTTON_CAPABILITIES
             if any(type(getattr(self, name, 0)) is not int or getattr(self, name, 0) != 1 for name in capabilities):
                 raise ValueError('Native session does not support button actions')
             nonce = getattr(self, 'button_action_session', 0)
@@ -127,10 +144,14 @@ class SessionTransport:
             raise ValueError('Native session does not support object leases')
         if reflected and getattr(self, 'reflected_protocol', 0) != 1:
             raise ValueError('Native session does not support reflected invocation')
-        if not reflected and not leased and not retained and not assignment and not text and not menu and not button_action and command not in ('enable', 'disable', 'invoke', 'drain', 'ping', 'close', 'console-attach', 'console-detach', 'console-status', 'console-poll', 'console-execute', 'console-print', 'console-names', 'console-key'):
+        if not reflected and not leased and not retained and not assignment and not text and not menu and not button_action and not multi_button and command not in ('enable', 'disable', 'invoke', 'drain', 'ping', 'close', 'console-attach', 'console-detach', 'console-status', 'console-poll', 'console-execute', 'console-print', 'console-names', 'console-key'):
             raise ValueError('Unsupported native session command')
         suffix = ''
-        if button_action:
+        if multi_button:
+            from ._multi_button_wire import validate_request
+            validate_request(payload)
+            suffix = ' ' + payload.hex()
+        elif button_action:
             from ._button_action_wire import validate_request
             validate_request(payload)
             suffix = ' ' + payload.hex()
