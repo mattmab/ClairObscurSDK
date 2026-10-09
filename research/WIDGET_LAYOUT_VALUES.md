@@ -413,3 +413,29 @@ This proves the verified base-text ownership path on SDK-created objects, not
 arbitrary localized/history implementations, TextProperty assignment, native
 text-handle retention or a visible menu. Next render a TextBlock label, validate
 v12 packaging/relaunch/cleanup, and continue input/focus and menu actions.
+
+## Visible native text specimen
+
+2026-10-09 08:58:56 local: the persistent v12 host completed the extended visible
+widget specimen. An SDK-created TextBlock rendered two readable lines,
+`Expedition 33 SDK` and `Python to native UMG`, inside the disabled blue-gray
+panel. Both controls used their engine-provided defaults except the previously
+verified layout/background values and copied text. No font/style ownership API
+was assumed. Screenshot observation at2048x1152 placed the panel approximately
+at(85,85)-(533,255), with both text lines fully visible. The native console was
+closed during the observation.
+
+GetText returned the exact two-line string after AddToViewport had created the
+Slate representation, exercising that getter branch as well as the earlier
+unrendered case. The45-second observation delay ran in external Python. Cleanup
+then removed the viewport entry, restored RootWidget toNone, removed the label
+and button, verified zero children and restored the exact holder baseline. A
+second screenshot confirmed the panel and label were gone. Input mode and focus
+were not changed; click handling and general keybinds were not tested.
+
+Evidence: `evidence/widget-visible-text-live.json`,
+`evidence/widget-visible-text-observation.json`, and the08:58:56 entry in
+`logs/text-v12-source.stderr.log`. `verify_live_widget_visible.py` preserves the
+older no-label specimen and accepts an optional label_text for this v12 path.
+The package manifest now includes the v12 controller and DLL; isolated package
+and relaunch validation remain separate gates.

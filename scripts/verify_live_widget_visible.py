@@ -1,4 +1,4 @@
-"""Brief visible UMG specimen on the existing persistent v11 console session.
+"""Brief visible UMG specimen on the existing persistent v11/v12 console session.
 
 Uses only SDK-owned objects. It never installs actions, changes input mode, or
 requests focus. The button is disabled before viewport attachment. The bounded
@@ -18,10 +18,14 @@ from expedition33._scope import SessionScope
 ROOT = Path(__file__).resolve().parents[1]
 
 
-def run(session, *, hold_seconds=30):
+def run(session, *, hold_seconds=30, label_text=None):
     if type(hold_seconds) is not int or not 0 <= hold_seconds <= 45:
         raise ValueError('Observation delay must be an integer from 0 through 45')
     assert session.supports_pod_values and session.supports_object_assignment
+    if label_text is not None:
+        from expedition33._text_wire import encode_units
+        encode_units(label_text)
+        assert session.supports_text_values
     helper = runpy.run_path(str(ROOT/'scripts/verify_live_widget_lifecycle.py'))
     catalog, library, functions, args = helper['preflight']()
     assert catalog.pid == session.pid
@@ -38,9 +42,10 @@ def run(session, *, hold_seconds=30):
                 'input_mode_changed':False, 'focus_requested':False,
                 'visual_confirmation':'requires separate screenshot observation',
                 'hold_seconds':hold_seconds}
-    path = ROOT/'evidence/widget-visible-live.json'
+    path = ROOT/'evidence'/('widget-visible-text-live.json' if label_text is not None else 'widget-visible-live.json')
     def save(): path.write_text(json.dumps(evidence, indent=2), encoding='utf-8')
-    widget = tree = canvas = button = None
+    widget = tree = canvas = button = label = None
+    label_attached = False
     attached = assigned = added = uncertain = False
     def mutate(callback, *values, **keywords):
         nonlocal uncertain
@@ -70,6 +75,19 @@ def run(session, *, hold_seconds=30):
             mutate(scope.invoke, slot, fn('CanvasPanelSlot',name), **{parameter:value})
         mutate(scope.invoke, button, fn('Button','SetBackgroundColor'),
                InBackgroundColor={'R':0.125,'G':0.25,'B':0.5,'A':1.0})
+        if label_text is not None:
+            label = scope.invoke_retained(cdo('GameplayStatics'), spawn, ObjectClass=cls('TextBlock'), Outer=tree).return_value
+            label_slot = mutate(scope.invoke_retained, canvas, add, Content=label).return_value
+            label_attached = True
+            evidence['objects'].update(label=asdict(label),label_slot=asdict(label_slot))
+            mutate(scope.invoke, label, enabled, bInIsEnabled=False)
+            with mutate(scope.invoke_retained, label, fn('TextBlock','SetText'), InText=label_text):
+                pass
+            for name,parameter,value in (
+                ('SetPosition','InPosition',{'X':100.0,'Y':100.0}),
+                ('SetSize','InSize',{'X':380.0,'Y':120.0}),
+                ('SetAnchors','InAnchors',{'Minimum':{'X':0.0,'Y':0.0},'Maximum':{'X':0.0,'Y':0.0}})):
+                mutate(scope.invoke,label_slot,fn('CanvasPanelSlot',name),**{parameter:value})
         mutate(scope.assign_object, tree, cls('WidgetTree'), 'RootWidget', canvas,
                expected=None, allow_mutation=True)
         assigned = True
@@ -80,6 +98,10 @@ def run(session, *, hold_seconds=30):
         assert scope.invoke(widget, functions['IsInViewport']).return_value is True
         assert dict(scope.invoke(slot, fn('CanvasPanelSlot','GetPosition')).return_value) == {'X':80.0,'Y':80.0}
         assert dict(scope.invoke(slot, fn('CanvasPanelSlot','GetSize')).return_value) == {'X':420.0,'Y':160.0}
+        if label is not None:
+            with mutate(scope.invoke_retained,label,fn('TextBlock','GetText')) as result:
+                assert result.return_value == label_text
+            evidence['text_after_slate_creation'] = label_text
         evidence['viewport_added'] = evidence['layout_readback'] = True
         evidence['observation_started_unix'] = time.time()
         save()
@@ -97,6 +119,10 @@ def run(session, *, hold_seconds=30):
                        expected=canvas, allow_mutation=True)
                 assert root() is None
                 evidence['root_restored'] = True
+            if label_attached and not uncertain:
+                label_attached = False
+                mutate(scope.invoke,label,functions['RemoveFromParent'])
+                evidence['label_removed'] = True
             if attached and not uncertain:
                 attached = False
                 mutate(scope.invoke, button, functions['RemoveFromParent'])

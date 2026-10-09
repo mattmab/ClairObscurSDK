@@ -85,6 +85,13 @@ holder cleanup passed; v12 is the current persistent source host after a clean
 v11 handover. See WIDGET_LAYOUT_VALUES.md. Visible labels, actions and focus/key
 handling remain unfinished; no native Mods Menu is claimed by this text probe.
 
+The v12 visible specimen now rendered an actual two-line TextBlock in the
+SDK-created panel. Text readback after Slate creation, viewport removal, root
+restoration, both child removals and exact holder cleanup passed at08:58:56.
+This supplies a verified native label building block. The original BL4 menu's
+context-dependent input/focus restoration still needs an E33-specific contract;
+its blanket ignore-input resets are not adopted without ownership tracking.
+
 ## Preserved implementation references
 
 Primary source is the installed BL4 sdk_mods directory. Nineteen original files
