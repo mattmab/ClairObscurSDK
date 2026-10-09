@@ -5,12 +5,12 @@ implemented; no E33 native menu or general keybind implementation is claimed. Th
 Harness remain operational. The full additional request, including all17 live
 acceptance tests, is preserved locally in USER_REQUEST_MANAGEMENT.txt.
 
-2026-10-09 widget progress: base UserWidget creation and same-operation native
-retention passed live through persistent console Python. The viewport call exposed
-lazy zero-to-assigned registry serials and failed the SDK post-call identity check.
-Explicit fresh-identity removal and lease cleanup passed; no call was retried.
-See WIDGET_OWNERSHIP.md. Stabilizing new-object serials before publication precedes
-the complete UMG lifecycle test; no native menu or general key dispatch is claimed.
+2026-10-09 widget progress: v9 base UserWidget creation, same-operation retention,
+stable serial publication, viewport add/remove and explicit release passed live
+through persistent console Python, restoring the exact holder baseline. This fixes
+the lazy serial boundary exposed by the earlier v8 specimen. See WIDGET_OWNERSHIP.md.
+Child content, native menu rendering, focus lifecycle and general key dispatch
+remain unfinished; the blank widget specimen is not a native Mods Menu.
 
 ## Preserved implementation references
 

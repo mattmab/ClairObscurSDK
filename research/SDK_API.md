@@ -103,3 +103,13 @@ results release after encoding. `Harness.poll()` expires values on the owner
 thread; the IntrospectionHarness mod calls it from its regular pump. Closing the
 Harness releases its owners without closing the shared transport. Opaque native
 values, additional argument types and full Harness parity remain unsupported.
+
+### Stable retained returns (experimental v9)
+
+`Session(stable_returns=True)` selects v9 and includes the retained/lease/reflected
+capabilities. `supports_stable_returns` is available on root and mod sessions.
+Only retained output identities receive serial assignment while held on the game
+thread; ordinary input/target observations still require an exact identity match.
+Native serial allocation is not an identity wildcard or a license to reuse stale
+observations. The base UserWidget viewport lifecycle passed live; visible menu
+contents, focus handling and full Harness parity are not established by that test.

@@ -111,6 +111,11 @@ class SessionScope:
         self._check()
         return self._session.supports_retained_invocation
 
+    @property
+    def supports_stable_returns(self):
+        self._check()
+        return self._session.supports_stable_returns
+
     def invoke_retained(self, obj, function, **arguments):
         self._check()
         result = self._session.invoke_retained(obj, function, **arguments)

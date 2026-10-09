@@ -1,4 +1,4 @@
-"""Bounded base-UserWidget specimen on an existing persistent v8 session.
+"""Bounded base-UserWidget specimen on an existing persistent v9 session.
 
 Run preflight from the shell; call run(sdk) from the native Python console.
 Does not install a menu, change input mode, set focus, or force garbage collection.
@@ -58,8 +58,10 @@ def holders():
             for group in data['collections'] for h in group['strong_holders']}
 
 
-def run(session):
+def run(session, *, evidence_name='widget-lifecycle-stable-live.json'):
     assert session.supports_retained_invocation
+    assert session.supports_stable_returns
+    assert Path(evidence_name).name == evidence_name
     catalog, target, functions, args = preflight()
     assert catalog.pid == session.pid
     baseline = holders()
@@ -104,7 +106,7 @@ def run(session):
                 scope.invoke(widget, functions['RemoveFromParent'])
         finally:
             scope.close()
-            (ROOT/'evidence/widget-lifecycle-live.json').write_text(json.dumps(evidence, indent=2), encoding='utf-8')
+            (ROOT/'evidence'/evidence_name).write_text(json.dumps(evidence, indent=2), encoding='utf-8')
     print('Base UserWidget: created, retained, added, removed, released; holder baseline restored.')
     return evidence
 

@@ -36,6 +36,7 @@ class SessionTransport:
             self.reflected_protocol = ready.get('reflected_protocol', 0)
             self.lease_protocol = ready.get('lease_protocol', 0)
             self.retained_protocol = ready.get('retained_protocol', 0)
+            self.stable_identity_protocol = ready.get('stable_identity_protocol', 0)
             if (self.start.get('event') != 'snapshot_start' or
                 any(row.get('event') != 'object' for row in self.objects) or
                 ready.get('event') != 'session_ready' or ready['pid'] != self.start['pid'] or

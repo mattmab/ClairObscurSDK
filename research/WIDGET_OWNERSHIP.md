@@ -1,10 +1,10 @@
 # Native widget ownership investigation — 2026-10-09
 
-Current status: v8 public retained invocation and original Harness retained values
-are implemented and live-tested (OBJECT_LEASES.md). A base UserWidget was created
-and retained in the live game, but its first viewport operation exposed lazy
-registry serial assignment. The complete create/add/remove specimen did not pass;
-stable identities for newly created objects are the next implementation gate.
+Current status: v9 stable retained returns passed the complete base UserWidget
+create/add/remove/release specimen live. v8 public retained invocation and original
+Harness retained values are implemented and live-tested (OBJECT_LEASES.md).
+The first v8 viewport specimen exposed lazy registry serial assignment; v9 now
+assigns serials through the verified engine allocator before returning ownership.
 Earlier investigation stages below preserve their original evidence boundaries.
 
 ## Base UserWidget specimen and lazy serial assignment — 2026-10-09
@@ -84,6 +84,31 @@ also compile with /W4 /WX. These are compile/fixture proofs, not game validation
 Next: expose an explicit experimental v9 session, hand over cooperatively, run
 the complete guarded widget specimen, confirm removal/holder cleanup, and restore
 the persistent host. No new release or package validation is claimed yet.
+
+### v9 public session and live lifecycle proof
+
+`Session(stable_returns=True)` and `launch.cmd management --stable-returns` select
+v9 explicitly, imply retained calls, and require all four native capabilities.
+Missing capability closes the opened transport. Session/mod scopes expose
+supports_stable_returns. 127 Python tests pass, including the opt-in and failed
+handshake cleanup. The package manifest input list now includes the v9 pair;
+isolated v9 package execution remains a separate pending check.
+
+The v8 host exited cooperatively through mods action shutdown at02:14:44.
+Persistent v9 host27480/controller24140 started02:15:01 in the same game34604,
+session4911e4510a1a423a989134bc52647bb6. The specimen was entered through native
+console Python. New UserWidget237337/serial86453 was retained before returning;
+IsInViewport went false -> true after AddToViewport -> false after RemoveFromParent.
+Release acknowledged and the exact three original generic holders were restored.
+The run completed02:16:22 without retry or recovery. Evidence:
+evidence/widget-lifecycle-stable-live.json and logs/management-host-v9.stderr.log.
+The failed v8 evidence remains separate. The v9 DLL is now pinned until game exit;
+do not rebuild its loaded path. The persistent management/Harness host remains live.
+
+This specimen has no child content and did not acquire focus, so it does not prove
+visible menu rendering or focus restoration. Next gates: child construction/tree
+root assignment, native string/text and settings controls, then verified input
+routing/focus lifecycle and key dispatch. Full Harness parity is still incomplete.
 
 Target: Steam23765773, SHA256
 218a2478aad5b3a1674b5d7097ec1ac4f994abb95466f9da1407fcd39d639618.

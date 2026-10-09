@@ -312,3 +312,18 @@ Build with `scripts/build-retained-call-candidate.cmd` only after the game exits
 v8 stays pinned until process shutdown. No newly created widget, forced-GC
 survival, native UMG frontend or general key dispatch is established by these
 existing-object ownership tests. The immutable earlier v0.1 archive is unchanged.
+
+## Stable retained object returns (experimental v9)
+
+`launch.cmd management --stable-returns` selects the v9 controller. Direct users
+can opt in with `Session(stable_returns=True)`; it includes reflected calls,
+leases and retained results. Check `session.supports_stable_returns` from either
+the root session or a mod scope. A returned object is held while the engine assigns
+its registry serial, before Python receives it. Zero is never a wildcard.
+
+The base UserWidget create/add/remove/release path passed in the live main menu,
+including exact native holder cleanup. No visible menu content or focus changes
+were involved. Native UMG frontend, general key dispatch, game relaunch with v9
+and isolated v9 package execution remain pending. Build using
+`scripts/build-stable-call-candidate.cmd` only after the game exits: the v9 DLL
+is pinned for the process lifetime. See research/WIDGET_OWNERSHIP.md for evidence.

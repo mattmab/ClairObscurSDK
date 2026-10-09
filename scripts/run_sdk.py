@@ -41,9 +41,10 @@ def main():
     parser.add_argument('--reflected', action='store_true', help='Use experimental v6 reflected invocation backend')
     parser.add_argument('--leases', action='store_true', help='Use experimental v7 object leases and reflected invocation')
     parser.add_argument('--retained', action='store_true', help='Use experimental v8 retained invocation and Harness values')
+    parser.add_argument('--stable-returns', action='store_true', help='Use experimental v9 stable retained object returns')
     args = parser.parse_args()
-    if (args.reflected or args.leases or args.retained) and args.command not in ('console', 'introspection', 'management'):
-        parser.error('--reflected/--leases/--retained require console, introspection or management')
+    if (args.reflected or args.leases or args.retained or args.stable_returns) and args.command not in ('console', 'introspection', 'management'):
+        parser.error('--reflected/--leases/--retained/--stable-returns require console, introspection or management')
     log_dir = ROOT / 'logs'
     log_dir.mkdir(exist_ok=True)
     logging.basicConfig(level=logging.INFO, format='%(asctime)s %(levelname)s %(name)s: %(message)s',
@@ -55,8 +56,8 @@ def main():
             store = SettingsStore(ROOT / 'settings/management.json') if args.command == 'management' else None
             if store is not None and store.recovery:
                 log.warning('Management settings recovery: %s', store.recovery)
-            with (Session(reflected=args.reflected, leases=args.leases, retained=args.retained)
-                  if args.reflected or args.leases or args.retained else nullcontext(None)) as runtime, \
+            with (Session(reflected=args.reflected, leases=args.leases, retained=args.retained, stable_returns=args.stable_returns)
+                  if args.reflected or args.leases or args.retained or args.stable_returns else nullcontext(None)) as runtime, \
                     ModLoader(ROOT / 'mods', settings=store, session=runtime) as loader:
                 if args.command == 'management':
                     loader.load('SDKManagement')

@@ -46,12 +46,20 @@ class Session:
     thread, build, layout and lifetime checks remain authoritative for each call.
     Close explicitly or use a context manager to remove hooks deterministically.
     """
-    def __init__(self, *, reflected=False, leases=False, retained=False):
-        if any(type(flag) is not bool for flag in (reflected, leases, retained)):
-            raise ValueError('reflected, leases and retained must be bools')
-        backend = 'research-probe-v8' if retained else 'research-probe-v7' if leases else 'research-probe-v6'
+    def __init__(self, *, reflected=False, leases=False, retained=False, stable_returns=False):
+        if any(type(flag) is not bool for flag in (reflected, leases, retained, stable_returns)):
+            raise ValueError('reflected, leases, retained and stable_returns must be bools')
+        retained = retained or stable_returns
+        backend = ('research-probe-v9' if stable_returns else 'research-probe-v8' if retained
+                   else 'research-probe-v7' if leases else 'research-probe-v6')
         self._transport = (SessionTransport(_executable=Path(__file__).resolve().parents[2] /
                            f'build/{backend}/research_probe.exe') if reflected or leases or retained else SessionTransport())
+        if stable_returns and any(getattr(self._transport, name, 0) != 1 for name in
+                                  ('reflected_protocol', 'lease_protocol', 'retained_protocol', 'stable_identity_protocol')):
+            try:
+                self._transport.close()
+            finally:
+                raise RuntimeQueryError('Stable retained-return backend handshake missing')
         self._dispatcher = CallbackDispatcher()
         self._hooks = []
         self._leases = set()
@@ -70,6 +78,11 @@ class Session:
         self._transport._check_thread()
         if self._closed:
             raise RuntimeQueryError('SDK session is closed')
+
+    @property
+    def supports_stable_returns(self):
+        self._check()
+        return self.supports_retained_invocation and getattr(self._transport, 'stable_identity_protocol', 0) == 1
 
     @property
     def pid(self):

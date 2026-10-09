@@ -2,9 +2,10 @@
 
 The v7 transport implements target-derived strong UObject leases for existing
 objects. v8 adds public retained invocation, scope ownership and original Explorer
-retained values, with live proof recorded below. New base UserWidget creation and
-retention passed, but its viewport lifecycle exposed lazy registry serial
-assignment: new-object stable identities remain an implementation gate. See
+retained values, with live proof recorded below. The first new-widget viewport
+test exposed lazy serial assignment. v9 now stabilizes retained output serials
+through the verified engine allocator; base UserWidget create/add/remove/release
+passed live with exact native holder cleanup. Other lifecycle gates remain. See
 WIDGET_OWNERSHIP.md. Target: Steam23765773, executable SHA256
 218a2478aad5b3a1674b5d7097ec1ac4f994abb95466f9da1407fcd39d639618.
 
