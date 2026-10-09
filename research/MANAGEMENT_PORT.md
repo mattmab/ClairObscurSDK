@@ -749,3 +749,17 @@ with an active registration, followed by exact viewport/reference/holder cleanup
 Actual mouse/keyboard action delivery remains untested. Next exercise real input
 and persistent Python callbacks, then controller death/relaunch before using this
 path for shared mod registry controls. The loaded v16 DLL was reused unchanged.
+
+## Native action frontend bridge
+
+The registry now provides `action_callback(selection, action_id, argument)` for
+`menu.bind_action(...)`. This connects the verified native button transport to the
+same action dispatch used by the console frontend. Captured arguments are isolated;
+every click rechecks generation and enabled state. An old queued click cannot
+reach a newly loaded instance. Native ownership remains with ButtonAction/menu,
+so registry dispatch does not introduce another cleanup system.
+
+Three new offline tests cover actual ButtonAction event decoding into registry
+invocation, unload/reload rejection, menu-close revocation, immutable argument
+snapshots and binding validation. All20 targeted management/button tests pass.
+Live adapter validation, multiple controls and keyboard dispatch remain pending.

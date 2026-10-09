@@ -74,6 +74,60 @@ class ManagementTests(unittest.TestCase):
         self.assertEqual(self.registry.invoke(self.registry.select('specimen'), 'read'), 3)
         self.assertEqual(len(self.registry.views()), 1)
 
+    def test_native_action_uses_registry_and_rejects_reload(self):
+        from test_button_actions import ButtonActionsTests
+        native = ButtonActionsTests()
+        native.setUp()
+        self.loader.enable('Specimen')
+        selected = self.registry.select('specimen')
+        instance = self.loader._loaded['Specimen'][1]
+        action = native.menu.bind_action(self.registry.action_callback(selected, 'read'))
+        native.events = [native.event(action)]
+        self.assertEqual(action._poll(), 1)
+        self.assertEqual(instance.calls, 1)
+        self.loader.unload('Specimen')
+        self.loader.load('Specimen')
+        self.loader.enable('Specimen')
+        native.events = [native.event(action, 2)]
+        self.assertEqual(action._poll(), 1)
+        self.assertIn('Stale mod selection', action.failures[0])
+        self.assertEqual(instance.calls, 1)
+        self.assertEqual(self.loader._loaded['Specimen'][1].calls, 0)
+        self.assertTrue(native.menu.close())
+        self.assertEqual(action._poll(), 0)
+
+    def test_action_callback_captures_arguments_and_checks_each_delivery(self):
+        self.loader.enable('Specimen')
+        selected = self.registry.select('specimen')
+        from dataclasses import replace
+        from expedition33.management import Action
+        entry = self.registry._entries['specimen']
+        seen = []
+        def receive(value):
+            seen.append(value['items'][:])
+            value['items'].append('callback mutation')
+        entry.definition = replace(entry.definition, actions=(Action('capture', 'Capture', receive),))
+        argument = {'items': [1]}
+        callback = self.registry.action_callback(selected, 'capture', argument)
+        argument['items'].append(2)
+        callback(object()); callback(object())
+        self.assertEqual(seen, [[1], [1]])
+        self.loader.disable('Specimen')
+        with self.assertRaises(ManagementError): callback(object())
+        self.assertEqual(len(seen), 2)
+
+    def test_action_callback_rejects_invalid_binding_before_dispatch(self):
+        selected = self.registry.select('specimen')
+        with self.assertRaisesRegex(ManagementError, 'Enable'):
+            self.registry.action_callback(selected, 'read')
+        self.loader.enable('Specimen')
+        selected = self.registry.select('specimen')
+        with self.assertRaisesRegex(ManagementError, 'Unknown'):
+            self.registry.action_callback(selected, 'missing')
+        with self.assertRaisesRegex(ManagementError, '64 KiB'):
+            self.registry.action_callback(selected, 'read', 'x' * 65537)
+        self.assertEqual(self.loader._loaded['Specimen'][1].calls, 0)
+
     def test_invalid_option_and_failed_persistence_do_not_change_runtime(self):
         self.loader.enable('Specimen'); selection = self.registry.select('specimen')
         for value in (True, 11, 10**1000, float('nan')):

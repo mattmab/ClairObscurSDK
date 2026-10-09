@@ -258,3 +258,30 @@ focus/object-holder cleanup. Decorative labels overlapping controls need explici
 hit-test visibility; the reflected HitTestInvisible value passed the labelled
 specimen. See BUTTON_EVENTS.md for the precise live validation status. This does not imply a
 finished Mods Menu, multiple controls, keyboard activation or general keybinds.
+
+### Shared management action callbacks
+
+`Registry.action_callback(selection, action_id, argument=None)` creates a callback
+for an owned native button (and future key frontends):
+
+```python
+selection = registry.select('my.mod')
+action = menu.bind_action(registry.action_callback(selection, 'refresh'))
+# Session.poll() delivers through the registry on the external controller thread.
+# action.remove(), menu.close(), or session shutdown revokes the native binding.
+```
+
+Binding validates the enabled selection, action name and JSON argument budget.
+Arguments are copied at binding and again for each invocation. Transport events
+are not passed as mod arguments. Each delivery resolves the original generation
+through `Registry.invoke`; disable/unload/reload invalidates that selection rather
+than silently redirecting an old button to a new instance. Refresh the frontend
+and bind a new selection after lifecycle changes. The callback stores no bound mod
+method. It does not own native unregistration: retain the returned ButtonAction
+under the existing menu/scope lifecycle. Errors use the registry's normal error
+state and the button's bounded failure history. Button delivery ignores return
+values; use registry views to render current state.
+
+Offline integration tests cover native event delivery, stale-generation rejection,
+menu-close revocation and argument isolation. The adapter itself is not yet live
+validated and does not implement a multi-control Mods Menu or general keybinds.

@@ -279,6 +279,28 @@ class Registry:
         finally:
             self._dispatching.discard(selection.mod_id)
 
+    def action_callback(self, selection, action_id, argument=None):
+        """Capture a generation-checked action for native button/key frontends.
+
+        The event is transport metadata, never an implicit mod argument. Resolve
+        the action again on every delivery so a disabled/reloaded mod cannot be
+        reached through a cached bound method. The frontend owns unregistration.
+        """
+        entry = self._entry(selection)
+        if not self._enabled(entry):
+            raise ManagementError('Enable the mod before binding its actions')
+        if not any(action.id == action_id for action in entry.definition.actions):
+            raise ManagementError(f'Unknown action {action_id!r}')
+        _json_value(argument)
+        if len(json.dumps(argument, ensure_ascii=True, allow_nan=False)) > 65536:
+            raise ManagementError('Action arguments exceed 64 KiB')
+        captured = copy.deepcopy(argument)
+
+        def dispatch(_event=None):
+            return self.invoke(selection, action_id, captured)
+
+        return dispatch
+
     def invoke(self, selection, action_id, argument=None):
         entry = self._entry(selection)
         if not self._enabled(entry):
