@@ -41,6 +41,7 @@ class SessionTransport:
             self.object_assignment_protocol = ready.get('object_assignment_protocol', 0)
             self.pod_value_protocol = ready.get('pod_value_protocol', 0)
             self.text_value_protocol = ready.get('text_value_protocol', 0)
+            self.enum_value_protocol = ready.get('enum_value_protocol', 0)
             if (self.start.get('event') != 'snapshot_start' or
                 any(row.get('event') != 'object' for row in self.objects) or
                 ready.get('event') != 'session_ready' or ready['pid'] != self.start['pid'] or
@@ -122,6 +123,10 @@ class SessionTransport:
             from ._retained_wire import SIZE
             if type(payload) is not bytes or len(payload) != SIZE:
                 raise ValueError('Invalid retained invocation payload')
+            if int.from_bytes(payload[:4], 'little') == 4 and any(getattr(self, name, 0) != 1 for name in
+                    ('enum_value_protocol', 'text_value_protocol', 'pod_value_protocol', 'object_assignment_protocol',
+                     'stable_identity_protocol', 'retained_protocol', 'lease_protocol', 'reflected_protocol')):
+                raise ValueError('Native session does not support enum invocation')
             suffix = ' ' + payload.hex()
         elif leased:
             from ._lease_wire import SIZE

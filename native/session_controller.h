@@ -83,7 +83,9 @@ inline void run_runtime_session(DWORD pid, DWORD thread, int32_t object_index, i
     packet.request.object_index = object_index; packet.request.object_serial = object_serial;
     packet.request.function_index = function_index; packet.request.function_serial = function_serial;
     wchar_t executable[32768]; require(GetModuleFileNameW(nullptr, executable, 32768) != 0, "SESSION_SELF_PATH");
-#ifdef E33_TEXT_SESSION
+#ifdef E33_ENUM_SESSION
+    auto path = std::filesystem::path(executable).parent_path().parent_path() / L"runtime-session-v13" / L"runtime_session_v13.dll";
+#elif defined(E33_TEXT_SESSION)
     auto path = std::filesystem::path(executable).parent_path().parent_path() / L"runtime-session-v12" / L"runtime_session_v12.dll";
 #elif defined(E33_POD_SESSION)
     auto path = std::filesystem::path(executable).parent_path().parent_path() / L"runtime-session-v11" / L"runtime_session_v11.dll";
@@ -129,6 +131,9 @@ inline void run_runtime_session(DWORD pid, DWORD thread, int32_t object_index, i
 #endif
 #ifdef E33_TEXT_SESSION
               << ",\"text_value_protocol\":1"
+#endif
+#ifdef E33_ENUM_SESSION
+              << ",\"enum_value_protocol\":1"
 #endif
               << "}\n" << std::flush;
     std::string command;

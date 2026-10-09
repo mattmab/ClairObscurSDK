@@ -131,6 +131,11 @@ class SessionScope:
         self._check()
         return self._session.supports_text_values
 
+    @property
+    def supports_enum_values(self):
+        self._check()
+        return self._session.supports_enum_values
+
     def assign_object(self, obj, owner, name, value, *, expected, element=0, allow_mutation=False):
         self._check()
         return self._session.assign_object(obj, owner, name, value, expected=expected,

@@ -8,6 +8,10 @@ from expedition33 import RuntimeQueryError, _enum_wire, _invocation_wire
 from expedition33.enums import EnumDescriptor, EnumMember, EnumValue
 from expedition33.invocation import prepare_call, decode_result, UnsupportedInvocation, InvocationError, PARM, RETURN
 import test_invocation
+import test_text_transport
+from test_ownership import Transport
+from expedition33.sdk import Session
+from expedition33._scope import SessionScope
 
 
 class EnumInvocationTests(unittest.TestCase):
@@ -64,6 +68,47 @@ class EnumInvocationTests(unittest.TestCase):
             decode_result(plan, replace(reply, data=b'\x01'), self.f.catalog)
         packet[_invocation_wire.FIELDS_AT + 124] ^= 1
         with self.assertRaises(ValueError): _enum_wire.decode_reply(request, packet.hex())
+
+    def test_session_scope_route_and_handshake(self):
+        transport = Transport()
+        transport.start['pid'] = self.f.target.pid
+        for capability in (*test_text_transport.TextTransportTests.capabilities, 'enum_value_protocol'):
+            setattr(transport, capability, 1)
+        original = transport.command
+        def command(name, packet=None):
+            if name != 'retained-invoke': return original(name, packet)
+            transport.calls.append(name)
+            response = bytearray(packet)
+            struct.pack_into('<I', response, 32, 1)
+            response[_invocation_wire.DATA_AT] = 2
+            return {'retained_packet': response.hex()}
+        transport.command = command
+        plan = self.plan(None, output=True)
+        with patch('expedition33.sdk.SessionTransport', return_value=transport) as factory, patch(
+                'expedition33.catalog.capture', return_value=self.f.catalog), patch(
+                'expedition33.invocation.prepare_call', return_value=plan):
+            with Session(enum_values=True) as session:
+                self.assertIn('research-probe-v13', str(factory.call_args.kwargs['_executable']))
+                scope = SessionScope(session)
+                self.assertTrue(scope.supports_enum_values and scope.supports_text_values)
+                with scope.invoke_retained(self.f.target, self.f.function) as result:
+                    self.assertEqual(result.return_value, self.descriptor.value('E::Second'))
+                scope.close()
+                self.assertFalse(session._leases)
+            transport.enum_value_protocol = 0
+            with self.assertRaisesRegex(RuntimeQueryError, 'Enum value backend handshake'):
+                Session(enum_values=True)
+
+    def test_transport_rejects_incomplete_enum_handshake_before_send(self):
+        packet = _enum_wire.encode_plan(self.plan(self.descriptor.value('E::Second')))
+        helper = test_text_transport.TextTransportTests()
+        for missing in (*helper.capabilities, 'enum_value_protocol'):
+            transport = helper.transport()
+            transport.enum_value_protocol = 1
+            setattr(transport, missing, 0)
+            with self.subTest(missing=missing), self.assertRaisesRegex(ValueError, 'does not support'):
+                transport.command('retained-invoke', packet)
+            self.assertEqual(transport._process.stdin.getvalue(), '')
 
 
 if __name__ == '__main__': unittest.main()

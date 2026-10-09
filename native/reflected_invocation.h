@@ -1,6 +1,7 @@
 #pragma once
 #include "invocation_protocol.h"
 #include "text_call_protocol.h"
+#include "enum_call_protocol.h"
 #include <cmath>
 
 // Uses the target's own dispatcher, with no thunk ABI emulation or promise that
@@ -62,18 +63,28 @@ struct CallTextHandling {
     uint32_t (*returned)(void*);
     uint32_t (*finish)(void*);
 };
+struct CallEnumValidation {
+    RetainedCallPacket* packet;
+    // Null value validates an output's type without treating zero as an input.
+    bool (*validate)(uint64_t,uint64_t,const CallIdentity&,const uint8_t*);
+};
 inline uint32_t reflected_call(uint64_t base,CallPacket& packet,const CallRetention* retention=nullptr,
-                               const CallPodValidation* pod=nullptr,const CallTextHandling* text=nullptr) {
+                               const CallPodValidation* pod=nullptr,const CallTextHandling* text=nullptr,
+                               const CallEnumValidation* enums=nullptr) {
     const bool pod_enabled=pod && pod->validate;
+    const bool enum_enabled=enums && enums->packet && &enums->packet->call==&packet && enums->validate &&
+        pod_enabled && retention && retention->preflight && retention->capture && !text;
+    if(enums && !enum_enabled) return 753;
     const bool text_enabled=text && text->packet && &text->packet->retained.call==&packet &&
         text->arguments && text->context && text->available && text->prepare && text->begin && text->returned && text->finish &&
         pod_enabled && retention && retention->preflight && retention->capture;
     if(text && !text_enabled) return 227;
     // Never overwrite a frame still owning uncertain native arguments.
     if(text_enabled && !text->available(text->context)) return 230;
-    if(auto invalid=text_enabled ? validate_text_call(*text->packet) : validate_call_packet(packet,pod_enabled)) return invalid;
+    if(auto invalid=enum_enabled ? validate_enum_call(*enums->packet) :
+       text_enabled ? validate_text_call(*text->packet) : validate_call_packet(packet,pod_enabled)) return invalid;
     packet.outcome=CallNotDispatched;
-    if((packet.version!=kCallVersion && !(pod_enabled && packet.version==kPodCallVersion) && !(text_enabled && packet.version==kTextCallVersion)) || packet.parameter_size>kCallBytes ||
+    if((packet.version!=kCallVersion && !(pod_enabled && packet.version==kPodCallVersion) && !(text_enabled && packet.version==kTextCallVersion) && !(enum_enabled && packet.version==kEnumCallVersion)) || packet.parameter_size>kCallBytes ||
        packet.parameter_size>packet.allocation_extent || packet.allocation_extent>65536 ||
        packet.field_count>kCallFields || packet.object_count>kCallObjects) return 200;
     if(local_read<DWORD>(base+0x9272d30)!=GetCurrentThreadId() ||
@@ -97,19 +108,20 @@ inline uint32_t reflected_call(uint64_t base,CallPacket& packet,const CallRetent
     alignas(16) uint8_t local_arguments[kCallBytes]{};
     auto arguments=text_enabled ? text->arguments : local_arguments;
     uint8_t used[kCallBytes]{};
+    uint64_t enum_properties[kCallFields]{};
     std::memcpy(arguments,packet.data,packet.parameter_size);
     auto property=local_read<uint64_t>(function+0x50);
     unsigned seen=0, walked=0, returns=0;
     const char* kinds[]={"", "BoolProperty","ByteProperty","UInt16Property","IntProperty",
                          "FloatProperty","DoubleProperty","ObjectProperty","ClassProperty",
-                         "StructProperty","StructProperty","StructProperty","StructProperty","TextProperty"};
+                         "StructProperty","StructProperty","StructProperty","StructProperty","TextProperty","EnumProperty"};
     for(;property;property=local_read<uint64_t>(property+0x18)) {
         if(++walked>4096) return 207;
         auto flags=local_read<uint64_t>(property+0x38);
         if(!(flags&0x80)) continue;
         if(seen>=packet.field_count) return 208;
         const auto& field=packet.fields[seen++];
-        if(field.kind<CallBool || field.kind>(text_enabled ? kTextCallKind : pod_enabled && packet.version==kPodCallVersion ? CallAnchors : CallClass) || !field.name[0] || field.name[95] ||
+        if(field.kind<CallBool || field.kind>(enum_enabled ? kEnumCallKind : text_enabled ? kTextCallKind : pod_enabled && packet.version==kPodCallVersion ? CallAnchors : CallClass) || !field.name[0] || field.name[95] ||
            field.flags!=flags || local_read<uint64_t>(property+0x10)!=(function|1) ||
            !exact_name(base,property+0x20,field.name) ||
            !exact_name(base,local_read<uint64_t>(property+8),kinds[field.kind]) ||
@@ -119,6 +131,13 @@ inline uint32_t reflected_call(uint64_t base,CallPacket& packet,const CallRetent
         if(flags&0x400) { ++returns; if(field.offset!=packet.return_offset || field.dimension!=1) return 210; }
         unsigned width=field.kind==CallByte ? 1 : field.kind==CallUInt16 ? 2 :
             field.kind==CallInt32 || field.kind==CallFloat ? 4 : 8;
+        if(field.kind==kEnumCallKind) {
+            const bool input=!(flags&0x400) && (!(flags&0x100) || (flags&0x8000000));
+            width=1;
+            if(!enum_enabled || !enums->validate(base,property,field.constraint,
+                                               input ? arguments+field.offset : nullptr)) return 754;
+            enum_properties[seen-1]=property;
+        }
         if(field.kind==kTextCallKind) {
             width=16;
             if(!text_enabled || local_read<uint64_t>(property)!=base+0x6e1ba00 || field.dimension!=1) return 228;
@@ -199,6 +218,8 @@ inline uint32_t reflected_call(uint64_t base,CallPacket& packet,const CallRetent
     packet.object_count=0;
     for(unsigned f=0;f<packet.field_count;++f) {
         const auto& field=packet.fields[f];
+        if(field.kind==kEnumCallKind &&
+           !enums->validate(base,enum_properties[f],field.constraint,arguments+field.offset)) return 755;
         if(call_pod_kind(field.kind)) {
             for(unsigned i=0;i<field.dimension;++i)
                 if(!valid_pod_value(call_pod_profile(field.kind),arguments+field.offset+i*field.width,field.width)) return 226;

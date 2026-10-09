@@ -26,5 +26,17 @@ int main() {
     if(reflected_call(0,packet->retained.call,&retention,&pod,&handling)!=600) return 6;
     handling.prepare=nullptr;
     if(reflected_call(0,packet->retained.call,&retention,&pod,&handling)!=227) return 7;
+    auto enumeration=std::make_unique<RetainedCallPacket>();
+    enumeration->call.version=kEnumCallVersion;
+    CallEnumValidation enums{enumeration.get(),[](uint64_t,uint64_t,const CallIdentity&,const uint8_t*) { return false; }};
+    if(reflected_call(0,enumeration->call,&retention,&pod)!=300) return 8;
+    if(reflected_call(0,enumeration->call,nullptr,&pod,nullptr,&enums)!=753) return 9;
+    if(reflected_call(0,enumeration->call,&retention,nullptr,nullptr,&enums)!=753) return 10;
+    if(reflected_call(0,enumeration->call,&retention,&pod,&handling,&enums)!=753) return 11;
+    if(reflected_call(0,packet->retained.call,&retention,&pod,nullptr,&enums)!=753) return 12;
+    if(reflected_call(0,enumeration->call,&retention,&pod,nullptr,&enums)!=752) return 13;
+    enums.validate=nullptr;
+    if(reflected_call(0,enumeration->call,&retention,&pod,nullptr,&enums)!=753) return 14;
     std::cout << "Seven actual-dispatcher capability/quarantine gates passed without engine memory access.\n";
+    std::cout << "Seven enum dispatcher version/capability/correlation gates passed without engine memory access.\n";
 }

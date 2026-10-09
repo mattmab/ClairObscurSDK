@@ -1,4 +1,7 @@
 #pragma once
+#if defined(E33_ENUM_SESSION) && !defined(E33_TEXT_SESSION)
+#error Enum session requires the complete v12 capability chain
+#endif
 #if defined(E33_TEXT_SESSION) && !defined(E33_POD_SESSION)
 #error Text session requires the complete v11 capability chain
 #endif
@@ -19,7 +22,11 @@
 #ifdef E33_POD_SESSION
 #ifdef E33_TEXT_SESSION
 #include "text_call_protocol.h"
+#ifdef E33_ENUM_SESSION
+constexpr wchar_t kSessionMessage[] = L"E33SDK.Session.v13";
+#else
 constexpr wchar_t kSessionMessage[] = L"E33SDK.Session.v12";
+#endif
 #else
 constexpr wchar_t kSessionMessage[] = L"E33SDK.Session.v11";
 #endif
@@ -86,7 +93,9 @@ struct SessionPacket {
 #endif
 };
 inline void session_mapping_name(wchar_t (&name)[96], DWORD controller, uint64_t nonce) {
-#ifdef E33_TEXT_SESSION
+#ifdef E33_ENUM_SESSION
+    swprintf_s(name, L"Local\\E33Session13_%lu_%016llx", controller, nonce);
+#elif defined(E33_TEXT_SESSION)
     swprintf_s(name, L"Local\\E33Session12_%lu_%016llx", controller, nonce);
 #elif defined(E33_ASSIGNMENT_SESSION)
     swprintf_s(name, L"Local\\E33Session10_%lu_%016llx", controller, nonce);

@@ -17,6 +17,13 @@ static const CallPodValidation* session_pod_validation=nullptr;
 #ifdef E33_ASSIGNMENT_SESSION
 #include "target_object_assignment.h"
 #endif
+#ifdef E33_ENUM_SESSION
+#include "enum_schema.h"
+static bool validate_target_enum(uint64_t base,uint64_t property,const CallIdentity& id,const uint8_t* value) {
+    TargetPodSchemaOps ops{base};
+    return value ? validate_byte_enum_value(ops,property,id,*value) : validate_byte_enum_parameter(ops,property,id);
+}
+#endif
 #ifdef E33_REFLECTED_SESSION
 #include "reflected_invocation.h"
 #endif
@@ -155,6 +162,13 @@ uint32_t backend_command(SessionPacket* packet) {
         auto& retained=packet->retained;
         if(!retained_call_empty(retained)) { retained.call.error=412; return 0; }
         CallRetention retention{&retained,retain_preflight,retain_output};
+#ifdef E33_ENUM_SESSION
+        if(retained.call.version==kEnumCallVersion) {
+            CallEnumValidation enums{&retained,validate_target_enum};
+            retained.call.error=reflected_call(runtime_base,retained.call,&retention,session_pod_validation,nullptr,&enums);
+            return 0;
+        }
+#endif
         retained.call.error=reflected_call(runtime_base,retained.call,&retention,session_pod_validation);
         return 0;
     }

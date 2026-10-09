@@ -119,6 +119,12 @@ validation, including a packet derived from the live GameAndUIEx schema. No enum
 call was dispatched. Session/dispatcher integration and focus restoration remain
 next; the existing packaged v12 host and original Harness invocation are unchanged.
 
+V13 session/dispatcher and public capability integration now compile and pass
+offline checks (184 Python tests plus native gates and compatibility). It is
+isolated from the running v12 package. Live enum dispatch, Harness enum argument
+adaptation, focus restoration and clickable management controls remain pending;
+see WIDGET_LAYOUT_VALUES.md for the exact candidate and next validation steps.
+
 ## Preserved implementation references
 
 Primary source is the installed BL4 sdk_mods directory. Nineteen original files

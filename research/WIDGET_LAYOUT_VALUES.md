@@ -507,3 +507,34 @@ Evidence: `enum-live-plan.json/.bin`, `enum-invocation-python-tests.log` and
 `enum-schema-fixture.log`. This is live-metadata planning plus offline wire proof,
 not proof that input mode or focus changed. Next connect an isolated session and
 the game-thread validator, then validate bounded calls and context restoration.
+
+## Isolated v13 enum session candidate
+
+The native dispatcher now accepts an explicit enum-validation callback only with
+the retained/POD capability chain, matching packet identity and no text frame.
+It validates each EnumProperty before dispatch, checks input membership, and
+validates all enum values again after dispatch before publication. Failure after
+the engine call retains an unknown outcome; callers must not retry automatically.
+Malformed packets and missing callbacks reject before any engine memory access.
+
+`E33_ENUM_SESSION` requires the complete v12 build chain. The candidate uses
+message `E33SDK.Session.v13`, mapping `Local\\E33Session13_...`, and separate
+`build/runtime-session-v13` / `build/research-probe-v13` binaries. Existing packet
+storage is reused for retained version4 calls; text keeps its existing durable
+frame and transport. No running v12 binary was rebuilt or replaced.
+
+Public `Session(enum_values=True)`, scope `supports_enum_values`, and launcher
+`--enum-values` select this candidate. Complete handshakes are required before
+sending a version4 packet. `invoke_retained` preserves its existing lease adoption,
+cleanup and unknown-outcome rules and now returns copied EnumValue results.
+Plain invocation and mixed text/enum calls remain gated. The original Harness
+does not yet have an enum argument encoding; enum schema remains usable.
+
+Validation: v13 DLL/controller built with/W4/WX; all184 Python tests pass. Seven
+new actual-dispatcher capability/correlation cases pass alongside the seven text
+gates,43 ownership,22 text-wire,34 durable-frame and13 target-type checks. Legacy
+v5/v11 compile checks and v11/v12 layout fixtures still build. Evidence:
+`enum-v13-build.log`, `enum-v13-python-tests.log`, `enum-text-regression.log`,
+`enum-compatibility.log`. V13 has not been loaded into the game. Next perform a
+cooperative host handover, validate enum round trips on an SDK-owned widget,
+then implement the original Harness enum adapter and input/focus restoration.
