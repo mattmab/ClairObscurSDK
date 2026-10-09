@@ -1265,6 +1265,11 @@ TRACE_FRAMES.md for the native evidence, lifecycle details and remaining live,
 relaunch, installed-function schema browsing and wider codec/Blueprint gates.
 # Live trace validation update — 2026-10-09
 
+Follow-up live validation also passed hooked getter schema browsing with explicit
+retained-metadata provenance and signed integer input/return tracing through
+KismetMathLibrary.Add_IntInt. Native local/out/return specimens are now verified;
+controller-loss, relaunch and wider/Blueprint trace coverage remain open.
+
 Native scalar POST tracing now has live main-menu proof for a bool getter return
 and PlayerController viewport output parameters. The original Harness adapter
 also passed start/invoke/read/stop/forget against the real getter. Hook restoration

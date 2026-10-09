@@ -569,3 +569,24 @@ foreign-hook failure preservation and revoked scope access. Evidence:
 evidence/harness-trace-schema-tests.log. The live Harness verifier now includes
 schema inspection during an installed trace, but that added assertion has not
 yet run against a refreshed controller. Earlier live results do not prove it.
+
+## Live schema and input-local validation — 2026-10-09
+
+The refreshed verifier passed hooked-function schema inspection on game39900.
+The getter's BoolProperty ReturnValue was returned while its hook was installed,
+with the explicit before_trace_installation provenance. The subsequent Harness
+invoke/read/forget and session close passed. The viewport out specimen passed
+again. Evidence: evidence/trace-schema-live.log and the refreshed
+evidence/trace-out-harness-live.json (passed=true).
+
+Actual runtime metadata identified KismetMathLibrary.Add_IntInt with A/B integer
+inputs at offsets0/4, return at8, parameter size12 and entry RVA0x3827db0.
+The new scripts/verify_live_trace_locals.py invoked its default object for17+25
+and-9+4. The two trace events copied the exact signed inputs and returned42/-5,
+matching invocation results and target identity. Rejected/dropped counts were
+zero. Explicit stop restored the original entry; forget and session close passed.
+Evidence: evidence/trace-locals-schema.log and evidence/trace-locals-live.{json,log}.
+
+These specimens now cover native input locals, out addresses and the independent
+return address. They do not prove arbitrary schemas, Blueprint execution paths,
+controller-loss or game-relaunch cleanup. No native DLL was rebuilt or replaced.
