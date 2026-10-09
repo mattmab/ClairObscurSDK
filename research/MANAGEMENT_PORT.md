@@ -566,3 +566,12 @@ restoring RootWidget/children and the exact holder baseline. Visual appearance
 and disappearance were observed. Focus restoration, actionable controls, router
 integration and key dispatch remain pending; the label's panel overflow is also
 not a finished layout. See COMMONUI_INPUT_OWNERSHIP.md for evidence and limits.
+
+Console-free Harness getter calls plus target-derived Slate observations now
+identify the actual current focus owner as the GameEngine-held SViewport. Native
+menu recovery must support both viewport and UMG focus, not substitute the menu's
+desired button. SetFocusToGameViewport is reflected and its static implementation
+verified, but affects multiple eligible Slate users and fallback focus state.
+Next validate an explicitly single-user viewport-to-owned-child-to-viewport
+specimen with readback and exact cleanup. General per-user/disconnect restoration
+and real key dispatch remain separate acceptance gates.

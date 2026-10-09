@@ -147,3 +147,50 @@ callback, input-mode setter, key mapping or enabled control was used. Evidence:
 `evidence/widget-commonui-visible-live.json` and the persistent host log. This
 extends the earlier undisplayed activation proof to a visible owned widget tree;
 it does not establish CommonUI router integration or focus restoration.
+
+## Console-free focus and viewport identity
+
+`inspect_focus_via_harness.py` completed16 getter requests through the existing
+FileService on controller23916/game21804, without opening the console. A preceding
+Down key did not activate a menu action. Continue/NewGame/Settings/QuitButton and
+their four InternalRootButtonBase children all returned false for keyboard and
+user focus. Fresh request UUIDs, exact session matching and preserved responses
+prove the owner-thread Harness transport path; no timeout/replay occurred.
+Evidence: `menu-focus-via-harness.json` and its listed response IDs under
+`settings/E33Introspection/responses/`. This is a bounded sequential sample.
+
+The target's Slate path explains the result. Widget.HasUserFocus calls1542500,
+which dispatches via application-base virtual190. Live this resolves to15ed2d0.
+That function indexes16-byte user references at application+2f8/count+300, then
+calls1641050. The comparison helper obtains the current focused widget through
+163dc80: it promotes the last weak reference in user+70/count+78. The keyboard
+user mapping virtual8 resolves to10044d0, which returns0.
+
+Read-only native corroboration found one user (index0), a four-widget focus path,
+and a last widget with vtable RVA6e78128. Constructor17570e0 installs that vtable;
+allocator3228a00 is called with the explicit type string "SViewport" in the
+GameEngine, movie player and streaming-pause call sites. GameEngine creation
+3709d70 stores the reference at GameEngine+10d0/+10d8. The live focused widget
+and reference controller exactly match this GameEngine-held viewport. They also
+match the registered viewport weak reference at SlateApplication+398/+3a0.
+Thus the observed focus belongs to the game's Slate viewport, not a sampled UMG
+button. `inspect_slate_focus_dispatch.py` preserves the corroboration in
+`slate-focus-dispatch.json`. Stable repeated reads do not acquire ownership or
+constitute an atomic snapshot; these offsets are research, not a callable SDK API.
+
+The reflected WidgetBlueprintLibrary.SetFocusToGameViewport has no parameters
+and native entry313faf0. After defining that verified entry in Ghidra, inspection
+shows it calls1603dc0 with focus reason2. This helper promotes the registered
+viewport, builds its widget path and dispatches application virtual160, live
+1603b30. That target iterates eligible Slate users and also updates the stored
+fallback focus target/cause. It is therefore NOT a per-user restoration API.
+No live setter was called. A bounded transfer specimen may use this path only
+after confirming the supported single-user viewport baseline; a general mod
+menu still needs per-user ownership, stale-target checks and disconnect recovery.
+
+Evidence chain: `slate-focus-query.json`, `slate-focus-dispatch-functions.json`,
+`slate-user-focus.json`, `slate-focused-widget.json`,
+`slate-focused-vtable-xrefs.json`, `slate-focused-constructor.json`,
+`slate-focused-allocation.json`, `slate-viewport-callers.json`,
+`set-focus-game-viewport-schema.json`, `set-focus-game-viewport.json`,
+`slate-restore-viewport.json` and `slate-focus-all-users.json`.
