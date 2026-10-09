@@ -141,6 +141,45 @@ class Catalog:
 def capture():
     """Capture fresh live ownership and superclass observations; no saved-dump fallback."""
     start, rows = _query(['--catalog'])
+    return _decode_catalog(start, rows)
+
+
+def capture_selected(pid, identities):
+    """Read a bounded, self-contained class/outer closure for known identities.
+
+    identities contains (index, serial, address) tuples from prior observations
+    or native retained results. This does not enumerate all live objects, merge
+    old observations, pin objects, or authorize invocation. Native validation
+    rejects changed selectors and bounds the dependency closure to 16384 slots.
+    """
+    identities = tuple(identities)
+    if type(pid) is not int or not 0 < pid <= 0xffffffff or not 1 <= len(identities) <= 1024:
+        raise ValueError('Expected a process ID and 1 to 1024 object identities')
+    selected = {}
+    for identity in identities:
+        if not isinstance(identity, tuple) or len(identity) != 3 or any(type(v) is not int for v in identity):
+            raise ValueError('Expected integer (index, serial, address) identities')
+        index, serial, address = identity
+        if not 0 <= index < 100000000 or not -0x80000000 <= serial <= 0x7fffffff or not 0x10000 <= address <= 0x7fffffffffff:
+            raise ValueError('Object identity out of range')
+        if index in selected:
+            raise ValueError('Duplicate selected object index')
+        selected[index] = (serial, address)
+    selectors = ','.join(f'{index}:{serial}:{address:x}' for index, (serial, address) in selected.items())
+    start, rows = _query(['--catalog-select', str(pid), selectors])
+    if start['pid'] != pid:
+        raise RuntimeQueryError('Selected catalog process changed')
+    catalog = _decode_catalog(start, rows)
+    if len(catalog.objects) > 16384:
+        raise RuntimeQueryError('Selected catalog dependency limit exceeded')
+    for index, (serial, address) in selected.items():
+        obj = catalog.by_index.get(index)
+        if obj is None or (obj.serial, obj.address) != (serial, address):
+            raise RuntimeQueryError('Selected object missing or changed')
+    return catalog
+
+
+def _decode_catalog(start, rows):
     objects, classes = [], []
     try:
         for row in rows:

@@ -196,6 +196,8 @@ int main(int argc, char** argv) {
         bool console_construction = argc == 2 && std::string(argv[1]) == "--console-construct-proof";
         bool runtime_session = argc == 2 && std::string(argv[1]) == "--session";
         bool catalog = argc == 2 && std::string(argv[1]) == "--catalog";
+        const bool selected_catalog = argc == 4 && std::string(argv[1]) == "--catalog-select";
+        if (selected_catalog) catalog = true;
         if (catalog) limit = 0;
         if (invoke_proof || observe_proof || runtime_session || console_construction) limit = 0;
         int32_t proof_object = -1, proof_object_serial = 0, proof_function = -1, proof_function_serial = 0;
@@ -212,7 +214,7 @@ int main(int argc, char** argv) {
                     "FUNCTION_NAME_REQUIRES_OWNER_DOT_NAME");
             function_owner = qualified.substr(0, dot); function_name = qualified.substr(dot + 1); limit = 0;
         }
-        else if (argc == 4 && (std::string(argv[1]) == "--describe" || std::string(argv[1]) == "--read-values" || std::string(argv[1]) == "--describe-enums")) {
+        else if (argc == 4 && (selected_catalog || std::string(argv[1]) == "--describe" || std::string(argv[1]) == "--read-values" || std::string(argv[1]) == "--describe-enums")) {
             read_values = std::string(argv[1]) == "--read-values";
             read_enums = std::string(argv[1]) == "--describe-enums";
             descriptor_pid = std::stoul(argv[2]);
@@ -230,7 +232,7 @@ int main(int argc, char** argv) {
             require(!descriptors.empty(), "DESCRIPTOR_SELECTORS_EMPTY"); limit = 0;
         }
         else require(argc == 1 || catalog || thread_ping || invoke_proof || observe_proof || runtime_session || console_construction, "USAGE: research_probe.exe [--catalog | --limit N | --reflect-class NAME | --read-bools OBJECT | --reflect-function OWNER.NAME | --thread-ping | --invoke-proof | --observe-proof | --session]");
-        const bool reflection = !reflect_class.empty() || !bool_object.empty() || !function_name.empty() || !descriptors.empty();
+        const bool reflection = !reflect_class.empty() || !bool_object.empty() || !function_name.empty() || (!descriptors.empty() && !selected_catalog);
         DWORD pid = discover_process();
         require(descriptors.empty() || pid == descriptor_pid, "DESCRIPTOR_PROCESS_CHANGED");
         Handle process(OpenProcess(PROCESS_VM_READ | PROCESS_QUERY_LIMITED_INFORMATION, FALSE, pid));
@@ -289,6 +291,26 @@ int main(int argc, char** argv) {
             return 0;
         }
         uint32_t emitted = 0, null_slots = 0, changing_slots = 0;
+        // Selected catalogs are complete dependency closures, not fabricated
+        // additions to an older capture. Every queued slot is checked again
+        // when emitted. Scope and lifetime remain those of an observation.
+        std::vector<int32_t> selected_work;
+        if (selected_catalog) for (const auto& entry : descriptors) selected_work.push_back(entry.first);
+        auto select_dependency = [&](uint64_t address) {
+            if (!selected_catalog || !address) return;
+            const auto header = reader.get<ObjectHeader>(address);
+            const auto item = item_at(header.index);
+            require(item.object == address, "SELECTED_DEPENDENCY_NOT_REGISTERED");
+            const auto identity = std::make_pair(item.serial, address);
+            auto known = descriptors.find(header.index);
+            if (known != descriptors.end()) {
+                require(known->second == identity, "SELECTED_DEPENDENCY_CHANGED");
+                return;
+            }
+            require(descriptors.size() < 16384, "SELECTED_DEPENDENCY_LIMIT");
+            descriptors.emplace(header.index, identity);
+            selected_work.push_back(header.index);
+        };
         auto derives_from_core_type = [&](uint64_t type, const std::string& wanted) {
             std::unordered_set<uint64_t> seen;
             bool found = false;
@@ -318,6 +340,7 @@ int main(int argc, char** argv) {
         std::unordered_set<uint64_t> catalog_visiting;
         std::function<bool(uint64_t)> record_class = [&](uint64_t at) -> bool {
             if (!at) return false;
+            select_dependency(at);
             auto known = catalog_classes.find(at);
             if (known != catalog_classes.end()) return known->second;
             require(catalog_visiting.size() < 128 && catalog_visiting.insert(at).second,
@@ -351,7 +374,16 @@ int main(int argc, char** argv) {
             catalog_classes.emplace(at, is_metaclass);
             return is_metaclass;
         };
-        for (int32_t i = 0; i < array.num_elements && (!limit || emitted < limit); ++i) {
+        size_t selected_cursor = 0;
+        for (int32_t next_index = 0; !limit || emitted < limit;) {
+            int32_t i;
+            if (selected_catalog) {
+                if (selected_cursor == selected_work.size()) break;
+                i = selected_work[selected_cursor++];
+            } else {
+                if (next_index == array.num_elements) break;
+                i = next_index++;
+            }
             if (!descriptors.empty() && descriptors.find(i) == descriptors.end()) continue;
             auto item = item_at(i);
             if (!descriptors.empty()) {
@@ -370,7 +402,7 @@ int main(int argc, char** argv) {
             auto class_name = read_name(reader, pool, cls.name_id, cls.name_number);
             auto meta_name = read_name(reader, pool, meta.name_id, meta.name_number);
             bool descriptor_function = false;
-            if (!descriptors.empty() && !read_values && !read_enums) {
+            if (!descriptors.empty() && !read_values && !read_enums && !selected_catalog) {
                 // Validate UStruct membership through the observed metaclass chain;
                 // never reinterpret arbitrary UObject bytes as reflection metadata.
                 std::unordered_set<uint64_t> seen_types;
@@ -400,6 +432,9 @@ int main(int argc, char** argv) {
             }
             int32_t outer_index = -1, outer_serial = 0;
             if (catalog) {
+                select_dependency(object.cls);
+                select_dependency(cls.cls);
+                select_dependency(object.outer);
                 if (record_class(object.cls)) record_class(item.object);
                 if (object.outer) {
                     const auto outer = reader.get<ObjectHeader>(object.outer);

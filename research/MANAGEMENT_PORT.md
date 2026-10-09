@@ -1130,3 +1130,35 @@ This is functional validation of the changed teardown path on six canvas
 children, not a same-size before/after benchmark, full 12-control menu timing,
 disconnect/relaunch coverage or a packaging claim. Full-menu timing and the much
 larger widget-construction cost remain open performance gates.
+
+### Bounded selected-catalog reader — 2026-10-09
+
+Read-only profiling of the live catalog returned96054 objects in2.9245 seconds;
+about2.15 seconds was spent waiting for the native reader and its output.
+The profile is preserved in `evidence/catalog-cost.prof`. Object-return capture
+is therefore a material remaining construction cost, beyond Python planning.
+
+The independent reader now supports `--catalog-select PID INDEX:SERIAL:ADDRESS`
+(comma-separated selectors), exposed as `catalog.capture_selected(pid,
+identities)`. It accepts1–1024 selected identities and expands their current
+outer, class, metaclass and superclass dependencies, bounded to16384 objects.
+Every dependency must be registered and its identity must still match when
+emitted. The same executable fingerprint, anchors, object headers, class size,
+inheritance and end-count checks remain active. This produces a self-contained
+partial catalog; it does not merge stale observations, pin objects, enumerate
+all live objects or authorize calls. There is no full-scan fallback on failure.
+
+PROVEN on game21568 by `scripts/verify_selected_catalog.py`: the live main-menu
+PlayerController selected closure contained19 objects. All selected object and
+class rows exactly matched an independent full96054-object capture; the full
+Unreal path also matched. Full capture took2.7657038 seconds and selected capture
+0.3462925 seconds in this run. Changed serial, address and process selectors were
+each rejected. Evidence: `evidence/selected-catalog-live.json`. The native reader
+built successfully and289 Python tests pass, including incomplete dependency
+graphs, incorrect selectors/process, input bounds and no-fallback behavior.
+
+Only the standalone reader executable was rebuilt. The resident v17 DLL and
+its controller binary were untouched. Retained-result decoding and menu creation
+still use full captures; adopting selected result closures needs explicit
+planning-observation semantics and same-call lease/decode failure validation.
+No menu opening speedup or updated package is claimed from this reader test.
