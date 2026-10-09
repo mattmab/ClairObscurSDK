@@ -547,3 +547,24 @@ JSON artifacts and `button-action-disconnect-run.log`.
 This establishes controller-death teardown and subsequent binding in the same game
 process. The worker queue was empty when disconnected; pending-event loss and game
 relaunch are separate validation cases. No new runtime DLL was built or loaded.
+
+## Isolated v16 development candidate
+
+Candidate `expedition33-0.1.0-candidate-20261009T165925Z` packages clean source
+revision5f0c6e0, including the existing v16 controller/runtime and the
+`--button-actions` launcher opt-in. All338 files (including MANIFEST.json) match
+the extracted directory and ZIP bytes. Exclusion checks passed; raw evidence,
+logs, settings and game data are not packaged. ZIP SHA256:
+f14cd0b3c038591f3b743a41788c45904c4a8033584f88634a29bcfde6dd19a7.
+
+Isolated CPython3.13.15 (-I -S -B) ran220 bundled tests successfully, skipping
+seven unavailable native-fixture artifact checks. Those native artifacts are not
+part of the release bundle. Isolated launcher help and all three menu-backend
+selection checks passed without attaching to the game. The DLL/controller are
+copies of the unchanged pinned source binaries. Evidence: `button-v16-package.json`,
+`button-v16-package-validation.json`, `button-v16-package-tests.log`.
+
+This is an offline-verified candidate, not a new validated release. Live use from
+this package after a fresh game launch remains required; current source-session
+proof cannot establish which DLL a newly launched packaged controller would load
+while another copy is already resident in the game.

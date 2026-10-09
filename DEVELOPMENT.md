@@ -28,7 +28,7 @@ validation scopes; original release acceptance does not certify newer runtimes.
 | Native menu ownership (opt-in v14) | Scope-owned prepare/attach/focus/close, controller-death cleanup and preserving unrelated widget focus live-tested. General per-user/UMG focus baselines and relaunch pending. |
 | SButton ownership (opt-in v15) | Independent reference retention, normal release and controller-death cleanup live-tested. Callback binding, cloning-aware revocation and action delivery remain unimplemented. |
 | Button actions (opt-in v16) | `Session(button_actions=True)` and `menu.bind_action(callback)` implemented. Real mouse delivery, contained Python exception, unregistration, and exact focus/holder cleanup live-tested. Bound-action controller death, stale-owner rejection and fresh-session bind/rebind/cleanup passed. Keyboard activation and game relaunch remain pending. Overlapping decorative widgets require explicit hit-test treatment; see BUTTON_EVENTS.md. |
-| Current candidate packaging | Packaging includes v13/v14/v15/v16 binaries and launcher opt-ins, including `--button-actions`. Isolated launcher selection passed. Candidate byte verification and live package acceptance are separate gates; no new release claim. |
+| Current candidate packaging | v16 candidate 20261009T165925Z includes the controller/runtime and `--button-actions` launcher opt-in. All338 manifest/archive files verified; isolated launcher selection and220 tests passed (7 unbundled native-fixture checks skipped). Fresh-game live package acceptance remains pending; no new release claim. |
 
 ## Interactive native console
 
