@@ -343,3 +343,37 @@ Next wire the durable context into a separate session capability and the existin
 Python planner/transport, validate Unicode and empty text round trips live, then
 render native TextBlock labels. These fixtures prove ownership bookkeeping and
 rejection behavior; they do not prove live FText output lifetime or menu behavior.
+
+## Candidate v12 native session and controller
+
+`E33_TEXT_SESSION` now requires the complete v11 capability chain, adds
+SessionTextInvoke106 and advertises text_value_protocol1. It uses its own
+E33SDK.Session.v12 message, E33Session12 mapping name and isolated DLL/controller
+paths. `build-text-candidate.cmd` builds these artifacts without replacing v11.
+The appended text envelope uses the old struct's four bytes of tail padding;
+compiled layout fixtures verify existing field offsets, envelope size and final
+alignment rather than assuming an append offset from the old total size.
+
+The backend copies the wire envelope into module-owned storage before invoking
+the guarded dispatcher. The native argument frame never lives in shared mapping
+memory. Every normal/error/SEH result attempts explicit guarded cleanup. An empty
+or fully cleaned frame can reset; deferred ownership prevents another text call
+and close retries on the game thread. Uncertain ownership remains bounded in the
+pinned module and rejects later text calls and session reopen. Terminal shutdown
+does not guess a destructor or reuse those records. Existing lease and console
+cleanup still run after text cleanup, except while a valid release is deferred.
+
+The controller encodes/decodes the full bounded envelope. Python's internal
+transport requires the full advertised capability chain and exact version/size
+before sending a text command; malformed or mismatched acknowledgements retain
+the existing abort/owner-watcher behavior. Public Session and invocation planning
+have not opted in yet. No candidate DLL has been loaded into the game.
+
+Both candidate artifacts build with/W4/WX. v5/v11 compile compatibility passes.
+All167 Python tests pass, including the compiled v11/v12 layout comparison,
+missing-capability rejection, payload version/size rejection and acknowledgement
+mismatch handling. Evidence: `evidence/text-session-build.log`,
+`evidence/text-session-compatibility.log`, `evidence/text-session-python-tests.log`.
+These checks do not constitute live session/cleanup validation. Next connect
+public planning/result decoding and the persistent management host, then perform
+a cooperative handover and bounded live text round trips before native labels.

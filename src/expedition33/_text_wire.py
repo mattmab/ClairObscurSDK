@@ -1,4 +1,4 @@
-"""Candidate copied-text envelope. No transport capability or engine dispatch."""
+"""Copied-text envelope for the opt-in candidate v12 transport."""
 from dataclasses import dataclass, replace
 import struct
 from . import _invocation_wire as call

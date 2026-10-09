@@ -71,6 +71,13 @@ tests. The runtime has not opted in yet: the next step is session/controller and
 planner integration, followed by live text round trips and TextBlock labels.
 Existing console, packaged lifecycle and numeric layout behavior are unchanged.
 
+The isolated v12 candidate now builds with its own session/mapping and full text
+controller transport. Native session storage owns the text frame across failures;
+normal cleanup, deferred close and quarantine/reopen rejection are wired. Internal
+Python transport gating and compiled layout checks pass (167 Python tests total).
+Public text planning/result decoding and live handover are still pending. No v12
+code has been loaded into the running game and no live text/menu claim is made.
+
 ## Preserved implementation references
 
 Primary source is the installed BL4 sdk_mods directory. Nineteen original files

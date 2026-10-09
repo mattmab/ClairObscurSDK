@@ -3,9 +3,9 @@
 #include "reflected_invocation.h"
 #include "text_call_frame.h"
 
-// Candidate context. The eventual backend must keep it in session-owned
-// storage, call cleanup on every normal failure path, and quarantine it after
-// ambiguous dispatch/SEH faults. It is not yet instantiated by runtime_session.
+// Candidate context kept in durable native-session storage by the opt-in v12
+// backend. Cleanup runs on every failure path; ambiguous ownership is preserved
+// in the pinned module and prevents reuse after dispatch/SEH faults.
 struct TargetTextCall {
     uint64_t base=0;
     TextCallPacket* packet=nullptr;

@@ -40,6 +40,7 @@ class SessionTransport:
             self.stable_identity_protocol = ready.get('stable_identity_protocol', 0)
             self.object_assignment_protocol = ready.get('object_assignment_protocol', 0)
             self.pod_value_protocol = ready.get('pod_value_protocol', 0)
+            self.text_value_protocol = ready.get('text_value_protocol', 0)
             if (self.start.get('event') != 'snapshot_start' or
                 any(row.get('event') != 'object' for row in self.objects) or
                 ready.get('event') != 'session_ready' or ready['pid'] != self.start['pid'] or
@@ -90,6 +91,11 @@ class SessionTransport:
         reflected = command == 'reflected-invoke'
         retained = command == 'retained-invoke'
         assignment = command == 'object-assign'
+        text = command == 'text-invoke'
+        if text and any(getattr(self, capability, 0) != 1 for capability in
+                        ('text_value_protocol', 'pod_value_protocol', 'object_assignment_protocol',
+                         'stable_identity_protocol', 'retained_protocol', 'lease_protocol', 'reflected_protocol')):
+            raise ValueError('Native session does not support owned text invocation')
         if assignment and getattr(self, 'object_assignment_protocol', 0) != 1:
             raise ValueError('Native session does not support object assignment')
         if retained and getattr(self, 'retained_protocol', 0) != 1:
@@ -99,10 +105,15 @@ class SessionTransport:
             raise ValueError('Native session does not support object leases')
         if reflected and getattr(self, 'reflected_protocol', 0) != 1:
             raise ValueError('Native session does not support reflected invocation')
-        if not reflected and not leased and not retained and not assignment and command not in ('enable', 'disable', 'invoke', 'drain', 'ping', 'close', 'console-attach', 'console-detach', 'console-status', 'console-poll', 'console-execute', 'console-print', 'console-names', 'console-key'):
+        if not reflected and not leased and not retained and not assignment and not text and command not in ('enable', 'disable', 'invoke', 'drain', 'ping', 'close', 'console-attach', 'console-detach', 'console-status', 'console-poll', 'console-execute', 'console-print', 'console-names', 'console-key'):
             raise ValueError('Unsupported native session command')
         suffix = ''
-        if assignment:
+        if text:
+            from ._text_wire import SIZE, VERSION
+            if type(payload) is not bytes or len(payload) != SIZE or int.from_bytes(payload[:4], 'little') != VERSION:
+                raise ValueError('Invalid owned text invocation payload')
+            suffix = ' ' + payload.hex()
+        elif assignment:
             from ._assignment_wire import SIZE
             if type(payload) is not bytes or len(payload) != SIZE:
                 raise ValueError('Invalid object assignment payload')

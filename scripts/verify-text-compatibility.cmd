@@ -11,6 +11,10 @@ if errorlevel 1 goto failed
 cl /nologo /W4 /WX /EHsc /std:c++17 /O2 /c /DE33_REFLECTED_SESSION /DE33_LEASE_SESSION /DE33_RETAINED_SESSION /DE33_STABLE_SESSION /DE33_ASSIGNMENT_SESSION /DE33_POD_SESSION /Fo:runtime_v11.obj "%PROJECT_ROOT%\native\runtime_session.cpp"
 if errorlevel 1 goto failed
 cl /nologo /W4 /WX /EHsc /std:c++17 /O2 /c /DE33_REFLECTED_SESSION /DE33_LEASE_SESSION /DE33_RETAINED_SESSION /DE33_STABLE_SESSION /DE33_ASSIGNMENT_SESSION /DE33_POD_SESSION /Fo:controller_v11.obj "%PROJECT_ROOT%\native\research_probe.cpp"
+if errorlevel 1 goto failed
+cl /nologo /W4 /WX /EHsc /std:c++17 /DE33_REFLECTED_SESSION /DE33_LEASE_SESSION /DE33_RETAINED_SESSION /DE33_STABLE_SESSION /DE33_ASSIGNMENT_SESSION /DE33_POD_SESSION /Fe:session_layout_v11.exe "%PROJECT_ROOT%\native\session_layout_fixture.cpp"
+if errorlevel 1 goto failed
+cl /nologo /W4 /WX /EHsc /std:c++17 /DE33_TEXT_SESSION /DE33_REFLECTED_SESSION /DE33_LEASE_SESSION /DE33_RETAINED_SESSION /DE33_STABLE_SESSION /DE33_ASSIGNMENT_SESSION /DE33_POD_SESSION /Fe:session_layout_v12.exe "%PROJECT_ROOT%\native\session_layout_fixture.cpp"
 :failed
 set "TEST_RESULT=%errorlevel%"
 popd

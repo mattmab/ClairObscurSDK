@@ -35,6 +35,26 @@ static ObserverBuffer session_events{};
 static uint64_t runtime_base = 0, target_object = 0, target_function = 0;
 static bool observing = false;
 static unsigned console_toggle_key=0;
+#ifdef E33_TEXT_SESSION
+#include "target_text_call.h"
+// Never borrow the shared mapping for ownership or cleanup. These records live
+// in the pinned module even after a controller exits or an engine call faults.
+static TextCallPacket session_text_packet;
+static TargetTextCall session_text;
+static TextFrameResult guarded_text_cleanup() {
+    __try {
+        TargetOwnedTextOps ops{session_text.base};
+        return session_text.frame.cleanup(ops);
+    } __except(EXCEPTION_EXECUTE_HANDLER) { return TextFrameResult::Quarantined; }
+}
+static uint32_t guarded_text_invoke(const CallRetention* retention) {
+    __try {
+        const auto handling=session_text.handling();
+        return reflected_call(session_text.base,session_text_packet.retained.call,
+                              retention,session_pod_validation,&handling);
+    } __except(EXCEPTION_EXECUTE_HANDLER) { return 708; }
+}
+#endif
 #ifdef E33_RETAINED_SESSION
 static uint32_t retain_preflight(void*,const CallPacket& call) {
     return static_cast<uint32_t>(session_leases.preflight(lease_session,retained_call_slots(call)));
@@ -71,7 +91,11 @@ static bool lifetime_valid() {
         fixed_slot(runtime_base, target.function_index, target.function_serial) == target_function;
 }
 uint32_t backend_open(SessionPacket* packet) {
-    // Only the fixed, already-proven getter is supported by this session version.
+#ifdef E33_TEXT_SESSION
+    // Failed ownership from a previous session is never adopted by a new owner.
+    if(!session_text.frame.available()) return 230;
+#endif
+    // Opening first verifies the fixed, already-proven getter and target thread.
     target = packet->request;
     uint32_t error = invoke_fixed_guarded(&target);
     if (error) return error;
@@ -89,6 +113,26 @@ uint32_t backend_open(SessionPacket* packet) {
 uint32_t backend_command(SessionPacket* packet) {
     if (!lifetime_valid()) return 61;
     switch (packet->request.action) {
+#ifdef E33_TEXT_SESSION
+    case SessionTextInvoke: {
+        if(!session_text.frame.available()) { packet->text.retained.call.error=230; return 0; }
+        session_text_packet=packet->text;
+        session_text.base=runtime_base;
+        session_text.packet=&session_text_packet;
+        CallRetention retention{&session_text_packet.retained,retain_preflight,retain_output};
+        auto error=guarded_text_invoke(&retention);
+        // Includes normal pre/post-dispatch rejection and guarded SEH failure.
+        // Unknown dispatch ownership is quarantined, never destructed or retried.
+        const auto cleaned=guarded_text_cleanup();
+        if(!error) error=TargetTextCall::error(cleaned);
+        session_text_packet.retained.call.error=error;
+        packet->text=session_text_packet;
+        // Reset only after all owners were released. A deferred or uncertain
+        // frame rejects subsequent text calls and remains available for close.
+        session_text.frame.reset();
+        return 0;
+    }
+#endif
 #ifdef E33_ASSIGNMENT_SESSION
     case SessionObjectAssign: {
         auto& wire=packet->assignment;
@@ -214,6 +258,15 @@ static StrongLeaseResult guarded_lease_close() {
 #endif
 uint32_t backend_close() {
     uint32_t lease_cleanup_error=0;
+#ifdef E33_TEXT_SESSION
+    const auto text_cleanup=guarded_text_cleanup();
+    if(text_cleanup==TextFrameResult::CleanupDeferred && !backend_shutting_down())
+        return kSessionCloseDeferred;
+    if(text_cleanup==TextFrameResult::Ok) session_text.frame.reset();
+    else if(!backend_shutting_down()) lease_cleanup_error=TargetTextCall::error(text_cleanup);
+    // On terminal teardown or uncertain ownership, the pinned module retains
+    // the bounded frame. It is not unloaded, reset, or reused by a new session.
+#endif
 #ifdef E33_LEASE_SESSION
     if(lease_session) {
         auto result=guarded_lease_close();
@@ -222,7 +275,7 @@ uint32_t backend_close() {
         if(result==StrongLeaseResult::Deferred && !backend_shutting_down())
             return kSessionCloseDeferred;
         if(result==StrongLeaseResult::Ok) lease_session=0;
-        else if(!backend_shutting_down()) lease_cleanup_error=static_cast<uint32_t>(result);
+        else if(!backend_shutting_down() && !lease_cleanup_error) lease_cleanup_error=static_cast<uint32_t>(result);
         // During terminal engine teardown, engine-owned vtables remain valid;
         // quarantined storage is bounded and never reused by another session.
     }
