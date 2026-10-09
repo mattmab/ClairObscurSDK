@@ -125,6 +125,15 @@ integrated mod host remained operational. Live evidence is
 The new pair is included by the packaging script, but isolated-package startup
 and fresh-game relaunch for v11 still need validation.
 
+Clean-source package check: candidate `20261009T074043Z`, source `9b5ee40`,
+contains 226 manifest-hashed files including both v11 binaries. Directory and ZIP
+hashes all match; logs, settings and raw evidence are excluded. ZIP SHA256:
+`e6da3c689328b43f1f96922df5f4fa01c5179ee86440c05d074bc14311d8ff2c`.
+Isolated CPython 3.13.15 loaded the bundled SDK and ran 151 tests successfully
+(two native-fixture tests skipped because fixture executables are not bundled).
+This is packaging/integrity validation, not live startup from that bundle.
+Evidence: `evidence/pod-v11-package*.json` and `pod-v11-package-tests.log`.
+
 Local raw evidence: `evidence/widget-layout-schema.json`,
 `evidence/widget-layout-schema.log`, `evidence/widget-layout-thunks.json` and its
 argument/tool files. No functions discovered during this inventory were executed.
