@@ -421,3 +421,48 @@ recycled child-reference rejection; native /W4 build has no warnings.
 This candidate is not deployed to the persistent host yet. The existing console
 and host were preserved. Deployment should use the tested cooperative handover;
 no need to overwrite an executable held by the live transport or replace its DLL.
+
+## Reflected struct observations and arrays of structs — 2026-10-08
+
+IMPLEMENTED in the candidate: recursively copied stored StructProperty fields,
+including structs in dynamic arrays. Reuses target-verified UStruct field chains,
+property extents, subclass references and scalar/bool layouts. Bounds:64KiB per
+struct,4 struct levels,64 distinct reflected fields per struct,4096 decode nodes
+per top-level property and64 copied array elements. Descriptor owner/field chains
+have cycle/length guards. Bytes, descriptor identities, reference pointers and
+array headers are reread; this is still not an atomic observation or GC pin.
+
+Supported struct members: bool, byte, int32, uint16, float, double, FName, stored
+object references and nested structs. Unsupported member types and depth/node
+limits produce explicit per-member errors. Container/string/enum members and
+static arrays inside structs remain unsupported. Top-level static struct arrays
+are bounded to64 elements. Native opaque fields are never emitted as raw pointers.
+
+StoredStruct carries a catalog-checked ScriptStruct identity, immutable field/
+type/error maps and a field-truncation indicator. Recycled nested references reject
+the containing property. Even empty struct arrays require a matching type identity.
+The adapter presents copies to the original Explorer encoder; snapshots/diffs use
+the original core unchanged. Its500-node output budget still applies in addition
+to native read bounds. Copied structs cannot be used as owned native arguments.
+
+PROVEN on34604 using scripts/verify_live_struct_values.py:
+
+- Default__InputSettings.ConsoleKeys: two reflected Key structs, names Tilde and².
+- ActionMappings:154 total, first64 copied; action names, four modifier bools and
+  nested Key.KeyName decoded. This is now a live large-array truncation specimen.
+- AxisMappings:39 entries, including float scales and nested key names.
+- Default__SceneComponent: RelativeLocation Vector(0,0,0), RelativeRotation
+  Rotator(0,0,0), RelativeScale3D Vector(1,1,1).
+- Direct SDK values and harness encoding agree on key identities and lengths;
+  repeated original-core snapshots/diffs are stable for both targets.
+
+Evidence: evidence/struct-values-live.json and introspection-values-struct-live.json.
+All33 existing bool observations still agree; scalar/reference regression and
+snapshot/diff passed. All74 Python tests pass, including nested type recycling,
+empty-array type validation, duplicate fields, depth bounds, invalid scalars,
+partial errors and encoding truncation. Native /W4 build passes without warnings.
+
+Candidate: build/research-probe-struct/research_probe.exe. Persistent host31328
+and the pinned DLL were preserved; deployment and bundle update remain pending.
+These are default configuration observations, not proof that the active Enhanced
+Input/CommonUI path consumes every mapping. No mapping or key state was changed.

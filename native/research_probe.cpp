@@ -671,6 +671,121 @@ int main(int argc, char** argv) {
                                 value_type == "UInt16Property" ? 2 : value_type == "ByteProperty" ? 1 :
                                 value_type == "NameProperty" || value_type == "ObjectProperty" || value_type == "DoubleProperty" ? 8 : 0;
                         };
+                        // Copied reflected fields only: never reconstruct or own
+                        // non-reflected state (for example FKey's shared pointer).
+                        size_t struct_budget = 4096;
+                        std::function<std::string(uint64_t, const PropertyPrefix&, uint64_t,
+                            const uint8_t*, unsigned)> struct_json;
+                        struct_json = [&](uint64_t property, const PropertyPrefix& layout, uint64_t at,
+                                          const uint8_t* bytes, unsigned depth) -> std::string {
+                            require(depth < 4 && struct_budget > 0, "STRUCT_DEPTH_OR_NODE_LIMIT");
+                            --struct_budget;
+                            require(layout.element_size > 0 && layout.element_size <= 65536, "STRUCT_VALUE_SIZE_LIMIT");
+                            const auto ref = reader.get<uint64_t>(property + 0x70);
+                            const auto structure = reader.get<ObjectHeader>(ref);
+                            const auto slot = item_at(structure.index);
+                            require(slot.object == ref && derives_from_core_type(structure.cls, "ScriptStruct"),
+                                    "STRUCT_VALUE_TYPE_INVALID");
+                            const auto struct_name = read_name(reader, pool, structure.name_id, structure.name_number);
+                            require(reader.get<int32_t>(ref + 0x58) == layout.element_size, "STRUCT_VALUE_EXTENT_MISMATCH");
+                            std::ostringstream members;
+                            std::unordered_set<uint64_t> struct_owners, struct_fields;
+                            std::unordered_set<std::string> names;
+                            bool truncated = false;
+                            size_t count = 0;
+                            for (auto current = ref; current;) {
+                                require(struct_owners.size() < 64 && struct_owners.insert(current).second, "STRUCT_OWNER_CYCLE");
+                                const auto current_header = reader.get<ObjectHeader>(current);
+                                const auto current_slot = item_at(current_header.index);
+                                require(current_slot.object == current && derives_from_core_type(current_header.cls, "ScriptStruct"),
+                                        "STRUCT_OWNER_INVALID");
+                                const auto first_member = reader.get<uint64_t>(current + 0x50);
+                                const auto super_struct = reader.get<uint64_t>(current + 0x40);
+                                const auto extent = reader.get<int32_t>(current + 0x58);
+                                require(extent >= 0 && extent <= layout.element_size, "STRUCT_OWNER_EXTENT_INVALID");
+                                for (auto member = first_member; member;) {
+                                    if (count == 64) { truncated = true; break; }
+                                    require(struct_fields.size() < 4096 && struct_fields.insert(member).second, "STRUCT_FIELD_CYCLE_OR_LIMIT");
+                                    const auto child = reader.get<PropertyPrefix>(member);
+                                    require(child.owner == (current | 1ULL) && child.offset >= 0 && child.dimension > 0 &&
+                                            child.element_size > 0 && int64_t(child.offset) + int64_t(child.dimension) * child.element_size <= extent &&
+                                            (reader.get<uint64_t>(child.type + 0x10) & 0x8000), "STRUCT_FIELD_LAYOUT_INVALID");
+                                    const auto id = reader.get<uint64_t>(child.type);
+                                    const auto kind = read_name(reader, pool, uint32_t(id), uint32_t(id >> 32));
+                                    const auto member_name = read_name(reader, pool, child.name_id, child.number);
+                                    if (names.insert(member_name).second) {
+                                        if (count++) members << ',';
+                                        members << "{\"name\":" << quote(member_name) << ",\"type\":" << quote(kind);
+                                        try {
+                                            require(struct_budget > 0, "STRUCT_NODE_LIMIT"); --struct_budget;
+                                            require(child.dimension == 1, "STRUCT_STATIC_ARRAY_UNSUPPORTED");
+                                            const auto source = bytes + child.offset;
+                                            std::string encoded;
+                                            if (kind == "StructProperty") {
+                                                encoded = struct_json(member, child, at + child.offset, source, depth + 1);
+                                            } else if (kind == "BoolProperty") {
+                                                const auto encoding = reader.get<uint32_t>(member + 0x70);
+                                                const auto offset = uint8_t(encoding >> 8), mask = uint8_t(encoding >> 24);
+                                                require(mask && offset < child.element_size, "STRUCT_BOOL_ENCODING_INVALID");
+                                                encoded = (source[offset] & mask) ? "true" : "false";
+                                                require(reader.get<uint32_t>(member + 0x70) == encoding, "STRUCT_BOOL_ENCODING_CHANGED");
+                                            } else {
+                                                const auto width = scalar_width(kind);
+                                                require(width && width == child.element_size, "STRUCT_MEMBER_TYPE_UNSUPPORTED");
+                                                uint64_t raw = 0; std::memcpy(&raw, source, width);
+                                                encoded = scalar_json(kind, raw);
+                                            }
+                                            members << ",\"value\":" << encoded;
+                                        } catch (const std::exception& error) {
+                                            members << ",\"error\":" << quote(error.what());
+                                        }
+                                        members << '}';
+                                    }
+                                    const auto child_again = reader.get<PropertyPrefix>(member);
+                                    require(std::memcmp(&child, &child_again, sizeof(child)) == 0, "STRUCT_MEMBER_CHANGED");
+                                    member = child.next;
+                                }
+                                const auto current_again = reader.get<ObjectHeader>(current);
+                                const auto slot_again = item_at(current_header.index);
+                                require(std::memcmp(&current_header, &current_again, sizeof(current_header)) == 0 &&
+                                        slot_again.object == current && slot_again.serial == current_slot.serial &&
+                                        reader.get<uint64_t>(current + 0x50) == first_member &&
+                                        reader.get<uint64_t>(current + 0x40) == super_struct &&
+                                        reader.get<int32_t>(current + 0x58) == extent, "STRUCT_DESCRIPTOR_CHANGED");
+                                if (truncated) break;
+                                current = super_struct;
+                            }
+                            std::vector<uint8_t> repeated(layout.element_size);
+                            reader.read(at, repeated.data(), repeated.size());
+                            const auto final_property = reader.get<PropertyPrefix>(property);
+                            const auto final_slot = item_at(structure.index);
+                            require(std::memcmp(bytes, repeated.data(), repeated.size()) == 0 &&
+                                    std::memcmp(&layout, &final_property, sizeof(layout)) == 0 &&
+                                    reader.get<uint64_t>(property + 0x70) == ref &&
+                                    final_slot.object == ref && final_slot.serial == slot.serial, "STRUCT_OBSERVATION_CHANGED");
+                            std::ostringstream out;
+                            out << "{\"$struct\":{\"type\":{\"index\":" << structure.index << ",\"serial\":" << slot.serial
+                                << ",\"address\":" << quote(hex(ref)) << ",\"name\":" << quote(struct_name)
+                                << "},\"fields\":[" << members.str() << "],\"truncated\":" << (truncated ? "true" : "false") << "}}";
+                            return out.str();
+                        };
+                        if (read_values && type == "StructProperty") {
+                            try {
+                                require(p.dimension <= 64 && p.element_size <= 65536, "STRUCT_VALUE_LIMIT");
+                                for (int32_t element = 0; element < p.dimension; ++element) {
+                                    const auto at = item.object + p.offset + uint64_t(element) * p.element_size;
+                                    std::vector<uint8_t> bytes(p.element_size);
+                                    reader.read(at, bytes.data(), bytes.size());
+                                    const auto value = struct_json(field, p, at, bytes.data(), 0);
+                                    std::cout << "{\"event\":\"stored_value\",\"owner_index\":" << header.index
+                                              << ",\"name\":" << quote(field_name) << ",\"element\":" << element
+                                              << ",\"value\":" << value << "}\n";
+                                }
+                            } catch (const std::exception& error) {
+                                std::cout << "{\"event\":\"stored_value_error\",\"owner_index\":" << header.index
+                                          << ",\"name\":" << quote(field_name) << ",\"error\":" << quote(error.what()) << "}\n";
+                            }
+                        }
                         if (read_values && type == "ArrayProperty") {
                             try {
                                 // Target export 14133c540: flags +70, child +78,
@@ -687,8 +802,9 @@ int main(int argc, char** argv) {
                                 const auto child = reader.get<PropertyPrefix>(inner);
                                 const auto child_id = reader.get<uint64_t>(child.type);
                                 const auto child_type = read_name(reader, pool, uint32_t(child_id), uint32_t(child_id >> 32));
-                                const auto width = scalar_width(child_type);
+                                const auto width = child_type == "StructProperty" ? child.element_size : scalar_width(child_type);
                                 require(width != 0, "ARRAY_ELEMENT_TYPE_UNSUPPORTED");
+                                require(width > 0 && width <= 65536, "ARRAY_ELEMENT_SIZE_LIMIT");
                                 require(child.owner == field && child.dimension == 1 && child.offset == 0 &&
                                         child.element_size == width && (reader.get<uint64_t>(child.type + 0x10) & 0x8000),
                                         "ARRAY_INNER_LAYOUT_INVALID");
@@ -705,10 +821,14 @@ int main(int argc, char** argv) {
                                     }
                                     std::ostringstream values;
                                     for (int32_t index = 0; index < copied; ++index) {
-                                        uint64_t raw = 0;
-                                        std::memcpy(&raw, bytes.data() + size_t(index) * width, width);
                                         if (index) values << ',';
-                                        values << scalar_json(child_type, raw);
+                                        const auto source = bytes.data() + size_t(index) * width;
+                                        if (child_type == "StructProperty") {
+                                            values << struct_json(inner, child, observed_array.data + uint64_t(index) * width, source, 0);
+                                        } else {
+                                            uint64_t raw = 0; std::memcpy(&raw, source, width);
+                                            values << scalar_json(child_type, raw);
+                                        }
                                     }
                                     if (copied) reader.read(observed_array.data, repeated.data(), repeated.size());
                                     const auto array_again = reader.get<ArrayHeader>(at);

@@ -320,3 +320,12 @@ verified FKey construction/destruction or engine-owned key lookup, general
 identity-checked game-thread invocation, then widget creation/retention and focus
 restoration. Continue with CommonUI routing evidence before input suppression.
 No game settings, input modes, widget instances or mappings were changed here.
+
+Follow-up: reflected struct reads now decode ConsoleKeys and the nested Key
+members in default action/axis mappings (see INTROSPECTION_PORT.md). The live
+default console keys are Tilde and²;154 action mappings and39 axis mappings were
+observed, with the action prefix bounded to64. This provides inspectable input
+configuration through reusable SDK primitives. It does not prove active mapping
+contexts, enable arbitrary key dispatch, or solve FKey argument ownership.
+Next: verify engine-owned key construction/lookup and general game-thread calls;
+keep the existing console recovery path available during input-hook development.

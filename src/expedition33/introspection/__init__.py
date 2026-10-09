@@ -8,7 +8,7 @@ from types import SimpleNamespace
 
 from ..catalog import capture
 from ..reflection import describe
-from ..values import read_values, StoredArray
+from ..values import read_values, StoredArray, StoredStruct
 from .. import ObjectSnapshot, RuntimeQueryError
 from .core import Explorer
 
@@ -17,8 +17,29 @@ class UnsupportedCapability(RuntimeError):
     pass
 
 
-class _UnavailableValue:
-    """Type marker only; no native wrapper construction is exposed yet."""
+class _StructValue:
+    def __init__(self, backend, observation):
+        self._backend, self._observation = backend, observation
+        self._type = SimpleNamespace(Name=observation.type_object.name,
+            _properties=lambda: (SimpleNamespace(Name=name) for name in observation.types))
+
+    def __getattr__(self, name):
+        if name in self._observation.errors:
+            raise UnsupportedCapability(self._observation.errors[name])
+        if name not in self._observation.fields:
+            raise AttributeError(name)
+        return _adapt(self._backend, self._observation.fields[name])
+
+    def __str__(self):
+        return f'Reflected observation of {self._type.Name}; native state is not owned'
+
+
+def _adapt(backend, value):
+    if isinstance(value, ObjectSnapshot): return backend.wrap(value)
+    if isinstance(value, StoredStruct): return _StructValue(backend, value)
+    if isinstance(value, StoredArray): return StoredArray(tuple(_adapt(backend, item) for item in value.items), value.length)
+    if isinstance(value, tuple): return tuple(_adapt(backend, item) for item in value)
+    return value
 
 
 class _Object:
@@ -47,12 +68,7 @@ class _Object:
             raise AttributeError(name)
         if key in observation.errors:
             raise UnsupportedCapability(observation.errors[key])
-        def adapt(value):
-            if isinstance(value, ObjectSnapshot): return self._backend.wrap(value)
-            if isinstance(value, StoredArray): return StoredArray(tuple(adapt(item) for item in value.items), value.length)
-            if isinstance(value, tuple): return tuple(adapt(item) for item in value)
-            return value
-        return adapt(observation.values[key])
+        return _adapt(self._backend, observation.values[key])
 
 
 class _Struct(_Object):
@@ -95,6 +111,12 @@ class _Property:
 
 class _Explorer(Explorer):
     """Add copied inner-type metadata without modifying the preserved core."""
+    def encode(self, value, depth=2, budget=None):
+        result = super().encode(value, depth, budget)
+        if isinstance(value, _StructValue) and '$struct' in result and value._observation.truncated:
+            result['truncated'] = True
+        return result
+
     def prop_schema(self, prop):
         result = super().prop_schema(prop)
         inner = getattr(prop, 'Inner', None)
@@ -112,7 +134,7 @@ class _Explorer(Explorer):
 class _Backend:
     __version__ = 'expedition33-independent/introspection-stage1'
     unreal = SimpleNamespace(UObject=_Object, UFunction=_Function,
-        WrappedStruct=_UnavailableValue, WrappedArray=StoredArray)
+        WrappedStruct=_StructValue, WrappedArray=StoredArray)
 
     def __init__(self):
         self.catalog = None
@@ -222,9 +244,9 @@ class Harness:
                 result['original_argument_types'] = result['argument_types']
                 result['argument_types'] = []
                 result['parity_complete'] = False
-                result['limitations'] = ['Value reads cover stored bool/byte/int32/uint16/float/double/name/string/object references; recursive types pending',
+                result['limitations'] = ['Stored scalars, strings, references, selected arrays and bounded reflected structs; opaque native state is not owned',
                     'Writes, invocation, traces and agent bridge pending',
-                    'Map/set, nested inner descriptors and additional property variants pending',
+                    'Container/string/enum-valued struct members, map/set and additional property variants pending',
                     'Function pages use registry identity order within each declaring class']
                 result['execution'] = 'external Python owner thread; read-only native catalog'
             return result

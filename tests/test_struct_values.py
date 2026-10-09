@@ -1,0 +1,80 @@
+"""Struct observation bounds, stale identities and original Explorer encoding."""
+import unittest
+
+from expedition33.values import StoredStruct
+from expedition33.introspection import _Backend, _Explorer, _adapt
+import test_values
+
+
+class StructValueTests(unittest.TestCase):
+    def setUp(self):
+        self.base = test_values.ValueTests()
+        self.base.setUp()
+        ref = self.base.catalog.by_index[3]
+        self.reference = dict(index=ref.index, serial=ref.serial, address=hex(ref.address), name=ref.name)
+
+    def struct(self, fields, truncated=False):
+        return {'$struct': {'type': dict(self.reference), 'fields': fields, 'truncated': truncated}}
+
+    def observe(self, value):
+        self.base.property('Data', 'StructProperty')
+        self.base.rows[-1]['struct_index'] = self.reference['index']
+        self.base.rows[-1]['struct_serial'] = self.reference['serial']
+        self.base.rows[-1]['struct_name'] = self.reference['name']
+        self.base.value('Data', value)
+        return self.base.read()
+
+    def test_nested_values_errors_and_truncation_survive_core_encoding(self):
+        value = self.struct([
+            {'name':'Key', 'type':'StructProperty', 'value':self.struct([
+                {'name':'KeyName', 'type':'NameProperty', 'value':'Tilde'}])},
+            {'name':'Enabled', 'type':'BoolProperty', 'value':True},
+            {'name':'Opaque', 'type':'MapProperty', 'error':'STRUCT_MEMBER_TYPE_UNSUPPORTED'}], True)
+        stored = self.observe(value).values[2, 'Data']
+        self.assertIsInstance(stored.fields['Key'], StoredStruct)
+        with self.assertRaises(TypeError): stored.fields['Enabled'] = False
+        encoded = _Explorer(_Backend()).encode(_adapt(_Backend(), stored), depth=3)
+        self.assertTrue(encoded['truncated'])
+        self.assertEqual(encoded['fields']['Key']['fields'], {'KeyName':'Tilde'})
+        self.assertTrue(encoded['fields']['Enabled'])
+        self.assertIn('$error', encoded['fields']['Opaque'])
+
+    def test_recycled_nested_type_rejects_entire_property(self):
+        nested = self.struct([])
+        nested['$struct']['type']['serial'] += 1
+        result = self.observe(self.struct([{'name':'Nested','type':'StructProperty','value':nested}]))
+        self.assertNotIn((2, 'Data'), result.values)
+        self.assertIn('reference changed', result.errors[2, 'Data'])
+
+    def test_duplicate_fields_invalid_scalar_and_depth_rejected(self):
+        from expedition33.values import _struct_value
+        row = {'name':'Number', 'type':'ByteProperty', 'value':4}
+        for fields in ([row, row], [dict(row, value=256)], [dict(row, value=True)]):
+            with self.assertRaises(ValueError): _struct_value(self.base.catalog, self.struct(fields))
+        value = self.struct([])
+        for _ in range(4): value = self.struct([{'name':'Nested','type':'StructProperty','value':value}])
+        with self.assertRaises(ValueError): _struct_value(self.base.catalog, value)
+
+    def test_struct_array_type_mismatch_and_stale_member(self):
+        value = self.struct([{'name':'KeyName','type':'NameProperty','value':'Tilde'}])
+        self.base.array('StructProperty', 1, [value])
+        self.base.rows[-2]['inner_struct_index'] = self.reference['index']
+        self.base.rows[-2]['inner_struct_serial'] = self.reference['serial']
+        self.base.rows[-2]['inner_struct_name'] = self.reference['name']
+        self.assertEqual(self.base.read().values[2,'Dynamic'].items[0].fields['KeyName'], 'Tilde')
+        self.base.rows[-2]['inner_struct_index'] += 1
+        self.assertNotIn((2,'Dynamic'), self.base.read().values)
+        self.base.rows[-2]['inner_struct_index'] = self.reference['index']
+        value['$struct']['type']['serial'] += 1
+        self.assertNotIn((2,'Dynamic'), self.base.read().values)
+
+    def test_empty_struct_array_still_checks_type_identity(self):
+        self.base.array('StructProperty', 0, [])
+        self.base.rows[-2].update(inner_struct_index=self.reference['index'],
+            inner_struct_serial=self.reference['serial'], inner_struct_name=self.reference['name'])
+        self.assertEqual(self.base.read().values[2,'Dynamic'].items, ())
+        self.base.rows[-2]['inner_struct_serial'] += 1
+        self.assertIn((2,'Dynamic'), self.base.read().errors)
+
+
+if __name__ == '__main__': unittest.main()
