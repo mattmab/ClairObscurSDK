@@ -23,7 +23,9 @@ passed live through a fresh adapter instance sharing that host. The controlled
 handover to the isolated v10 package now passed: the normal persistent Harness
 imports the updated adapter and advertises scalar ObjectProperty set. The
 packaged widget-root assignment/viewport/restoration specimen also passed with
-exact holder cleanup. Fresh-game package startup remains untested. Next implement
+exact holder cleanup. Fresh-game startup and normal game exit now also passed
+with the repaired v10 package (DEVELOPMENT.md records the discovered timeout and
+the successful retest). Next implement
 visible control layout and validated focus/key handling. See DEVELOPMENT.md for
 package evidence and INTROSPECTION_PORT.md for the exact set boundary.
 

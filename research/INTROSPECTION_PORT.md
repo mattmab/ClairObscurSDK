@@ -36,10 +36,11 @@ read confirmed null; exact generic-holder baseline was restored. No viewport,
 focus/input or GC stress operation ran. Evidence: local
 `evidence/harness-set-live.json` and `logs/management-host-v10.stderr.log`.
 
-The existing host's original long-lived Harness still uses its earlier imported
-adapter; a controlled host/package restart is needed to expose set there.
-The updated on-disk adapter and standalone live specimen are validated.
-Next integrate that startup/package lifecycle, then continue visible menu
+The normal persistent Harness now loads the updated adapter after controlled
+handover. The rebuilt v10 package also passed fresh-game startup, widget-root/
+viewport lifecycle and normal game shutdown, including a disabled service
+heartbeat and zero host/controller exit codes. See DEVELOPMENT.md for the failed
+exit-reporting case, repair and preserved evidence. Next continue visible menu
 controls, broader value codecs, key/focus handling, traces and agent bridge.
 
 ## Original and provenance

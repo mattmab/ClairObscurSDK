@@ -160,4 +160,9 @@ After confirmed target exit, leases become inaccessible with state
 but no engine release acknowledgement was received. Scoped cleanup revokes local
 callbacks without sending commands to the dead transport. Existing older native
 binaries do not provide this typed report until rebuilt. Native fixture and
-142 Python tests pass; the v10 live shutdown retest is pending.
+142 Python tests pass. The repaired isolated v10 package passed fresh-game widget
+root/viewport lifecycle and normal game exit with an outstanding object lease;
+game, Python host and controller all exited zero without cleanup tracebacks.
+Already-acknowledged releases remain acknowledged after subsequent game exit.
+This does not prove cleanup before an abnormal crash or completion of a request
+that was pending at exit.

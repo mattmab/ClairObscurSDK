@@ -55,6 +55,8 @@ class Transport:
 class OwnershipTests(unittest.TestCase):
     def test_confirmed_game_exit_revokes_scope_without_retrying_release(self):
         scope = SessionScope(self.session)
+        released = scope.retain(self.obj)
+        self.assertTrue(released.release())
         lease = scope.retain(self.obj)
         calls = list(self.transport.calls)
         self.transport.target_exit_code = 0
@@ -64,6 +66,7 @@ class OwnershipTests(unittest.TestCase):
         self.assertFalse(lease.active)
         self.assertFalse(lease.release())
         self.assertEqual(lease._state, 'target_exited')
+        self.assertTrue(released.release())
         with self.assertRaises(LeaseError):
             _ = lease.object
 

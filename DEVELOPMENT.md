@@ -369,3 +369,23 @@ command waits and reports the confirmed exit code; Python revokes registrations
 and lease access without retrying engine operations. `verify-target-exit.cmd`
 checks live/invalid handles and real child exits 0, 7 and 259. All 142 Python tests
 pass, and the rebuilt v10 pair compiles with /W4 /WX. Live retest remains pending.
+
+Live retest completed at03:10:32. Candidate
+`expedition33-0.1.0-candidate-20261009T070714Z`, source `8d01791`, ZIP SHA256
+`5bb70fda8e2c78229dc3cb971726d0dbb615aa33db2956b9098af34b31183197`,
+passed all211 file hashes and isolated Python tests (141 passed, one unbundled
+native fixture skipped). Steam-launched game29348 loaded the package's v10 DLL
+from its own directory; no previously pinned module was reused. Its root/viewport
+lifecycle passed with exact holder cleanup. A subsequent existing-object lease
+was intentionally left active before normal GUI quit. Game29348, host38760 and
+controller19104 all exited0; the Harness heartbeat became disabled and no cleanup
+tracebacks occurred. Pending requests are not claimed to have completed at exit.
+
+Evidence: `evidence/target-exit-package-check.json`,
+`evidence/target-exit-fresh-root-live.json`,
+`evidence/target-exit-live-processes.json`, and
+`logs/target-exit-package.stderr.log`. The failed earlier run remains preserved.
+The source follow-up also preserves True from already-acknowledged lease
+releases after later target exit; its ownership regression tests pass. Directly
+launching the shipping EXE did not remain running in this environment; use Steam
+for game relaunch. No game save or gameplay session was selected.
