@@ -1049,3 +1049,41 @@ Staged folder installation, backup/recovery journal and live archive activation
 remain the next adapter work. This validates installed Python-tree replacement,
 not archive installation, global dependency/core reload, full Harness parity,
 travel/GC, or a new release package.
+
+## Prepared folder swap and recovery inspection — 2026-10-09
+
+expedition33.mod_install adds PreparedInstall for the staged adapter. Preparation
+verifies archive bytes, writes a fresh private transaction directory under
+mods/.transactions/<random-id>/prepared, and checks package-source compatibility
+without executing source or modifying the installed folder. The installed mod
+must already exist. Prepared files are checked again before and after cleanup.
+Links/junctions and resolved paths outside the configured mod root are rejected.
+
+activate(cleanup) requires the lifecycle callback to return literal True before
+moving anything. It renames the installed folder to the transaction's backup,
+then renames the prepared candidate into the installed location. Both moves stay
+inside the checked mod root; no folder/file is deleted and backups are retained.
+Each step records a phase in an atomically replaced, file-flushed JSON journal.
+The two folder renames are not one atomic filesystem transaction. A process or
+I/O failure between them may leave the installed path absent; inspection and
+explicit recovery are required. Full power-loss durability is not claimed.
+
+Transactions cannot be replayed after activation starts, including cleanup failure.
+There is no automatic rollback or automatic re-enable. inspect_transaction(root,
+id) can read a prior process's journal and actual target/backup/prepared presence.
+It derives paths from the configured root and transaction ID, verifies journal
+paths match that layout, bounds journal input, and refuses redirected paths.
+Reported folder presence is evidence, not a claim that a running mod was activated.
+
+All333 tests pass. Filesystem tests exercise real Windows folder renames in temporary
+roots, preserved backups/resources, cleanup-before-move, refusal of false/None/1
+cleanup results, candidate changes before/during cleanup, a simulated sharing
+violation at the second rename, replay refusal, fresh journal inspection, hostile
+journal paths, invalid hashes/names and incompatible package preparation. Evidence:
+evidence/mod-install-tests.log. No installed game mod was swapped by these tests.
+
+This is a tested transaction primitive, not staged Harness support yet. The next
+integration must use fixed staging paths, serialize lifecycle ownership, connect
+cleanup/load/enable to the journal, refuse unresolved transactions on startup,
+provide explicit recovery policy, and validate archive replacement live. The
+running source controller remains on the earlier package-import milestone.
