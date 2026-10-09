@@ -466,3 +466,45 @@ Candidate: build/research-probe-struct/research_probe.exe. Persistent host31328
 and the pinned DLL were preserved; deployment and bundle update remain pending.
 These are default configuration observations, not proof that the active Enhanced
 Input/CommonUI path consumes every mapping. No mapping or key state was changed.
+
+## Invocation argument planning and dispatch contract — 2026-10-08
+
+IMPLEMENTED: expedition33.invocation.prepare_call builds immutable CallPlan data
+from the current catalog and freshly described UFunction. It checks target/function
+identity, function metatype, declaring-class ancestry, parameter extent, return
+offset, duplicate names and overlapping storage (including packed bool masks).
+Arguments are named and explicit. Local fields are excluded; ParmsSize and total
+allocation extent remain distinct. Ref/out/return direction follows the original
+harness property flags. Return codecs are checked even when there are no inputs.
+
+Current planning codecs: bool, byte, uint16, int32, float, double, object and class
+references, including bounded static parameter arrays. Object slots remain zero
+in the byte buffer; separate identity patches carry catalog observations with
+verified class constraints. Integers cannot masquerade as object addresses.
+Strings, names, enums, containers and structs need additional verified codecs and
+lifetime contracts. This module DOES NOT dispatch, hold objects alive, decode
+results or extend Harness.SUPPORTED. Session.call still has only its existing
+fixed getter implementation. A plan is not permission to call a cached address.
+
+PROVEN metadata-only against live34604 via scripts/verify_live_call_plans.py:
+WidgetBlueprintLibrary.Create32-byte arguments with three symbolic object patches;
+SetInputMode_GameOnly9-byte arguments versus16-byte allocation extent; actual
+player-controller IsLocalController1-byte return. IsInputKeyDown was rejected for
+unsupported FKey construction. No function was executed. Evidence:
+evidence/invocation-plans-live.json. All82 tests pass, including stale references,
+class constraints, overlapping bool bits, invalid sizes/returns, missing/extra
+arguments, ref/out initialization and unsupported return ownership.
+
+Ghidra evidence in invoke-dispatch-paths.json and invoke-lifetime-paths.json
+corroborates dispatcher141393330: allocates using size+58/alignment+5c, copies
+ParmsSize+b6, forms an FFrame, handles out properties, invokes through141280940,
+and performs property cleanup. Helper141280940 calls UFunction+d8 with context,
+frame and return pointer. Actor wrapper14332bb90 applies execution guards before
+delegating. Future dispatch must preserve that route; a thunk is not a plain
+buffer-taking function. Network/callspace paths exist, so successful transport
+delivery alone cannot be reported as proof that the function body ran.
+
+Next: native game-thread plan revalidation and a versioned command/result packet;
+explicit outcome semantics and no retry after timeout; bounded result conversion;
+engine-owned value construction/cleanup and retention for nontrivial types; then
+wire the general call API into the unchanged original Explorer invoke operation.

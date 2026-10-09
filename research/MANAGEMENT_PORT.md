@@ -329,3 +329,17 @@ configuration through reusable SDK primitives. It does not prove active mapping
 contexts, enable arbitrary key dispatch, or solve FKey argument ownership.
 Next: verify engine-owned key construction/lookup and general game-thread calls;
 keep the existing console recovery path available during input-hook development.
+
+Invocation follow-up: argument planning now checks the live Create, game-only
+input-mode and IsLocalController descriptors without executing them. It preserves
+object identities as symbolic patches and rejects unsupported FKey arguments.
+The native dispatch packet, game-thread revalidation and result lifetime remain
+the next implementation steps; the Python planner cannot yet create a widget.
+
+Additional target evidence:143ddc5b0 looks up key state by FName in PlayerInput and
+releases the copied key's control block. Cleanup1413dca00 operates on Key+10;
+predicate141405190 calls lazy initializer1413dd470, which fills Key+8/+10 via
+1413ded40 when details are absent. This identifies the ownership-bearing fields
+beyond reflected KeyName. It does not yet prove a universal constructor contract
+or authorize borrowing/copying those pointers. Evidence:
+evidence/invoke-lifetime-paths.json and key-details-path.json.

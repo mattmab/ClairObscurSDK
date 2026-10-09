@@ -1,0 +1,173 @@
+"""Build invocation arguments from observed metadata. No dispatch is exposed yet.
+
+Plans are immutable observations, not authority to call an address. The native
+game-thread backend must revalidate every identity and layout, materialize object
+patches, route through the target's dispatcher, and report execution explicitly.
+Opaque/native-owned types require constructors and destructors before support.
+"""
+from dataclasses import dataclass
+import math
+import struct
+
+from . import ObjectSnapshot
+from .reflection import describe
+
+PARM, OUT, RETURN, REFERENCE = 0x80, 0x100, 0x400, 0x8000000
+
+
+class UnsupportedInvocation(ValueError):
+    pass
+
+
+@dataclass(frozen=True)
+class Parameter:
+    name: str
+    kind: str
+    offset: int
+    width: int
+    dimension: int
+    flags: int
+    boolean_encoding: int | None = None
+    constraint: object = None
+
+    @property
+    def input(self):
+        return not self.flags & RETURN and (not self.flags & OUT or bool(self.flags & REFERENCE))
+
+
+@dataclass(frozen=True)
+class ObjectPatch:
+    offset: int
+    object: ObjectSnapshot
+
+
+@dataclass(frozen=True)
+class CallPlan:
+    target: ObjectSnapshot
+    function: ObjectSnapshot
+    function_flags: int
+    entry_rva: int
+    parameter_size: int
+    allocation_extent: int
+    return_offset: int
+    parameters: tuple
+    data: bytes
+    objects: tuple
+
+
+_FORMATS = {'ByteProperty': ('B', 1, 0, 255), 'UInt16Property': ('H', 2, 0, 65535),
+            'IntProperty': ('i', 4, -2147483648, 2147483647),
+            'FloatProperty': ('f', 4, None, None), 'DoubleProperty': ('d', 8, None, None)}
+
+
+def prepare_call(catalog, target, function, arguments):
+    """Describe a current UFunction and prepare named arguments without executing it.
+
+Zeroed object slots have separate identity patches; caller-supplied integer
+addresses are never accepted. All inputs are explicit, with no guessed defaults.
+Output/return types must also be supported before a plan can be built.
+"""
+    target, function = catalog.resolve(target), catalog.resolve(function)
+    if catalog.find_class('Function').index not in catalog.ancestors(function.class_index):
+        raise ValueError('Expected a reflected Function identity')
+    if function.outer_index not in catalog.ancestors(target.class_index):
+        raise ValueError('Function owner is not in the target class hierarchy')
+    descriptor = describe(catalog, (function,))[function.index]
+    return _prepare(catalog, target, function, descriptor, arguments)
+
+
+def _prepare(catalog, target, function, descriptor, arguments):
+    if type(arguments) is not dict or any(type(key) is not str for key in arguments):
+        raise ValueError('Arguments must be a dictionary of parameter names')
+    info = descriptor.function
+    if info is None or not descriptor.owners or descriptor.owners[0]['index'] != function.index:
+        raise ValueError('Function metadata is missing or inconsistent')
+    size, extent, returned = info['params_size'], descriptor.owners[0]['size'], info['return_offset']
+    if (type(size) is not int or type(extent) is not int or not 0 <= size <= extent <= 65536 or
+            type(returned) is not int or not (returned == 65535 or 0 <= returned < size)):
+        raise ValueError('Invalid parameter size, extent or return offset')
+    parameters, occupied, names = [], set(), set()
+    for row in descriptor.properties:
+        if not row['flags'] & PARM:
+            continue  # Function locals are initialized by the engine dispatcher.
+        name, kind = row['name'], row['type']
+        offset, width, dimension = row['offset'], row['element_size'], row['dimension']
+        if (name in names or type(name) is not str or not name or row['owner_index'] != function.index or
+                any(type(value) is not int for value in (offset, width, dimension)) or
+                offset < 0 or width <= 0 or not 1 <= dimension <= 64 or offset + width * dimension > size):
+            raise ValueError('Invalid or duplicate parameter layout')
+        names.add(name)
+        if len(names) > 128:
+            raise ValueError('Parameter count exceeds 128')
+        encoding, constraint = None, None
+        if kind == 'BoolProperty':
+            encoding = int(row['bool_encoding'], 16)
+            byte_offset, field_mask = (encoding >> 8) & 255, (encoding >> 24) & 255
+            byte_mask, storage_size = (encoding >> 16) & 255, encoding & 255
+            if (not 0 < encoding <= 0xffffffff or not field_mask or byte_offset >= width or
+                    storage_size != width or byte_mask == 0 or byte_mask & ~field_mask or
+                    byte_mask & (byte_mask - 1)):
+                raise ValueError('Unsupported bool storage encoding')
+            locations = {(offset + element * width + byte_offset, bit)
+                         for element in range(dimension) for bit in range(8) if field_mask & (1 << bit)}
+        else:
+            expected = _FORMATS[kind][1] if kind in _FORMATS else 8 if kind in ('ObjectProperty', 'ClassProperty') else None
+            if expected is None:
+                raise UnsupportedInvocation(f'{name}: {kind} needs an additional verified codec/lifetime contract')
+            if width != expected:
+                raise ValueError('Parameter storage width does not match its codec')
+            locations = {(byte, bit) for byte in range(offset, offset + width * dimension) for bit in range(8)}
+            if kind in ('ObjectProperty', 'ClassProperty'):
+                prefix = 'meta_class' if kind == 'ClassProperty' else 'property_class'
+                constraint = catalog.by_index[row[prefix + '_index']]
+                if (constraint.serial != row[prefix + '_serial'] or constraint.name != row[prefix + '_name'] or
+                        constraint.address != int(row[prefix + '_address'], 16) or constraint.index not in catalog.classes):
+                    raise ValueError('Parameter class constraint changed')
+        if occupied & locations:
+            raise ValueError('Parameter storage overlaps')
+        occupied.update(locations)
+        parameters.append(Parameter(name, kind, offset, width, dimension, row['flags'], encoding, constraint))
+    returns = [parameter for parameter in parameters if parameter.flags & RETURN]
+    if (len(returns) > 1 or (returned == 65535) != (len(returns) == 0) or
+            (returns and (returns[0].offset != returned or returns[0].dimension != 1))):
+        raise ValueError('Return property does not match function metadata')
+    expected_inputs = {parameter.name for parameter in parameters if parameter.input}
+    if set(arguments) != expected_inputs:
+        raise ValueError(f'Argument names mismatch; missing={sorted(expected_inputs - arguments.keys())}, extra={sorted(arguments.keys() - expected_inputs)}')
+    data, patches = bytearray(size), []
+    for parameter in parameters:
+        if not parameter.input:
+            continue
+        value = arguments[parameter.name]
+        values = value if parameter.dimension > 1 else (value,)
+        if type(values) not in (tuple, list) or len(values) != parameter.dimension:
+            raise ValueError(f'{parameter.name}: expected exactly {parameter.dimension} elements')
+        for index, item in enumerate(values):
+            at = parameter.offset + index * parameter.width
+            if parameter.kind == 'BoolProperty':
+                if type(item) is not bool: raise ValueError(f'{parameter.name}: expected bool')
+                if item:
+                    data[at + ((parameter.boolean_encoding >> 8) & 255)] |= (parameter.boolean_encoding >> 16) & 255
+            elif parameter.kind in ('ObjectProperty', 'ClassProperty'):
+                if item is None: continue
+                if not isinstance(item, ObjectSnapshot): raise ValueError('Object arguments require observed identities, not addresses')
+                item = catalog.resolve(item)
+                if parameter.kind == 'ClassProperty' and item.index not in catalog.classes:
+                    raise ValueError(f'{parameter.name}: expected a class object')
+                class_index = item.index if parameter.kind == 'ClassProperty' else item.class_index
+                if parameter.constraint.index not in catalog.ancestors(class_index):
+                    raise ValueError(f'{parameter.name}: object violates class constraint')
+                patches.append(ObjectPatch(at, item))
+            else:
+                fmt, _, low, high = _FORMATS[parameter.kind]
+                if low is None:
+                    try: finite = type(item) in (int, float) and math.isfinite(item)
+                    except OverflowError: finite = False
+                    if not finite:
+                        raise ValueError(f'{parameter.name}: expected finite number')
+                elif type(item) is not int or not low <= item <= high:
+                    raise ValueError(f'{parameter.name}: integer outside storage range')
+                try: struct.pack_into('<' + fmt, data, at, item)
+                except (OverflowError, struct.error) as error: raise ValueError(f'{parameter.name}: value cannot fit storage') from error
+    return CallPlan(target, function, info['flags'], int(info['entry_rva'], 16), size, extent, returned,
+                    tuple(parameters), bytes(data), tuple(patches))
