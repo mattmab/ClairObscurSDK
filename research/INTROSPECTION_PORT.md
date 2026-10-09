@@ -388,3 +388,10 @@ Bool/string/struct/nested-container array elements, map/set values, and general
 retained native values remain unsupported. In particular, input key arrays whose
 elements are reflected FKey structs still require the struct decoder; their
 presence alone does not establish keybind dispatch or safe mutation.
+
+Deployment follow-up2026-10-08: after the old controller and transport exited
+normally, the candidate reader was installed as build/research-probe/research_probe.exe.
+SHA256:7a53f78b2a5048678d941c5172df317b5752b0b357c7c8297651aeee11babc8e.
+The integrated management host attached and served live roots before and after
+a cooperative controller restart. The pinned native v5 DLL was not replaced.
+The historical deployment deferral above is resolved; game relaunch remains pending.

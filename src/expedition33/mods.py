@@ -44,7 +44,13 @@ class ModLoader:
         self._polling = False
         self._disabling = set()
         self._enabling = set()
+        self.stop_requested = False
         self.registry = Registry(self, settings)
+
+    def request_stop(self):
+        """Ask the owning host loop to exit after its current dispatch completes."""
+        self._check_thread()
+        self.stop_requested = True
 
     def _check_thread(self):
         if threading.get_ident() != self._owner:

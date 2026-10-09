@@ -259,3 +259,30 @@ That new launcher path, native UMG, key dispatch/rebinding, fresh-process relaun
 controller reconnection, and an isolated updated bundle still require live tests.
 The existing private v0.1 archive is unchanged. General key support is not inferred
 from stored strings, and the console help explicitly identifies the missing backend.
+
+## Integrated host and cooperative shutdown — 2026-10-08
+
+PROVEN on the same game PID34604: the older controller completed its active
+command, unloaded Introspection and detached normally before the reader update.
+The new persistent management host PID27468/session1764cfbee60a449eaf74b16706e558d7
+registered both sdk.management and sdk.introspection. Native backtick opened the
+console; `mods`, selection and `mods action status` worked. The file client also
+returned live World/GameInstance/LocalPlayer/PlayerController roots.
+
+The new `mods action shutdown` on sdk.management returned its confirmation at
+20:01:37 before cleanup. The launcher logged detach; Python27468 and its transport
+39364 exited, while game34604 remained alive. This is a cooperative flag checked
+after dispatch, not transport closure from inside a callback. A custom host must
+honor stop_requested and exit its loader context itself.
+
+Replacement persistent host31328/session6d53cbc6934347bdb4d4763f3e2938f4 attached
+at20:03:07. Its file client enumerated live roots again, and native-console
+`py print(6 * 7)` displayed42. A first sandboxed launch attempt did not persist;
+it had no attach log or remaining host/transport and was not counted as a success.
+The replacement runs hidden without a duration limit. Evidence is in
+evidence/management-handover.json, management-reconnect.json and
+logs/management-host-1.stderr.log / management-host-3.stderr.log.
+
+All68 Python tests pass. Same-process controller restart is now proven; native
+UMG, general key dispatch/rebinding, game relaunch and updated isolated packaging
+remain pending. Console action output currently needs more readable formatting.

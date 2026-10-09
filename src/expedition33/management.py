@@ -199,6 +199,11 @@ class Registry:
         self._check()
         return self._loader.discover()
 
+    def request_shutdown(self):
+        """Cooperative host stop; the callback returns before resource cleanup."""
+        self._check()
+        self._loader.request_stop()
+
     def load(self, folder):
         self._check()
         self._loader.load(folder)

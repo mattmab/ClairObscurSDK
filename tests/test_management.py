@@ -145,6 +145,16 @@ class ManagementTests(unittest.TestCase):
         self.assertFalse(shared.closed)
         self.assertEqual(borrowed.registry.views(), ())
 
+    def test_shutdown_request_defers_cleanup_until_host_exits(self):
+        self.loader.enable('Specimen')
+        shared = self.loader._session
+        self.registry.request_shutdown()
+        self.assertTrue(self.loader.stop_requested)
+        self.assertFalse(shared.closed)
+        self.assertEqual(self.registry.invoke(self.registry.select('specimen'), 'read'), 3)
+        self.loader.close()
+        self.assertTrue(shared.closed)
+
     def test_recursive_option_change_rejected_before_persistence(self):
         self.loader.enable('Specimen'); selection = self.registry.select('specimen')
         from dataclasses import replace

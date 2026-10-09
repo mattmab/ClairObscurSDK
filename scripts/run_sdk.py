@@ -61,7 +61,7 @@ def main():
                     log.info('Native console ready. Press Tilde; use py help(), py my_mod.some_function(), or sdk.hello. Ctrl+C stops the controller.')
                 deadline = time.monotonic() + args.seconds if args.seconds > 0 else float('inf')
                 try:
-                    while time.monotonic() < deadline:
+                    while not loader.stop_requested and time.monotonic() < deadline:
                         loader.poll()
                         time.sleep(.05)
                 except KeyboardInterrupt:
