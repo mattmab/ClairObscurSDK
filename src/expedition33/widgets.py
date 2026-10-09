@@ -13,7 +13,7 @@ from ._scope import SessionScope
 
 
 class OwnedMenuPanel:
-    def __init__(self, session, *, controls=12, cached_construction=False):
+    def __init__(self, session, *, controls=12, cached_construction=False, selected_results=False):
         session._check()
         if not session.supports_multi_controls:
             raise ValueError('Owned menu panels require v17 multi-control support')
@@ -21,7 +21,10 @@ class OwnedMenuPanel:
             raise ValueError('A panel requires between1 and16 controls')
         if type(cached_construction) is not bool:
             raise ValueError('cached_construction must be bool')
+        if type(selected_results) is not bool or (selected_results and not cached_construction):
+            raise ValueError('selected_results requires cached_construction')
         self._cached_construction = cached_construction
+        self._selected_results = selected_results
         self.scope = SessionScope(session)
         self.count = controls
         self.state = 'new'
@@ -126,12 +129,17 @@ class OwnedMenuPanel:
         self.visible = visibility('Visible')
         self.collapsed = visibility('Collapsed')
         if self._cached_construction:
-            self._planner = self.scope.invocation_planner()
+            self._planner = self.scope.invocation_planner(selected_results=self._selected_results)
         self.widget = self._construction_call(
             self._default('WidgetBlueprintLibrary'), self._function('WidgetBlueprintLibrary', 'Create'),
             WorldContextObject=self.player, WidgetType=self._class('CommonActivatableWidget'),
             OwningPlayer=self.player).return_value
         current = capture()
+        if self._planner is not None:
+            # Create also initializes WidgetTree, which is a child and therefore
+            # outside the returned widget's outer/class dependency closure.
+            # Adopt the full observation already needed for the property read.
+            self._planner.refresh_from(current)
         self.tree = read_values(current, current.resolve(self.widget)).values[
             self._class('UserWidget').index, 'WidgetTree']
         if self.tree is None or self.tree.outer_index != self.widget.index or self._root() is not None:

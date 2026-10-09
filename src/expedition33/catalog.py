@@ -96,6 +96,26 @@ class Catalog:
             raise RuntimeQueryError('Object identity changed or belongs to another process')
         return current
 
+    def with_observations(self, observed):
+        """Combine compatible planning observations, without claiming freshness.
+
+        Only the supplied closure was read now; untouched rows retain their old
+        observation age. Changed identities or class relations require a full
+        refresh. Native operations must still validate every dispatched call.
+        Neither catalog is modified and no object ownership is acquired.
+        """
+        if observed.pid != self.pid:
+            raise RuntimeQueryError('Planning observations belong to another process')
+        for obj in observed.objects:
+            if obj.index in self.by_index:
+                self.resolve(obj)
+        for index, cls in observed.classes.items():
+            if index in self.classes and self.classes[index] != cls:
+                raise RuntimeQueryError('Planning class relation changed; full refresh required')
+        objects = dict(self.by_index); objects.update(observed.by_index)
+        classes = dict(self.classes); classes.update(observed.classes)
+        return Catalog(self.pid, objects.values(), tuple(classes.values()))
+
     def outer_chain(self, observed):
         """Root-first ownership chain. No unverified Unreal path punctuation."""
         current = self.resolve(observed)

@@ -2,8 +2,10 @@
 
 These are not UObject owners or trusted engine addresses. Native code checks
 identities, function/schema/argument constraints and execution context for every
-dispatch. Object outputs still receive same-call native leases and a fresh
-catalog before exposure. Scalar/text outputs need no new full catalog.
+dispatch. Object outputs still receive same-call native leases and fresh
+identity observations before exposure. An explicit selected-results mode combines
+fresh closures with older planning rows; it does not refresh untouched objects.
+Scalar/text outputs need no new full catalog.
 """
 import weakref
 import threading
@@ -12,8 +14,11 @@ from .invocation import UnsupportedInvocation
 
 
 class InvocationPlanner:
-    def __init__(self, session, *, scope=None):
+    def __init__(self, session, *, scope=None, selected_results=False):
         session._check()
+        if type(selected_results) is not bool:
+            raise ValueError('selected_results must be bool')
+        self._selected_results = selected_results
         if not session.supports_retained_invocation:
             raise UnsupportedInvocation('Prepared calls require retained invocation support')
         self._session = weakref.ref(session)
@@ -47,6 +52,21 @@ class InvocationPlanner:
         catalog = capture()
         if catalog.pid != session.pid:
             raise ValueError('Planning catalog belongs to another process')
+        self._catalog = catalog
+
+    def refresh_from(self, catalog):
+        """Adopt an explicit catalog observation and revoke existing plans.
+
+        This performs no read and makes no freshness claim beyond the supplied
+        observation. Useful when an SDK read discovered additional child objects.
+        Native dispatch validation remains mandatory.
+        """
+        session = self._check()
+        self._generation += 1
+        self._catalog = None
+        from .catalog import Catalog
+        if not isinstance(catalog, Catalog) or catalog.pid != session.pid:
+            raise ValueError('Expected a catalog from this process')
         self._catalog = catalog
 
     def prepare(self, obj, function, **arguments):
@@ -120,7 +140,8 @@ class PreparedInvocation:
             planner._generation += 1
             planner._catalog = None
         result, observed = session._invoke_retained_plan(
-            self._plan, catalog, _return_catalog=True)
+            self._plan, catalog, _return_catalog=True,
+            _selected_results=planner._selected_results)
         if scope is not None:
             # Hold scope alive through dispatch and use the existing adoption path.
             scope._adopt_retained(result)

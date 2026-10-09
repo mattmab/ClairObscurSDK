@@ -1162,3 +1162,35 @@ its controller binary were untouched. Retained-result decoding and menu creation
 still use full captures; adopting selected result closures needs explicit
 planning-observation semantics and same-call lease/decode failure validation.
 No menu opening speedup or updated package is claimed from this reader test.
+
+### Selected retained-result observations — 2026-10-09
+
+The planner now has explicit `selected_results=True` support. Same-call native
+leases are adopted before reading returned identities and their dependency
+closures. Compatible observations are combined without refreshing untouched
+rows or granting them authority. Recycled identities and changed class relations
+fail; there is no automatic full-read fallback or mutation retry. Native dispatch
+gates remain mandatory. Capture/decode failures release newly acquired leases.
+
+The first live specimen exposed an important boundary: Create initializes a
+WidgetTree child outside the returned UserWidget's outer/class closure. Planning
+rejected the next CanvasPanel spawn before dispatch. The partial owner closed
+successfully with exact holder/viewport/focus baseline restored, followed by a
+cooperative controller shutdown. Evidence: `logs/selected-results-host.log` and
+`evidence/selected-results-{before,after}.json`.
+
+The fix adopts the full observation already used to read WidgetTree through
+`InvocationPlanner.refresh_from(catalog)`, revoking older plans without another
+read. A fresh controller built and displayed the corrected two-control specimen
+on game21568 in57.4468428 seconds. Normal close took11.0655405 seconds, left zero
+children, reported no uncertainty, and restored exact retained-holder and
+viewport baselines plus viewport focus. The native console remained usable.
+Evidence: `logs/selected-results-v2-host.log` and
+`evidence/selected-results-v2-{before,open,after}.json`.
+
+All296 Python tests pass, including selected capture failure, output lease
+cleanup, recycled overlaps, changed class relations, scoped/null results and
+explicit observation revocation. This opt-in is validated on the bounded
+specimen only. Full management service adoption, full-menu timing, relaunch
+coverage, general keybinds and updated packaging remain pending. The resident
+native DLL was not rebuilt or replaced.

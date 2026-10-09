@@ -257,17 +257,20 @@ class Session:
                             text_values=self.supports_text_values, enum_values=self.supports_enum_values)
         return self._invoke_retained_plan(plan, catalog)
 
-    def invocation_planner(self):
+    def invocation_planner(self, *, selected_results=False):
         """Explicit reusable observations; native gates still validate each call.
 
         A planner shares one catalog across prepared retained calls. Refresh it
         when new object identities are needed; refresh/close revoke older plans.
         It does not pin any observed UObject or retry a failed engine operation.
+        selected_results=True reads only returned identities and dependencies,
+        then combines compatible planning observations. Untouched rows do not
+        become fresh. Changed identities fail without a full-scan fallback.
         """
         from .prepared_invocation import InvocationPlanner
-        return InvocationPlanner(self)
+        return InvocationPlanner(self, selected_results=selected_results)
 
-    def _invoke_retained_plan(self, plan, catalog, *, _return_catalog=False):
+    def _invoke_retained_plan(self, plan, catalog, *, _return_catalog=False, _selected_results=False):
         self._check()
         from .invocation import decode_result, UnsupportedInvocation, InvocationError
         from .ownership import ObjectLease, RetainedInvocation
@@ -310,7 +313,14 @@ class Session:
                 lease = ObjectLease(self, token, None)
                 self._leases.add(lease)
                 acquired.append((offset, lease))
-            current = capture() if reply.objects else catalog
+            if reply.objects and _selected_results:
+                from .catalog import capture_selected
+                # Same-call leases were adopted above before this read can fail.
+                identities = tuple(dict.fromkeys((index, serial, address)
+                    for _, index, serial, address in reply.objects))
+                current = catalog.with_observations(capture_selected(self.pid, identities))
+            else:
+                current = capture() if reply.objects else catalog
             result = decode_result(plan, reply, current, texts=texts)
             identities = {offset: index for offset, index, *_ in reply.objects}
             for offset, lease in acquired:
