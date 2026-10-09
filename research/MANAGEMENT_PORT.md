@@ -543,3 +543,12 @@ and discarding their output (CONSOLE_DUMPS.md). Investigate the action-router
 helpers/state rather than assuming those commands provide a usable snapshot.
 Native Mods Menu controls, input restoration and real key-event dispatch remain
 unimplemented; the existing shared registry and console fallback remain available.
+
+CommonUI follow-up: COMMONUI_INPUT_OWNERSHIP.md records the actual live main-menu
+root/TitleScreen activation and an absent optional router input config despite a
+nonnull active tree. The SDK-owned, undisplayed CommonActivatableWidget lifecycle
+now passes repeated activation/deactivation and exact holder cleanup. Input-mode
+bytes from an absent optional must not be used as a restoration snapshot. Next
+verify viewport/tree integration and a real child focus target with restoration
+to the game's prior focus owner. This is not yet native menu interaction or key
+dispatch acceptance.
