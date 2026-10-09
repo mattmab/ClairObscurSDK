@@ -59,3 +59,20 @@ or architectural rewrite without evidence that the release path requires it.
 At meaningful milestones report completed work, actual live proof, remaining
 blockers, critical-path change and this frozen-scope percentage. Increase scores
 only for verified deliverable progress; do not change weights silently.
+
+## First measured milestone
+
+The real existing v18 host completed a cProfile-wrapped native-menu open in
+193.984seconds (profiling overhead included). It made422external _query calls
+with162.51seconds cumulative time;337describe calls took116.46seconds. Build
+alone took173.67seconds. These nested times overlap and must not be added.
+Raw evidence: evidence/management-profile-open.{json,prof}; host log
+logs/trace-v18-schema-host.log. The profile ran the previously loaded widget
+module, before the hoisted lookup change; no end-to-end speedup is claimed.
+
+The dominant next target is repeated process-backed metadata acquisition, not
+an unmeasured UI rewrite. Reuse verified descriptors within the existing planner
+while keeping native dispatch schema/identity checks, then remeasure. New output
+identities still require live observation/ownership. The51%baseline is unchanged;
+the critical path is better identified, not yet completed. The menu remains
+owned by the current management service for normal close/cleanup.
