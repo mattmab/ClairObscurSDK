@@ -57,7 +57,8 @@ class AgentTests(unittest.TestCase):
         self.assertTrue(self.request(op='mod_enable', mod='Specimen', allow_mutation=True)['success'])
         self.assertEqual(self.request(op='mod_list')['result'],
         [{'name': 'Specimen', 'enabled': True, 'version': 'test', 'cleanup_error': None,
-          'source_sha256': self.loader.status()[0].source_sha256}])
+          'source_sha256': self.loader.status()[0].source_sha256,
+          'package_sha256': self.loader.status()[0].package_sha256}])
 
     def test_failure_diagnostics_no_retry_mutation_and_reentry(self):
         scope = self.loader._loaded['Specimen'][2]

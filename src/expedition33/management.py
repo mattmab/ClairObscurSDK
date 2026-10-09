@@ -189,6 +189,8 @@ class Registry:
                     for s in self._loader.status() if s.name == entry.name), None),
                 'source_sha256': next((getattr(s, 'source_sha256', None)
                     for s in self._loader.status() if s.name == entry.name), None),
+                'package_sha256': next((getattr(s, 'package_sha256', None)
+                    for s in self._loader.status() if s.name == entry.name), None),
                 'options': [{'id': option.id, 'title': option.title, 'kind': option.kind,
                     'value': option.validate(entry.preferences.get('options', {}).get(option.id, option.default)),
                     'default': copy.deepcopy(option.default), 'minimum': option.minimum,
@@ -230,10 +232,10 @@ class Registry:
             raise ManagementError('This core mod is protected; stop the controller to unload it')
         self._loader.unload(entry.name)
 
-    def reload(self, selection, *, expected_sha256, changed_only=False):
+    def reload(self, selection, *, expected_sha256, changed_only=False, expected_package_sha256=None):
         entry = self._entry(selection)
         return self._loader.reload(entry.name, expected_sha256=expected_sha256,
-                                   changed_only=changed_only)
+                                   changed_only=changed_only, expected_package_sha256=expected_package_sha256)
 
     def option(self, selection, option_id):
         entry = self._entry(selection)

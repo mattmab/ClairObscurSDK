@@ -27,6 +27,9 @@ class AgentClientTests(unittest.TestCase):
              {'op': 'mod_reload', 'mod': 'Sample', 'expected_sha256': 'a' * 64}),
             (['reload-changed', 'Sample', '--expected-sha256', 'b' * 64],
              {'op': 'reload_changed_mod', 'mod': 'Sample', 'expected_sha256': 'b' * 64}),
+            (['reload', 'Sample', '--expected-sha256', 'a' * 64, '--expected-package-sha256', 'c' * 64],
+             {'op': 'mod_reload', 'mod': 'Sample', 'expected_sha256': 'a' * 64,
+              'expected_package_sha256': 'c' * 64}),
             (['logs', '--contains', 'match', '--limit', '2'], {'op': 'logs', 'contains': 'match', 'limit':2})]
         for argv, expected in examples:
             code, _, sender = self.call(['--allow-mutation', '--timeout', '27', '--data', 'custom'] + argv)

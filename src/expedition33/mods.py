@@ -14,6 +14,7 @@ import uuid
 from .sdk import Session
 from ._scope import SessionScope
 from .management import ModDefinition, Registry
+from .mod_imports import PackageSources, OwnedImports
 
 
 class ModError(RuntimeError):
@@ -26,6 +27,7 @@ class ModStatus:
     enabled: bool
     cleanup_error: str | None = None
     source_sha256: str | None = None
+    package_sha256: str | None = None
 
 
 def _error(phase, error):
@@ -51,6 +53,7 @@ class ModLoader:
         # Keep the failure across unload/load; only a fresh controller can reset it.
         self._cleanup_failures = {}
         self._source_digests = {}
+        self._imports = {}
         self._reloading = False
         self.stop_requested = False
         self.registry = Registry(self, settings)
@@ -92,18 +95,25 @@ class ModLoader:
             code = compile(source, str(path), 'exec', dont_inherit=True)
         except BaseException as error:
             raise _error('compile', error) from None
-        return path, code, hashlib.sha256(source).hexdigest()
+        digest = hashlib.sha256(source).hexdigest()
+        try:
+            package = PackageSources(path, code, digest)
+        except BaseException as error:
+            raise _error('package preflight', error) from None
+        return path, code, digest, package
 
     def _load_source(self, name, snapshot):
-        path, code, digest = snapshot
+        path, code, digest, package = snapshot
         key = '_expedition33_mod_' + uuid.uuid4().hex
-        spec = importlib.util.spec_from_file_location(key, path)
+        imports = OwnedImports(key, package)
+        imports.install()
+        spec = imports.find_spec(key)
         module = importlib.util.module_from_spec(spec)
         sys.modules[key] = module
         try:
             # Execute exactly the captured bytes; timestamp/size-matched .pyc
             # files and edits during cleanup must not substitute another source.
-            exec(code, module.__dict__)
+            imports.exec_module(module)
             instance = module.Mod()
             if not callable(getattr(instance, 'enable', None)) or not callable(getattr(instance, 'disable', None)):
                 raise TypeError('Mod must define enable(session) and disable()')
@@ -111,13 +121,14 @@ class ModLoader:
             definition = describe() if describe is not None else ModDefinition(name.lower(), name)
             self.registry.register(name, definition)
         except BaseException as error:
-            sys.modules.pop(key, None)
+            imports.close()
             raise _error('load', error) from None
         self._loaded[name] = [key, instance, None]
         self._source_digests[name] = digest
+        self._imports[name] = imports
 
-    def reload(self, name, *, expected_sha256, changed_only=False):
-        """Replace one trusted installed mod.py; dependencies/core are not reloaded.
+    def reload(self, name, *, expected_sha256, changed_only=False, expected_package_sha256=None):
+        """Replace trusted installed Python sources; global dependencies/core stay loaded.
 
         Compilation and digest validation precede cleanup. After cleanup starts,
         failures are reported without replay or automatic rollback/re-enable.
@@ -138,9 +149,14 @@ class ModLoader:
         snapshot = self._read_source(name)
         if snapshot[2] != expected_sha256:
             raise ModError('expected_sha256 does not match installed mod.py')
-        if changed_only and self._source_digests.get(name) == snapshot[2]:
+        package = snapshot[3]
+        old_package = self._imports[name].sources
+        if package.has_dependencies or old_package.has_dependencies or expected_package_sha256 is not None:
+            if expected_package_sha256 != package.sha256:
+                raise ModError('expected_package_sha256 must match the captured Python source tree: ' + package.sha256)
+        if changed_only and old_package.sha256 == package.sha256:
             return dict(changed=False, mod=name, version=row['version'],
-                        enabled=record[2] is not None, sha256=snapshot[2])
+                        enabled=record[2] is not None, sha256=snapshot[2], package_sha256=package.sha256)
         enabled = record[2] is not None
         # Do not use unload's finally path: failure must stop replacement.
         self._reloading = True
@@ -160,7 +176,7 @@ class ModLoader:
                 shared.close()
         view = next(v for v in self.registry.views() if v['folder'] == name)
         return dict(changed=True, mod=name, version=view['version'],
-                    enabled=view['enabled'], sha256=snapshot[2])
+                    enabled=view['enabled'], sha256=snapshot[2], package_sha256=package.sha256)
 
     def enable(self, name, *, console=False, console_key=None):
         record = self._record(name)
@@ -286,6 +302,7 @@ class ModLoader:
             key, _, _ = self._loaded.pop(name)
             self.registry.unregister(name)
             sys.modules.pop(key, None)
+            self._imports.pop(name).close()
             self._source_digests.pop(name, None)
 
     def _record(self, name):
@@ -299,7 +316,8 @@ class ModLoader:
         self._check_thread()
         return tuple(ModStatus(name, record[2] is not None and name not in self._enabling
                                and name not in self._disabling,
-                               self._cleanup_failures.get(name), self._source_digests.get(name))
+                               self._cleanup_failures.get(name), self._source_digests.get(name),
+                               self._imports[name].sources.sha256)
                      for name, record in self._loaded.items())
 
     def close(self):

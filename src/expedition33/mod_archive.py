@@ -6,6 +6,7 @@ identify reviewed bytes; they are not signatures or a Python sandbox.
 from dataclasses import dataclass
 import hashlib
 import io
+import json
 from pathlib import Path
 import re
 import stat
@@ -22,6 +23,11 @@ class ArchiveError(ValueError):
     pass
 
 
+def python_source_digest(inventory):
+    """Hash sorted relative Python-path/content-digest pairs, excluding resources."""
+    return hashlib.sha256(json.dumps(inventory, sort_keys=True, separators=(',', ':')).encode()).hexdigest()
+
+
 @dataclass(frozen=True)
 class Candidate:
     sha256: str
@@ -29,6 +35,8 @@ class Candidate:
 
     def summary(self):
         return {'sha256': self.sha256, 'file_count': len(self.files),
+                'python_package_sha256': python_source_digest({name: hashlib.sha256(data).hexdigest()
+                    for name, data in self.files if name.endswith('.py')}),
                 'expanded_bytes': sum(len(data) for _, data in self.files),
                 'files': [{'path': name, 'size': len(data),
                            'sha256': hashlib.sha256(data).hexdigest()}

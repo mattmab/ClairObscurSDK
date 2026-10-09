@@ -1001,3 +1001,51 @@ replacement/cleanup/relaunch verification. These are required before advertising
 staged_archive_install support; installed-entry reload remains the only activated
 reload path. General traces, keybind/editor work and full Harness parity remain
 unfinished.
+
+## Package-local Python ownership and helper reload — 2026-10-09
+
+ModLoader now captures and compiles package-local .py sources before load/reload.
+Each load owns a unique Python package namespace and a matching import finder.
+Relative helpers (from .helper import value), nested packages and implicit package
+directories import from the captured source. Empty package search paths prevent
+fall-through to disk or stale .pyc files. Lazy imports use the same captured tree.
+Absolute SDK/stdlib/third-party imports retain normal process ownership and are
+not evicted. No sys.path modification occurs.
+
+Import failure and unload remove the owner finder and all sys.modules entries
+under that exact namespace, then release captured source references. Other mod
+namespaces are preserved. Removing module-cache entries cannot revoke arbitrary
+Python references held by user code; engine access still requires live SDK scopes.
+Root mod.py remains the entry point; root __init__.py and ambiguous module/package
+paths are rejected. Python helpers use identifier path components; native extension
+reload and general importlib.resources integration are not implemented.
+
+Reload requires expected_package_sha256 when the old or new tree contains helpers,
+including helper removal. The digest is SHA256 of compact, key-sorted JSON mapping
+relative Python paths to their file SHA256 values. It excludes non-Python resources;
+archive SHA256 still covers the complete candidate. mod_list exposes loaded
+package_sha256; archive build/inspect exposes the matching python_package_sha256.
+The CLI accepts --expected-package-sha256. reload_changed_mod compares whole Python
+trees, so helper-only edits no longer look unchanged. The original entry digest
+remains required. Old scopes/selections still follow cleanup-before-replacement.
+
+All327 source tests pass. New tests cover identical helper names in two mods,
+namespace eviction, lazy capture and uncaptured-file rejection, helper-only reload,
+required tree digest, import-failure cleanup, syntax preflight, nested/implicit
+packages and module/package ambiguity. Archive and loader tree digests agree.
+Evidence: evidence/package-import-tests.log. CLI request shape is also tested.
+
+LIVE PROVEN with scripts/verify_live_package_reload.py on game39900 and source
+controller15816/session434737dd9d8742a287a4980e64cf1f19. A research mod's mod.py
+remained byte-identical while label.py changed from Helper version 1 to2. Both
+versions successfully called the verified Actor.IsActorBeingDestroyed getter.
+Missing/stale package digests were rejected; helper-only replacement removed the
+old namespace and kept exactly one active hook; unchanged tree skipped reload.
+Final cleanup restored the zero-hook baseline. Evidence includes both source ZIPs
+and raw replies in evidence/package-reload-fc8014b97155436db01f6bace743c790/ and
+logs/package-reload-host.log. The preceding controller exited normally with code0.
+
+Staged folder installation, backup/recovery journal and live archive activation
+remain the next adapter work. This validates installed Python-tree replacement,
+not archive installation, global dependency/core reload, full Harness parity,
+travel/GC, or a new release package.
