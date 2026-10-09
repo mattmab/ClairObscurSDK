@@ -190,6 +190,7 @@ class ManagementTests(unittest.TestCase):
         self.assertIn('owner thread', errors[0])
 
     def test_borrowed_session_survives_loader_cleanup(self):
+        self.loader.close()
         shared = FakeSession()
         with ModLoader(self.root, session=shared) as borrowed:
             borrowed.load('Specimen'); borrowed.enable('Specimen')

@@ -18,3 +18,4 @@ __pycache__/
 research/USER_REQUEST*.txt
 
 *.egg-info/
+.sdk-loader.lock

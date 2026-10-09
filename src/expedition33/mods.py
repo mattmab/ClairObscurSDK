@@ -60,6 +60,9 @@ class ModLoader:
         self.registry = Registry(self, settings)
         from .introspection.agent import AgentBridge
         self.actions = AgentBridge(self.registry, self.root.parent / 'logs' / 'sdk.log')
+        from .mod_lock import ModRootLock
+        self._root_lock = ModRootLock(self.root)
+        self._closed = False
 
     def request_stop(self):
         """Ask the owning host loop to exit after its current dispatch completes."""
@@ -69,6 +72,8 @@ class ModLoader:
     def _check_thread(self):
         if threading.get_ident() != self._owner:
             raise ModError('Mods must be managed on their owning Python thread')
+        if self._closed:
+            raise ModError('Mod loader is closed')
 
     def discover(self):
         self._check_thread()
@@ -384,6 +389,8 @@ class ModLoader:
                      for name, record in self._loaded.items())
 
     def close(self):
+        if self._closed:
+            return
         self._check_thread()
         failures = []
         for name in tuple(self._loaded):
@@ -392,6 +399,8 @@ class ModLoader:
             except ModError as error:
                 failures.append(str(error))
         self.actions.close()
+        self._closed = True
+        self._root_lock.close()
         if failures:
             raise ModError('; '.join(failures))
 

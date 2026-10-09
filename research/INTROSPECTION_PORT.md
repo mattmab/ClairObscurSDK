@@ -1155,3 +1155,26 @@ full controller/game relaunch of the installed archive. Explicit failure recover
 concurrent-process policy, relaunch and updated packaged validation remain open.
 The prior338 source tests remain the source baseline; this addition is the live
 verification script and evidence, not a new SDK release or full parity claim.
+
+### Exclusive mod-root ownership — 2026-10-09
+
+ModLoader now owns an OS-backed exclusive lock on its resolved mod directory
+until close. A competing loader in the same or another process fails before
+loading mod code. Different roots remain usable with a shared live Session.
+Windows uses a nonblocking byte-range lock; the fallback uses flock. The
+.sdk-loader.lock file stays in place and is ignored by Git: deleting/replacing
+it while a controller is alive would defeat cooperative ownership. Packaged
+source selection excludes it. Process exit releases the OS handle without
+requiring a stale PID/lock-file deletion heuristic. A closed loader cannot be
+reused to perform lifecycle operations after relinquishing ownership.
+
+All341 tests pass in evidence/mod-root-lock-tests.log. New tests use actual
+separate Python processes to verify exclusion, normal release, and release
+on os._exit without Python cleanup. Existing borrowed-session and fresh-loader
+checks now close the previous loader first. This lock serializes cooperating
+controllers; it is not protection against arbitrary external file edits, a
+native hook-cleanup guarantee, or a lock adopted by older running SDK versions.
+
+The currently resident source controller predates this change. No live or
+packaged validation of this revision is claimed. Offline restore/recovery will
+use the same root ownership boundary; that operation remains to be implemented.

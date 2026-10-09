@@ -50,6 +50,7 @@ class StagedLoaderTests(unittest.TestCase):
             self.loader.install_staged('Example', expected_sha256=digest)
         self.assertFalse(self.loader.actions.actions)
         self.assertFalse(self.loader.status())
+        self.loader.close()
         with ModLoader(self.mods) as fresh:
             with self.assertRaisesRegex(ModError, 'Unresolved installation'):
                 fresh.load('Example')
@@ -59,6 +60,7 @@ class StagedLoaderTests(unittest.TestCase):
         with self.assertRaisesRegex(ModError, 'cleanup failed'):
             self.loader.install_staged('Example', expected_sha256=self.stage())
         self.assertIn('value = 1', (self.mods / 'Example/mod.py').read_text())
+        self.loader.close()
         with ModLoader(self.mods) as fresh:
             with self.assertRaisesRegex(ModError, 'Unresolved installation'):
                 fresh.load('Example')
