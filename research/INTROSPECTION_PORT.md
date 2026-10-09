@@ -557,3 +557,9 @@ implementation of Explorer retain. Retain remains rejected before invocation.
 Verify the complete collector/lifetime contract before adding leases; ordinary
 object observations and returned identities remain non-owning. Native FKey and
 other owned value types require separate construction/destruction support.
+
+Follow-up: the target's generic strong-reference collector is identified and
+corroborated live. Native creation/release candidate logic and an isolated
+fixture are implemented; public retain, session leases, invocation result
+retention and live ownership validation remain pending. The original Explorer
+core is unchanged. WIDGET_OWNERSHIP.md records exact evidence and limitations.

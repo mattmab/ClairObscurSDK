@@ -60,19 +60,29 @@ def main():
                                 for at in range(0, count * 8, 65536))
             before = members()
             widgets = []
+            strong_holders = []
+            scope_guards = []
             for (holder,) in struct.iter_unpack('<Q', before):
-                if u64(holder) != base + 0x739f468:
+                vtable = u64(holder)
+                destinations = {base + 0x739f468: widgets,
+                                base + 0x6eddd50: strong_holders,
+                                base + 0x7817218: scope_guards}
+                if vtable not in destinations:
                     continue
                 raw = read(holder, 24)
+                if struct.unpack_from('<Q', raw)[0] != vtable:
+                    raise RuntimeError('Holder type changed during probe')
                 widget = struct.unpack_from('<Q', raw, 16)[0]
                 item = {'registered': bool(raw[9]), 'conditional': bool(raw[8]),
                         'holder_address': hex(holder), 'widget': identity(widget) if widget else None}
                 if raw != read(holder, 24): raise RuntimeError('Slate holder changed during probe')
                 assert item['registered'] and item['conditional'] == (offset == 0x38)
-                widgets.append(item)
+                destinations[vtable].append(item)
             if header != read(state + offset, 16) or before != members():
                 raise RuntimeError('GC registration list changed during probe')
-            collections.append({'name': name, 'count': count, 'capacity': capacity, 'slate_widgets': widgets})
+            collections.append({'name': name, 'count': count, 'capacity': capacity,
+                                'slate_widgets': widgets, 'strong_holders': strong_holders,
+                                'scope_guards': scope_guards})
         if referencer != u64(base + 0x9346f60) or state != u64(referencer + 0x28):
             raise RuntimeError('GC referencer changed')
         identity(referencer)
@@ -83,7 +93,9 @@ def main():
         path.write_text(json.dumps(result, indent=2), encoding='utf-8')
         print(json.dumps({'pid': start['pid'], 'referencer': owner,
                           'collections': [{'name': row['name'], 'count': row['count'],
-                                           'slate_widgets': len(row['slate_widgets'])} for row in collections]}))
+                                           'slate_widgets': len(row['slate_widgets']),
+                                           'strong_holders': len(row['strong_holders']),
+                                           'scope_guards': len(row['scope_guards'])} for row in collections]}))
     finally:
         kernel.CloseHandle(handle)
 

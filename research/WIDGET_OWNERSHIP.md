@@ -80,3 +80,70 @@ changing an object's shared root flag. Before implementation:
 This mechanism concerns UObject lifetime. It does not solve owned FKey values,
 native strings, containers, input dispatch or full Introspection Harness parity.
 The console fallback and persistent Python host remain independent of UMG.
+
+## Generic strong-holder candidate — subsequent investigation
+
+The generic engine holder is a better candidate than a custom GC subclass.
+Diagnostic141e733d0 names it
+`UEStrongObjectPtr_Private::TInternalReferenceCollector`. Disk pointer search
+locates its four-entry vtable at146eddd50:
+
+| Slot | Address | Verified behavior |
+| --- | --- | --- |
+| 0 | 141e6c4f0 | Resets base vtable, unregisters via14125bb10, frees24-byte storage when flags bit0 is set. |
+| 8 | 141e6c930 | Calls collector virtual+88 with `(collector, holder+10, 0, 0)`; explicit assembly confirms all four register arguments. |
+| 10 | 141e733d0 | Constructs an engine-owned diagnostic FString through141027600 and returns the output pointer. |
+| 18 | 1410044f0 | Returns false. |
+
+Unlike SObjectWidget's collector+10 forwarding, this generic callback explicitly
+uses+88 and zeroes its additional arguments. The SDK candidate uses the existing
+engine vtable, not a guessed collector ABI or a custom diagnostic string callback.
+
+Correction to the exploratory six-pointer vtable dump: the apparent entries at
+GC base+20 and SObjectWidget holder+20 begin separate adjacent vtables. Direct
+constructor xrefs to146de2658/14739f488 establish those boundaries. They must not
+be copied as additional GC-holder methods. The raw exploratory dump remains
+unchanged as evidence, with this interpretation recorded separately.
+
+Creation sites141ea77c0,141e72e20 and143150220 independently show allocation
+through144a98010(24), zeroed holder flags, base vtable, registration1412514b0,
+generic vtable assignment, object slot assignment and the conditional1412b0e90
+barrier. Destruction is through the holder's deleting destructor with flags1.
+The barrier marks registry/cluster state and queues references; the candidate
+calls this target helper instead of reproducing its internals.
+
+Global149272cea is now supported as an exit-request indicator by callers with
+`Win RequestExit` and `ConsoleCtrl RequestExit` diagnostic strings. Registration
+is disabled once it is set. This is separate from the existing9272cfc guard.
+
+The extended read-only probe observed three generic holders, retaining objects
+of classes AudioSubsystemCollectionRoot, TypedElementRegistry and
+InterchangeManager. All matched the live registry identity checks. No scope-guard
+holder was found in this snapshot; absence is not proof of unavailability.
+
+Evidence: `strong-holder-pointer-search.json`, `strong-holder-creation-body.json`,
+`strong-holder-paths.json`, `strong-holder-callback-abi.json`,
+`strong-holder-name-bodies.json`, `gc-contract-xrefs.json` and updated
+`gc-owners-live.json`. The database save succeeded (`strong-holder-save.json`).
+
+### Implemented candidate, not yet a live SDK capability
+
+`native/strong_reference.h` implements explicit creation/release with persistent
+tracking and registration/destruction uncertainty. `target_strong_reference.h`
+binds the verified target operations and identity/thread/GC/exit guards. It is
+not included in the running transport and has not created an SDK-owned holder.
+There is no public Python retain API yet.
+
+`scripts/test-strong-reference.cmd` passes /W4 /WX compilation of both the fixture
+and target adapter. The fixture checks creation order, conditional barrier,
+post-allocation revalidation, allocation/registration rejection, duplicate
+acquisition, deferred release, foreign-vtable rejection, idempotent empty release
+and quarantine after ambiguous registration or destruction. These are lifecycle
+logic tests, not proof that target engine calls work live.
+
+Remaining integration gates: bounded generation-scoped lease storage, SEH fault
+containment and membership reconciliation, controller-death cleanup and a live
+register/release specimen. Quarantine alone is not a complete recovery strategy:
+an interrupted registration can leave a base-vtable holder in the engine list.
+Do not enable this candidate until that state can be reconciled safely. Creation
+must retain returned objects before the invocation response reaches Python.

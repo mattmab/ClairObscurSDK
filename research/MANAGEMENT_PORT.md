@@ -368,3 +368,10 @@ synchronization and teardown contract still require verification; no widget
 creation, retention, focus change or key dispatch is claimed. Keep ownership
 registration inside the eventual create operation to avoid a Python round-trip
 GC gap. Shared console management remains usable while this work continues.
+
+The follow-up found an existing generic24-byte engine strong-reference holder,
+including its exact constructor sequence, collector callback and destructor.
+Three live instances corroborate its layout. A native candidate adapter and
+lifecycle fixture now compile/pass; no SDK holder has been registered live.
+Prefer this target mechanism over a custom SObjectWidget-derived holder. See
+WIDGET_OWNERSHIP.md for the remaining lease, fault-recovery and live-test gates.
