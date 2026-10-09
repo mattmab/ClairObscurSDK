@@ -569,3 +569,25 @@ planning. Evidence preserves both attempts: `enum-widget-preflight.json`,
 Next adapt typed enum values to the original Harness's argument/result and retained
 value paths, then validate menu focus ownership and actual interaction. V13 package
 relaunch/shutdown and text regression through this live host remain separate gates.
+
+## V13 Harness and text compatibility — 2026-10-09
+
+The typed enum adapter now has live JSON input/output, retained `$value` reuse,
+release, malformed-input rejection and exact holder-cleanup proof. The original
+core remains unchanged; see INTROSPECTION_PORT.md and the reproducible
+`verify_live_harness_enum_values.py` specimen. Cooperative source-controller
+replacement also completed cleanly using the unchanged v13 DLL.
+
+At09:52:55, `verify_live_widget_text.py` passed through the same v13 host:
+ASCII/Unicode/empty TextBlock values, invalid-text rejection, original Harness
+text retain/reuse/release and exact holder restoration. Evidence:
+`widget-text-progress.json`, `widget-text-live.json` and
+`logs/enum-harness-v13.stderr.log`. The earlier text evidence was copied to
+`widget-text-pre-v13-progress.json` / `widget-text-pre-v13-live.json` before this
+run. No widget was displayed and no input mode changed in either probe.
+
+Next: actual CommonUI ownership and restoration, followed by focused menu
+interaction. The registered diagnostic wrappers appear to discard their generated
+text in this executable (CONSOLE_DUMPS.md), so their names are insufficient as
+an input-state API. V13 packaging, fresh-game relaunch and broader gameplay/GC
+coverage remain pending.

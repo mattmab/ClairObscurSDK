@@ -90,3 +90,33 @@ profile commands and GC stress commands were also left unexecuted.
    console frontend and recovery bindings.
 5. Use names to focus the Introspection Harness investigation. Preserve its
    actual object enumeration, schema and lifetime checks; dumps do not replace them.
+
+## CommonUI handler follow-up — 2026-10-09
+
+Target Ghidra evidence narrows the usefulness of the two registered CommonUI
+diagnostics. Neither was executed in this follow-up.
+
+- `CommonUI.DumpActivatableTree` registration RVAe9f990 binds RVA476a760.
+  That wrapper calls helper RVA475a2b0, then frees the returned array of24-byte
+  string/player records. The helper defaults its first three boolean arguments
+  to true and the optional player selector to-1; it builds active-root, tree and
+  persistent-action text from the player's action router.
+- `CommonUI.DumpInputConfig` registration RVAe9fb30 binds RVA476ac90 with a
+  world-context delegate. It takes no command arguments. It formats each local
+  player's input mode, mouse capture and hide-cursor state, or an absent-router /
+  absent-config message, into a temporary string and then frees it.
+
+The decompiled shipping wrappers show no output-device/log emission for their
+constructed text. This is static evidence of discarded diagnostics, not a live
+proof of visible console output or a reusable public API. Registration and help
+therefore do not establish that either command can supply our restoration state.
+The tree helper's returned text and the input-config lookup are useful native
+investigation leads, but ownership, ABI, thread and lifetime verification are
+required before exposing them through our SDK. No offsets from this observation
+have been added to a callable runtime API.
+
+Evidence: `commonui-diagnostic-search.json`, `commonui-diagnostic-xrefs.json`,
+`commonui-diagnostic-registration.json`, `commonui-diagnostic-handlers.json`,
+and `commonui-tree-helper.json`. Next menu work should investigate the actual
+action-router state and restoration path; do not assume these console commands
+provide usable output or force GameOnly over the game's existing menu.

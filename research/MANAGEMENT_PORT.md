@@ -528,3 +528,18 @@ live evidence, including two independent mod scopes and exact holder cleanup.
 The launcher exposes `management --retained`. Shared native ownership is now
 available for the bounded widget lifecycle specimen; native UMG, focus handling
 and key dispatch remain pending. See OBJECT_LEASES.md for limits and proof.
+
+## Current UMG prerequisites — 2026-10-09
+
+Subsequent v9-v13 work now provides verified object output ownership, scalar
+object assignment, selected numeric layout structs, owned text and typed byte
+enums. The original Harness can invoke these supported paths and retain/reuse
+their results; enum JSON and existing text paths passed together in the live v13
+host. See WIDGET_LAYOUT_VALUES.md for exact proof and remaining package gates.
+
+The next interaction prerequisite is a reversible input/focus ownership contract.
+Target inspection shows the registered CommonUI diagnostic wrappers constructing
+and discarding their output (CONSOLE_DUMPS.md). Investigate the action-router
+helpers/state rather than assuming those commands provide a usable snapshot.
+Native Mods Menu controls, input restoration and real key-event dispatch remain
+unimplemented; the existing shared registry and console fallback remain available.

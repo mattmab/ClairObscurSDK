@@ -752,3 +752,16 @@ encoding budgets and original retained-value lookup/close. The underlying v13
 Widget visibility calls have separate live proof; this new Harness JSON adapter
 has not yet been exercised in the live persistent host. No focus/input-mode or
 key-dispatch validation is implied.
+
+Live follow-up: `verify_live_harness_enum_values.py` passed at09:49:40 on
+game PID21804, after cooperative v13 controller replacement (old Python8860 /
+native12588 exited; new Python23916 / native19188). The source host uses the same
+unchanged v13 DLL. An SDK-owned, undisplayed Button accepted named Hidden/Visible
+arguments, returned typed JSON, accepted that JSON again, and reused an original
+`$value` retained enum. Raw integers, mismatched numeric annotations and unknown
+members were rejected while visibility remained unchanged. `release_value`
+revoked reuse; Harness close cleared remaining result ownership. The shared
+widget fixture removed the child and restored the exact native holder baseline.
+Evidence: `harness-enum-values-progress.json`, `harness-enum-values-live.json`,
+`enum-v13-first-disabled.json`, and `logs/enum-harness-v13.stderr.log`.
+No viewport, input-mode, focus, forced-GC or gameplay-state change was exercised.
