@@ -694,3 +694,26 @@ and the unchanged v16 layout check. No new DLL or controller was built/loaded.
 Controller command serialization, feature negotiation, isolated v17 build scripts,
 Python control ownership/shared drain, and live two-control validation remain
 pending. These compile checks do not establish runtime behavior or feature parity.
+
+### Isolated v17 controller build and Python packet codec
+
+`build-multi-button-candidate.cmd` builds runtime-session-v17/runtime_session_v17.dll
+and research-probe-v17/research_probe.exe in separate directories. The controller
+selects that DLL, advertises multi_button_protocol1/capacity16, validates exact
+multi-button hex requests before IPC, submits command109 and returns the complete
+acknowledgement packet. Both binaries built with /W4 /WX; SHA256 records are in
+`evidence/multi-v17-build.json`. They have not been loaded into the game.
+
+The Python `_multi_button_wire` codec preserves the 2648-byte contract, including
+bind identity and zero-output checks. A successful drain carries no single-control
+registration; each event has its own registration/action and shares the verified
+session/menu owner. Whole-batch decoding rejects foreign sessions/owners, unordered
+sequences, modified request identities and nonzero unused output. Callback routing
+must additionally check each registration/action against the live menu registry;
+that dispatch layer is still pending. Unknown outcomes never return events.
+
+All227 Python tests pass, including four new packet tests. Existing native fixtures,
+v15/v16 compatibility object builds and v16 layout check also pass after controller
+changes. Pending: Python session capability negotiation, v17 selection, multi-control
+menu ownership/shared draining and live two-control lifecycle validation. The
+running v16 console/Harness and its binaries were not replaced.

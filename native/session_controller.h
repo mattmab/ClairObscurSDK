@@ -83,7 +83,9 @@ inline void run_runtime_session(DWORD pid, DWORD thread, int32_t object_index, i
     packet.request.object_index = object_index; packet.request.object_serial = object_serial;
     packet.request.function_index = function_index; packet.request.function_serial = function_serial;
     wchar_t executable[32768]; require(GetModuleFileNameW(nullptr, executable, 32768) != 0, "SESSION_SELF_PATH");
-#ifdef E33_BUTTON_ACTION_SESSION
+#ifdef E33_MULTI_BUTTON_SESSION
+    auto path = std::filesystem::path(executable).parent_path().parent_path() / L"runtime-session-v17" / L"runtime_session_v17.dll";
+#elif defined(E33_BUTTON_ACTION_SESSION)
     auto path = std::filesystem::path(executable).parent_path().parent_path() / L"runtime-session-v16" / L"runtime_session_v16.dll";
 #elif defined(E33_BUTTON_REFERENCE_SESSION)
     auto path = std::filesystem::path(executable).parent_path().parent_path() / L"runtime-session-v15" / L"runtime_session_v15.dll";
@@ -150,6 +152,9 @@ inline void run_runtime_session(DWORD pid, DWORD thread, int32_t object_index, i
 #ifdef E33_BUTTON_ACTION_SESSION
               << ",\"button_action_protocol\":1,\"button_action_session\":" << packet.request.nonce
 #endif
+#ifdef E33_MULTI_BUTTON_SESSION
+              << ",\"multi_button_protocol\":1,\"multi_button_capacity\":16"
+#endif
               << "}\n" << std::flush;
     std::string command;
     while (std::getline(std::cin, command)) {
@@ -162,6 +167,21 @@ inline void run_runtime_session(DWORD pid, DWORD thread, int32_t object_index, i
         bool text=false;
         bool menu=false;
         bool button_action=false;
+        bool multi_button=false;
+#ifdef E33_MULTI_BUTTON_SESSION
+        multi_button=command.substr(0,separator)=="multi-button";
+        if(multi_button) {
+            require(separator!=std::string::npos,"MULTI_BUTTON_PAYLOAD_MISSING");
+            const auto encoded=command.substr(separator+1);
+            require(encoded.size()==sizeof(MultiButtonPacket)*2,"MULTI_BUTTON_PAYLOAD_SIZE");
+            auto* destination=reinterpret_cast<uint8_t*>(&packet.multi_button);
+            auto digit=[](char c)->unsigned { if(c>='0'&&c<='9') return c-'0'; if(c>='a'&&c<='f') return c-'a'+10;
+                throw std::runtime_error("MULTI_BUTTON_PAYLOAD_ENCODING"); };
+            for(size_t i=0;i<sizeof(MultiButtonPacket);++i) destination[i]=static_cast<uint8_t>(digit(encoded[i*2])*16+digit(encoded[i*2+1]));
+            require(valid_multi_button_request(packet.multi_button),"MULTI_BUTTON_REQUEST_INVALID");
+            command.resize(separator);
+        }
+#endif
 #ifdef E33_BUTTON_ACTION_SESSION
         button_action=command.substr(0,separator)=="button-action";
         if(button_action) {
@@ -257,7 +277,7 @@ inline void run_runtime_session(DWORD pid, DWORD thread, int32_t object_index, i
             command.resize(separator);
         }
 #endif
-        if(!reflected && !leased && !retained && !assignment && !text && !menu && !button_action && separator!=std::string::npos) { decode_console_payload(command.substr(separator+1),packet.console_text); command.resize(separator); }
+        if(!reflected && !leased && !retained && !assignment && !text && !menu && !button_action && !multi_button && separator!=std::string::npos) { decode_console_payload(command.substr(separator+1),packet.console_text); command.resize(separator); }
         DWORD action = command == "enable" ? SessionEnable : command == "disable" ? SessionDisable :
             command == "invoke" ? SessionInvoke : command == "drain" ? SessionDrain :
             command == "ping" ? SessionPing : command == "close" ? SessionClose :
@@ -286,6 +306,9 @@ inline void run_runtime_session(DWORD pid, DWORD thread, int32_t object_index, i
 #ifdef E33_BUTTON_ACTION_SESSION
         if(button_action) action=SessionButtonAction;
 #endif
+#ifdef E33_MULTI_BUTTON_SESSION
+        if(multi_button) action=SessionMultiButton;
+#endif
         require(action != 0, "SESSION_UNKNOWN_COMMAND");
         connection.command(action);
         std::cout << "{\"event\":\"session_response\",\"command\":" << quote(command)
@@ -304,6 +327,15 @@ inline void run_runtime_session(DWORD pid, DWORD thread, int32_t object_index, i
             }
         }
         std::cout << ']';
+#ifdef E33_MULTI_BUTTON_SESSION
+        if(multi_button) {
+            static const char digits[]="0123456789abcdef";
+            const auto* source=reinterpret_cast<const uint8_t*>(&packet.multi_button);
+            std::string encoded(sizeof(MultiButtonPacket)*2,'0');
+            for(size_t i=0;i<sizeof(MultiButtonPacket);++i) { encoded[i*2]=digits[source[i]>>4]; encoded[i*2+1]=digits[source[i]&15]; }
+            std::cout << ",\"multi_button_packet\":" << quote(encoded);
+        }
+#endif
 #ifdef E33_BUTTON_ACTION_SESSION
         if(button_action) {
             static const char digits[]="0123456789abcdef";
