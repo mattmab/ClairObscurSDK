@@ -388,3 +388,30 @@ closing, closed and quarantined menus reject bindings. The five native fixtures,
 target and v15/v16 runtime compilation, and v16 layout execution pass
 (`button-action-protocol-build.log`). The controller and Python transport do not
 yet send this packet; no v16 DLL has been loaded and no live action claim is made.
+
+## Controller serialization and Python decoder
+
+The v16 controller now selects runtime-session-v16/runtime_session_v16.dll,
+advertises button_action_protocol1 and its native session nonce, accepts strict
+lowercase-hex `button-action` packets and returns the complete response packet.
+It validates request fields before dispatch. The added binary command is excluded
+from console-text decoding. v15 remains on its original runtime path/capabilities.
+
+`_button_action_wire.py` constructs clean packets and correlates responses against
+the operation, owner, child lease and action ID. It validates outcomes, lifecycle
+states, registration, event bounds, zero unused output and within-packet sequence
+ordering. Events must match the handshake session nonce and requested owner;
+their registrations must match the returned active registration. Unknown outcomes
+discard all partial events rather than dispatching them. The future callback
+owner must additionally match its saved registration/action IDs and track sequence
+progress across drains before executing Python.
+
+Five Python tests pass for valid requests, lifecycle responses, foreign/stale or
+unordered events, bounds/correlation and unknown outcomes. A binary response
+written by the native fixture decodes to the expected event and dropped count in
+Python (`button-action-native-golden.bin`, `button-action-native-python-layout.json`).
+All native fixtures and both v15/v16 runtime AND controller translation units
+compile with /W4 /WX (`button-action-controller-build.log`); Python results are in
+`button-action-wire-tests.log`. These are offline checks. Session selection,
+Python transport/callback ownership, isolated v16 binary builds and live validation
+remain pending; no new runtime DLL was loaded.

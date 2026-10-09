@@ -726,3 +726,12 @@ button and leases. A close-intent gate prevents re-registration during deferred
 action/menu teardown. Strict packet and lifecycle fixtures pass; the v16 packet
 now includes the action payload. Next add controller serialization, Python
 validation/dispatch and the isolated runtime build before live click testing.
+
+Controller serialization and the standalone Python action decoder are now in
+place. A native-generated packet decodes correctly in Python, five protocol tests
+pass, and v15/v16 controller/runtime paths compile. The decoder rejects foreign
+session/owner events and discards uncertain outputs. Next wire v16 selection and
+capability negotiation into Session, then scoped callback registration and poll
+dispatch with saved registration/action and cross-drain sequence checks. Live
+clicks, unregister/disconnect/relaunch and multi-control menu rendering remain
+unvalidated.

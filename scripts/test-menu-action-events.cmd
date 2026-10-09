@@ -34,6 +34,10 @@ cl /nologo /W4 /WX /EHsc /std:c++17 /O2 %RUNTIME_FLAGS% /c /Fo:runtime_v15_compa
 if errorlevel 1 (popd & exit /b 1)
 cl /nologo /W4 /WX /EHsc /std:c++17 /O2 %RUNTIME_FLAGS% /DE33_BUTTON_ACTION_SESSION /c /Fo:runtime_actions.obj "%PROJECT_ROOT%\native\runtime_session.cpp"
 if errorlevel 1 (popd & exit /b 1)
+cl /nologo /W4 /WX /EHsc /std:c++17 /O2 %RUNTIME_FLAGS% /DE33_BUTTON_ACTION_SESSION /c /Fo:controller_actions.obj "%PROJECT_ROOT%\native\research_probe.cpp"
+if errorlevel 1 (popd & exit /b 1)
+cl /nologo /W4 /WX /EHsc /std:c++17 /O2 %RUNTIME_FLAGS% /c /Fo:controller_v15_compat.obj "%PROJECT_ROOT%\native\research_probe.cpp"
+if errorlevel 1 (popd & exit /b 1)
 cl /nologo /W4 /WX /EHsc /std:c++17 /O2 %RUNTIME_FLAGS% /DE33_BUTTON_ACTION_SESSION /Fe:session_layout_v16.exe "%PROJECT_ROOT%\native\session_layout_fixture.cpp"
 if errorlevel 1 (popd & exit /b 1)
 session_layout_v16.exe

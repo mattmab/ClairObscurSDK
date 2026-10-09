@@ -2,8 +2,9 @@
 #include <cassert>
 #include <cstddef>
 #include <cstdio>
+#include <fstream>
 
-int main() {
+int main(int argc,char** argv) {
     static_assert(offsetof(ButtonActionPacket,events)==72);
     ButtonActionPacket packet{};
     packet.version=1; packet.operation=1; packet.owner=2; packet.child_lease=3; packet.action=4;
@@ -35,4 +36,13 @@ int main() {
         packet.action=0; assert(valid_button_action_request(packet)); packet.action=4;
     }
     std::puts("Button action protocol: strict header, operation and output-field rejection passed.");
+    if(argc==2) {
+        ButtonActionPacket golden{};
+        golden.version=1; golden.operation=2; golden.outcome=2; golden.count=1;
+        golden.state=2; golden.owner=2; golden.child_lease=3; golden.dropped=2; golden.registration=12;
+        golden.events[0]={{7,12,2,4},8};
+        std::ofstream output(argv[1],std::ios::binary);
+        output.write(reinterpret_cast<const char*>(&golden),sizeof(golden));
+        assert(output.good());
+    }
 }
