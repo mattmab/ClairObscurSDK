@@ -48,8 +48,9 @@ def main():
     parser.add_argument('--text-values', action='store_true', help='Use experimental v12 owned text invocation and v11 capabilities')
     parser.add_argument('--menu-ownership', action='store_true', help='Use experimental v14 scope-owned menu lifecycle; no finished Mods Menu')
     parser.add_argument('--button-references', action='store_true', help='Use experimental v15 retained Slate button lifetime; no click callbacks')
+    parser.add_argument('--button-actions', action='store_true', help='Use experimental v16 menu-owned Python button callbacks; no finished Mods Menu')
     args = parser.parse_args()
-    if (args.reflected or args.leases or args.retained or args.stable_returns or args.object_assignment or args.pod_values or args.text_values or args.enum_values or args.menu_ownership or args.button_references) and args.command not in ('console', 'introspection', 'management'):
+    if (args.reflected or args.leases or args.retained or args.stable_returns or args.object_assignment or args.pod_values or args.text_values or args.enum_values or args.menu_ownership or args.button_references or args.button_actions) and args.command not in ('console', 'introspection', 'management'):
         parser.error('Experimental session flags require console, introspection or management')
     log_dir = ROOT / 'logs'
     log_dir.mkdir(exist_ok=True)
@@ -62,8 +63,8 @@ def main():
             store = SettingsStore(ROOT / 'settings/management.json') if args.command == 'management' else None
             if store is not None and store.recovery:
                 log.warning('Management settings recovery: %s', store.recovery)
-            with (Session(reflected=args.reflected, leases=args.leases, retained=args.retained, stable_returns=args.stable_returns, object_assignment=args.object_assignment, pod_values=args.pod_values, text_values=args.text_values, enum_values=args.enum_values, menu_ownership=args.menu_ownership, button_references=args.button_references)
-                  if args.reflected or args.leases or args.retained or args.stable_returns or args.object_assignment or args.pod_values or args.text_values or args.enum_values or args.menu_ownership or args.button_references else nullcontext(None)) as runtime, \
+            with (Session(reflected=args.reflected, leases=args.leases, retained=args.retained, stable_returns=args.stable_returns, object_assignment=args.object_assignment, pod_values=args.pod_values, text_values=args.text_values, enum_values=args.enum_values, menu_ownership=args.menu_ownership, button_references=args.button_references, button_actions=args.button_actions)
+                  if args.reflected or args.leases or args.retained or args.stable_returns or args.object_assignment or args.pod_values or args.text_values or args.enum_values or args.menu_ownership or args.button_references or args.button_actions else nullcontext(None)) as runtime, \
                     ModLoader(ROOT / 'mods', settings=store, session=runtime) as loader:
                 if args.command == 'management':
                     loader.load('SDKManagement')

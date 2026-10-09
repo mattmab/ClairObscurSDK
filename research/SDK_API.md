@@ -221,6 +221,12 @@ See WIDGET_LAYOUT_VALUES.md for live evidence and remaining validation gates.
 
 ### Experimental owned-button actions (v16)
 
+The development launcher accepts `management --button-actions` (also available
+for `console` and `introspection`). This selects v16 and implies its earlier
+capability chain; it does not automatically create a native Mods Menu. Bundles
+must contain both the v16 controller and runtime DLL. Source-session live proof
+does not by itself certify a newly packaged copy or a fresh game launch.
+
 Use `Session(button_actions=True)` for the action-capable runtime. After a
 scope-owned native menu is attached, `menu.bind_action(callback)` binds its one
 verified owned Button. The callback receives an immutable copied ActionEvent

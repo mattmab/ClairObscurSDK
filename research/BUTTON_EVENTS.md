@@ -525,3 +525,25 @@ runs used separate session nonces and monotonically advancing registrations and
 event sequences; no old event was delivered into the new session.
 Evidence: `button-input-label-hit-test-progress.json`,
 `button-input-label-hit-test-live.json`, `button-input-label-hit-test-run.log`.
+
+## Bound-action controller death and session recovery
+
+`verify_live_button_action_disconnect.py` passed on PID21804 with the unchanged
+pinned v16 DLL. Its worker attached/focused an owned menu, bound the button and
+drained an empty queue. It then killed only its own controller PID25668 and exited
+with os._exit(23), bypassing all Python scope/session finally handlers. The native
+owner watcher restored the same viewport focus and exact pre-worker UObject holder
+set. No menu-close command was sent by Python.
+
+A fresh v16 session reported no active menu and Empty0 button reference, then
+rejected the old owner/child-lease status request with911/Returned, state0 and no
+events. It created another owned specimen, bound a newer registration, drained
+zero events, explicitly removed/rebound it, and closed the menu with the replacement
+action still bound. The replacement action closed, native reference became Empty0,
+viewport and exact holder baseline were restored, and the recovery session closed
+normally. The supervising process exited0. Evidence: `button-action-disconnect-*`
+JSON artifacts and `button-action-disconnect-run.log`.
+
+This establishes controller-death teardown and subsequent binding in the same game
+process. The worker queue was empty when disconnected; pending-event loss and game
+relaunch are separate validation cases. No new runtime DLL was built or loaded.

@@ -26,7 +26,7 @@ def main():
         assert path.is_relative_to(root) and not forbidden.intersection(Path(relative).parts)
         assert path.suffix.lower() not in ('.pak','.utoc','.ucas','.pdb')
         assert hashlib.sha256(path.read_bytes()).hexdigest()==digest
-    for version in (13,14,15):
+    for version in (13,14,15,16):
         assert f'build/runtime-session-v{version}/runtime_session_v{version}.dll' in expected
         assert f'build/research-probe-v{version}/research_probe.exe' in expected
     with zipfile.ZipFile(archive) as zipped:
@@ -34,7 +34,7 @@ def main():
         for name in expected:
             assert zipped.read(name)==(root/name).read_bytes()
     help_text=subprocess.check_output([sys.executable,'-I','-S','-B',str(root/'scripts/run_sdk.py'),'--help'],text=True)
-    assert '--menu-ownership' in help_text and '--button-references' in help_text
+    assert all(flag in help_text for flag in ('--menu-ownership', '--button-references', '--button-actions'))
     print(json.dumps(dict(directory=str(root),archive=str(archive),files=len(expected),
                          archive_sha256=metadata['sha256'],manifest_verified=True,zip_bytes_verified=True,
                          exclusions_verified=True,isolated_launcher_help=True,
