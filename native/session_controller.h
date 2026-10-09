@@ -75,7 +75,9 @@ inline void run_runtime_session(DWORD pid, DWORD thread, int32_t object_index, i
     packet.request.object_index = object_index; packet.request.object_serial = object_serial;
     packet.request.function_index = function_index; packet.request.function_serial = function_serial;
     wchar_t executable[32768]; require(GetModuleFileNameW(nullptr, executable, 32768) != 0, "SESSION_SELF_PATH");
-#ifdef E33_STABLE_SESSION
+#ifdef E33_ASSIGNMENT_SESSION
+    auto path = std::filesystem::path(executable).parent_path().parent_path() / L"runtime-session-v10" / L"runtime_session_v10.dll";
+#elif defined(E33_STABLE_SESSION)
     auto path = std::filesystem::path(executable).parent_path().parent_path() / L"runtime-session-v9" / L"runtime_session_v9.dll";
 #elif defined(E33_RETAINED_SESSION)
     auto path = std::filesystem::path(executable).parent_path().parent_path() / L"runtime-session-v8" / L"runtime_session_v8.dll";
@@ -107,6 +109,9 @@ inline void run_runtime_session(DWORD pid, DWORD thread, int32_t object_index, i
 #ifdef E33_STABLE_SESSION
               << ",\"stable_identity_protocol\":1"
 #endif
+#ifdef E33_ASSIGNMENT_SESSION
+              << ",\"object_assignment_protocol\":1"
+#endif
               << "}\n" << std::flush;
     std::string command;
     while (std::getline(std::cin, command)) {
@@ -115,6 +120,20 @@ inline void run_runtime_session(DWORD pid, DWORD thread, int32_t object_index, i
         bool reflected=false;
         bool leased=false;
         bool retained=false;
+        bool assignment=false;
+#ifdef E33_ASSIGNMENT_SESSION
+        assignment=command.substr(0,separator)=="object-assign";
+        if(assignment) {
+            require(separator!=std::string::npos,"ASSIGNMENT_PAYLOAD_MISSING");
+            auto encoded=command.substr(separator+1);
+            require(encoded.size()==sizeof(AssignmentPacket)*2,"ASSIGNMENT_PAYLOAD_SIZE");
+            auto* destination=reinterpret_cast<uint8_t*>(&packet.assignment);
+            auto digit=[](char c)->unsigned { if(c>='0'&&c<='9') return c-'0'; if(c>='a'&&c<='f') return c-'a'+10;
+                throw std::runtime_error("ASSIGNMENT_PAYLOAD_ENCODING"); };
+            for(size_t i=0;i<sizeof(AssignmentPacket);++i) destination[i]=static_cast<uint8_t>(digit(encoded[i*2])*16+digit(encoded[i*2+1]));
+            command.resize(separator);
+        }
+#endif
 #ifdef E33_RETAINED_SESSION
         retained=command.substr(0,separator)=="retained-invoke";
         if(retained) {
@@ -157,7 +176,7 @@ inline void run_runtime_session(DWORD pid, DWORD thread, int32_t object_index, i
             command.resize(separator);
         }
 #endif
-        if(!reflected && !leased && !retained && separator!=std::string::npos) { decode_console_payload(command.substr(separator+1),packet.console_text); command.resize(separator); }
+        if(!reflected && !leased && !retained && !assignment && separator!=std::string::npos) { decode_console_payload(command.substr(separator+1),packet.console_text); command.resize(separator); }
         DWORD action = command == "enable" ? SessionEnable : command == "disable" ? SessionDisable :
             command == "invoke" ? SessionInvoke : command == "drain" ? SessionDrain :
             command == "ping" ? SessionPing : command == "close" ? SessionClose :
@@ -173,6 +192,9 @@ inline void run_runtime_session(DWORD pid, DWORD thread, int32_t object_index, i
 #endif
 #ifdef E33_RETAINED_SESSION
         if(retained) action=SessionRetainedInvoke;
+#endif
+#ifdef E33_ASSIGNMENT_SESSION
+        if(assignment) action=SessionObjectAssign;
 #endif
         require(action != 0, "SESSION_UNKNOWN_COMMAND");
         connection.command(action);
@@ -192,6 +214,15 @@ inline void run_runtime_session(DWORD pid, DWORD thread, int32_t object_index, i
             }
         }
         std::cout << ']';
+#ifdef E33_ASSIGNMENT_SESSION
+        if(assignment) {
+            static const char digits[]="0123456789abcdef";
+            const auto* source=reinterpret_cast<const uint8_t*>(&packet.assignment);
+            std::string encoded(sizeof(AssignmentPacket)*2,'0');
+            for(size_t i=0;i<sizeof(AssignmentPacket);++i) { encoded[i*2]=digits[source[i]>>4]; encoded[i*2+1]=digits[source[i]&15]; }
+            std::cout << ",\"assignment_packet\":" << quote(encoded);
+        }
+#endif
 #ifdef E33_RETAINED_SESSION
         if(retained) {
             static const char digits[]="0123456789abcdef";

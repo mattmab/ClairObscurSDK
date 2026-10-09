@@ -46,11 +46,12 @@ class Session:
     thread, build, layout and lifetime checks remain authoritative for each call.
     Close explicitly or use a context manager to remove hooks deterministically.
     """
-    def __init__(self, *, reflected=False, leases=False, retained=False, stable_returns=False):
-        if any(type(flag) is not bool for flag in (reflected, leases, retained, stable_returns)):
-            raise ValueError('reflected, leases, retained and stable_returns must be bools')
+    def __init__(self, *, reflected=False, leases=False, retained=False, stable_returns=False, object_assignment=False):
+        if any(type(flag) is not bool for flag in (reflected, leases, retained, stable_returns, object_assignment)):
+            raise ValueError('Session capability flags must be bools')
+        stable_returns = stable_returns or object_assignment
         retained = retained or stable_returns
-        backend = ('research-probe-v9' if stable_returns else 'research-probe-v8' if retained
+        backend = ('research-probe-v10' if object_assignment else 'research-probe-v9' if stable_returns else 'research-probe-v8' if retained
                    else 'research-probe-v7' if leases else 'research-probe-v6')
         self._transport = (SessionTransport(_executable=Path(__file__).resolve().parents[2] /
                            f'build/{backend}/research_probe.exe') if reflected or leases or retained else SessionTransport())
@@ -60,6 +61,11 @@ class Session:
                 self._transport.close()
             finally:
                 raise RuntimeQueryError('Stable retained-return backend handshake missing')
+        if object_assignment and getattr(self._transport, 'object_assignment_protocol', 0) != 1:
+            try:
+                self._transport.close()
+            finally:
+                raise RuntimeQueryError('Object assignment backend handshake missing')
         self._dispatcher = CallbackDispatcher()
         self._hooks = []
         self._leases = set()
@@ -83,6 +89,21 @@ class Session:
     def supports_stable_returns(self):
         self._check()
         return self.supports_retained_invocation and getattr(self._transport, 'stable_identity_protocol', 0) == 1
+
+    @property
+    def supports_object_assignment(self):
+        self._check()
+        return getattr(self._transport, 'object_assignment_protocol', 0) == 1
+
+    def assign_object(self, obj, owner, name, value, *, expected, element=0, allow_mutation=False):
+        """Assign an ObjectProperty with an explicit old value and temporary leases.
+
+        Does not roll back on scope/session closure. Never retry unknown outcomes.
+        """
+        self._check()
+        from .assignment import assign
+        return assign(self, obj, owner, name, value, expected=expected,
+                      element=element, allow_mutation=allow_mutation)
 
     @property
     def pid(self):

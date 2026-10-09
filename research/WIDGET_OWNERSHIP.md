@@ -79,6 +79,35 @@ Evidence: object-property-vtable.json, object-property-accessors.json and
 object-property-setter-abi.json. One queried adjacent vtable target1413715e0 had
 no defined Ghidra function and was not used or assigned a guessed meaning.
 
+### v10 transport and Python integration — not live-tested
+
+The assignment candidate is now connected to isolated Session.v10/E33Session10
+transport action105. Its packed232-byte request contains three lease tokens and
+the200-byte assignment. Native dispatch requires this session's registered,
+non-quarantined holders to match the target, expected old object and replacement;
+null references require zero tokens. Identity and metadata validation still run
+after that ownership check. Error7 rejects missing/foreign/released ownership.
+
+`Session(object_assignment=True)` requires the assignment handshake plus all v9
+capabilities. It exposes `assign_object(target, declaring_class, name, value,
+expected=old, allow_mutation=True, element=0)` on root and mod scopes. It refreshes
+catalog/schema, rejects unsupported types/layouts, acquires temporary leases and
+releases them after acknowledgement. The exact old value is checked natively
+before writing. Changed/malformed acknowledgements abort session ownership;
+unknown outcomes are never retried. Successful mutation is persistent engine
+state, not a scope-owned resource automatically rolled back at close. Callers
+must explicitly restore references as part of their widget lifecycle.
+
+`launch.cmd management --object-assignment` selects v10. The package input list
+includes its new DLL/controller pair, but no v10 archive/live/relaunch proof is
+claimed. The existing v9 host remains running. Native v10 DLL/controller builds,
+assignment/lease fixtures, v5/v9 compatibility object compilation and133 Python
+tests pass. Tests include explicit mutation opt-in, stale expected values,
+malformed acknowledgement abort/no-retry, temporary ownership release and
+mandatory capability negotiation. Next: cooperative host handover, create an
+owned test tree/canvas, assign/read back root, viewport add/remove, restore null
+root, and verify exact holder cleanup before integrating Harness `set`.
+
 ## Base UserWidget specimen and lazy serial assignment — 2026-10-09
 
 The live read-only probe `scripts/inspect_widget_initialization.py` confirmed

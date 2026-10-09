@@ -36,6 +36,15 @@ public:
         return count;
     }
     bool owns(uint64_t session) const { return session && session==session_; }
+    bool owns_object(uint64_t session,uint64_t token,uint64_t object) const {
+        if(!owns(session) || !token || !object) return false;
+        for(const auto& e:entries_) if(e.token==token) {
+            const auto& s=e.storage;
+            return s.pointer && !s.registration_uncertain && !s.destruction_uncertain &&
+                s.pointer->registered && s.pointer->object==object;
+        }
+        return false;
+    }
     StrongLeaseResult preflight(uint64_t session,uint32_t count) const {
         if(!owns(session)) return StrongLeaseResult::SessionMismatch;
         if(count>Capacity-active()) return StrongLeaseResult::Capacity;

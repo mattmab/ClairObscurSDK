@@ -1,9 +1,10 @@
 #pragma once
 #include "invocation_protocol.h"
 
-// Candidate primitive; not yet reachable through a session transport.
+// Experimental v10 primitive, not yet validated live.
 // Callers must retain their objects, own the game thread, and contain native
 // faults outside this frame. A dispatched failure must never be retried.
+#pragma pack(push, 1)
 struct ObjectAssignment {
     CallIdentity target{}, owner{}, constraint{}, expected{}, value{};
     uint64_t flags=0;
@@ -11,6 +12,8 @@ struct ObjectAssignment {
     char name[96]{};
     uint32_t outcome=CallNotDispatched;
 };
+#pragma pack(pop)
+static_assert(sizeof(ObjectAssignment)==200);
 enum class ObjectAssignmentResult {
     Ok, InvalidRequest, InvalidContext, StaleMetadata, ChangedValue, UnknownOutcome
 };

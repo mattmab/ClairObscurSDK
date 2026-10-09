@@ -1,5 +1,29 @@
 # SDK_API
 
+## Experimental v10 object assignment (not yet live-validated)
+
+`Session(object_assignment=True)` or `launch.cmd management --object-assignment`
+selects the isolated backend. Root and mod scopes expose
+`supports_object_assignment` and the following explicit mutation API:
+
+```python
+result = sdk.assign_object(tree, widget_tree_class, "RootWidget", canvas,
+                           expected=None, allow_mutation=True)
+# Restore deliberately while the tree and canvas identities remain valid:
+sdk.assign_object(tree, widget_tree_class, "RootWidget", None,
+                  expected=canvas, allow_mutation=True)
+```
+
+Arguments are observed SDK objects; the declaring class resolves the property
+without ambiguous inherited names. Only the verified ObjectProperty layout is
+currently supported, with optional fixed-array `element`. The native game thread
+compares the current reference with `expected`, checks metadata and identities,
+and uses the build's engine setter. Temporary leases span the operation.
+`AssignmentResult.before/after` are non-owning observations. Scope close does not
+undo mutations; mods must restore state in their explicit lifecycle. Failures
+report dispatch outcome and must not be automatically retried. General Harness
+`set`, other property types and live root/viewport acceptance remain pending.
+
 Updated: 2026-10-08
 
 Evidence labels: OBSERVED = directly seen; PROVEN = reproduced with a stated test; INFERRED = supported interpretation; HYPOTHESIS = untested; STALE/DISPROVEN = superseded or contradicted.

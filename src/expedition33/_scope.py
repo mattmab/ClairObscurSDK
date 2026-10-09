@@ -116,6 +116,16 @@ class SessionScope:
         self._check()
         return self._session.supports_stable_returns
 
+    @property
+    def supports_object_assignment(self):
+        self._check()
+        return self._session.supports_object_assignment
+
+    def assign_object(self, obj, owner, name, value, *, expected, element=0, allow_mutation=False):
+        self._check()
+        return self._session.assign_object(obj, owner, name, value, expected=expected,
+                                           element=element, allow_mutation=allow_mutation)
+
     def invoke_retained(self, obj, function, **arguments):
         self._check()
         result = self._session.invoke_retained(obj, function, **arguments)

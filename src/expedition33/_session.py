@@ -37,6 +37,7 @@ class SessionTransport:
             self.lease_protocol = ready.get('lease_protocol', 0)
             self.retained_protocol = ready.get('retained_protocol', 0)
             self.stable_identity_protocol = ready.get('stable_identity_protocol', 0)
+            self.object_assignment_protocol = ready.get('object_assignment_protocol', 0)
             if (self.start.get('event') != 'snapshot_start' or
                 any(row.get('event') != 'object' for row in self.objects) or
                 ready.get('event') != 'session_ready' or ready['pid'] != self.start['pid'] or
@@ -80,6 +81,9 @@ class SessionTransport:
             raise RuntimeQueryError('Native session is closed')
         reflected = command == 'reflected-invoke'
         retained = command == 'retained-invoke'
+        assignment = command == 'object-assign'
+        if assignment and getattr(self, 'object_assignment_protocol', 0) != 1:
+            raise ValueError('Native session does not support object assignment')
         if retained and getattr(self, 'retained_protocol', 0) != 1:
             raise ValueError('Native session does not support retained invocation')
         leased = command in ('lease-acquire', 'lease-release', 'lease-status')
@@ -87,10 +91,15 @@ class SessionTransport:
             raise ValueError('Native session does not support object leases')
         if reflected and getattr(self, 'reflected_protocol', 0) != 1:
             raise ValueError('Native session does not support reflected invocation')
-        if not reflected and not leased and not retained and command not in ('enable', 'disable', 'invoke', 'drain', 'ping', 'close', 'console-attach', 'console-detach', 'console-status', 'console-poll', 'console-execute', 'console-print', 'console-names', 'console-key'):
+        if not reflected and not leased and not retained and not assignment and command not in ('enable', 'disable', 'invoke', 'drain', 'ping', 'close', 'console-attach', 'console-detach', 'console-status', 'console-poll', 'console-execute', 'console-print', 'console-names', 'console-key'):
             raise ValueError('Unsupported native session command')
         suffix = ''
-        if retained:
+        if assignment:
+            from ._assignment_wire import SIZE
+            if type(payload) is not bytes or len(payload) != SIZE:
+                raise ValueError('Invalid object assignment payload')
+            suffix = ' ' + payload.hex()
+        elif retained:
             from ._retained_wire import SIZE
             if type(payload) is not bytes or len(payload) != SIZE:
                 raise ValueError('Invalid retained invocation payload')

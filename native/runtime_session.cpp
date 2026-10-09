@@ -2,6 +2,9 @@
 #include "fixed_invocation.h"
 #include "observer_core.h"
 #include "console_attachment.h"
+#ifdef E33_ASSIGNMENT_SESSION
+#include "target_object_assignment.h"
+#endif
 #ifdef E33_REFLECTED_SESSION
 #include "reflected_invocation.h"
 #endif
@@ -74,6 +77,23 @@ uint32_t backend_open(SessionPacket* packet) {
 uint32_t backend_command(SessionPacket* packet) {
     if (!lifetime_valid()) return 61;
     switch (packet->request.action) {
+#ifdef E33_ASSIGNMENT_SESSION
+    case SessionObjectAssign: {
+        auto& wire=packet->assignment;
+        auto& assignment=wire.assignment;
+        if(wire.version!=1 || wire.error || !valid_object_assignment(assignment)) {
+            wire.error=6; return 0;
+        }
+        if(!session_leases.owns_object(lease_session,wire.target_token,assignment.target.address) ||
+           (assignment.expected.address ? !session_leases.owns_object(lease_session,wire.expected_token,assignment.expected.address) : wire.expected_token!=0) ||
+           (assignment.value.address ? !session_leases.owns_object(lease_session,wire.value_token,assignment.value.address) : wire.value_token!=0)) {
+            wire.error=7; return 0;
+        }
+        TargetObjectAssignmentOps ops{runtime_base};
+        wire.error=static_cast<uint32_t>(assign_object_property(ops,assignment));
+        return 0;
+    }
+#endif
 #ifdef E33_RETAINED_SESSION
     case SessionRetainedInvoke: {
         auto& retained=packet->retained;

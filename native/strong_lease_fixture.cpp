@@ -40,6 +40,8 @@ int main() {
     check(pool.preflight(10,2)==R::Ok && !pool.active(),"preflight has no side effects");
     check(pool.acquire(engine,11,100,a)==R::SessionMismatch && a==0,"wrong session");
     check(pool.acquire(engine,10,100,a)==R::Ok && a,"first lease");
+    check(pool.owns_object(10,a,100),"owned assignment target");
+    check(!pool.owns_object(11,a,100) && !pool.owns_object(10,a,101) && !pool.owns_object(10,0,100),"assignment lease binding");
     check(pool.acquire(engine,10,100,b)==R::Ok && b!=a,"independent ownership for same object");
     check(pool.active()==2 && engine.allocations.size()==2,"two native holders");
     check(pool.preflight(10,1)==R::Capacity,"preflight rejects before dispatch");
@@ -47,6 +49,7 @@ int main() {
     check(pool.acquire(engine,10,100,c)==R::Capacity && !c,"bounded capacity");
     check(pool.release(engine,11,a)==R::SessionMismatch,"cross-session release rejected");
     check(pool.release(engine,10,a)==R::Ok && pool.active()==1,"release exactly one");
+    check(!pool.owns_object(10,a,100),"released token cannot authorize assignment");
     check(pool.release(engine,10,a)==R::Stale,"stale token rejected");
     check(pool.acquire(engine,10,100,c)==R::Ok && c!=a && c!=b,"slot reuse changes token");
     engine.releasable=false;
