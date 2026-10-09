@@ -1,7 +1,7 @@
 #pragma once
 #include "invocation_protocol.h"
 
-// Experimental v10 primitive, not yet validated live.
+// Experimental v10 primitive; WidgetTree root assignment/restoration tested live.
 // Callers must retain their objects, own the game thread, and contain native
 // faults outside this frame. A dispatched failure must never be retried.
 #pragma pack(push, 1)

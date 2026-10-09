@@ -1,6 +1,12 @@
 # SDK_API
 
-## Experimental v10 object assignment (not yet live-validated)
+## Experimental v10 object assignment
+
+Live proof: an SDK-created WidgetTree.RootWidget was assigned to an SDK-created
+CanvasPanel, read back, added/removed through its UserWidget viewport lifecycle,
+then restored to null. A stale expected value was rejected before mutation;
+all temporary/scoped holders returned to the exact baseline. This proves that
+specimen, not all ObjectProperty variants or general Harness `set` parity.
 
 `Session(object_assignment=True)` or `launch.cmd management --object-assignment`
 selects the isolated backend. Root and mod scopes expose
@@ -22,7 +28,7 @@ and uses the build's engine setter. Temporary leases span the operation.
 `AssignmentResult.before/after` are non-owning observations. Scope close does not
 undo mutations; mods must restore state in their explicit lifecycle. Failures
 report dispatch outcome and must not be automatically retried. General Harness
-`set`, other property types and live root/viewport acceptance remain pending.
+`set`, other property types, visible controls and focus/keybind acceptance remain pending.
 
 Updated: 2026-10-08
 

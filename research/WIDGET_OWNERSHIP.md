@@ -7,6 +7,33 @@ The first v8 viewport specimen exposed lazy registry serial assignment; v9 now
 assigns serials through the verified engine allocator before returning ownership.
 Earlier investigation stages below preserve their original evidence boundaries.
 
+## v10 root assignment and viewport lifecycle — live proof
+
+At02:42:38 on2026-10-09, `scripts/verify_live_widget_root.py` passed through the
+in-game native console and persistent v10 Python host. The v9 host/controller
+exited cooperatively at02:40:49; v10 started at02:41:04 (Python21172,
+controller36320, game34604). The management fallback and Harness share this host.
+
+Created UserWidget237336 serial86459 owns WidgetTree237335 serial0. Retained
+CanvasPanel237334 serial86460 was assigned to RootWidget through the public
+`assign_object` API and native engine container setter. A fresh stored-value
+read matched the canvas index/serial. Attempting to clear with expected=null
+returned native error4/not_dispatched, leaving the installed root unchanged.
+AddToViewport/IsInViewport proved membership; RemoveFromParent/IsInViewport
+proved removal. Explicit assignment expected=canvas restored root=null, confirmed
+by another fresh read. Scope close restored all three exact original generic
+holders. No unknown outcome occurred, no recovery was needed, and no focus/input
+mode or forced-GC operation was used. The specimen contains an empty canvas;
+visible menu controls and rendering acceptance are not claimed.
+
+Evidence: local `evidence/widget-root-live.json` and
+`logs/management-host-v10.stderr.log`. After cleanup, console Python printed the
+passed result, assignment capability and the existing Harness operation list.
+The v10 host remains active. Its DLL is now loaded/pinned: never rebuild that
+path before game exit. Next connect the verified primitive to original Harness
+`set` without editing core.py, and build visible controls/layout/focus on the
+proven widget hierarchy. v10 package/relaunch checks remain pending.
+
 ## Canvas/Button child lifecycle — live proof, 2026-10-09
 
 `scripts/verify_live_widget_children.py` ran through native console `py` in the

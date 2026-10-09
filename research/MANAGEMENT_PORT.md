@@ -11,15 +11,15 @@ through persistent console Python, restoring the exact holder baseline. This fix
 the lazy serial boundary exposed by the earlier v8 specimen. See WIDGET_OWNERSHIP.md.
 CanvasPanel/Button construction and child attachment/removal now also passed
 through the persistent v9 host, including retained CanvasPanelSlot identity and
-exact holder cleanup. Root assignment, native menu rendering, focus lifecycle
-and general key dispatch remain unfinished. Next establish a reusable verified
-game-thread property assignment path for WidgetTree.RootWidget and Harness set;
-the lifecycle specimens are not a native Mods Menu.
+exact holder cleanup. v10 now also passed root assignment/readback, stale-value
+rejection, viewport add/remove and explicit root restoration, with exact holder
+cleanup. Native menu rendering, focus lifecycle and general key dispatch remain
+unfinished; the lifecycle specimens are not a native Mods Menu.
 
-The RootWidget ObjectProperty setter now has target assembly evidence and a
-compile/fixture-tested native assignment candidate (WIDGET_OWNERSHIP.md). Session
-transport, public mutation API and live root assignment remain pending; the
-current v9 persistent management host is unchanged.
+The RootWidget setter uses the reusable session/mod-scope assign_object API
+and target-verified engine assignment path (WIDGET_OWNERSHIP.md). The persistent
+management host now runs v10. Next connect this primitive to original Harness
+set, then implement visible control layout and validated focus/key handling.
 
 ## Preserved implementation references
 
