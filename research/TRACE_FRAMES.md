@@ -199,3 +199,31 @@ No functions were executed or hooks installed. These are metadata-backed storage
 plans, not proof of observed frame addresses or general tracing functionality.
 Native schema revalidation, frame/out-chain resolution, transport, value decoding
 and Harness wiring remain pending. The current packaged controller is unchanged.
+
+## Native out-record resolver candidate — 2026-10-09
+
+Fresh disassembly of GetViewportSize (143b26b70) and its native property helper
+(141395250) confirms the separate out-record route. The helper tests property
+flags at +38 bit8; for an out property it searches frame+80 by exact property
+pointer, follows record+10, and writes record+8 to frame+38. For a normal property
+it uses frame+28 plus the signed property offset at +44. GetViewportSize selects
+the helper's frame+38 address for each int destination. These are executable
+observations; no claim is made that arbitrary bytecode frames share the route.
+Raw disassembly: evidence/trace-viewport-thunk.json and trace-native-step.json.
+
+native/trace_frame.h is an isolated, build-specific resolver candidate using an
+injected bounded reader. It requires the expected current function at frame+90
+and a null code pointer, retains separate locals/result addresses, and snapshots
+at most128 out records. Cycles, duplicate property records, null record members,
+unreadable ranges and address overflow fail closed, clearing the entire output.
+Missing out properties return unavailable, with no fallback to locals. A null
+result is preserved as unavailable; the future schema-aware collector must reject
+it when a return field needs storage. Resolved addresses are ephemeral internal
+data, not copied event payloads or proof of readability/lifetime.
+
+scripts/test-trace-frame.cmd passes under MSVC /W4 /WX, exercising separate
+sources, identity and bytecode gates, malformed chains, overflow, missing output
+storage and the record cap. Evidence: evidence/trace-frame-fixture.log. This is
+synthetic fixture validation only. Live frame capture, schema-aware bounded reads,
+native registration/transport and Harness integration remain pending. No mapped
+DLL was rebuilt and the running controller was unchanged.
