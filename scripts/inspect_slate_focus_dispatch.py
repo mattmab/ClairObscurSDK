@@ -94,6 +94,9 @@ def _observe_once():
         viewport, viewport_owner = struct.unpack('<QQ', viewport_ref)
         result['game_viewport'] = dict(engine_path=catalog.path_name(engine),
             widget=hex(viewport), owner=hex(viewport_owner), vtable=rva(u64(viewport)))
+        control_vtable = u64(viewport_owner)
+        result['viewport_reference_type'] = dict(vtable=rva(control_vtable),
+            destroy_object=rva(u64(control_vtable)), destroy_controller=rva(u64(control_vtable+8)))
         registered_viewport = read(app+0x398, 16)
         result['registered_viewport_matches_game_viewport'] = registered_viewport == viewport_ref
         assert registered_viewport == read(app+0x398, 16)

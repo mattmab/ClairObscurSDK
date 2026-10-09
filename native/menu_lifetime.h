@@ -7,7 +7,7 @@ enum class MenuResult { Ok, Invalid, Busy, Deferred, Quarantined };
 enum class MenuState {
     Empty, Registered, AttachUnknown, Attached, FocusUnknown, Focused,
     RestorePending, RestoreUnknown, DeactivatePending, DeactivateUnknown,
-    DetachPending, DetachUnknown, Quarantined
+    DetachPending, DetachUnknown, ReleasePending, ReleaseUnknown, Quarantined
 };
 
 // Durable native bookkeeping, independent of IPC/Python memory. The target
@@ -78,12 +78,12 @@ public:
         switch(state_) {
         case MenuState::AttachUnknown: case MenuState::FocusUnknown:
         case MenuState::RestoreUnknown: case MenuState::DeactivateUnknown:
-        case MenuState::DetachUnknown: case MenuState::Quarantined:
+        case MenuState::DetachUnknown: case MenuState::ReleaseUnknown: case MenuState::Quarantined:
             return quarantine();
         default: break;
         }
         auto ready=context(ops); if(ready!=MenuResult::Ok) return ready;
-        if(state_==MenuState::Registered) { clear(); return MenuResult::Ok; }
+        if(state_==MenuState::Registered) state_=MenuState::ReleasePending;
         if(state_==MenuState::Attached || state_==MenuState::Focused) {
             // Attachment/activation can move focus even before focus() runs.
             switch(ops.focus_owner()) {
@@ -115,6 +115,12 @@ public:
             ready=context(ops); if(ready!=MenuResult::Ok) return ready;
             state_=MenuState::DetachUnknown;
             if(!ops.detach()) return quarantine();
+            state_=MenuState::ReleasePending;
+        }
+        if(state_==MenuState::ReleasePending) {
+            ready=context(ops); if(ready!=MenuResult::Ok) return ready;
+            state_=MenuState::ReleaseUnknown;
+            if(!ops.release_baseline()) return quarantine();
             clear();
             return MenuResult::Ok;
         }

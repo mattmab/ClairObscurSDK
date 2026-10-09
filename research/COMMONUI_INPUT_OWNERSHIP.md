@@ -269,3 +269,44 @@ backend_close releases the pool; keep unresolved records/leases pinned; map the
 operations through an isolated protocol version; expose mod-scope ownership;
 exercise normal close, controller exit, unrelated-focus change and relaunch live.
 The full native Mods Menu and key-dispatch feature remains incomplete.
+
+## Native viewport retention and focus adapter candidate
+
+Live read-only corroboration now includes the viewport reference-controller
+vtable RVA740a750 and its object/controller destructor entries322bc20/161dae0.
+Ghidra confirms322bc20 destroys the embedded viewport at controller+10, while
+161dae0 resets the controller vtable and frees the allocation when requested.
+The allocation and existing release paths establish strong/weak counts at+8/+c.
+Evidence: updated `slate-focus-dispatch.json` and `slate-reference-destroy.json`.
+
+`target_menu_focus.h` implements a bounded native game-thread snapshot and a
+TargetMenuFocusOwner candidate. Capture checks GameEngine registration/class,
+game-thread/GC/exit conditions, exact application and mapping vtables, exactly
+one Slate user, bounded focus arrays, and agreement between GameEngine-held and
+registered viewport references. It requires current focus to be that viewport.
+It then publishes identities into native storage and retains a concrete viewport
+reference through `target_slate_reference.h`. Ownership prevents the captured
+viewport/controller allocation from being recycled while the record is live;
+subsequent observation still rejects changes in the engine, user or viewport.
+
+`owned_slate_reference.h` tracks acquisition/release in durable states. The target
+adapter uses the verified atomic reference operations and exact destructor
+entries; interrupted operations are quarantined without replay. Release obeys
+the same game-thread/GC/exit gate. MenuLifetime now includes baseline release as
+its final guarded stage after detachment and before removing lease protection.
+An unattached registered record releases only its captured baseline. Adapter
+setup must also clean up a captured baseline if later registration fails; runtime
+integration must track that durable storage even before MenuLifetime registration.
+
+Validation: both native fixtures pass under MSVC /W4 /WX; the target focus adapter
+compiles. New cases cover the original engine owner releasing its reference,
+final-owner destruction, deferred reference release, interruption after increment
+or decrement, foreign controller rejection, and deferred/interrupted/rejected
+baseline release in the menu sequence. Log: `menu-focus-adapter-build.log`.
+The target ownership operations have NOT run inside the live game. No ABI/lifecycle
+success is inferred from simulated fixture operations or compilation.
+
+Remaining target adapter work includes verified reflected attachment/focus/
+deactivation/removal operations, owned-child focus attribution, protocol capture
+and release gates, and backend_close ordering. Native controller-loss restoration
+is still unsupported pending that integration and live validation.

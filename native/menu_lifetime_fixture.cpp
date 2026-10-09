@@ -27,6 +27,7 @@ struct Engine {
     bool restore() { if(!call("restore")) return false; focused=MenuFocusOwner::Prior; return true; }
     bool deactivate() { return call("deactivate"); }
     bool detach() { return call("detach"); }
+    bool release_baseline() { return call("release"); }
 };
 using R=MenuResult;
 static void prepare(MenuLifetime& menu,Engine& engine) {
@@ -47,7 +48,7 @@ int main() {
         check(m.close(e,11,20)==R::Invalid && m.close(e,10,21)==R::Invalid,"owner isolation");
         check(e.events==before,"foreign close has no effects");
         check(m.close(e,10,20)==R::Ok && !m.active(),"normal close");
-        check(e.events==std::vector<std::string>({"attach","focus","restore","deactivate","detach"}),"cleanup ordering");
+        check(e.events==std::vector<std::string>({"attach","focus","restore","deactivate","detach","release"}),"cleanup ordering");
         check(!m.protects(10,30),"leases releasable only after detach");
         before=e.events;
         check(m.close(e,10,20)==R::Invalid && e.events==before,"stale close does not replay");
@@ -55,30 +56,30 @@ int main() {
     for(auto who:{MenuFocusOwner::Prior,MenuFocusOwner::Unrelated}) {
         Engine e; MenuLifetime m; prepare(m,e); e.focused=who;
         check(m.close(e,10,20)==R::Ok,"nonowned focus close");
-        check(e.events==std::vector<std::string>({"attach","focus","deactivate","detach"}),"do not steal focus");
+        check(e.events==std::vector<std::string>({"attach","focus","deactivate","detach","release"}),"do not steal focus");
     }
-    for(const auto* stage:{"restore","deactivate"}) {
+    for(const auto* stage:{"restore","deactivate","detach"}) {
         Engine e; MenuLifetime m; prepare(m,e); e.defer_after=stage;
         check(m.close(e,10,20)==R::Deferred && m.protects(10,30),"deferred keeps leases");
         e.current=MenuContext::Ready; e.defer_after.clear();
         check(m.close(e,10,20)==R::Ok,"resume cleanup");
-        check(e.events==std::vector<std::string>({"attach","focus","restore","deactivate","detach"}),"resume does not repeat completed steps");
+        check(e.events==std::vector<std::string>({"attach","focus","restore","deactivate","detach","release"}),"resume does not repeat completed steps");
     }
     {
         Engine e; MenuLifetime m; prepare(m,e); e.current=MenuContext::Deferred;
         check(m.close(e,10,20)==R::Deferred && e.events.size()==2,"defer before any cleanup");
         e.focused=MenuFocusOwner::Unrelated; e.current=MenuContext::Ready;
         check(m.close(e,10,20)==R::Ok,"resume after external focus change");
-        check(e.events==std::vector<std::string>({"attach","focus","deactivate","detach"}),"deferred cleanup preserves new focus owner");
+        check(e.events==std::vector<std::string>({"attach","focus","deactivate","detach","release"}),"deferred cleanup preserves new focus owner");
     }
     {
         Engine e; MenuLifetime m;
         check(m.register_owned(e,10,20,30,40)==R::Ok,"activation-only registration");
         check(m.attach(e,10,20)==R::Ok,"activation-only attach");
         check(m.close(e,10,20)==R::Ok,"activation can take focus without explicit focus call");
-        check(e.events==std::vector<std::string>({"attach","restore","deactivate","detach"}),"restore attachment-acquired focus");
+        check(e.events==std::vector<std::string>({"attach","restore","deactivate","detach","release"}),"restore attachment-acquired focus");
     }
-    for(const auto* stage:{"attach","focus","restore","deactivate","detach"}) {
+    for(const auto* stage:{"attach","focus","restore","deactivate","detach","release"}) {
         Engine e; MenuLifetime m;
         check(m.register_owned(e,10,20,30,40)==R::Ok,"fault registration");
         e.fault=stage;
@@ -101,9 +102,9 @@ int main() {
     {
         Engine e; MenuLifetime m;
         check(m.register_owned(e,10,20,30,40)==R::Ok,"register before attachment");
-        check(m.close(e,10,20)==R::Ok && e.events.empty(),"never attached needs no engine cleanup");
+        check(m.close(e,10,20)==R::Ok && e.events==std::vector<std::string>({"release"}),"never attached releases only captured baseline");
     }
-    for(const auto* stage:{"attach","focus","restore","deactivate","detach"}) {
+    for(const auto* stage:{"attach","focus","restore","deactivate","detach","release"}) {
         Engine e; MenuLifetime m; e.reject=stage;
         check(m.register_owned(e,10,20,30,40)==R::Ok,"rejection registration");
         auto result=m.attach(e,10,20);
