@@ -313,3 +313,37 @@ The v19 build was confirmed absent before creation; PID39900 still uses its
 existing v17/v18 modules. No mapped DLL was overwritten and no v19 live attachment
 has occurred. Registry polling/dispatch integration and live physical-key
 acceptance remain required. Frozen completion is still 57%.
+
+## First live key delivery and remap
+
+The v19 registry bridge is now integrated into ModLoader polling and available
+through Session(keybinds=True) / launch.cmd management --keybinds. A single
+session-owned map uses monotonic generations across registry-owner reuse. The
+complete response batch is checked against the acknowledged map before callbacks.
+Each callback rechecks registry generation, enabled state, current mapping and
+conflicts. Overflow discards the batch. Uncertain transport outcomes stop delivery
+without retry; a borrowed session remains owned by its host and cannot be adopted
+by another key service. Normal loader close clears the native map.
+
+All 417 distinct Python tests passed, including seven new service tests covering
+map replacement, disable, malformed batches, overflow, callback-triggered lifecycle
+changes, owner reuse and uncertain outcomes. Evidence: key-service-regression.log.
+
+After cooperative v18 shutdown (host exit0), v19 attached to existing PID39900.
+KeybindExample was loaded/enabled through the native Python console. Physical F6
+produced callback count1 at 19:53:00. Remapping count to F7 advanced the registry
+generation and saved F7 in settings/management.json. Physical F6 then produced no
+additional callback, and physical F7 produced count2 at 19:53:45. The native
+console stayed functional and the game remained at its main menu. Evidence:
+logs/keybind-v19-host.log and evidence/keybind-first-delivery-host.log.
+
+This is live proof of registration, delivery and API remapping in one existing
+game process, not full keybind acceptance. UMG selection, typing suppression,
+error containment, unbind, unload/reload, controller reconnect and fresh-game
+restore still require live checks. The v19 DLL is now mapped: DO NOT rebuild or
+overwrite it while the game remains running. Use the example's current saved F7
+mapping in subsequent checks; its counter is currently2.
+
+Frozen score: keybinds increase from0 to30 for this verified partial deliverable.
+Weights and other scores are unchanged:56.75 + 15*30/100 =61.25, displayed **61%**.
+Next finish the keybind acceptance checks, then portable packaging/fresh acceptance.

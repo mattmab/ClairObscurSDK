@@ -51,8 +51,9 @@ def main():
     parser.add_argument('--button-actions', action='store_true', help='Use experimental v16 menu-owned Python button callbacks; no finished Mods Menu')
     parser.add_argument('--multi-controls', action='store_true', help='Use experimental v17 menu-owned multiple controls; no finished Mods Menu')
     parser.add_argument('--traces', action='store_true', help='Use experimental v18 scalar native POST traces; broader coverage pending')
+    parser.add_argument('--keybinds', action='store_true', help='Use experimental v19 mod key delivery')
     args = parser.parse_args()
-    if (args.reflected or args.leases or args.retained or args.stable_returns or args.object_assignment or args.pod_values or args.text_values or args.enum_values or args.menu_ownership or args.button_references or args.button_actions or args.multi_controls or args.traces) and args.command not in ('console', 'introspection', 'management'):
+    if (args.reflected or args.leases or args.retained or args.stable_returns or args.object_assignment or args.pod_values or args.text_values or args.enum_values or args.menu_ownership or args.button_references or args.button_actions or args.multi_controls or args.traces or args.keybinds) and args.command not in ('console', 'introspection', 'management'):
         parser.error('Experimental session flags require console, introspection or management')
     log_dir = ROOT / 'logs'
     log_dir.mkdir(exist_ok=True)
@@ -65,13 +66,13 @@ def main():
             store = SettingsStore(ROOT / 'settings/management.json') if args.command == 'management' else None
             if store is not None and store.recovery:
                 log.warning('Management settings recovery: %s', store.recovery)
-            with (Session(reflected=args.reflected, leases=args.leases, retained=args.retained, stable_returns=args.stable_returns, object_assignment=args.object_assignment, pod_values=args.pod_values, text_values=args.text_values, enum_values=args.enum_values, menu_ownership=args.menu_ownership, button_references=args.button_references, button_actions=args.button_actions, multi_controls=args.multi_controls, traces=args.traces)
-                  if args.reflected or args.leases or args.retained or args.stable_returns or args.object_assignment or args.pod_values or args.text_values or args.enum_values or args.menu_ownership or args.button_references or args.button_actions or args.multi_controls or args.traces else nullcontext(None)) as runtime, \
+            with (Session(reflected=args.reflected, leases=args.leases, retained=args.retained, stable_returns=args.stable_returns, object_assignment=args.object_assignment, pod_values=args.pod_values, text_values=args.text_values, enum_values=args.enum_values, menu_ownership=args.menu_ownership, button_references=args.button_references, button_actions=args.button_actions, multi_controls=args.multi_controls, traces=args.traces, keybinds=args.keybinds)
+                  if args.reflected or args.leases or args.retained or args.stable_returns or args.object_assignment or args.pod_values or args.text_values or args.enum_values or args.menu_ownership or args.button_references or args.button_actions or args.multi_controls or args.traces or args.keybinds else nullcontext(None)) as runtime, \
                     ModLoader(ROOT / 'mods', settings=store, session=runtime) as loader:
                 if args.command == 'management':
                     loader.load('SDKManagement')
                     loader.enable('SDKManagement', console=True, console_key=args.console_key)
-                    log.info('Console management ready: mods. Experimental native menu: mods ui (requires --multi-controls; slow startup). General keybinds remain pending.')
+                    log.info('Console management ready: mods. Experimental native menu: mods ui (requires --multi-controls or newer). Key delivery requires --keybinds.')
                 loader.load(mod_name)
                 loader.enable(mod_name, console=True, console_key=args.console_key)
                 if args.command in ('introspection', 'management'):

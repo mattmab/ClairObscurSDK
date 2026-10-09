@@ -8,7 +8,7 @@ from pathlib import Path
 
 from . import RuntimeQueryError, ObjectSnapshot, objects
 from ._callbacks import CallbackDispatcher, ObservedIdentity, ObserverContext
-from ._session import SessionTransport, supports_multi_controls, supports_traces
+from ._session import SessionTransport, supports_multi_controls, supports_traces, supports_keys
 from ._console import Console
 from ._pod_values import NumericStructValue
 
@@ -48,9 +48,10 @@ class Session:
     thread, build, layout and lifetime checks remain authoritative for each call.
     Close explicitly or use a context manager to remove hooks deterministically.
     """
-    def __init__(self, *, reflected=False, leases=False, retained=False, stable_returns=False, object_assignment=False, pod_values=False, text_values=False, enum_values=False, menu_ownership=False, button_references=False, button_actions=False, multi_controls=False, traces=False):
-        if any(type(flag) is not bool for flag in (reflected, leases, retained, stable_returns, object_assignment, pod_values, text_values, enum_values, menu_ownership, button_references, button_actions, multi_controls, traces)):
+    def __init__(self, *, reflected=False, leases=False, retained=False, stable_returns=False, object_assignment=False, pod_values=False, text_values=False, enum_values=False, menu_ownership=False, button_references=False, button_actions=False, multi_controls=False, traces=False, keybinds=False):
+        if any(type(flag) is not bool for flag in (reflected, leases, retained, stable_returns, object_assignment, pod_values, text_values, enum_values, menu_ownership, button_references, button_actions, multi_controls, traces, keybinds)):
             raise ValueError('Session capability flags must be bools')
+        traces = traces or keybinds
         multi_controls = multi_controls or traces
         button_actions = button_actions or multi_controls
         button_references = button_references or button_actions
@@ -61,7 +62,7 @@ class Session:
         object_assignment = object_assignment or pod_values
         stable_returns = stable_returns or object_assignment
         retained = retained or stable_returns
-        backend = ('research-probe-v18' if traces else 'research-probe-v17' if multi_controls else 'research-probe-v16' if button_actions else 'research-probe-v15' if button_references else 'research-probe-v14' if menu_ownership else 'research-probe-v13' if enum_values else 'research-probe-v12' if text_values else 'research-probe-v11' if pod_values else 'research-probe-v10' if object_assignment else 'research-probe-v9' if stable_returns else 'research-probe-v8' if retained
+        backend = ('research-probe-v19' if keybinds else 'research-probe-v18' if traces else 'research-probe-v17' if multi_controls else 'research-probe-v16' if button_actions else 'research-probe-v15' if button_references else 'research-probe-v14' if menu_ownership else 'research-probe-v13' if enum_values else 'research-probe-v12' if text_values else 'research-probe-v11' if pod_values else 'research-probe-v10' if object_assignment else 'research-probe-v9' if stable_returns else 'research-probe-v8' if retained
                    else 'research-probe-v7' if leases else 'research-probe-v6')
         self._transport = (SessionTransport(_executable=Path(__file__).resolve().parents[2] /
                            f'build/{backend}/research_probe.exe') if reflected or leases or retained else SessionTransport())
@@ -120,6 +121,11 @@ class Session:
                 self._transport.close()
             finally:
                 raise RuntimeQueryError('Trace backend handshake missing')
+        if keybinds and not supports_keys(self._transport):
+            try:
+                self._transport.close()
+            finally:
+                raise RuntimeQueryError('Keybind backend handshake missing')
         self._traces = set()
         self._trace_owner_sequence = 0
         self._dispatcher = CallbackDispatcher()

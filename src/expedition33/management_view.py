@@ -118,7 +118,7 @@ class ManagementView:
                      (' [conflict]' if b['value'] in conflicts else ''),
                      'pick_key', b['id'], True, None) for b in view['keybinds']]
             detail += '\nSelect a binding to remap. Conflicting enabled bindings do not dispatch.'
-            detail += '\nPreferences only: native key delivery is not connected yet.'
+            detail += '\nKey delivery requires the experimental v19 controller (--keybinds).'
         elif self.screen == 'key_picker':
             binding = next(b for b in view['keybinds'] if b['id'] == self.binding_id)
             detail += f"\n{binding['title']}: {binding['value'] or 'Unbound'}"

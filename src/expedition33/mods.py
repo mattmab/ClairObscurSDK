@@ -47,6 +47,7 @@ class ModLoader:
         self._session = session
         self._borrowed = session is not None
         self._polling = False
+        self._keys = None
         self._disabling = set()
         self._enabling = set()
         # A failed cleanup may have external effects beyond SDK-owned resources.
@@ -341,6 +342,18 @@ class ModLoader:
             if self._session is not shared:
                 return 0
             delivered = shared.poll()
+            if self._session is not shared or getattr(shared, '_closed', False):
+                return delivered
+            from ._session import supports_keys
+            if supports_keys(getattr(shared, '_transport', None)):
+                from .keybind_service import KeybindService
+                if self._keys is None or self._keys.session is not shared:
+                    if self._keys is not None:
+                        self._keys.close()
+                    self._keys = KeybindService(shared, self.registry)
+                delivered += self._keys.poll()
+                if self._session is not shared:
+                    return delivered
             failures = []
             records = [(key, self._loaded.get(key)) for key in selected]
             for key, record in records:
@@ -393,6 +406,11 @@ class ModLoader:
             return
         self._check_thread()
         failures = []
+        if self._keys is not None:
+            try:
+                self._keys.close()
+            except BaseException as error:
+                failures.append(str(_error('keybind cleanup', error)))
         for name in tuple(self._loaded):
             try:
                 self.unload(name)
