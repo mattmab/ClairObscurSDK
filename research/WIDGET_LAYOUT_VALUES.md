@@ -538,3 +538,34 @@ v5/v11 compile checks and v11/v12 layout fixtures still build. Evidence:
 `enum-compatibility.log`. V13 has not been loaded into the game. Next perform a
 cooperative host handover, validate enum round trips on an SDK-owned widget,
 then implement the original Harness enum adapter and input/focus restoration.
+
+## V13 live enum dispatch — 2026-10-09
+
+At09:33:20 local the packaged v12 host completed cooperative shutdown through
+native-console Python; both controller processes exited and its Harness status
+became disabled. Game21804 remained at the main menu. Source Python8860/native12588
+then loaded `build/runtime-session-v13/runtime_session_v13.dll`, SHA256
+`8234267DB2DCF650ED23BA5A23BFD58286B38BFDF6F3B35BFDDB94965AC05525`.
+The new persistent Harness session is `c851b9150d3a4a02b09b29a2f3362e17`.
+
+The live Widget schema identifies SetVisibility/GetVisibility as scalar one-byte
+EnumProperty using ESlateVisibility (thunks RVA310ca20/30ffcd0). The console-driven
+`verify_live_widget_enums.py` specimen created an SDK-owned, undisplayed Button.
+At09:37:47 its typed setters/getters had round-tripped Hidden2 and Visible0,
+preserving the exact enum identity. An untyped integer input was rejected before
+dispatch. Child removal, scope release and exact holder-baseline restoration
+passed, and the persistent heartbeat resumed. No viewport/focus/input-mode change
+or forced GC occurred. This proves enum invocation, not interactive menu behavior.
+
+The first test attempt used the catalog captured before the Button existed;
+Python identity validation rejected it before any enum dispatch. The cleanup path
+restored the exact holder baseline, independently checked after normalizing JSON
+tuple/list representations. The corrected specimen refreshes the catalog before
+planning. Evidence preserves both attempts: `enum-widget-preflight.json`,
+`widget-enum-preflight-rejection.json`, `enum-rejection-cleanup.json`,
+`widget-enum-progress.json`, `widget-enum-live.json`, `enum-v13-live-host.json`,
+`enum-v12-disabled.json` and `logs/enum-v13-source.stderr.log`.
+
+Next adapt typed enum values to the original Harness's argument/result and retained
+value paths, then validate menu focus ownership and actual interaction. V13 package
+relaunch/shutdown and text regression through this live host remain separate gates.

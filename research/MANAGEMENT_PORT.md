@@ -125,6 +125,14 @@ isolated from the running v12 package. Live enum dispatch, Harness enum argument
 adaptation, focus restoration and clickable management controls remain pending;
 see WIDGET_LAYOUT_VALUES.md for the exact candidate and next validation steps.
 
+V13 now passed live typed ESlateVisibility Hidden/Visible round trips on an
+SDK-created Button, raw-integer rejection, child removal and exact holder cleanup.
+The cooperative v12 handover completed and source v13 is the current persistent
+console/management host. No widget was displayed and focus/input mode was unchanged.
+The original Harness enum argument/result adapter and native interactive menu
+remain next; see WIDGET_LAYOUT_VALUES.md for the preserved first-attempt test error
+and successful corrected run.
+
 ## Preserved implementation references
 
 Primary source is the installed BL4 sdk_mods directory. Nineteen original files
