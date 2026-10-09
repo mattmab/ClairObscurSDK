@@ -843,3 +843,19 @@ typed structs/enums and retained values available, parity_complete still False.
 This proves console/Python/Harness coexistence in the persistent v17 session,
 not the outstanding focused-callback-removal or controller-loss menu cases.
 Evidence: multi-v17-persistent-handover.log and multi-v17-persistent-process.json.
+
+### Focused callback removal in persistent Python — 2026-10-09
+
+The separate remove_focused_control=True probe passed through a `py` command
+in the existing native console, on game21568 / Python11428 / controller21732.
+Real input produced blue, green, green; the removed-blue click delivered no
+event. The probe then removed green's callback while green held focus and closed
+the menu. Exact viewport focus, WidgetTree root, both child removals and native
+holder baseline were restored, with no unknown mutation outcome. The two widgets
+visibly disappeared and the persistent host returned the success message.
+
+Evidence: multi-button-removed-focus-progress.json (passed/complete),
+multi-button-removed-focus-widget-live.json and multi-button-removed-focus-console.log.
+This confirms focus ownership outlives callback registration in the actual shared
+console runtime. It does not validate forced controller loss with multiple
+controls; that remains the next lifecycle gate before the full menu frontend.
