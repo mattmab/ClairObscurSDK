@@ -8,6 +8,7 @@ from dataclasses import dataclass
 import json
 
 from .management import ManagementError, Selection
+from .keys import KEY_NAMES
 
 
 @dataclass(frozen=True)
@@ -52,6 +53,7 @@ class ManagementView:
     def __init__(self, registry):
         self.registry = registry
         self.selection = None
+        self.binding_id = None
         self.screen = 'list'
         self.page = 0
         self.query = ''
@@ -108,7 +110,21 @@ class ManagementView:
                      not view['enabled'], not (view['enabled'] and view['protected']), None),
                     ('Settings', 'screen', 'options', bool(view['options']), None),
                     ('Actions', 'screen', 'actions', bool(view['actions']), None),
+                    ('Keybinds', 'screen', 'keybinds', bool(view['keybinds']), None),
                     ('Unload', 'unload', None, not view['protected'], None)]
+        elif self.screen == 'keybinds':
+            conflicts = self.registry.key_conflicts()
+            rows = [(f"{b['title']}: {b['value'] or 'Unbound'}" +
+                     (' [conflict]' if b['value'] in conflicts else ''),
+                     'pick_key', b['id'], True, None) for b in view['keybinds']]
+            detail += '\nSelect a binding to remap. Conflicting enabled bindings do not dispatch.'
+            detail += '\nPreferences only: native key delivery is not connected yet.'
+        elif self.screen == 'key_picker':
+            binding = next(b for b in view['keybinds'] if b['id'] == self.binding_id)
+            detail += f"\n{binding['title']}: {binding['value'] or 'Unbound'}"
+            rows = [('Unbind', 'key', None, True, None),
+                    ('Reset to default', 'key_reset', None, True, None)]
+            rows += [(key, 'key', key, True, None) for key in KEY_NAMES]
         elif self.screen == 'options':
             rows = []
             for option in view['options']:
@@ -168,7 +184,8 @@ class ManagementView:
             elif operation == 'load':
                 self.registry.load(argument)
             elif operation == 'back':
-                self.screen = 'list' if self.screen == 'details' else 'details'
+                self.screen = ('keybinds' if self.screen == 'key_picker' else
+                               'list' if self.screen == 'details' else 'details')
                 self.page = 0
                 if self.screen == 'list': self.selection = None
             elif operation == 'page':
@@ -184,6 +201,13 @@ class ManagementView:
             elif operation == 'option':
                 result = self.registry.set_option(self.selection, argument, value, reset=reset)
                 self.status = 'Saved: ' + repr(result)[:2048]
+            elif operation == 'pick_key':
+                self.binding_id, self.screen, self.page = argument, 'key_picker', 0
+            elif operation in ('key', 'key_reset'):
+                self.selection = self.registry.set_keybind(self.selection, self.binding_id,
+                    argument, reset=operation == 'key_reset')
+                self.screen, self.page = 'keybinds', 0
+                self.status = 'Key preference saved'
             elif operation == 'action':
                 result = self.registry.invoke(self.selection, argument, value)
                 self.status = 'Result: ' + repr(result)[:2048]

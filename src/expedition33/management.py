@@ -10,6 +10,7 @@ import math
 import threading
 
 from .settings import identifier, _json_value
+from .keys import normalize_key, VIRTUAL_KEYS
 
 
 class ManagementError(RuntimeError):
@@ -58,6 +59,14 @@ class Action:
 
 
 @dataclass(frozen=True)
+class Keybind:
+    id: str
+    title: str
+    default: str | None
+    callback: object = field(repr=False, compare=False)
+
+
+@dataclass(frozen=True)
 class ModDefinition:
     id: str
     title: str
@@ -67,6 +76,7 @@ class ModDefinition:
     protected: bool = False
     options: tuple[Option, ...] = ()
     actions: tuple[Action, ...] = ()
+    keybinds: tuple[Keybind, ...] = ()
 
 
 @dataclass(frozen=True)
@@ -113,7 +123,8 @@ class Registry:
                 raise ManagementError('Invalid mod metadata text')
         if type(definition.protected) is not bool:
             raise ManagementError('Protected policy must be a boolean')
-        for collection, expected in ((definition.options, Option), (definition.actions, Action)):
+        for collection, expected in ((definition.options, Option), (definition.actions, Action),
+                                     (definition.keybinds, Keybind)):
             if type(collection) is not tuple or len(collection) > 256:
                 raise ManagementError('Definitions require bounded tuples of options/actions')
             seen = set()
@@ -126,8 +137,10 @@ class Registry:
                 seen.add(item.id)
                 if type(item.title) is not str or len(item.title) > 256 or '\0' in item.title:
                     raise ManagementError('Invalid option/action title')
-                if expected is Action and not callable(item.callback):
+                if expected in (Action, Keybind) and not callable(item.callback):
                     raise ManagementError('Action callback must be callable')
+                if expected is Keybind:
+                    normalize_key(item.default)
                 if expected is Option:
                     if item.on_change is not None and not callable(item.on_change):
                         raise ManagementError('Option callback must be callable')
@@ -145,6 +158,8 @@ class Registry:
         preferences = self._settings.get(definition.id) if self._settings is not None else {}
         for option in definition.options:
             option.validate(preferences.get('options', {}).get(option.id, option.default))
+        for binding in definition.keybinds:
+            normalize_key(preferences.get('keybinds', {}).get(binding.id, binding.default))
         self._entries[definition.id] = _Entry(name, definition, self._next(), preferences)
 
     def unregister(self, name):
@@ -195,7 +210,10 @@ class Registry:
                     'value': option.validate(entry.preferences.get('options', {}).get(option.id, option.default)),
                     'default': copy.deepcopy(option.default), 'minimum': option.minimum,
                     'maximum': option.maximum, 'choices': list(option.choices)} for option in definition.options],
-                'actions': [{'id': action.id, 'title': action.title} for action in definition.actions]}
+                'actions': [{'id': action.id, 'title': action.title} for action in definition.actions],
+                'keybinds': [{'id': binding.id, 'title': binding.title,
+                    'value': self.keybind(selection, binding.id),
+                    'default': normalize_key(binding.default)} for binding in definition.keybinds]}
 
     def views(self):
         self._check()
@@ -276,6 +294,76 @@ class Registry:
                         self._callback(selection, option.on_change, self.option(selection, option.id),
                                        'Applying saved option failed')
                 break
+
+    def _binding(self, entry, binding_id):
+        binding = next((b for b in entry.definition.keybinds if b.id == binding_id), None)
+        if binding is None:
+            raise ManagementError(f'Unknown keybind {binding_id!r}')
+        return binding
+
+    def keybind(self, selection, binding_id):
+        entry = self._entry(selection)
+        binding = self._binding(entry, binding_id)
+        return normalize_key(entry.preferences.get('keybinds', {}).get(binding.id, binding.default))
+
+    def key_conflicts(self):
+        """Report enabled mod collisions; conflicting keys are never dispatched."""
+        self._check()
+        keys = {}
+        for mod_id, entry in self._entries.items():
+            if not self._enabled(entry):
+                continue
+            for binding in entry.definition.keybinds:
+                key = self.keybind(self.select(mod_id), binding.id)
+                if key is not None:
+                    keys.setdefault(key, []).append((mod_id, binding.id))
+        return {key: tuple(owners) for key, owners in keys.items() if len(owners) > 1}
+
+    def set_keybind(self, selection, binding_id, key=None, *, reset=False):
+        entry = self._entry(selection)
+        binding = self._binding(entry, binding_id)
+        if selection.mod_id in self._dispatching:
+            raise ManagementError('Recursive management dispatch is not supported')
+        key = normalize_key(binding.default if reset else key)
+        preferences = copy.deepcopy(entry.preferences)
+        preferences.setdefault('keybinds', {})[binding.id] = key
+        if self._settings is not None:
+            self._settings.save(selection.mod_id, preferences)
+        entry.preferences = preferences
+        # Queued deliveries and rendered controls from the old map are revoked.
+        entry.generation = self._next()
+        return self.select(selection.mod_id)
+
+    def key_routes(self):
+        """Snapshot routing metadata; it grants no engine or callback authority.
+
+        The native adapter must attach a session/map generation to each event.
+        Delivery must call dispatch_key, which revalidates these observations.
+        """
+        self._check()
+        conflicts = self.key_conflicts()
+        routes = []
+        for mod_id, entry in self._entries.items():
+            if not self._enabled(entry):
+                continue
+            selection = self.select(mod_id)
+            for binding in entry.definition.keybinds:
+                key = self.keybind(selection, binding.id)
+                if key is not None and key not in conflicts:
+                    routes.append((selection, binding.id, key, VIRTUAL_KEYS[key]))
+        return tuple(routes)
+
+    def dispatch_key(self, selection, binding_id, key):
+        entry = self._entry(selection)
+        binding = self._binding(entry, binding_id)
+        key = normalize_key(key)
+        if not self._enabled(entry):
+            raise ManagementError('Enable the mod before dispatching its keybinds')
+        if key is None or self.keybind(selection, binding_id) != key:
+            raise ManagementError('Key mapping changed; discard the stale delivery')
+        if key in self.key_conflicts():
+            raise ManagementError('Conflicting key mapping; remap or unbind it first')
+        return self._callback(selection, binding.callback, None, 'Keybind callback failed')
 
     def _callback(self, selection, callback, argument, phase):
         entry = self._entry(selection)

@@ -13,11 +13,15 @@ mods options | actions       show selected mod's settings/actions
 mods set OPTION_ID JSON      validate, save and apply an option
 mods reset OPTION_ID         restore an option default
 mods action ACTION_ID [JSON] invoke an enabled mod's action
+mods keys                    show bindings and enabled-mod conflicts
+mods bind BINDING_ID KEY      save a single-key mapping
+mods unbind BINDING_ID        remove the mapping
+mods resetkey BINDING_ID      restore the binding default
 mods unload                  unload selected mod and revoke its resources
 mods back | quit             leave selection or close this menu
 mods ui [open|close|refresh|status]  experimental native menu
 mods help                    show this help
-Native menu availability depends on the controller; general keybinds remain pending.
+Key preferences are available; native key delivery requires a supporting controller.
 Native Unreal commands and py commands remain available at all times.'''
 
 
@@ -57,7 +61,7 @@ class ConsoleMenu:
             raise ManagementError('Mods menu is closed')
         parts = arguments.strip().split(None, 1)
         verb, tail = (parts[0].lower(), parts[1] if len(parts) > 1 else '') if parts else ('list', '')
-        if verb in ('list', 'help', 'back', 'quit', 'enable', 'disable', 'unload', 'options', 'actions') and tail:
+        if verb in ('list', 'help', 'back', 'quit', 'enable', 'disable', 'unload', 'options', 'actions', 'keys') and tail:
             raise ManagementError(f'mods {verb} takes no arguments')
         if verb == 'ui':
             if self.native is None:
@@ -90,6 +94,20 @@ class ConsoleMenu:
             self._list()
         elif verb in ('options', 'actions'):
             print(json.dumps(self._selected()[verb], ensure_ascii=False, indent=2))
+        elif verb == 'keys':
+            print(json.dumps({'bindings': self._selected()['keybinds'],
+                             'conflicts': self.registry.key_conflicts()}, indent=2))
+        elif verb in ('bind', 'unbind', 'resetkey'):
+            self._selected()
+            values = tail.split()
+            if len(values) != (2 if verb == 'bind' else 1):
+                raise ManagementError('Use mods help for binding syntax')
+            self.selection = self.registry.set_keybind(self.selection, values[0],
+                values[1] if verb == 'bind' else None, reset=verb == 'resetkey')
+            print('Saved key preference: ' + repr(self.registry.keybind(self.selection, values[0])))
+            conflicts = self.registry.key_conflicts()
+            if conflicts:
+                print('Conflicting keys will not dispatch: ' + json.dumps(conflicts))
         elif verb in ('set', 'reset', 'action'):
             self._selected()
             values = tail.split(None, 1)

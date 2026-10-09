@@ -257,3 +257,34 @@ Menu configuration/key integration and fresh-process acceptance remain incomplet
 Critical path now proceeds to minimal configurable keys, then integration,
 portable packaging and the fresh-process acceptance matrix. Advanced parity is
 still deferred; the performance work does not earn credit for those features.
+
+## Keybind preferences and frontend integration
+
+Inspected the preserved BL4 set_keybind_value and workspace key-management
+implementation: shared runtime/display values, None for unbind, saved settings,
+enabled-mod conflict reporting, and lifecycle-owned callbacks. Our ModDefinition
+now accepts Keybind definitions with stable IDs, titles, defaults and callbacks.
+The existing Registry owns mappings and presents the same saved values to the
+console and UMG presenter. No second preferences store was introduced.
+
+The console supports mods keys/bind/unbind/resetkey. The UMG presenter provides
+a paginated key selector, unbind and reset using ordinary native buttons. Mappings
+are persisted before the in-memory generation changes; a failed save preserves
+the prior map. Remapping invalidates earlier selections/deliveries. Disabled and
+unloaded mods have no routes. Conflicts suppress all enabled owners of that key;
+callbacks are owner-thread checked, error-contained and never replayed. Dispatch
+revalidates the selected generation, current map and enabled/conflict state.
+
+All 406 tests pass, including eight new focused tests for persistence, failed
+saves, stale delivery, disable/unload, collisions, callback failure, console
+recovery and the UMG selector. Evidence: evidence/key-preferences-regression.log.
+This is implemented and unit-tested controller-side functionality only. Native
+key delivery has NOT been connected, and the new frontend has NOT been validated
+in the live game. The existing controller is still running its previous modules.
+Frozen completion remains 57%; no live keybind completion credit is claimed.
+
+Next: add bounded key-map/event transport to a new runtime candidate using the
+already verified game-thread message hook. Preserve console ownership, reject
+stale map generations, suppress repeats and console typing, and clean up on
+disconnect. Do not overwrite the mapped v18 DLL. Then validate actual physical
+press/remap/unbind/unload and integrate packaged fresh-game acceptance.
