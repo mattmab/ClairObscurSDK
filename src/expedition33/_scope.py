@@ -70,6 +70,13 @@ class SessionScope:
     supported methods avoid exposing a second independent transport lifecycle.
     """
     def __init__(self, session):
+        self._parent = None
+        self._children = []
+        if isinstance(session, SessionScope):
+            session._check()
+            self._parent = weakref.ref(session)
+            session._children.append(self)
+            session = session._session
         self._session = session
         self._owner = threading.get_ident()
         self._closed = False
@@ -83,7 +90,16 @@ class SessionScope:
             raise RuntimeError('Mod resources require the owning Python thread')
         if self._closed:
             raise RuntimeError('Mod resource scope is closed')
+        if self._parent is not None:
+            parent = self._parent()
+            if parent is None or parent._closed:
+                raise RuntimeError('Parent resource scope is closed')
         self._session._check()
+
+    @property
+    def supports_multi_controls(self):
+        self._check()
+        return self._session.supports_multi_controls
 
     @property
     def pid(self):
@@ -219,6 +235,12 @@ class SessionScope:
         # Revoke callback access before any transport operation can fail.
         self._closed = True
         errors = []
+        for child in reversed(tuple(self._children)):
+            try:
+                child.close()
+            except BaseException as error:
+                errors.append(type(error).__name__)
+        self._children.clear()
         menus_closed = True
         for menu in reversed(self._menus):
             try:
@@ -247,5 +269,10 @@ class SessionScope:
         except BaseException as error:
             errors.append(type(error).__name__)
         self._session = None
+        if self._parent is not None:
+            parent = self._parent()
+            if parent is not None and self in parent._children:
+                parent._children.remove(self)
+            self._parent = None
         if errors:
             raise RuntimeError('Mod resource cleanup failed: ' + ', '.join(errors))

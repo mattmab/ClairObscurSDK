@@ -15,13 +15,15 @@ mods reset OPTION_ID         restore an option default
 mods action ACTION_ID [JSON] invoke an enabled mod's action
 mods unload                  unload selected mod and revoke its resources
 mods back | quit             leave selection or close this menu
+mods ui [open|close|refresh|status]  experimental native menu
 mods help                    show this help
-Native key dispatch and UMG are not implemented yet; no binding is advertised.
+Native menu availability depends on the controller; general keybinds remain pending.
 Native Unreal commands and py commands remain available at all times.'''
 
 
 class ConsoleMenu:
-    def __init__(self, registry, console):
+    def __init__(self, registry, console, *, native=None):
+        self.native = native
         self.registry = registry
         self.selection = None
         self._closed = False
@@ -57,7 +59,11 @@ class ConsoleMenu:
         verb, tail = (parts[0].lower(), parts[1] if len(parts) > 1 else '') if parts else ('list', '')
         if verb in ('list', 'help', 'back', 'quit', 'enable', 'disable', 'unload', 'options', 'actions') and tail:
             raise ManagementError(f'mods {verb} takes no arguments')
-        if verb == 'help':
+        if verb == 'ui':
+            if self.native is None:
+                raise ManagementError('Native menu is unavailable; console management remains available')
+            print(self.native.command(tail))
+        elif verb == 'help':
             print(HELP)
         elif verb in ('list', 'back'):
             self.selection = None

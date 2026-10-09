@@ -1,28 +1,40 @@
-"""Unified management harness; console frontend first, UMG/input pending."""
+"""Unified console and experimental native management; key dispatch pending."""
 from expedition33.management import ModDefinition, Action
 from expedition33.management_console import ConsoleMenu
+from expedition33.management_service import NativeMenuService
 
 
 class Mod:
     def __init__(self):
         self.menu = None
+        self.native = None
         self.registry = None
 
     def management(self):
         return ModDefinition('sdk.management', 'SDK Management', protected=True,
-            description='Shared mod registry and console menu. Native UMG and key dispatch pending.',
+            description='Shared registry, console menu and experimental native UMG menu. Key dispatch pending.',
             actions=(Action('shutdown', 'Stop the SDK controller cleanly', self.shutdown),))
 
     def enable(self, session):
         self.registry = session.mods
-        self.menu = ConsoleMenu(session.mods, session.console)
+        self.native = NativeMenuService(session, session.mods)
+        self.menu = ConsoleMenu(session.mods, session.console, native=self.native)
 
     def shutdown(self, argument):
         self.registry.request_shutdown()
         return 'Controller shutdown requested; cleanup follows this command.'
 
+    def poll(self):
+        if self.native is not None:
+            self.native.poll()
+
     def disable(self):
-        if self.menu is not None:
-            self.menu.close()
-            self.menu = None
-        self.registry = None
+        try:
+            if self.native is not None:
+                self.native.close()
+                self.native = None
+        finally:
+            if self.menu is not None:
+                self.menu.close()
+                self.menu = None
+            self.registry = None

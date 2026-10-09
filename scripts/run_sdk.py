@@ -70,7 +70,7 @@ def main():
                 if args.command == 'management':
                     loader.load('SDKManagement')
                     loader.enable('SDKManagement', console=True, console_key=args.console_key)
-                    log.info('Console management ready: mods. Native UMG and general key dispatch remain pending.')
+                    log.info('Console management ready: mods. Experimental native menu: mods ui (requires --multi-controls; slow startup). General keybinds remain pending.')
                 loader.load(mod_name)
                 loader.enable(mod_name, console=True, console_key=args.console_key)
                 if args.command in ('introspection', 'management'):

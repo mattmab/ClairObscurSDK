@@ -10,6 +10,7 @@ from expedition33.management_native import NativeManagementMenu, display_line, d
 class FakePanel:
     def __init__(self, session, *, cached_construction=False):
         self.cached_construction = cached_construction
+        self.state = "new"
         self.count = 12
         self.title, self.detail = 'title', 'detail'
         self.buttons = list(range(12))
@@ -18,9 +19,9 @@ class FakePanel:
         self.visible = {}
         self.menu = SimpleNamespace(bind_control=self.bind)
         self.defer = False
-    def build(self): self.operations.append('build')
+    def build(self): self.operations.append('build'); self.state = 'built'
     def enable_cached_planning(self): self.operations.append('planner')
-    def open(self): self.operations.append('open')
+    def open(self): self.operations.append('open'); self.state = 'open'
     def set_text(self, label, text): self.text[label] = text
     def set_enabled(self, index, enabled): self.enabled[index] = enabled
     def set_visible(self, index, visible): self.visible[index] = visible
@@ -38,6 +39,7 @@ class FakePanel:
         self.operations.append('close')
         if self.defer: return False
         for handle in self.handles: handle.active = False
+        self.state = "closed"
         return True
 
 

@@ -1040,3 +1040,64 @@ slow ordinary teardown remain unacceptable for release. Reopen/relaunch,
 full-renderer controller-loss cleanup, gameplay transitions and updated packaging
 are not established by this test. Cached options remain explicit while those
 validation gates and further performance work are open.
+
+### SDK Management service integration candidate — 2026-10-09
+
+`NativeMenuService` now gives SDKManagement explicit ownership of the native
+frontend. The existing `mods` command routes `ui`, `ui open`, `ui close`,
+`ui refresh` and `ui status` to that owner. It uses the same Registry as the
+console and loads no second controller. The multi-control capability is required;
+unsupported hosts retain console management. Ownership is assigned before
+construction, so a failure does not discard the cleanup handle. Failed refreshes
+revoke input and suspend automatic refresh rather than retrying mutations.
+
+The controller polls copied public registry state at most twice per second.
+Changed mod state refreshes the open native view and revokes prior controls.
+SDKManagement closes its frontend before unregistering its console commands.
+Nested SessionScopes now own child scopes while sharing the actual root Session:
+child close preserves siblings and the parent; parent close revokes children
+before its own resources. Prepared invocation uses the root transport and adopts
+results into the appropriate child scope.
+
+282 offline tests pass, including child ownership, cleanup errors, prepared
+results, actual SDKManagement load/disable, command routing, unsupported hosts,
+registry refresh, construction/refresh failures and deferred cleanup. This is
+source-only integration; no loaded native binary was changed. A live source host
+started at15:28:21 and passed the pre-open baseline check at15:29:45. The ordinary
+`mods ui` command started construction at15:32:41. Live integration acceptance is
+pending until open, registry refresh and exact close-baseline checks complete.
+
+Numeric/text/JSON editors, general keybinds, full-renderer controller-loss and
+relaunch validation, responsive layout and updated packaging remain pending.
+Synchronous menu work still delays Python command processing, although engine
+operations remain on the verified game thread and the game continues rendering.
+
+### Integrated service live acceptance — 2026-10-09
+
+PROVEN in game21568 with the unchanged pinned v17 runtime: native console
+`mods ui` completed at15:37:38 (296.568 seconds from the logged start). At15:38:21,
+`service_evidence('open', my_mod)` verified an open service, exactly one child
+scope, the shared registry and preserved mods/Harness command registrations.
+The native console remained available over the panel.
+
+At15:38:58, `mods load ManagementExample` loaded the trusted local example's
+metadata without enabling its engine hook. The visible native list automatically
+changed from ManagementExample [not loaded] to Management Example [disabled],
+alongside the still-enabled Harness and SDK Management. No manual refresh or
+second state store was used.
+
+The ordinary `mods ui close` command removed the panel and completed cleanup at
+15:41:03. At15:41:21, `service_evidence('after', my_mod)` passed: service
+not_created, zero child scopes, exact original game viewport and retained-holder
+map, viewport focus restored, shared registry and command registrations retained.
+The same persistent Python session executed the post-close check. Raw artifacts:
+`evidence/management-service-before.json`, `management-service-open.json` and
+`management-service-after.json` under evidence, plus
+`logs/native-management-service-host.log`. The example remains loaded but disabled.
+
+This validates the normal integrated command lifecycle and registry refresh,
+not full-renderer controller death, reopen/relaunch, gameplay transitions or a
+new package. Five-minute construction and slow cleanup remain release blockers.
+282 offline tests pass. GitHub metadata independently confirmed private=True and
+visibility=private using the existing authorized Git credential; the connector
+itself returned404 for this private repository. No visibility setting was changed.

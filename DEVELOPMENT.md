@@ -22,13 +22,37 @@ validation scopes; original release acceptance does not certify newer runtimes.
 | Disconnect/relaunch | Original console/observer runtime: normal close, controller death, shutdown and packaged relaunch tested. Newer menu runtimes: normal close/controller death tested; packaged v16 mouse actions and cleanup passed after relaunch. Packaged v16 host shutdown and gameplay transitions remain pending. |
 | Gameplay/map transitions | Not validated; current live console/relationship evidence is from the main menu. |
 | Private v0.1 | Functional release criteria passed; package verification is recorded in research/MILESTONES.md. The recovered Ghidra research pass is tracked separately. |
-| Unified management (current checkout) | Registry, typed settings/actions and console menu implemented; console lifecycle/setting restoration live-tested. Native UMG and general keybinds pending. Not included in the existing v0.1 archive. |
+| Unified management (current checkout) | Registry, typed settings/actions and console menu implemented; console lifecycle/setting restoration live-tested. Experimental native UMG list/details/actions and normal cleanup live-tested. SDKManagement-owned `mods ui`, shared-registry automatic refresh and exact post-close baseline passed live; numeric/text/JSON editors and general keybinds pending. Not included in the existing v0.1 archive. |
 | Numeric UMG struct calls (opt-in v11) | Vector2D position/size and Margin effects verified live; disabled UMG Button rendered and cleaned up exactly. Original Harness `$struct`/`$value` passed from an isolated v11 package after fresh game launch. Normal v11 shutdown passed. |
 | Owned text / typed enums (v12/v13) | Constrained owned FText and exact-UEnum byte values implemented and live-tested; general native value types unsupported. |
 | Native menu ownership (opt-in v14) | Scope-owned prepare/attach/focus/close, controller-death cleanup and preserving unrelated widget focus live-tested. General per-user/UMG focus baselines and relaunch pending. |
 | SButton ownership (opt-in v15) | Independent reference retention, normal release and controller-death cleanup live-tested. Callback binding, cloning-aware revocation and action delivery remain unimplemented. |
 | Button actions (opt-in v16) | `Session(button_actions=True)` and `menu.bind_action(callback)` implemented. Mouse delivery, contained Python exception, unregistration, and exact cleanup passed from the isolated package after fresh game launch. Bound-action controller death, stale-owner rejection and fresh-session bind/rebind/cleanup also passed. Keyboard activation remains pending. Overlapping decorative widgets require explicit hit-test treatment; see BUTTON_EVENTS.md. |
 | Current candidate packaging | v16 candidate 20261009T165925Z includes the controller/runtime and `--button-actions` launcher opt-in. All338 manifest/archive files verified; isolated launcher selection and220 tests passed (7 unbundled native-fixture checks skipped). Fresh-game mouse actions, exact cleanup, native console, persistent Python, shared registry listing and Harness enum adapter passed. No full-menu or new release claim. |
+
+## Experimental native management frontend (source checkout)
+
+Run `launch.cmd management --multi-controls`, then open the native console with
+Tilde and enter `mods ui`. SDKManagement owns the panel and shares the console's
+mod registry. Repeated open while already open does not create another panel.
+Use `mods ui status` to inspect its state, `mods ui refresh` for an explicit
+refresh, and `mods ui close` to close it while preserving console management.
+Registry changes also refresh an open panel through the controller's normal poll.
+
+Construction currently takes about five minutes; Python commands wait while it
+builds. Cleanup is also slow. Do not interpret that delay as permission to start
+a second controller or discard the owner. A failed refresh suspends native input
+and retains the owner for cleanup. An unknown mutation outcome is not retried.
+Orderly SDKManagement shutdown closes the panel before removing its console
+commands; nested resource scopes keep ownership separate from other mods.
+
+List/details/actions and the underlying normal-close path have live proof.
+The integrated service passed open, shared-registry automatic refresh and exact
+post-close resource/focus checks on the current game session. Text, numeric and JSON
+editors, scrolling/responsive layout, general keybinds and full-renderer
+disconnect/relaunch coverage remain pending. This source feature is not included
+in the older packaged private archive. See research/MANAGEMENT_PORT.md for the
+recorded evidence and performance limits.
 
 ## Interactive native console
 
