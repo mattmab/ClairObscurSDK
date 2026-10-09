@@ -441,3 +441,30 @@ Python planning must still retain the original entry metadata for a function who
 current reflection entry points outside the executable to our thunk. Session trace
 methods, scoped ownership and Harness integration remain pending. The v18 candidate
 has not been loaded into the game.
+
+## Python session trace ownership candidate — 2026-10-09
+
+Session(traces=True) now explicitly selects v18 and requires the complete prior
+capability chain plus trace protocol1/capacity16. Existing session options retain
+their backend selection. Session.trace(function, exemplar, target=None,
+duration_ms=10000, limit=100) prepares an observed scalar plan, allocates an owner
+token and starts a native registration. The returned handle retains that exact
+plan and exposes read/status/stop/close. Close means forget; stop preserves queued
+events. Read yields immutable named arguments/return values with sequence,
+timestamp, thread and registry identity, never a live object pointer.
+
+The handle rejects duplicate/backwards sequences, backwards counters, unexpected
+game threads and payloads that do not match its retained plan. Malformed or missing
+acknowledgements abort the controller and mark session trace handles unknown,
+requesting the native watcher cleanup rather than abandoning a possibly installed
+registration. Definite native rejection, including deferred cleanup934, keeps the
+handle and does not retry automatically. Session close revokes all handles as
+confirmed closed or unknown according to transport cleanup acknowledgement.
+
+All364 Python tests pass (evidence/trace-session-tests.log), including v18 opt-in,
+failed handshake cleanup, missing-capability transport rejection, stopped reads,
+forget, duplicate events, invalid payloads, deferred close and ambiguous replies.
+These are mocked transport/fixture checks. This API has not been validated live;
+scope ownership, original-entry metadata for invocation planning, Harness adapter
+and live/relaunch evidence remain pending. The existing deployed controller and
+v17 DLL are unchanged.
