@@ -13,6 +13,7 @@ from types import MappingProxyType
 from . import ObjectSnapshot, RuntimeQueryError
 from .reflection import describe
 from . import _pod_values
+from .enums import EnumValue, describe_enums, enum_sentinel
 
 PARM, OUT, RETURN, REFERENCE = 0x80, 0x100, 0x400, 0x8000000
 
@@ -89,6 +90,13 @@ def decode_result(plan, reply, catalog, *, texts=()):
                     item = text_values[field_index]
                 elif parameter.kind == 'StructProperty':
                     item = _pod_values.decode(parameter.pod_profile, reply.data[at:at + parameter.width])
+                elif parameter.kind == 'EnumProperty':
+                    enum = catalog.resolve(parameter.constraint)
+                    number = reply.data[at]
+                    matches = [m for m in parameter.enum_members if m.value == number]
+                    if parameter.width != 1 or not matches:
+                        raise ValueError('Enum result is outside the observed member set')
+                    item = EnumValue(enum, matches[0].name, number)
                 else:
                     item = struct.unpack_from('<' + _FORMATS[parameter.kind][0], reply.data, at)[0]
                 values.append(item)
@@ -116,6 +124,7 @@ class Parameter:
     boolean_encoding: int | None = None
     constraint: object = None
     pod_profile: str | None = None
+    enum_members: tuple = ()
 
     @property
     def input(self):
@@ -149,23 +158,23 @@ _FORMATS = {'ByteProperty': ('B', 1, 0, 255), 'UInt16Property': ('H', 2, 0, 6553
             'FloatProperty': ('f', 4, None, None), 'DoubleProperty': ('d', 8, None, None)}
 
 
-def prepare_call(catalog, target, function, arguments, *, pod_values=False, text_values=False):
+def prepare_call(catalog, target, function, arguments, *, pod_values=False, text_values=False, enum_values=False):
     """Describe a current UFunction and prepare named arguments without executing it.
 
 Zeroed object slots have separate identity patches; caller-supplied integer
 addresses are never accepted. All inputs are explicit, with no guessed defaults.
 Output/return types must also be supported before a plan can be built.
 """
-    if type(pod_values) is not bool or type(text_values) is not bool:
+    if any(type(flag) is not bool for flag in (pod_values, text_values, enum_values)):
         raise ValueError('Value capability flags must be bool')
-    pod_values = pod_values or text_values
+    pod_values = pod_values or text_values or enum_values
     target, function = catalog.resolve(target), catalog.resolve(function)
     if catalog.find_class('Function').index not in catalog.ancestors(function.class_index):
         raise ValueError('Expected a reflected Function identity')
     if function.outer_index not in catalog.ancestors(target.class_index):
         raise ValueError('Function owner is not in the target class hierarchy')
     descriptor = describe(catalog, (function,))[function.index]
-    return _prepare(catalog, target, function, descriptor, arguments, pod_values=pod_values, text_values=text_values)
+    return _prepare(catalog, target, function, descriptor, arguments, pod_values=pod_values, text_values=text_values, enum_values=enum_values)
 
 
 def _struct_reference(catalog, row):
@@ -195,7 +204,7 @@ def _observed_pod_profile(catalog, row, descriptors):
     return obj, profile
 
 
-def _prepare(catalog, target, function, descriptor, arguments, *, pod_values=False, text_values=False):
+def _prepare(catalog, target, function, descriptor, arguments, *, pod_values=False, text_values=False, enum_values=False):
     if type(arguments) is not dict or any(type(key) is not str for key in arguments):
         raise ValueError('Arguments must be a dictionary of parameter names')
     info = descriptor.function
@@ -219,6 +228,7 @@ def _prepare(catalog, target, function, descriptor, arguments, *, pod_values=Fal
         if len(names) > 128:
             raise ValueError('Parameter count exceeds 128')
         encoding, constraint, pod_profile = None, None, None
+        enum_members = ()
         if kind == 'BoolProperty':
             encoding = int(row['bool_encoding'], 16)
             byte_offset, field_mask = (encoding >> 8) & 255, (encoding >> 24) & 255
@@ -238,6 +248,14 @@ def _prepare(catalog, target, function, descriptor, arguments, *, pod_values=Fal
                 if dimension != 1:
                     raise UnsupportedInvocation('TextProperty arrays require a separate ownership contract')
                 expected = 16
+            if kind == 'EnumProperty' and enum_values:
+                if dimension != 1 or row.get('inner_type') != 'ByteProperty' or row.get('inner_element_size') != 1:
+                    raise UnsupportedInvocation('Enum invocation currently requires scalar byte-backed storage')
+                constraint = catalog.by_index[row['enum_index']]
+                if constraint.serial != row['enum_serial'] or constraint.name != row['enum_name']:
+                    raise ValueError('Enum parameter identity changed')
+                enum_members = describe_enums(catalog, [constraint])[constraint.index].members
+                expected = 1
             if expected is None:
                 raise UnsupportedInvocation(f'{name}: {kind} needs an additional verified codec/lifetime contract')
             if width != expected:
@@ -252,7 +270,7 @@ def _prepare(catalog, target, function, descriptor, arguments, *, pod_values=Fal
         if occupied & locations:
             raise ValueError('Parameter storage overlaps')
         occupied.update(locations)
-        parameters.append(Parameter(name, kind, offset, width, dimension, row['flags'], encoding, constraint, pod_profile))
+        parameters.append(Parameter(name, kind, offset, width, dimension, row['flags'], encoding, constraint, pod_profile, enum_members))
     returns = [parameter for parameter in parameters if parameter.flags & RETURN]
     if (len(returns) > 1 or (returned == 65535) != (len(returns) == 0) or
             (returns and (returns[0].offset != returned or returns[0].dimension != 1))):
@@ -261,6 +279,9 @@ def _prepare(catalog, target, function, descriptor, arguments, *, pod_values=Fal
     if set(arguments) != expected_inputs:
         raise ValueError(f'Argument names mismatch; missing={sorted(expected_inputs - arguments.keys())}, extra={sorted(arguments.keys() - expected_inputs)}')
     text_fields = [p for p in parameters if p.kind == 'TextProperty']
+    enum_fields = [p for p in parameters if p.kind == 'EnumProperty']
+    if text_fields and enum_fields:
+        raise UnsupportedInvocation('Mixed text/enum transport is not connected yet')
     if len(text_fields) > 8:
         raise UnsupportedInvocation('Text calls support at most eight text fields')
     data, patches, texts = bytearray(size), [], []
@@ -283,6 +304,15 @@ def _prepare(catalog, target, function, descriptor, arguments, *, pod_values=Fal
                 texts.append((parameter.name, item))
             elif parameter.kind == 'StructProperty':
                 data[at:at + parameter.width] = _pod_values.encode(parameter.pod_profile, item)
+            elif parameter.kind == 'EnumProperty':
+                if not isinstance(item, EnumValue) or catalog.resolve(item.enum) != parameter.constraint:
+                    raise ValueError('Enum argument requires a value of the exact observed enum identity')
+                if (type(item.value) is not int or not 0 <= item.value <= 255 or
+                        type(item.name) is not str or enum_sentinel(item.name) or
+                        any(enum_sentinel(m.name) and m.value == item.value for m in parameter.enum_members) or
+                        not any(m.name == item.name and m.value == item.value for m in parameter.enum_members)):
+                    raise ValueError('Enum argument is invalid, stale, out of range or a sentinel')
+                data[at] = item.value
             elif parameter.kind in ('ObjectProperty', 'ClassProperty'):
                 if item is None: continue
                 if not isinstance(item, ObjectSnapshot): raise ValueError('Object arguments require observed identities, not addresses')
@@ -305,5 +335,5 @@ def _prepare(catalog, target, function, descriptor, arguments, *, pod_values=Fal
                 try: struct.pack_into('<' + fmt, data, at, item)
                 except (OverflowError, struct.error) as error: raise ValueError(f'{parameter.name}: value cannot fit storage') from error
     return CallPlan(target, function, info['flags'], int(info['entry_rva'], 16), size, extent, returned,
-                    tuple(parameters), bytes(data), tuple(patches), 3 if text_fields else 2 if pod_values else 1,
+                    tuple(parameters), bytes(data), tuple(patches), 4 if enum_fields else 3 if text_fields else 2 if pod_values else 1,
                     tuple(texts))

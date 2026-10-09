@@ -114,6 +114,11 @@ passes24 fault/identity/context cases; it remains disconnected from dispatch.
 Next connect explicit enum identity/value planning and versioned transport, then
 validate a bounded call before applying the menu's input/focus ownership policy.
 
+Typed enum planning and candidate version4 retained wire now pass Python/native
+validation, including a packet derived from the live GameAndUIEx schema. No enum
+call was dispatched. Session/dispatcher integration and focus restoration remain
+next; the existing packaged v12 host and original Harness invocation are unchanged.
+
 ## Preserved implementation references
 
 Primary source is the installed BL4 sdk_mods directory. Nineteen original files

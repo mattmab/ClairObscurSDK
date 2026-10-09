@@ -1,9 +1,11 @@
 #include "target_pod_schema.h"
 #include "enum_schema.h"
+#include "enum_call_protocol.h"
 #include <map>
 #include <string>
 #include <iostream>
 #include <stdexcept>
+#include <fstream>
 
 bool compile_enum_adapter(uint64_t base,uint64_t property,const CallIdentity& id,uint8_t value) {
     TargetPodSchemaOps ops{base};
@@ -53,8 +55,34 @@ struct Fixture {
     }
     bool check(uint8_t value=2) { return validate_byte_enum_value(m,property,id,value); }
 };
-int main() {
+int main(int argc,char** argv) {
     try {
+        if(argc==2) {
+            std::ifstream file(argv[1],std::ios::binary|std::ios::ate);
+            if(!file || file.tellg()!=static_cast<std::streamoff>(sizeof(RetainedCallPacket))) return 10;
+            RetainedCallPacket input{};
+            file.seekg(0); file.read(reinterpret_cast<char*>(&input),sizeof(input));
+            if(!file || validate_enum_call(input)) return 11;
+            std::cout << "Python enum packet passed native pure validation; no dispatch.\n";
+            return 0;
+        }
+        RetainedCallPacket packet{};
+        packet.call.version=kEnumCallVersion; packet.call.parameter_size=packet.call.allocation_extent=1;
+        packet.call.return_offset=65535; packet.call.target={1,1,0x10000}; packet.call.function={2,1,0x20000};
+        packet.call.field_count=1;
+        auto& p=packet.call.fields[0]; p.kind=kEnumCallKind; p.width=p.dimension=1; p.flags=0x80;
+        std::memcpy(p.name,"Mode",5); p.constraint={3,1,0x30000}; packet.call.data[0]=2;
+        if(validate_enum_call(packet) || !validate_call_packet(packet.call,true)) return 3;
+        for(unsigned variant=0;variant<6;++variant) {
+            auto invalid=packet;
+            if(variant==0) invalid.call.fields[0].width=4;
+            if(variant==1) invalid.call.fields[0].constraint.address=0;
+            if(variant==2) invalid.call.fields[0].kind=13;
+            if(variant==3) invalid.call.fields[0].bool_encoding=1;
+            if(variant==4) invalid.call.data[1]=1;
+            if(variant==5) invalid.count=1;
+            if(!validate_enum_call(invalid)) return 4;
+        }
         Fixture valid;
         if(!valid.check(0) || !valid.check(2) || !valid.check(255) || valid.check(1)) return 1;
         unsigned rejected=0;
@@ -87,7 +115,7 @@ int main() {
         reject([](auto& f){ f.m.words[f.enumeration+0x4c]=65537; });
         reject([](auto& f){ f.m.words[f.enumeration+0x40]=0; });
         reject([](auto& f){ f.m.words[f.data+24]=256; });
-        std::cout << "Byte-enum schema/membership passed; " << rejected << " malformed/context/identity cases rejected.\n";
+        std::cout << "Byte-enum schema/membership passed; " << rejected << " malformed/context/identity cases rejected; six invalid wire packets and legacy version rejected.\n";
     } catch(const std::exception& error) { std::cerr << error.what() << '\n'; return 2; }
     return 0;
 }

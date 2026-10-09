@@ -17,6 +17,24 @@ class EnumDescriptor:
     object: CatalogObject
     members: tuple[EnumMember, ...]
 
+    def value(self, name):
+        matches = [member for member in self.members if member.name == name]
+        if len(matches) != 1 or enum_sentinel(name):
+            raise ValueError('Expected one non-sentinel enum member name')
+        return EnumValue(self.object, matches[0].name, matches[0].value)
+
+
+def enum_sentinel(name):
+    return name.rsplit('::', 1)[-1] == 'MAX' or name.endswith('_MAX')
+
+
+@dataclass(frozen=True)
+class EnumValue:
+    """Typed copied value. Invocation revalidates identity, membership and width."""
+    enum: CatalogObject
+    name: str
+    value: int
+
 
 def describe_enums(catalog, observed):
     """Read native UEnum members selected by catalog identity.

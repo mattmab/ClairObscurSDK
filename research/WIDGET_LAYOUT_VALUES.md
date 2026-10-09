@@ -481,3 +481,29 @@ compiled with/W4/WX (`scripts/verify-enum-schema.cmd`). It is not yet connected
 to a call packet, session capability or live dispatch. Membership includes
 sentinels and is not sufficient caller policy; the eventual Python/wire layer
 must preserve explicit enum identity and reject unsupported argument semantics.
+
+Candidate enum planning/wire follow-up: `prepare_call(..., enum_values=True)`
+now produces version4 only for scalar byte-backed EnumProperty parameters. Inputs
+require a copied `EnumValue` from the exact enum identity and a current member
+name/value match; raw integers, stale identities, out-of-range values and `_MAX`
+sentinels (including numeric aliases of sentinels) are rejected. Output decoding
+returns typed copies and rejects values outside the observed member set. Names
+are not assumed unique by numeric value; output aliases use the first observed
+name. A decoded sentinel cannot subsequently be supplied as an input.
+
+`_enum_wire` retains the existing26,192-byte ownership envelope, with inner
+version4/kind14 and enum identity in the constraint slot. The pure native
+`enum_call_protocol.h` validator checks the new shape using a validation-only
+copy; that normalized copy must never be dispatched. Existing sessions/codecs
+reject version4. Mixed text/enum calls remain gated pending transport integration.
+No Session capability or actual enum dispatcher has been enabled yet.
+
+All182 Python tests pass. Native schema checks still pass24 adversarial cases;
+six malformed packet cases and rejection by the legacy validator also pass.
+`verify_live_enum_plan.py` read GameAndUIEx's actual19-byte parameter schema from
+game21804, created a typed DoNotLock plan, and sent the exact Python packet to
+the compiled pure native validator. It accepted the packet without game dispatch.
+Evidence: `enum-live-plan.json/.bin`, `enum-invocation-python-tests.log` and
+`enum-schema-fixture.log`. This is live-metadata planning plus offline wire proof,
+not proof that input mode or focus changed. Next connect an isolated session and
+the game-thread validator, then validate bounded calls and context restoration.
