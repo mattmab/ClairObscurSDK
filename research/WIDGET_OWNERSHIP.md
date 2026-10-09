@@ -7,6 +7,42 @@ The first v8 viewport specimen exposed lazy registry serial assignment; v9 now
 assigns serials through the verified engine allocator before returning ownership.
 Earlier investigation stages below preserve their original evidence boundaries.
 
+## Canvas/Button child lifecycle — live proof, 2026-10-09
+
+`scripts/verify_live_widget_children.py` ran through native console `py` in the
+existing persistent v9 host, completing at 02:24:08 local. It created a base
+UserWidget, read its engine-created WidgetTree, and used reflected
+GameplayStatics.SpawnObject to construct a CanvasPanel and Button with that tree
+as outer. CanvasPanel.AddChildToCanvas returned a retained CanvasPanelSlot.
+GetChildrenCount changed 0 to 1; the Button's reflected Slot reference matched
+the returned slot's index and serial. RemoveFromParent changed the count to 0.
+All four created return objects had positive stable serials and independent
+scoped holders. Scope close restored the exact three original generic holders.
+
+The tree itself had serial0 and was referenced by the retained UserWidget;
+this test does not establish a general zero-serial input stabilization API.
+No root property was written, nothing was added to the viewport, and input/focus
+were unchanged. This is child construction/attachment proof, not menu rendering
+or forced-GC survival proof. The persistent host was not replaced.
+
+Static evidence corroborates the live call: SpawnObject thunk143744670 calls
+14372aa60, which validates class/outer and constructs through1413bf660.
+AddChildToCanvas thunk143092410 calls panel helper1430be620. That helper creates
+a slot with the panel as outer, links slot/content/parent references with the
+target's conditional reference barrier, adds the slot to the panel, then invokes
+the panel callback and invalidation. Reflected frames are respectively24 and16
+bytes; no stock UE ABI was substituted.
+
+WidgetTree.RootWidget is reflected at+30; UserWidget.WidgetTree at+278. The live
+WidgetTree schema exposes no owned reflected constructor or root setter. A
+verified, identity-checked game-thread object-property assignment primitive is
+the next gate for a reusable root assignment and the Harness `set` capability.
+Do not replace this gate with an external memory write based only on the offset.
+
+Local evidence: widget-tree-schema.json, widget-child-plans.json,
+widget-addchild.json, widget-panel-add.json, console-spawn-body.json and
+widget-children-live.json. Raw evidence remains outside release packages.
+
 ## Base UserWidget specimen and lazy serial assignment — 2026-10-09
 
 The live read-only probe `scripts/inspect_widget_initialization.py` confirmed

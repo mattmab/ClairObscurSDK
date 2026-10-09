@@ -9,8 +9,12 @@ acceptance tests, is preserved locally in USER_REQUEST_MANAGEMENT.txt.
 stable serial publication, viewport add/remove and explicit release passed live
 through persistent console Python, restoring the exact holder baseline. This fixes
 the lazy serial boundary exposed by the earlier v8 specimen. See WIDGET_OWNERSHIP.md.
-Child content, native menu rendering, focus lifecycle and general key dispatch
-remain unfinished; the blank widget specimen is not a native Mods Menu.
+CanvasPanel/Button construction and child attachment/removal now also passed
+through the persistent v9 host, including retained CanvasPanelSlot identity and
+exact holder cleanup. Root assignment, native menu rendering, focus lifecycle
+and general key dispatch remain unfinished. Next establish a reusable verified
+game-thread property assignment path for WidgetTree.RootWidget and Harness set;
+the lifecycle specimens are not a native Mods Menu.
 
 ## Preserved implementation references
 
