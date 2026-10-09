@@ -787,3 +787,21 @@ Evidence: `management-button-progress.json`, `management-button-widget-live.json
 per-run result under `evidence/management-button-260f9a3ddd794df3b6d8af8aa70a25ea/`.
 No gameplay, keyboard activation or multi-control menu was exercised. The next
 UI gate remains multiple independently owned controls and keyboard input ownership.
+
+### Multiple-control lifecycle gate passed — 2026-10-09
+
+The v17 backend now passes live independent blue/green mouse callbacks, selective
+callback removal, focused-control removal, and forced controller loss while the
+second control owns focus. A fresh controller rejected stale ownership, bound two
+new controls, selectively rebound one, and closed with exact viewport focus,
+WidgetTree root/children and native holder restoration. See BUTTON_EVENTS.md for
+the failure/fix history and raw evidence. The original persistent host closed
+cooperatively before the failure test; only the disposable test controller died.
+
+The next frontend work can use these verified primitives: reusable widget
+construction and labels, a mod list and details from Registry.views/view, and
+generation-checked callbacks for actions/settings/enable state. Reuse a bounded
+set of controls for paging instead of allocating new Slate controls for every
+refresh: focus ownership retains at most16 distinct controls per menu lifetime.
+Native menu acceptance, configurable keybind input routing, and Harness parity
+remain incomplete; these lifecycle probes are not the finished Mods Menu.

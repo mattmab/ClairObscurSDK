@@ -859,3 +859,36 @@ multi-button-removed-focus-widget-live.json and multi-button-removed-focus-conso
 This confirms focus ownership outlives callback registration in the actual shared
 console runtime. It does not validate forced controller loss with multiple
 controls; that remains the next lifecycle gate before the full menu frontend.
+
+### Multiple-control controller loss — 2026-10-09
+
+The disconnect probe now accepts `--multi-controls`, retaining its original v16
+default. The v17 variant binds two independently registered controls and uses
+verified Widget focus calls to focus the second. It kills only its own controller
+and exits the worker without Python finally blocks, then observes native cleanup
+before opening a new session. The persistent management host was cooperatively
+closed first (exit0 at14:22:00); game21568 remained running.
+
+The forced-loss phase restored the exact viewport focus and native holder
+baseline on the first observation. New-session status rejected the old owner and
+child lease with error1011, empty state and no events. This is evidence of native
+cleanup without Python teardown. The fresh two-control binding/rebind/normal-close
+phase also PASSED, with probe exit0 at14:26:57. The second callback was removed and
+rebound with a newer registration. Menu close restored viewport focus, WidgetTree
+root, both children and the exact holder baseline; no mutation outcome was unknown.
+This validates the v17 multiple-control disconnect/reconnect lifecycle at the
+main menu. It does not establish gameplay/map-transition behavior, general key
+dispatch, the actual management frontend, or a packaged v17 release.
+
+Raw evidence: `multi-button-disconnect-worker.json`,
+`multi-button-disconnect-worker-live.json`, `multi-button-disconnect-result.json`
+and `multi-button-disconnect-run.log` under evidence/.
+Recovery evidence: `multi-button-disconnect-recovery.json` and
+`multi-button-disconnect-recovery-live.json`.
+
+The persistent source v17 management/Harness host was restored at14:27:28. A
+native-console Python command at14:28:28 confirmed multi-control support and
+returned the original Harness status (parity_complete remains False). Console
+opening/submission/closing still worked after the forced-loss/recovery test.
+Evidence: `multi-v17-after-disconnect-host.log`,
+`multi-v17-after-disconnect-console.log`, `multi-v17-after-disconnect-process.json`.

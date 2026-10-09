@@ -1,4 +1,8 @@
-"""Kill only this test's controller with an action bound; verify native recovery."""
+"""Kill this test's controller with bound actions; verify native recovery.
+
+Use --multi-controls for v17 second-control focus and two-control recovery.
+The default retains the original v16 single-control lifecycle probe.
+"""
 import argparse
 from dataclasses import asdict
 import json
@@ -21,7 +25,7 @@ def save(name, value):
         json.dumps(value, indent=2), encoding='utf-8')
 
 
-def specimen(session, *, disconnect):
+def specimen(session, *, disconnect, multi=False):
     name = 'worker' if disconnect else 'recovery'
     observe = runpy.run_path(str(ROOT / 'scripts/inspect_slate_focus_dispatch.py'))['observe']
     before = observe()
@@ -41,10 +45,38 @@ def specimen(session, *, disconnect):
             assert not evidence['during']['users'][0]['matches_game_viewport']
             save(name, evidence)
 
+        def open_controls(self, scope, widget, buttons, player):
+            from expedition33.catalog import capture
+            self.menu = scope.prepare_menu(widget, buttons[0], player)
+            assert self.menu.attach() and self.menu.focus()
+            self.buttons = buttons
+            self.actions = [self.menu.bind_control(button, lambda event: None) for button in buttons]
+            assert len({action._registration for action in self.actions}) == 2
+            assert self.menu._controls.poll() == 0
+            catalog = capture()
+            owner = catalog.find_class('Widget').index
+            def fn(name):
+                found = [obj for obj in catalog.objects if obj.outer_index == owner and obj.name == name]
+                assert len(found) == 1
+                return found[0]
+            # Same verified Widget focus calls used by the menu adapter, now
+            # targeting the second owned child before controller disappearance.
+            scope.invoke(buttons[1], fn('SetUserFocus'), PlayerController=player)
+            assert scope.invoke(buttons[1], fn('HasKeyboardFocus')).return_value is True
+            assert scope.invoke(buttons[1], fn('HasUserFocus'), PlayerController=player).return_value is True
+            evidence.update(owner=self.menu._owner,
+                            child_lease=self.actions[1]._lease._token,
+                            registration=max(a._registration for a in self.actions),
+                            registrations=[a._registration for a in self.actions],
+                            during=observe(), bound=True, second_control_focused=True)
+            assert not evidence['during']['users'][0]['matches_game_viewport']
+            save(name, evidence)
+
         def close(self):
             if self.menu is not None:
                 assert self.menu.close()
-                assert self.action._state == 'closed'
+                actions = self.actions if multi else [self.action]
+                assert all(action._state == 'closed' for action in actions)
                 assert self.menu._button_reference_state == 0
                 evidence.update(menu_closed=True, reference_empty=True)
                 save(name, evidence)
@@ -62,6 +94,15 @@ def specimen(session, *, disconnect):
             evidence['controller_exit_code'] = controller.wait(timeout=10)
             save(name, evidence)
             os._exit(23)
+        if multi:
+            prior = lifecycle.actions[1]._registration
+            assert lifecycle.actions[1].remove()
+            lifecycle.actions[1] = lifecycle.menu.bind_control(lifecycle.buttons[1], lambda event: None)
+            assert lifecycle.actions[1]._registration > prior
+            assert lifecycle.menu._controls.poll() == 0
+            evidence['rebound_registration'] = lifecycle.actions[1]._registration
+            save(name, evidence)
+            return dict(empty_drain=True, rebind=True, controls=2)
         assert lifecycle.action.remove()
         lifecycle.action = lifecycle.menu.bind_action(lambda event: None)
         assert lifecycle.action._registration > evidence['registration']
@@ -71,7 +112,7 @@ def specimen(session, *, disconnect):
         return dict(empty_drain=True, rebind=True)
 
     result = runpy.run_path(str(ROOT / 'scripts/verify_live_widget_visible.py'))['run'](
-        session, activatable=True, button_enabled=True, native_lifecycle=lifecycle,
+        session, activatable=True, button_enabled=True, two_buttons=multi, native_lifecycle=lifecycle,
         on_display=displayed, hold_seconds=0, evidence_name=f'{STEM}-{name}-live.json')
     assert result['passed'] and result['holder_baseline_restored']
     after = observe()
@@ -83,22 +124,33 @@ def specimen(session, *, disconnect):
 
 
 def main():
+    global STEM, wire
     parser = argparse.ArgumentParser(description=__doc__)
     parser.add_argument('--worker', action='store_true')
+    parser.add_argument('--multi-controls', action='store_true')
     args = parser.parse_args()
+    if args.multi_controls:
+        from expedition33 import _multi_button_wire as wire
+        STEM = 'multi-button-disconnect'
+    options = {'multi_controls': True} if args.multi_controls else {'button_actions': True}
     if args.worker:
-        with sdk.Session(button_actions=True) as session:
-            specimen(session, disconnect=True)
+        with sdk.Session(**options) as session:
+            specimen(session, disconnect=True, multi=args.multi_controls)
         raise AssertionError('Worker unexpectedly reached normal cleanup')
 
     result = dict(passed=False, phase='worker', python_cleanup_ran=False)
     save('result', result)
     try:
-        worker = subprocess.run([sys.executable, '-B', __file__, '--worker'])
+        command = [sys.executable, '-I', '-S', '-B', __file__, '--worker']
+        if args.multi_controls:
+            command.append('--multi-controls')
+        worker = subprocess.run(command)
         assert worker.returncode == 23, worker.returncode
         previous = json.loads((ROOT / 'evidence' / f'{STEM}-worker.json').read_text())
         live = json.loads((ROOT / 'evidence' / f'{STEM}-worker-live.json').read_text())
         assert previous['bound'] and previous['disconnect_requested']
+        if args.multi_controls:
+            assert previous['second_control_focused'] and len(set(previous['registrations'])) == 2
         assert 'menu_closed' not in previous and 'native_closed' not in live
         observe = runpy.run_path(str(ROOT / 'scripts/inspect_slate_focus_dispatch.py'))['observe']
         holders = runpy.run_path(str(ROOT / 'scripts/verify_live_widget_lifecycle.py'))['holders']
@@ -115,7 +167,7 @@ def main():
         assert state['game_viewport'] == previous['before']['game_viewport']
         assert state['users'][0]['matches_game_viewport'] and owned == baseline
         result['native_cleanup_restored_baseline'] = True
-        with sdk.Session(button_actions=True) as session:
+        with sdk.Session(**options) as session:
             nonce = session._transport.button_action_session
             assert nonce != previous['session']
             sent = _menu_wire.request('status', previous['owner'])
@@ -123,12 +175,14 @@ def main():
             menu = _menu_wire.decode(sent, response['menu_packet'])
             assert not menu.error and not menu.active and response['button_reference_state'] == 0
             sent = wire.request('status', previous['owner'], previous['child_lease'])
-            response = session._transport.command('button-action', sent)
-            stale = wire.decode(sent, response['button_action_packet'], session=nonce)
-            assert stale.error == 911 and stale.state == 0 and not stale.events
+            command_name = 'multi-button' if args.multi_controls else 'button-action'
+            packet_name = 'multi_button_packet' if args.multi_controls else 'button_action_packet'
+            response = session._transport.command(command_name, sent)
+            stale = wire.decode(sent, response[packet_name], session=nonce)
+            assert stale.error == (1011 if args.multi_controls else 911) and stale.state == 0 and not stale.events
             result.update(phase='recovery_specimen', stale_owner_status=asdict(stale), new_session=nonce)
             save('result', result)
-            fresh = specimen(session, disconnect=False)
+            fresh = specimen(session, disconnect=False, multi=args.multi_controls)
             assert fresh['registration'] > previous['registration']
             result['fresh_binding_and_cleanup'] = fresh['passed']
         result.update(passed=True, phase='complete', normal_recovery_close=True)
