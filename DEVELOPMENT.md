@@ -490,3 +490,27 @@ Evidence: `evidence/text-v12-source-exit.json`,
 `evidence/text-v12-package-live.json`, `evidence/text-v12-package-progress.json`,
 and `logs/text-v12-package.stderr.log`. The earlier offline package validation
 record remains a historical pre-live result.
+
+## v17 menu and agent candidate — 2026-10-09 (offline validation)
+
+Candidate `expedition33-0.1.0-candidate-20261009T202751Z` packages source
+`a6dc867`, including the optimized full native menu, original Harness action
+bridge and companion e33_agent.py client. Packaging now copies the v17 reader/
+controller and runtime DLL as well as older supported backends; previously the
+source launcher's --multi-controls mode had no matching binaries in the bundle.
+The loaded game DLL was only read/copied, never rebuilt or overwritten.
+
+The archive SHA256 is
+`5d1e11eb1c04a6d347e6d03b126dcb6aef8bfa8f23d1bc8c2568cd736bdfedfe`.
+All379 manifest/archive entries match, game data/logs/settings are excluded,
+and isolated launcher plus agent-client help run from the candidate directory.
+The bundled suite ran306 tests:299 passed and7 native-fixture tests were skipped
+because their standalone test executables are not bundled. The source suite
+passes all306 with those fixtures present. These skips are not live validation.
+
+Evidence: `evidence/agent-v17-candidate.json` and
+`evidence/agent-v17-candidate-verification.json`. This is a candidate, not a
+validated release: fresh-game bundle startup, full-menu lifecycle/relaunch and
+packaged bridge actions still require live validation. The current game remains
+attached to the source controller, whose corresponding features were validated
+separately in MANAGEMENT_PORT.md and INTROSPECTION_PORT.md.
