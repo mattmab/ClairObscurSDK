@@ -1,5 +1,19 @@
 #include "target_button_delegate.h"
 #include "target_button_actions.h"
+#include "target_multi_button_actions.h"
+
+static TargetMultiButtonActions multi_actions;
+ButtonDelegateResult compile_multi_bind(uint64_t base,uint64_t session,uint64_t owner,uint64_t action,
+                                       uint64_t lease,const CallIdentity& identity) {
+    return multi_actions.bind(base,session,owner,action,lease,identity);
+}
+ButtonDelegateResult compile_multi_close() { return multi_actions.close(); }
+ButtonDelegateResult compile_multi_remove(uint64_t session,uint64_t lease) {
+    return multi_actions.remove(session,lease);
+}
+ButtonDelegateResult compile_multi_drain(uint64_t session,MenuActionEvent* events,size_t& count,uint64_t& dropped) {
+    return multi_actions.drain(session,events,64,count,dropped);
+}
 
 static TargetButtonDelegateTable target_table;
 static TargetButtonActions target_actions;

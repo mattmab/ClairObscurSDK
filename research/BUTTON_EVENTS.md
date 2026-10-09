@@ -646,3 +646,25 @@ Python menu control ownership and one shared event drain; two visible controls
 with independent mod actions; disconnect/destruction/relaunch cleanup. Keyboard
 routing remains a separate gate. This core is not evidence of a working multi-
 control Mods Menu.
+
+### Target multi-control adapter candidate
+
+`target_multi_button_actions.h` now connects the pool to the verified target
+reference and forwarding adapters. Sixteen stable control slots retain their
+own Slate references and supplied UObject lease IDs. Pinned shared thunks look
+up the exact delegate instance on the verified thread. Foreign-thread entry
+latches a permanent fault and forwards the immutable engine callback without
+reading the pool. Any quarantined binding gates the entire pool before drain.
+Individual removal restores its delegate before releasing its Slate reference;
+whole-owner close restores every delegate before releasing any control reference.
+Unknown SEH outcomes still require the containing runtime to quarantine the owner.
+The caller must validate menu membership, executable identity and UObject lease
+ownership; the adapter alone does not establish those transport prerequisites.
+
+The candidate compiles with MSVC /W4 /WX through button_target_compile.cpp. The
+pool fixture and existing queue/lifecycle/protocol/forwarding fixtures pass; v15
+and v16 runtime/controller compatibility object builds and the unchanged v16
+layout check pass. test-button-delegate-pool.cmd now compiles the target adapter
+as well as running the portable pool fixture. No DLL was rebuilt or loaded.
+Transport, Python multi-control lifecycle and live two-control validation remain
+unimplemented; this is target integration source, not a callable SDK capability.
