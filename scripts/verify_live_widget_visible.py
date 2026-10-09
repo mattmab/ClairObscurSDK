@@ -21,7 +21,9 @@ ROOT = Path(__file__).resolve().parents[1]
 
 def run(session, *, hold_seconds=30, label_text=None, activatable=False,
         button_enabled=False, on_display=None, evidence_name=None, native_lifecycle=None,
-        label_hit_test_invisible=False):
+        label_hit_test_invisible=False, two_buttons=False):
+    if type(two_buttons) is not bool or (two_buttons and native_lifecycle is None):
+        raise ValueError('Two-button specimen requires native lifecycle ownership')
     if type(hold_seconds) is not int or not 0 <= hold_seconds <= 45:
         raise ValueError('Observation delay must be an integer from 0 through 45')
     if type(activatable) is not bool or type(button_enabled) is not bool:
@@ -58,7 +60,8 @@ def run(session, *, hold_seconds=30, label_text=None, activatable=False,
                 'hold_seconds':hold_seconds}
     path = ROOT/'evidence'/(evidence_name or ('widget-visible-text-live.json' if label_text is not None else 'widget-visible-live.json'))
     def save(): path.write_text(json.dumps(evidence, indent=2), encoding='utf-8')
-    widget = tree = canvas = button = label = None
+    widget = tree = canvas = button = label = second_button = None
+    second_attached = False
     label_attached = False
     attached = assigned = added = uncertain = activated = False
     native_attempted = False
@@ -92,6 +95,20 @@ def run(session, *, hold_seconds=30, label_text=None, activatable=False,
             mutate(scope.invoke, slot, fn('CanvasPanelSlot',name), **{parameter:value})
         mutate(scope.invoke, button, fn('Button','SetBackgroundColor'),
                InBackgroundColor={'R':0.125,'G':0.25,'B':0.5,'A':1.0})
+        if two_buttons:
+            second_button = scope.invoke_retained(cdo('GameplayStatics'), spawn,
+                ObjectClass=cls('Button'), Outer=tree).return_value
+            second_slot = mutate(scope.invoke_retained, canvas, add, Content=second_button).return_value
+            second_attached = True
+            evidence['objects'].update(second_button=asdict(second_button), second_slot=asdict(second_slot))
+            mutate(scope.invoke, second_button, enabled, bInIsEnabled=button_enabled)
+            for name, parameter, value in (
+                ('SetPosition','InPosition',{'X':560.0,'Y':80.0}),
+                ('SetSize','InSize',{'X':420.0,'Y':160.0}),
+                ('SetAnchors','InAnchors',{'Minimum':{'X':0.0,'Y':0.0},'Maximum':{'X':0.0,'Y':0.0}})):
+                mutate(scope.invoke, second_slot, fn('CanvasPanelSlot',name), **{parameter:value})
+            mutate(scope.invoke, second_button, fn('Button','SetBackgroundColor'),
+                   InBackgroundColor={'R':0.125,'G':0.5,'B':0.25,'A':1.0})
         if label_text is not None:
             label = scope.invoke_retained(cdo('GameplayStatics'), spawn, ObjectClass=cls('TextBlock'), Outer=tree).return_value
             label_slot = mutate(scope.invoke_retained, canvas, add, Content=label).return_value
@@ -125,7 +142,10 @@ def run(session, *, hold_seconds=30, label_text=None, activatable=False,
         assert observed.index == canvas.index and observed.serial == canvas.serial
         if native_lifecycle is not None:
             native_attempted = True
-            mutate(native_lifecycle.open, scope, widget, button, args['OwningPlayer'])
+            if two_buttons:
+                mutate(native_lifecycle.open_controls, scope, widget, (button, second_button), args['OwningPlayer'])
+            else:
+                mutate(native_lifecycle.open, scope, widget, button, args['OwningPlayer'])
         else:
             mutate(scope.invoke, widget, functions['AddToViewport'], ZOrder=1000)
             added = True
@@ -177,6 +197,10 @@ def run(session, *, hold_seconds=30, label_text=None, activatable=False,
                 mutate(scope.invoke,label,functions['RemoveFromParent'])
                 evidence['label_removed'] = True
             if attached and not uncertain:
+                if second_attached:
+                    second_attached = False
+                    mutate(scope.invoke, second_button, functions['RemoveFromParent'])
+                    evidence['second_child_removed'] = True
                 attached = False
                 mutate(scope.invoke, button, functions['RemoveFromParent'])
                 assert scope.invoke(canvas, fn('PanelWidget','GetChildrenCount')).return_value == 0

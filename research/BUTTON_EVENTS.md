@@ -753,3 +753,26 @@ whole-batch rejection before effects, callback-driven removal and menu closure,
 exception containment, deferred-remove lease protection, and duplicate/unowned
 control rejection. v17 live two-control validation remains required. No running
 controller, native DLL, or game state changed in this implementation step.
+
+### First live v17 two-control probe — 2026-10-09
+
+PID16344 loaded the isolated v17 DLL. Real mouse clicks delivered exactly blue,
+green, green across two distinct registrations; clicking blue after removing its
+callback delivered no event while green remained active. This confirms routing
+and selective removal at the main menu, not complete multi-control lifecycle.
+
+The probe FAILED its focus-restoration assertion after closing the menu. Both
+widgets disappeared, but exact holder/root/child cleanup was not reached by the
+original probe. TargetMenuOps::focus_owner checks only the initial child through
+its reflected focus plans; the second child is classified as unrelated. Also,
+close_menu_actions releases multi-control references before menu restoration.
+Fixing this requires durable menu-wide focus ownership through cleanup, including
+controls whose callbacks have been removed, without stealing unrelated focus.
+Do not mark v17 lifecycle or controller-loss cleanup validated.
+
+Raw evidence: multi-button-progress.json, multi-button-widget-live.json,
+multi-v17-run.log, multi-v17-loaded-module.json, multi-v17-processes.json under
+evidence/. The runner exited1. The probe now records focus snapshots and delays
+its focus assertion until acknowledged menu/tree cleanup finishes; that revised
+probe has not yet been rerun. The validated v16 management/Harness controller was
+restored. The loaded v17 DLL remains pinned and must not be overwritten.
