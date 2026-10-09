@@ -182,6 +182,34 @@ def capture():
     return _decode_catalog(start, rows)
 
 
+def capture_matching(pid, *, names=(), classes=()):
+    """Discover bounded exact names or class instances and read their closure.
+
+    Class selectors include subclasses. Returned catalogs also contain required
+    class/outer dependencies, so callers must select and disambiguate targets.
+    This is a point-in-time observation, not a lease or an atomic world snapshot.
+    """
+    from contextlib import nullcontext
+    from ._reader import ReadBatch, active_reader
+    names, classes = tuple(names), tuple(classes)
+    if type(pid) is not int or not 0 < pid <= 0xffffffff or not 1 <= len(names) + len(classes) <= 256:
+        raise ValueError('Expected process ID and 1 to 256 match selectors')
+    for group in (names, classes):
+        if any(type(s) is not str or not 1 <= len(s) <= 1024 or any(c in s for c in ',\r\n\t\0') for s in group):
+            raise ValueError('Invalid catalog match selector')
+        if len(set(group)) != len(group):
+            raise ValueError('Duplicate catalog match selector')
+    selectors = ','.join([*('n=' + s for s in names), *('c=' + s for s in classes)])
+    with ReadBatch(pid) if active_reader() is None else nullcontext():
+        start, rows = _query(['--catalog-match', str(pid), selectors])
+    if start['pid'] != pid:
+        raise RuntimeQueryError('Matched catalog process changed')
+    catalog = _decode_catalog(start, rows)
+    if len(catalog.objects) > 16384:
+        raise RuntimeQueryError('Matched catalog dependency limit exceeded')
+    return catalog
+
+
 def capture_selected(pid, identities):
     """Read a bounded, self-contained class/outer closure for known identities.
 

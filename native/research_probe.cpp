@@ -197,7 +197,9 @@ int run_query(int argc, char** argv) {
         bool console_construction = argc == 2 && std::string(argv[1]) == "--console-construct-proof";
         bool runtime_session = argc == 2 && std::string(argv[1]) == "--session";
         bool catalog = argc == 2 && std::string(argv[1]) == "--catalog";
-        const bool selected_catalog = argc == 4 && std::string(argv[1]) == "--catalog-select";
+        const bool matching_catalog = argc == 4 && std::string(argv[1]) == "--catalog-match";
+        const bool selected_catalog = matching_catalog || (argc == 4 && std::string(argv[1]) == "--catalog-select");
+        std::unordered_set<std::string> match_names, match_classes;
         if (selected_catalog) catalog = true;
         if (catalog) limit = 0;
         if (invoke_proof || observe_proof || runtime_session || console_construction) limit = 0;
@@ -214,6 +216,18 @@ int run_query(int argc, char** argv) {
             require(dot != std::string::npos && dot > 0 && dot + 1 < qualified.size(),
                     "FUNCTION_NAME_REQUIRES_OWNER_DOT_NAME");
             function_owner = qualified.substr(0, dot); function_name = qualified.substr(dot + 1); limit = 0;
+        }
+        else if (matching_catalog) {
+            descriptor_pid = std::stoul(argv[2]);
+            std::istringstream tokens(argv[3]); std::string token;
+            while (std::getline(tokens, token, ',')) {
+                require(token.size() > 2 && token.size() <= 1026 && token[1] == '=' &&
+                    (token[0] == 'n' || token[0] == 'c') &&
+                    match_names.size() + match_classes.size() < 256, "MATCH_SELECTOR_INVALID");
+                auto& nameset = token[0] == 'n' ? match_names : match_classes;
+                require(nameset.insert(token.substr(2)).second, "MATCH_SELECTOR_DUPLICATE");
+            }
+            require(!match_names.empty() || !match_classes.empty(), "MATCH_SELECTORS_EMPTY");
         }
         else if (argc == 4 && (selected_catalog || std::string(argv[1]) == "--describe" || std::string(argv[1]) == "--read-values" || std::string(argv[1]) == "--describe-enums")) {
             read_values = std::string(argv[1]) == "--read-values";
@@ -235,7 +249,7 @@ int run_query(int argc, char** argv) {
         else require(argc == 1 || catalog || thread_ping || invoke_proof || observe_proof || runtime_session || console_construction, "USAGE: research_probe.exe [--catalog | --limit N | --reflect-class NAME | --read-bools OBJECT | --reflect-function OWNER.NAME | --thread-ping | --invoke-proof | --observe-proof | --session]");
         const bool reflection = !reflect_class.empty() || !bool_object.empty() || !function_name.empty() || (!descriptors.empty() && !selected_catalog);
         DWORD pid = discover_process();
-        require(descriptors.empty() || pid == descriptor_pid, "DESCRIPTOR_PROCESS_CHANGED");
+        require((descriptors.empty() && !matching_catalog) || pid == descriptor_pid, "DESCRIPTOR_PROCESS_CHANGED");
         Handle process(OpenProcess(PROCESS_VM_READ | PROCESS_QUERY_LIMITED_INFORMATION, FALSE, pid));
         require(process.value != nullptr, "OPEN_PROCESS_FAILED win32=" + std::to_string(GetLastError()));
         Handle snapshot(CreateToolhelp32Snapshot(TH32CS_SNAPMODULE | TH32CS_SNAPMODULE32, pid));
@@ -295,6 +309,42 @@ int run_query(int argc, char** argv) {
         // Selected catalogs are complete dependency closures, not fabricated
         // additions to an older capture. Every queued slot is checked again
         // when emitted. Scope and lifetime remain those of an observation.
+        if (matching_catalog) {
+            // Candidate discovery only. Every selected identity and dependency
+            // is re-read by the existing strict closure emitter below.
+            std::unordered_map<uint64_t, bool> type_matches;
+            std::unordered_set<uint64_t> visiting;
+            std::function<bool(uint64_t)> matches_type = [&](uint64_t at) {
+                if (!at || match_classes.empty()) return false;
+                auto cached = type_matches.find(at);
+                if (cached != type_matches.end()) return cached->second;
+                require(visiting.size() < 128 && visiting.insert(at).second, "MATCH_TYPE_CYCLE");
+                const auto header = reader.get<ObjectHeader>(at);
+                const auto slot = item_at(header.index);
+                require(slot.object == at, "MATCH_TYPE_NOT_REGISTERED");
+                const auto parent = reader.get<uint64_t>(at + 0x40);
+                const bool found = match_classes.count(read_name(reader, pool, header.name_id, header.name_number)) || matches_type(parent);
+                const auto again = reader.get<ObjectHeader>(at);
+                const auto slot_again = item_at(header.index);
+                require(slot_again.object == at && slot_again.serial == slot.serial &&
+                    std::memcmp(&header, &again, sizeof(header)) == 0 &&
+                    reader.get<uint64_t>(at + 0x40) == parent, "MATCH_TYPE_CHANGED");
+                visiting.erase(at);
+                type_matches.emplace(at, found);
+                return found;
+            };
+            for (int32_t i = 0; i < array.num_elements; ++i) {
+                const auto item = item_at(i);
+                if (!item.object) continue;
+                const auto header = reader.get<ObjectHeader>(item.object);
+                if (header.index != i || !header.cls) continue;
+                const auto name = read_name(reader, pool, header.name_id, header.name_number);
+                if (!match_names.count(name) && !matches_type(header.cls)) continue;
+                require(descriptors.size() < 1024, "MATCH_RESULT_LIMIT");
+                descriptors.emplace(i, std::make_pair(item.serial, item.object));
+            }
+            require(!descriptors.empty(), "MATCH_RESULTS_EMPTY");
+        }
         std::vector<int32_t> selected_work;
         if (selected_catalog) for (const auto& entry : descriptors) selected_work.push_back(entry.first);
         auto select_dependency = [&](uint64_t address) {

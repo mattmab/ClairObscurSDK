@@ -6,7 +6,7 @@ Construction is explicit so callers retain the owner even if a mutation fails.
 """
 import logging
 
-from .catalog import capture, capture_selected
+from .catalog import capture, capture_selected, capture_matching
 from .enums import describe_enums
 from .values import read_values, read_object_reference
 from ._scope import SessionScope
@@ -37,6 +37,8 @@ class OwnedMenuPanel:
         self._enabled = {}
         self._visible = {}
         self._planner = None
+        self._functions = {}
+        self._defaults = {}
 
     @staticmethod
     def _one(rows):
@@ -46,17 +48,26 @@ class OwnedMenuPanel:
         return rows[0]
 
     def _function(self, owner, name):
+        key = (owner, name)
+        if key in self._functions:
+            return self._functions[key]
         owner_index = self._class(owner).index
-        return self._one(o for o in self.catalog.objects
+        result = self._one(o for o in self.catalog.objects
             if o.outer_index == owner_index and o.name == name)
+        self._functions[key] = result
+        return result
 
     def _class(self, name):
         return self.catalog.by_index[self.catalog.find_class(name).index]
 
     def _default(self, name):
+        if name in self._defaults:
+            return self._defaults[name]
         class_index = self._class(name).index
-        return self._one(o for o in self.catalog.objects
+        result = self._one(o for o in self.catalog.objects
             if o.class_index == class_index and o.name == 'Default__' + name)
+        self._defaults[name] = result
+        return result
 
     def _mutate(self, method, *args, **kwargs):
         if self.uncertain:
@@ -124,7 +135,18 @@ class OwnedMenuPanel:
         self.state = 'building'
         log = logging.getLogger(__name__)
         log.info('Building owned native menu panel with %d reusable controls', self.count)
-        self.catalog = capture()
+        self.catalog = capture_matching(self.scope.pid, names=(
+            'Widget', 'UserWidget', 'CommonActivatableWidget', 'WidgetTree',
+            'CanvasPanel', 'CanvasPanelSlot', 'Button', 'TextBlock',
+            'WidgetBlueprintLibrary', 'GameplayStatics',
+            'Default__WidgetBlueprintLibrary', 'Default__GameplayStatics',
+            'ESlateVisibility', 'Vector2D', 'LinearColor', 'Margin', 'Anchors',
+            'Create', 'SpawnObject', 'AddChildToCanvas', 'SetPosition', 'SetSize',
+            'SetAnchors', 'SetIsEnabled', 'SetVisibility', 'SetBackgroundColor',
+            'SetText', 'AddToViewport', 'IsInViewport', 'ActivateWidget',
+            'IsActivated', 'SetUserFocus', 'HasKeyboardFocus', 'HasUserFocus',
+            'DeactivateWidget', 'RemoveFromParent', 'SetFocusToGameViewport'),
+            classes=('PlayerController', 'GameEngine')) if self._selected_results else capture()
         if self.catalog.pid != self.scope.pid:
             raise ValueError('Widget catalog belongs to another process')
         self.player = self._one(o for o in self.catalog.select('PlayerController')
@@ -282,5 +304,7 @@ class OwnedMenuPanel:
         self._text.clear()
         self._enabled.clear()
         self._visible.clear()
+        self._functions.clear()
+        self._defaults.clear()
         self.state = 'closed'
         return True

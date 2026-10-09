@@ -12,6 +12,32 @@ import time
 ROOT = Path(__file__).resolve().parents[1]
 
 
+def arm_navigation(management):
+    """Time the next real native-button dispatch, restoring the method afterward."""
+    menu = management.native.menu
+    if menu is None or menu.panel.state != 'open' or 'submit' in vars(menu):
+        raise ValueError('Expected an open menu without existing instrumentation')
+    original = menu.submit
+    def measured(*args, **kwargs):
+        started = time.perf_counter()
+        report = {'before': menu.frame.title, 'completed': False}
+        try:
+            result = original(*args, **kwargs)
+            report.update(completed=True, after=menu.frame.title)
+            return result
+        except BaseException as error:
+            report['error'] = f'{type(error).__name__}: {error}'
+            raise
+        finally:
+            del menu.submit
+            report['seconds'] = time.perf_counter() - started
+            (ROOT / 'evidence/management-navigation-timing.json').write_text(
+                json.dumps(report, indent=2), encoding='utf-8')
+            print(f"Navigation: {report['seconds']:.3f}s; completed={report['completed']}")
+    menu.submit = measured
+    return 'Next native menu click will be timed'
+
+
 def measure(management, operation, *, profile=True):
     service = management.native
     if operation not in ('open', 'refresh', 'close'):

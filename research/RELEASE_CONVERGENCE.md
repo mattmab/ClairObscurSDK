@@ -17,7 +17,8 @@ their tests and documented boundaries. No new broad reflection or trace work.
 1. Measure native menu open/paint/close costs; remove the dominant redundant work
    without dropping runtime checks. Target first open within5seconds and ordinary
    navigation within1second on this machine. These are acceptance targets, not
-   achieved timings. Keep a cleanup owner on failure.
+   achieved fresh-process timings. Existing-process timing passed on October 9
+   (see bounded menu discovery below). Keep a cleanup owner on failure.
 2. Minimal keybind service: registration/removal, Python dispatch, remap/unbind,
    persistence, basic conflicts, scoped unload cleanup, native-menu configuration
    and console recovery. Inspect preserved BL4 logic before implementing adapters.
@@ -216,3 +217,43 @@ reference-closure-{before,open,after}.json, reference-closure-regression.log,
 logs/reference-closure-host.log. This still misses the five-second opening target;
 completion remains 51%. The remaining full initial catalog and serialized game-thread
 construction calls are the next costs to address, not per-line queue mechanics.
+
+## Bounded menu discovery: performance gate passed in existing session
+
+The read-only worker now supports bounded exact-name/class candidate discovery,
+followed by the existing validated identity and class/outer dependency closure.
+The native menu requests its actual dependencies rather than serializing the
+whole registry. Missing, changed or ambiguous targets fail; no full-scan retry
+or weakening of native invocation/ownership checks was introduced. Function and
+default-object lookup observations are cached only within each owned panel and
+cleared on close. This follows the preserved BL4 menu's targeted class lookup
+pattern while using our own verified observation and invocation infrastructure.
+
+A read-only comparison in PID39900 found all 470 requested matches in a
+1337-object closure, versus 96059 objects in the full catalog. Every returned
+observation equaled its full-catalog counterpart. Capture took 0.792 seconds
+versus 2.598 seconds. All 398 regression tests passed. The mapped DLL was not
+rebuilt or replaced; only the standalone read worker changed.
+
+Live unprofiled opening took 4.903 seconds. A physical click into the Harness
+details page completed dispatch and repaint calls in 0.419 seconds; a subsequent
+screenshot confirmed the rendered details page. This measures controller-side
+dispatch, not independent input-to-display latency. Close took 3.924 seconds.
+Before/open/after assertions passed: shared registry, exact retained-holder
+baseline, zero remaining child scopes, same viewport and restored viewport focus.
+The game remained at its main menu. No fresh game launch is claimed. Opening has
+little margin under five seconds and must pass again in packaged acceptance.
+
+Raw local evidence: evidence/menu-catalog-benchmark.json,
+evidence/management-timing-matched-catalog-{open,close}.json,
+evidence/matched-catalog-navigation.json,
+evidence/matched-catalog-{before,open,after}.json,
+evidence/matched-catalog-regression.log and logs/matched-catalog-host.log.
+
+Frozen-scope progress is now **57%**: menu deliverable increases from 20 to 50
+for verified responsive construction/navigation and cleanup; every other score
+and weight stays unchanged. Weighted sum is 50.75 + 20*(50-20)/100 = 56.75.
+Menu configuration/key integration and fresh-process acceptance remain incomplete.
+Critical path now proceeds to minimal configurable keys, then integration,
+portable packaging and the fresh-process acceptance matrix. Advanced parity is
+still deferred; the performance work does not earn credit for those features.

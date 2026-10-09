@@ -10,7 +10,7 @@ import time
 from . import RuntimeQueryError
 
 _active = ContextVar('expedition33_read_batch', default=None)
-_SELECTED = frozenset(('--catalog-select', '--describe', '--read-values', '--describe-enums'))
+_SELECTED = frozenset(('--catalog-select', '--catalog-match', '--describe', '--read-values', '--describe-enums'))
 
 
 def active_reader():
