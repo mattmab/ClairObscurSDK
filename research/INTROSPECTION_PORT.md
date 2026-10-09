@@ -1253,3 +1253,13 @@ trace-getter-thunk.json. General trace operations remain unadvertised and disabl
 Also corrected stale Harness status text that still described staged installation
 as pending. The original BL4 core is unchanged. All348 source tests pass in
 evidence/trace-audit-tests.log. No resident DLL/controller was replaced this turn.
+
+### Trace candidate integration update — 2026-10-09
+
+The original trace_start/trace_read/trace_stop request contract is now connected
+through the adapter to the opt-in v18 SDK scalar native POST tracing path. The
+original core is unchanged. All371 Python tests pass, including history retention,
+filters, explicit forget, loss counters and original-core provenance. This is
+implemented and fixture-tested, not live-validated or full trace parity. See
+TRACE_FRAMES.md for the native evidence, lifecycle details and remaining live,
+relaunch, installed-function schema browsing and wider codec/Blueprint gates.

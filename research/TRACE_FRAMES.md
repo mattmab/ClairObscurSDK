@@ -495,3 +495,34 @@ child-scope unload, manual close, cleanup failure, revoked wrappers and planning
 without the external hooked-entry reader, including stale identity and invalid
 argument rejection. Live evidence is still pending. The original Harness adapter
 is the next integration step; no v18 runtime was loaded during these tests.
+
+## Original Harness trace request adapter — 2026-10-09
+
+The preserved core.py is unchanged. The adapter subclass now routes trace_start,
+trace_read and trace_stop to owned SDK traces when the supplied session advertises
+the v18 capability. It preserves named traces, optional target filters, original
+limit/seconds bounds, history retention, stop-before-forget and the16-name limit.
+For unfiltered traces it selects a compatible live exemplar for schema validation;
+the exemplar does not become a target filter. Unsupported schemas are rejected by
+SDK/native planning before a hook is installed.
+
+Polling copies up to8 events per registration per idle pass; explicit read drains
+up to64 queued events. Native observation/overflow/rejected counters are reported
+separately from delivered count, and native sequence gaps remain visible. Target
+paths resolve at drain time against matching registry serials; stale identities
+are represented explicitly. Events label target_resolution=drain_time and
+time_basis=delivery, with the original native monotonic timestamp preserved, so
+neither field falsely claims a captured wall time or retained object path.
+
+Harness close forgets native registrations before clearing core trace records;
+idle polling clears temporary catalog observations afterward. Status advertises
+native_scalar_post with fixtures-only/live-pending validation and keeps
+parity_complete false. All371 tests pass, including original-core provenance and
+new request-contract, filter, retained-history, drop-count, stale-target, close and
+capability-gating tests (evidence/harness-trace-tests.log).
+
+The candidate is still not live validated. Remaining gates include a cooperative
+controller transition to v18, real return/local/out frame observations, Harness
+invoke-to-trace proof, disconnect/relaunch cleanup, and wider codec/Blueprint
+coverage. Schema browsing of an installed trace's hooked function also still
+needs the retained descriptor path; invocation already uses that path.

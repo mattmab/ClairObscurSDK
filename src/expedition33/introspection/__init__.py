@@ -200,6 +200,8 @@ class _Explorer(Explorer):
     def __init__(self, sdk):
         super().__init__(sdk)
         self._owners = {}
+        from .trace_adapter import TraceAdapter
+        self._trace_adapter = TraceAdapter(self) if getattr(getattr(sdk, 'session', None), 'supports_traces', False) else None
 
     def _sweep_owners(self):
         errors = []
@@ -215,17 +217,33 @@ class _Explorer(Explorer):
             raise errors[0]
 
     def expire(self):
+        if self._trace_adapter is not None:
+            self._trace_adapter.poll()
         super().expire()
         self._sweep_owners()
 
+    def stop(self, name):
+        if self._trace_adapter is not None:
+            if name in self._trace_adapter.handles:
+                return self._trace_adapter.stop(name)
+            return None
+        return super().stop(name)
+
     def close(self):
         try:
+            if self._trace_adapter is not None:
+                self._trace_adapter.close()
             super().close()
         finally:
             self._sweep_owners()
 
     def dispatch(self, request):
         try:
+            if self._trace_adapter is not None:
+                if request['op'] == 'trace_start':
+                    return self._trace_adapter.start(request)
+                if request['op'] in ('trace_read', 'trace_stop'):
+                    return self._trace_adapter.read(request)
             return super().dispatch(request)
         finally:
             owner = getattr(self.sdk, 'pending_owner', None)
@@ -428,6 +446,8 @@ class Harness:
         if self._backend.assignment:
             self.SUPPORTED |= frozenset(('set',))
         self._explorer = _Explorer(self._backend)
+        if self._explorer._trace_adapter is not None:
+            self.SUPPORTED |= frozenset(('trace_start', 'trace_read', 'trace_stop'))
         self._closed = False
         self._running = False
 
@@ -478,10 +498,12 @@ class Harness:
                     result['argument_types'].append('$enum')
                 result['struct_types'] = list(_pod_values.PROFILES) if self._backend.pod_values else []
                 result['parity_complete'] = False
+                result['trace_types'] = ['native_scalar_post'] if self._explorer._trace_adapter is not None else []
+                result['trace_validation'] = 'fixtures_only; live validation pending'
                 result['write_types'] = ['ObjectProperty'] if self._backend.assignment else []
                 result['limitations'] = ['Stored scalars, strings, references, selected arrays and bounded reflected structs; opaque native state is not owned',
                     ('Set supports scalar ObjectProperty only; other writes pending' if self._backend.assignment else 'Writes pending') +
-                    '; general traces pending; staged installation is available through the management agent; invocation requires opt-in v6 and supported parameter types',
+                    '; tracing supports scalar native POST only with v18; staged installation is available through the management agent; invocation requires opt-in v6 and supported parameter types',
                     ('Retain supports copied primitives and leased object outputs; opaque native values unsupported'
                      if self._backend.retained else 'Invocation retain and opaque native values unsupported') +
                     '; out parameters use named return/out result fields',
@@ -504,7 +526,10 @@ class Harness:
     def poll(self):
         if threading.get_ident() != self._owner or self._closed or self._running:
             raise RuntimeError('Harness expiry requires an idle owning thread')
-        self._explorer.expire()
+        try:
+            self._explorer.expire()
+        finally:
+            self._backend.clear()
 
     def close(self):
         if threading.get_ident() != self._owner:
