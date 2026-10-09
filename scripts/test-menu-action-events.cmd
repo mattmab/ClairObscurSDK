@@ -18,6 +18,8 @@ if errorlevel 1 (popd & exit /b 1)
 cl /nologo /W4 /WX /EHsc /std:c++17 /O2 /Fe:button_forward_fixture.exe "%PROJECT_ROOT%\native\button_forward_fixture.cpp"
 if errorlevel 1 (popd & exit /b 1)
 button_forward_fixture.exe
+if errorlevel 1 (popd & exit /b 1)
+cl /nologo /W4 /WX /EHsc /std:c++17 /O2 /c /Fo:button_target_compile.obj "%PROJECT_ROOT%\native\button_target_compile.cpp"
 set "RESULT=%errorlevel%"
 popd
 exit /b %RESULT%

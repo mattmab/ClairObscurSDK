@@ -143,5 +143,17 @@ int main() {
     assert(catch_destroy_fault(safe_binding,safe_ops) && calls==before+1);
     // Original destructor exception was not swallowed or replayed by the SDK.
     throw_original=false;
+    TestQueue fault_queue;
+    TestBinding fault_binding(fault_queue);
+    TestOps fault_ops;
+    assert(fault_queue.open(10));
+    assert(fault_binding.install(fault_ops,10,1,2,1,100,200)==ButtonDelegateResult::Ok);
+    fault_binding.leave(fault_binding.enter(1),true);
+    assert(button_delegate_control_gate(fault_binding,fault_ops)==ButtonDelegateResult::Ok);
+    fault_ops.foreign_call();
+    fault_ops.freed=true; // A foreign destructor may have already freed storage.
+    assert(button_delegate_control_gate(fault_binding,fault_ops)==ButtonDelegateResult::Quarantined);
+    assert(!fault_queue.pop(10,event) && !fault_queue.begin(1).registration);
+    assert(fault_binding.protects_owner());
     std::puts("Native forwarding: reply bytes, optional success, reentrant close, SEH and foreign-thread passthrough passed.");
 }

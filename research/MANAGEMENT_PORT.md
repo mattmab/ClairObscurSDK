@@ -702,3 +702,11 @@ access. Target Ops and every runtime control/drain path must honor that permanen
 latch before this is publishable. Live input, transport/Python action delivery and
 the shared-registry UI remain unimplemented; fixture success does not establish
 live menu functionality.
+
+Target-specific adapter validation and module-pinned immutable table preparation
+now compile against the existing retained-button infrastructure. Installation
+requires the captured identity and exact13-entry engine table; the control gate
+fixture revokes pending events without touching freed storage after a latched
+thread fault. Runtime publication, teardown ordering, IPC and Python action
+delivery remain the next integration gates; this compile-tested adapter has not
+been installed in the game.

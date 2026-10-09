@@ -301,3 +301,33 @@ headers; parenthesized numeric_limits calls now compile correctly with Windows.h
 All three action fixtures pass. No pinned game DLL was rebuilt or live delegate
 changed. Remaining work is target-validated Ops, process-pinned publication,
 runtime lifecycle/IPC/Python integration, and real input/cleanup validation.
+
+## Target validation and pinned publication candidate
+
+`target_button_delegate.h` now connects the contract to the retained target
+Button. Installation validation requires the exact original/shadow table
+addresses, aligned captured delegate, Live SButton reference, unchanged leased
+Button/delegate identity and all13 original entries. The containing runtime must
+still perform executable fingerprint validation before initialization.
+
+Table initialization accepts only module-static table storage with all three
+callbacks in that same module, then pins the module before exposing the immutable
+table. Base, original callbacks and captured game-thread ID are never replaced
+after readiness. Stack/heap shadow storage is rejected by module lookup. Table
+preparation is not yet called by an installed game runtime.
+
+Target expected-value exchanges are restricted to the captured delegate and the
+original/shadow table pair. Pre-destructor restoration does not dereference the
+UObject or require GC inactivity; the caller must still own the retained SButton
+and invoke it on the captured thread, with outer SEH containment. The permanent
+foreign-thread fault latch is checked by the shared control gate before any
+runtime control or drain action may inspect delegate storage. The gate fixture
+proves queued events are removed and ownership quarantined without touching a
+simulated freed instance after a fault. It does not prove arbitrary concurrent
+engine destruction safe; an unexpected thread remains a quarantining failure.
+
+All three action fixtures and target install/close/forwarding translation-unit
+compilation pass /W4 /WX (`button-target-compile.log`). No existing runtime DLL
+was rebuilt. Next integrate the adapter's binding/revocation before menu detach
+and lease release, expose bounded action IPC, and validate an isolated runtime
+live before connecting persistent Python callbacks and registry controls.

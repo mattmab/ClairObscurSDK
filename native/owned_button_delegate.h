@@ -98,3 +98,14 @@ public:
         return true;
     }
 };
+
+// Mandatory gate for ALL runtime control and queue-drain entrypoints. Checking
+// the permanent foreign-thread latch precedes every delegate dereference. The
+// caller still owns SEH containment and may not release leases on quarantine.
+template<class Binding,class Ops>
+ButtonDelegateResult button_delegate_control_gate(Binding& binding,Ops& ops) {
+    if(!ops.on_thread()) return ButtonDelegateResult::Deferred;
+    if(ops.faulted()) { binding.quarantine(); return ButtonDelegateResult::Quarantined; }
+    if(binding.state()==ButtonDelegateState::Quarantined) return ButtonDelegateResult::Quarantined;
+    return ButtonDelegateResult::Ok;
+}
