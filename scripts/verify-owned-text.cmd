@@ -10,6 +10,10 @@ if errorlevel 1 goto failed
 owned_text_fixture.exe
 if errorlevel 1 goto failed
 cl /nologo /W4 /WX /EHsc /std:c++17 /c "%PROJECT_ROOT%\native\owned_text_compile.cpp"
+if errorlevel 1 goto failed
+cl /nologo /W4 /WX /EHsc /std:c++17 /Fe:text_call_fixture.exe "%PROJECT_ROOT%\native\text_call_fixture.cpp"
+if errorlevel 1 goto failed
+text_call_fixture.exe
 :failed
 set "TEST_RESULT=%errorlevel%"
 popd

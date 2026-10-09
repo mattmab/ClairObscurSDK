@@ -263,3 +263,43 @@ capability, retain v11 compatibility, and validate a live Unicode/empty/invalid
 input round trip before TextBlock labels. Generic TextProperty output adoption
 still needs its own lifetime/type validation; this helper alone does not provide
 Harness text invocation, text retention or a functioning Mods Menu.
+
+## Candidate text invocation envelope
+
+`native/text_call_protocol.h` and private Python `_text_wire.py` now define a
+separate91800-byte envelope around the unchanged retained-call packet. Inner
+call version3 identifies TextProperty kind13; v11's validator rejects it.
+Each of at most eight scalar TextProperty fields has its field index, unit count
+and4096-unit UTF-16 buffer. Native16-byte parameter slots remain zero on the wire.
+Input fields require a valid terminated copy; output fields start empty. Unused
+slots/padding must be zero, field order must match, and pointer-shaped native
+values are rejected. There is no arbitrary struct/string pointer serialization.
+
+The pure native validator normalizes text to zero integer storage only to reuse
+existing overlap/scalar/object/POD checks, separately checking text return offset
+and count. That normalized copy is never an executable plan. Integration must
+validate the real TextProperty metadata/vtable on the game thread and construct
+owned native parameters in durable session storage before dispatch.
+
+Python reply decoding correlates the exact call and text-field records, rejects
+raw native text bytes, validates UTF-16/termination/padding and preserves the
+existing object-output lease checks. Error/unknown outcomes expose no copied text
+or raw result bytes. Input-only text cannot silently change. Text results are
+Python string copies, not retained localized native FText handles.
+
+The native fixture passes22 envelope checks plus the explicit v11 rejection;
+the existing43 ownership checks and target-adapter/W4/WX compile still pass.
+All163 Python tests pass, including actual Python-generated packet validation
+by the native executable, supplementary Unicode, empty/maximum values, corrupt
+responses, eight-field bounds and coexistence with required object-return leases.
+Evidence: `evidence/text-call-native-tests.log` and
+`evidence/text-wire-python-tests.log`. The test fixture was adjusted to avoid
+repeated large stack temporaries; the eventual runtime must keep its envelope
+and ownership records in durable session storage.
+
+This remains a transport prerequisite, not an enabled capability. The public
+planner/session still reject text invocation; no new session handshake, controller
+command or game-thread text dispatcher is installed. The current v11 game and
+packaged console host remain running unchanged. Next connect the envelope to a
+new explicit capability, ownership-aware dispatch and cleanup, then validate live
+round trips and native TextBlock labels against this build.

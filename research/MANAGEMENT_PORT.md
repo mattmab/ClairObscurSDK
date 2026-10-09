@@ -58,6 +58,12 @@ compiles with/W4/WX. It is not yet connected to transport or live widgets. See
 WIDGET_LAYOUT_VALUES.md for the exact boundary and integration gates. The running
 v11 package and its console remain unchanged during this work.
 
+Text transport prerequisite: a separate candidate envelope and Python codec now
+pass native/cross-language validation, including bounded UTF-16 and existing
+object-result lease correlation. All163 Python tests pass. It remains disconnected
+from the public session and running game; native dispatch/lifecycle integration
+and live labels are the next gates. No new menu capability is advertised yet.
+
 ## Preserved implementation references
 
 Primary source is the installed BL4 sdk_mods directory. Nineteen original files
