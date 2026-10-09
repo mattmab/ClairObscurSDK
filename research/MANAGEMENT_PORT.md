@@ -343,3 +343,14 @@ predicate141405190 calls lazy initializer1413dd470, which fills Key+8/+10 via
 beyond reflected KeyName. It does not yet prove a universal constructor contract
 or authorize borrowing/copying those pointers. Evidence:
 evidence/invoke-lifetime-paths.json and key-details-path.json.
+# Invocation progress — 2026-10-09
+
+An isolated v6 game-thread dispatcher passed the live read-only
+Controller.IsLocalController specimen and rejection checks. See
+INTROSPECTION_PORT.md for the exact tested boundary. This removes the missing
+transport/dispatcher prerequisite for further menu experiments; it does not yet
+validate Create/AddToViewport, retaining widgets, restoring focus/input mode, or
+FKey ownership. The existing v5 `mods` fallback and Python console were restored
+and checked after the candidate closed. Native UMG and key dispatch acceptance
+gates remain open. Next: typed output handling and object ownership, then a
+bounded widget lifecycle specimen before connecting shared management actions.

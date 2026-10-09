@@ -2,6 +2,9 @@
 #include "fixed_invocation.h"
 #include "observer_core.h"
 #include "console_attachment.h"
+#ifdef E33_REFLECTED_SESSION
+#include "reflected_invocation.h"
+#endif
 
 static SchedulePacket target{};
 static ObserverBuffer session_events{};
@@ -37,6 +40,11 @@ uint32_t backend_open(SessionPacket* packet) {
 uint32_t backend_command(SessionPacket* packet) {
     if (!lifetime_valid()) return 61;
     switch (packet->request.action) {
+#ifdef E33_REFLECTED_SESSION
+    case SessionReflectedInvoke:
+        packet->call.error=reflected_call(runtime_base,packet->call);
+        return 0; // A rejected plan is a normal response, not a transport failure.
+#endif
     case SessionConsoleKey: {
         if (!attachment_valid(runtime_base)) return 132;
         wchar_t* end=nullptr;

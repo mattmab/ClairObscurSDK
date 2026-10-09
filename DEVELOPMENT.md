@@ -267,3 +267,18 @@ GUI quit; run it only when deliberately testing shutdown. Research scripts write
 local ignored evidence. The reduced Ghidra pass completed and passed save/reopen checks; broader research remains
 tracked separately. The private v0.1 release covers the validated functionality
 and explicit boundaries above; it does not claim exhaustive binary analysis.
+# Experimental invocation candidate (2026-10-09)
+
+`scripts/build-invocation-candidate.cmd` builds a separate v6 controller/DLL;
+it never overwrites the default v5 host. `scripts/test-invocation-packet.cmd`
+runs18 native packet checks and compiles default v5 paths with /W4 /WX without
+replacing their deployed files. The Python suite contains87 passing tests.
+`scripts/verify_live_reflected_call.py` passed the live read-only getter and two
+pre-dispatch rejection cases; only run it after cooperative shutdown of any
+existing SDK host, and restore the persistent host afterward. The v6 DLL is
+pinned until game exit, so do not rebuild over it while that game is running.
+
+The candidate is not enabled by the public Session.call/Harness invoke APIs and
+is not in the existing private v0.1 ZIP. Native UMG, arbitrary key dispatch,
+native value ownership, full harness parity and game-relaunch validation remain
+open. Details and evidence references are in research/INTROSPECTION_PORT.md.

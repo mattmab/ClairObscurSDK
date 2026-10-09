@@ -9,11 +9,11 @@ from . import RuntimeQueryError
 
 
 class SessionTransport:
-    def __init__(self):
+    def __init__(self, *, _executable=None):
         self._owner = threading.get_ident()
         self._closed = False
         self._lines = queue.Queue(maxsize=256)
-        executable = Path(__file__).resolve().parents[2] / 'build/research-probe/research_probe.exe'
+        executable = _executable or Path(__file__).resolve().parents[2] / 'build/research-probe/research_probe.exe'
         self._process = subprocess.Popen([str(executable), '--session'], stdin=subprocess.PIPE,
             stdout=subprocess.PIPE, stderr=subprocess.STDOUT, text=True, encoding='utf-8',
             errors='strict', bufsize=1, creationflags=subprocess.CREATE_NO_WINDOW)
@@ -33,6 +33,7 @@ class SessionTransport:
             self.start = self._read()
             self.objects = [self._read(), self._read()]
             ready = self._read()
+            self.reflected_protocol = ready.get('reflected_protocol', 0)
             if (self.start.get('event') != 'snapshot_start' or
                 any(row.get('event') != 'object' for row in self.objects) or
                 ready.get('event') != 'session_ready' or ready['pid'] != self.start['pid'] or
@@ -74,10 +75,18 @@ class SessionTransport:
         self._check_thread()
         if self._closed:
             raise RuntimeQueryError('Native session is closed')
-        if command not in ('enable', 'disable', 'invoke', 'drain', 'ping', 'close', 'console-attach', 'console-detach', 'console-status', 'console-poll', 'console-execute', 'console-print', 'console-names', 'console-key'):
+        reflected = command == 'reflected-invoke'
+        if reflected and getattr(self, 'reflected_protocol', 0) != 1:
+            raise ValueError('Native session does not support reflected invocation')
+        if not reflected and command not in ('enable', 'disable', 'invoke', 'drain', 'ping', 'close', 'console-attach', 'console-detach', 'console-status', 'console-poll', 'console-execute', 'console-print', 'console-names', 'console-key'):
             raise ValueError('Unsupported native session command')
         suffix = ''
-        if payload is not None:
+        if reflected:
+            from ._invocation_wire import SIZE
+            if type(payload) is not bytes or len(payload) != SIZE:
+                raise ValueError('Invalid reflected invocation payload')
+            suffix = ' ' + payload.hex()
+        elif payload is not None:
             if command not in ('console-execute', 'console-print', 'console-names', 'console-key') or not isinstance(payload, str) or '\0' in payload:
                 raise ValueError('Invalid console payload')
             encoded = payload.encode('utf-16le')

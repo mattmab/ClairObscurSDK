@@ -508,3 +508,36 @@ Next: native game-thread plan revalidation and a versioned command/result packet
 explicit outcome semantics and no retry after timeout; bounded result conversion;
 engine-owned value construction/cleanup and retention for nontrivial types; then
 wire the general call API into the unchanged original Explorer invoke operation.
+# Reflected invocation candidate — 2026-10-09
+
+The isolated v6 native session now accepts bounded, identity-bearing call plans
+and revalidates them on the game thread. It compares target/function identities,
+function ownership and metadata, parameter layout, native thunk RVA, primitive
+storage and object/class constraints before using the target's own dispatcher.
+It does not call a UFunction thunk with an invented ABI. The v5 transport remains
+the default; v6 has distinct message, mapping, DLL and executable names.
+
+Live proof on build23765773, game PID34604: Controller.IsLocalController on the
+actual main-menu PlayerController returned true twice. A stale serial and changed
+function flags were rejected before dispatch (202/204), with subsequent pings
+working. The candidate session closed normally. Evidence:
+`evidence/reflected-call-live.json`; reproducer:
+`scripts/verify_live_reflected_call.py`. Stop the existing host cooperatively
+before using that reproducer; do not run v5 and v6 owners concurrently.
+
+Wire outcomes distinguish not_dispatched, dispatch_returned and unknown. A
+dispatcher returning does not prove an RPC/body executed; faults/timeouts must
+never trigger automatic retry. Object bytes are represented by separately
+validated identity observations, not owned/retained native values. Public
+Session.call and Harness invoke are not expanded by this candidate. Native
+strings, names, enums, structs/FKey, containers, Blueprint frames, retained
+objects and widget creation remain unsupported or unvalidated.
+
+Validation: 87 Python tests, including Python-to-C++ packet agreement and
+capability gating;18 native malformed-packet/layout checks; v6 builds and default
+v5 compilation pass /W4 /WX. The original Explorer core remains unchanged.
+After the controlled test, persistent v5 host34788 was restored with fresh
+session6c7548d8fdf54980a5dd6199fa9458c0. Live roots and Python console output
+worked after restoration; this is same-game reconnect proof, not game relaunch.
+The first restore launch used an incorrect script path and exited before attach;
+the corrected scripts/run_sdk.py launch is the validated persistent host.
