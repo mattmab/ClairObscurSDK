@@ -1263,3 +1263,13 @@ filters, explicit forget, loss counters and original-core provenance. This is
 implemented and fixture-tested, not live-validated or full trace parity. See
 TRACE_FRAMES.md for the native evidence, lifecycle details and remaining live,
 relaunch, installed-function schema browsing and wider codec/Blueprint gates.
+# Live trace validation update — 2026-10-09
+
+Native scalar POST tracing now has live main-menu proof for a bool getter return
+and PlayerController viewport output parameters. The original Harness adapter
+also passed start/invoke/read/stop/forget against the real getter. Hook restoration
+and cooperative session cleanup passed; native console Python dispatch remained
+working under the v18 management host. See TRACE_FRAMES.md for evidence paths.
+Input locals, disconnect/relaunch, wider types and Blueprint tracing remain
+unverified or unsupported; parity_complete remains false. Full-menu performance,
+general keybinds and updated package validation remain separate open work.

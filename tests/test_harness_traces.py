@@ -73,13 +73,13 @@ class HarnessTraceTests(unittest.TestCase):
         harness.close()
         self.assertTrue(handle.closed)
 
-    def test_capability_gate_and_fixture_only_status(self):
+    def test_capability_gate_and_bounded_validation_status(self):
         with self.assertRaises(UnsupportedCapability):
             Harness().request(dict(op='trace_start', name='x', function='/Fn'))
         harness, traces, obj = self.fixture()
         status = harness.request({'op': 'status'})
         self.assertIn('trace_start', status['operations'])
         self.assertEqual(status['trace_types'], ['native_scalar_post'])
-        self.assertIn('live validation pending', status['trace_validation'])
+        self.assertIn('relaunch/broader coverage pending', status['trace_validation'])
         self.assertFalse(status['parity_complete'])
         harness.close()

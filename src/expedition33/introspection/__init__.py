@@ -499,7 +499,7 @@ class Harness:
                 result['struct_types'] = list(_pod_values.PROFILES) if self._backend.pod_values else []
                 result['parity_complete'] = False
                 result['trace_types'] = ['native_scalar_post'] if self._explorer._trace_adapter is not None else []
-                result['trace_validation'] = 'fixtures_only; live validation pending'
+                result['trace_validation'] = 'live getter return and viewport out specimens verified; locals/relaunch/broader coverage pending'
                 result['write_types'] = ['ObjectProperty'] if self._backend.assignment else []
                 result['limitations'] = ['Stored scalars, strings, references, selected arrays and bounded reflected structs; opaque native state is not owned',
                     ('Set supports scalar ObjectProperty only; other writes pending' if self._backend.assignment else 'Writes pending') +

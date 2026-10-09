@@ -526,3 +526,30 @@ controller transition to v18, real return/local/out frame observations, Harness
 invoke-to-trace proof, disconnect/relaunch cleanup, and wider codec/Blueprint
 coverage. Schema browsing of an installed trace's hooked function also still
 needs the retained descriptor path; invocation already uses that path.
+
+## First live v18 specimens — 2026-10-09
+
+The cooperative transition to v18 succeeded on game PID39900. The independent
+getter probe captured one false return from Default__Actor.IsActorBeingDestroyed,
+with matching object index/serial and zero rejected observations. Stop restored
+the original entry RVA0x333be80; a subsequent invocation produced no new event.
+Forget and session close completed. See evidence/trace-getter-live.json and
+scripts/verify_live_trace_getter.py.
+
+The main-menu PlayerController.GetViewportSize probe captured SizeX2560 and
+SizeY1440, matching the invocation outputs, with zero rejected observations.
+The preserved Harness request path then completed trace_start, invoke,
+trace_read and trace_stop/forget for the getter: one event, correct target path,
+false return and no drops or rejections. Harness and session close completed.
+See evidence/trace-out-harness-live.json and scripts/verify_live_trace_out_harness.py.
+
+The launcher now accepts --traces for console, introspection and management.
+A persistent source management host started with v18, and an in-game Python
+command printed "v18 console ready" to logs/trace-v18-host.log. All371 Python
+tests pass (evidence/harness-trace-live-regression.log); the launcher selection
+check covers all five menu/trace flags.
+
+This proves only these return/out specimens and the Harness request contract.
+Live input locals, controller-loss and game-relaunch cleanup, Blueprint frames,
+wider codecs and hooked-function schema browsing remain pending. The v18 DLL
+is now mapped and must not be rebuilt or overwritten until this game exits.
