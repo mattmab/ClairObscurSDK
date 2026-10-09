@@ -469,3 +469,15 @@ remain missing. Do not pass an untyped zero or bypass the EnumProperty gate.
 Before changing focus, identify the active CommonUI ownership/context and how to
 restore that context without forcing GameOnly over an existing game menu. The
 console dump's registered CommonUI diagnostics remain unexecuted candidates.
+
+The original Harness now exposes these members through its existing schema
+request; its read-only live input-mode schema test passed (INTROSPECTION_PORT.md).
+A candidate `native/enum_schema.h` checks scalar byte-backed EnumProperty,
+underlying field ownership/type/width, exact native UEnum identity/type, member
+bounds and numeric membership, with game-thread/GC/shutdown context checks.
+It shares the existing target read adapter and performs no engine calls or writes.
+Its actual template passed24 hostile-memory/context/identity fixture cases and
+compiled with/W4/WX (`scripts/verify-enum-schema.cmd`). It is not yet connected
+to a call packet, session capability or live dispatch. Membership includes
+sentinels and is not sufficient caller policy; the eventual Python/wire layer
+must preserve explicit enum identity and reject unsupported argument semantics.

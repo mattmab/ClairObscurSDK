@@ -8,6 +8,7 @@ from types import SimpleNamespace
 
 from ..catalog import capture
 from ..reflection import describe
+from ..enums import describe_enums
 from ..values import read_values, StoredArray, StoredStruct
 from .. import ObjectSnapshot, RuntimeQueryError
 from .. import _pod_values
@@ -250,6 +251,9 @@ class _Explorer(Explorer):
 
     def prop_schema(self, prop):
         result = super().prop_schema(prop)
+        enum = getattr(prop, 'Enum', None)
+        if enum is not None and 'Enum' in result:
+            result['Enum'].update(self.sdk.enum_schema(enum))
         inner = getattr(prop, 'Inner', None)
         if inner is not None:
             detail = result['Inner']
@@ -259,6 +263,8 @@ class _Explorer(Explorer):
                 reference = getattr(inner, attr, None)
                 if reference is not None:
                     detail[attr] = self.ref(reference)
+                    if attr == 'Enum':
+                        detail[attr].update(self.sdk.enum_schema(reference))
         return result
 
 
@@ -278,11 +284,13 @@ class _Backend:
         self.catalog = None
         self.descriptors, self.properties, self.function_children = {}, {}, {}
         self.observations = {}
+        self.enum_descriptors = {}
 
     def refresh(self):
         self.catalog = capture()
         self.descriptors, self.properties, self.function_children = {}, {}, {}
         self.observations = {}
+        self.enum_descriptors = {}
         self._struct_class = self.catalog.find_class('Struct').index
         self._function_class = self.catalog.find_class('Function').index
         for obj in self.catalog.objects:
@@ -293,6 +301,24 @@ class _Backend:
         self.catalog = None
         self.descriptors.clear(); self.properties.clear(); self.function_children.clear()
         self.observations.clear()
+        self.enum_descriptors.clear()
+
+    def enum_schema(self, enum):
+        obj = self.catalog.resolve(enum._observed)
+        if obj.index not in self.enum_descriptors:
+            try:
+                descriptor = describe_enums(self.catalog, [obj])[obj.index]
+                # Bound schema expansion independently of the native reader limit.
+                self.enum_descriptors[obj.index] = {
+                    'members': tuple((m.name, m.value) for m in descriptor.members[:128]),
+                    'member_count': len(descriptor.members),
+                    'members_truncated': len(descriptor.members) > 128}
+            except RuntimeQueryError as error:
+                self.enum_descriptors[obj.index] = {'members_error': str(error)[:500]}
+        result = dict(self.enum_descriptors[obj.index])
+        if 'members' in result:
+            result['members'] = [dict(name=name, value=value) for name, value in result['members']]
+        return result
 
     def wrap(self, obj):
         obj = self.catalog.resolve(obj)

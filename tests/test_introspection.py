@@ -10,6 +10,48 @@ from expedition33.introspection import Harness, UnsupportedCapability, core
 
 
 class IntrospectionTests(unittest.TestCase):
+    def test_enum_schema_bounded_copies_and_request_cache(self):
+        from expedition33.introspection import _Backend
+        from expedition33.enums import EnumDescriptor, EnumMember
+        from expedition33.catalog import Catalog
+        from test_catalog import fixture
+        backend = _Backend()
+        backend.catalog = Catalog(123, *fixture())
+        obj = backend.catalog.by_index[2]
+        enum = SimpleNamespace(_observed=obj)
+        descriptor = EnumDescriptor(obj, tuple(EnumMember(f'N{i}', i) for i in range(130)))
+        with patch('expedition33.introspection.describe_enums', return_value={obj.index: descriptor}) as reader:
+            first = backend.enum_schema(enum)
+            self.assertEqual(first['member_count'], 130)
+            self.assertEqual(len(first['members']), 128)
+            self.assertTrue(first['members_truncated'])
+            first['members'][0]['value'] = -1
+            self.assertEqual(backend.enum_schema(enum)['members'][0]['value'], 0)
+            reader.assert_called_once()
+        backend.clear()
+        self.assertFalse(backend.enum_descriptors)
+
+    def test_enum_schema_explicit_unavailable_and_inner_members(self):
+        from expedition33 import RuntimeQueryError
+        from expedition33.introspection import _Backend, _Explorer
+        from expedition33.catalog import Catalog
+        from test_catalog import fixture
+        backend = _Backend()
+        backend.catalog = Catalog(123, *fixture())
+        enum = SimpleNamespace(_observed=backend.catalog.by_index[2], Name='E', path='/E')
+        with patch('expedition33.introspection.describe_enums', side_effect=RuntimeQueryError('unsupported subclass')):
+            detail = backend.enum_schema(enum)
+            self.assertEqual(detail, {'members_error': 'unsupported subclass'})
+        explorer = _Explorer(backend)
+        explorer.ref = lambda obj: {'$object': obj.path}
+        prop = SimpleNamespace(Name='Value', Class=SimpleNamespace(Name='EnumProperty'),
+            PropertyFlags=0, ArrayDim=1, Offset_Internal=100, Enum=enum,
+            Inner=SimpleNamespace(Name='Element', Class=SimpleNamespace(Name='ByteProperty'),
+                                 ElementSize=1, Enum=enum))
+        schema = explorer.prop_schema(prop)
+        self.assertEqual(schema['Enum']['members_error'], 'unsupported subclass')
+        self.assertEqual(schema['Inner']['Enum']['members_error'], 'unsupported subclass')
+
     def test_inner_schema_preserves_verified_type_identity(self):
         from expedition33.introspection import _Explorer
         explorer = _Explorer(SimpleNamespace())

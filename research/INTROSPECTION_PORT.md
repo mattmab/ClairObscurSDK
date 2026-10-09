@@ -1,5 +1,28 @@
 # BL4 Introspection Harness port
 
+## Enum schema follow-up — 2026-10-09
+
+The existing original `schema` request now includes copied enum members under
+referenced `Enum` metadata, including nested array element enum references.
+The adapter uses the independent reader in REFLECTION.md; the original core is
+unchanged (normalized SHA256 remains
+`6c043cb1664e71daa6a6b3a50f9d04f284854101d071ac0b21ce18b1469fe543`).
+Each enum includes `members`, `member_count` and `members_truncated`. Expansion
+is bounded to128 entries; failures report `members_error` while preserving the
+existing type reference. Duplicate references share only a request-local cache,
+which is cleared on refresh, request completion and shutdown. Returned lists
+are independent copies. Sentinel names remain visible, without invocation rights.
+
+Read-only live proof on game21804: original `schema` for
+`/Script/UMG.WidgetBlueprintLibrary:SetInputMode_GameAndUIEx` returned all five
+EMouseLockMode entries, the verified byte underlying type, and current parameter
+offsets. The request cache was empty afterward. Reproduce with
+`scripts/verify_live_harness_enums.py`; raw evidence is
+`evidence/harness-enum-live.json`. All179 source Python tests pass, including
+bounded expansion, copy isolation, error metadata and preserved core provenance.
+This is source-only; the running v12 package is unchanged. Enum arguments,
+enum-valued property reads/writes and complete Harness parity remain pending.
+
 Status: original roots/search/schema, selected stored-value inspection, snapshots
 and diffs are live-validated; the local-file protocol is ported. Bounded native
 invocation and explicit object leases are available. v8 integrates original

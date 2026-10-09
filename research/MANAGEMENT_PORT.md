@@ -108,6 +108,12 @@ limits. This establishes mouse-lock values without guessing, but the invocation
 codec and owned input/focus restoration remain the next gates. The running v12
 package has not been changed, and neither input mode nor focus was mutated.
 
+The original Harness schema now includes bounded enum member metadata and passed
+live against GameAndUIEx. A candidate native byte-enum schema/membership gate
+passes24 fault/identity/context cases; it remains disconnected from dispatch.
+Next connect explicit enum identity/value planning and versioned transport, then
+validate a bounded call before applying the menu's input/focus ownership policy.
+
 ## Preserved implementation references
 
 Primary source is the installed BL4 sdk_mods directory. Nineteen original files
