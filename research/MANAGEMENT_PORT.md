@@ -675,3 +675,13 @@ Candidate byte/manifest/isolated-help validation does not establish live bundle
 acceptance. Next implement cloning-aware callback revocation and bounded action
 delivery before connecting native controls to the shared registry. General key
 dispatch still needs verified FKey ownership and input/focus policy.
+
+Button input research now confirms that the click helper executes the stored
+delegate directly. Both inspected clone paths reconstruct the engine vtable,
+so an instance-vtable adapter can leave copied delegates engine-native by keeping
+the original member-function pointer. Destruction/reuse and complete ABI/table
+verification remain gates before installation. The bounded native action queue
+candidate passes offline revocation, overflow, reentrancy-ticket and session
+isolation fixtures. Next connect a verified adapter and transport to persistent
+Python action dispatch, then build shared-registry controls. See BUTTON_EVENTS.md;
+no live menu actions or key dispatch are claimed by this step.

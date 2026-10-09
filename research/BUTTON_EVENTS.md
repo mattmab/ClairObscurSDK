@@ -168,3 +168,55 @@ Remaining: v15 game-relaunch testing; callback binding/observation,
 cloning-aware revocation, transport queue and persistent Python action dispatch.
 Controller replacement does not establish game-relaunch behavior or exercise the
 final-strong-owner destructor branch.
+
+## Instance-vtable adapter investigation and action queue candidate
+
+Further target decompilation identifies a narrower alternative to changing the
+member-function pointer at delegate+20. Click helper RVA16e0bb0 checks the stored
+delegate at SButton+2d8 through vtable+30 and invokes that same instance through
+vtable+58, passing a local reply buffer. It does not first clone the delegate.
+The mouse-path routines RVA16f0240 and16f2120 reach this helper. The original
+execute entry RVA3059490 resolves the weak UButton, calls its unchanged method
+and returns the reply-buffer pointer. Original callback RVA3089290 broadcasts
+OnClicked before building its handled reply. These are static findings, not a
+live SDK click-delivery test.
+
+Both clone variants RVA3054a90 and3054b10 explicitly write the engine vtable
+RVA7382098 to the new instance and copy the original member-function pointer.
+Thus an adapter confined to an individual delegate's vtable, leaving its method
+pointer untouched, would not propagate SDK hooks through these clone paths.
+Copy helper RVA1122400 invokes clone slot40 into temporary storage, destroys the
+old destination and transfers the new allocation. Destructor RVA1260100 returns
+the instance and frees its48-byte allocation only when flags bit0 is set; even
+a flags0 invocation can precede reuse/free by the surrounding container.
+
+Preferred next candidate: retain the SButton, validate the original delegate,
+replace only that instance's vtable with durable pinned storage, forward execute
+to the immutable engine entry without interpreting/copying the FReply, and
+observe destruction to revoke routing before memory reuse. Preserve original
+clone entries so their copies remain engine-native. Restore the exact original
+table before detachment; never overwrite another owner's replacement. Verify
+the complete table extent and actual register-level ABI before publishing it.
+Late calls, reentrant destruction/replacement, moved storage and thread ownership
+still require adapter fixtures and live corroboration. No hook is installed.
+
+Evidence: `button-adapter-functions.json`, `sbutton-input-vtable.json`,
+`sbutton-input-functions.json`, `sbutton-click-dispatch.json`, plus the earlier
+`button-delegate-execution.json`. No game mutation occurred in these queries.
+
+`native/menu_action_events.h` now implements the game-thread-owned bounded queue
+needed by this adapter. Registration tickets contain copied session, monotonically
+increasing registration, owner and action IDs. The adapter must capture a ticket
+before forwarding to Unreal and validate it on completion: the original call can
+synchronously revoke or replace a route. Revocation discards queued events for
+that registration; owner cleanup preserves other routes; close removes all routes
+and queued events. Generations never reset across sessions, and overflow is
+reported without replacing existing events. Queue methods are not thread-safe:
+the future runtime adapter must enforce game-thread access for bind/execute/drain.
+
+`test-menu-action-events.cmd` passes with /W4 /WX. The fixture covers forged
+tickets, duplicate instances, queue/registration capacity, overflow reporting,
+owner isolation, revocation during an original call, same-address rebind and a
+reused session ID. Evidence: `menu-action-events-fixture.log`. The queue is not
+yet connected to IPC, Python callbacks or the live delegate. This is not proof
+of mouse/keyboard delivery, native reply preservation or live unregistration.
