@@ -11,6 +11,19 @@ from expedition33.invocation import InvocationError
 class PreparedRetainedTests(unittest.TestCase):
     setUp = test_retained_results.RetainedResultTests.setUp
 
+    def test_explicit_catalog_avoids_scan_and_rejects_foreign_observation(self):
+        from expedition33.catalog import Catalog
+        from types import SimpleNamespace
+        with patch('expedition33.catalog.capture', side_effect=AssertionError('unexpected scan')):
+            with self.session.invocation_planner(catalog=self.p.catalog) as planner:
+                planner.prepare(self.p.target, self.p.function)
+                self.assertIs(planner._catalog, self.p.catalog)
+            foreign = Catalog(self.session.pid + 1, (), ())
+            for invalid in (foreign, SimpleNamespace(pid=self.session.pid)):
+                with self.assertRaisesRegex(ValueError, 'catalog from this process'):
+                    self.session.invocation_planner(catalog=invalid)
+        self.assertFalse(self.transport.calls)
+
     def planner(self):
         with patch('expedition33.catalog.capture', return_value=self.p.catalog):
             planner = self.session.invocation_planner()

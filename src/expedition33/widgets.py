@@ -6,7 +6,7 @@ Construction is explicit so callers retain the owner even if a mutation fails.
 """
 import logging
 
-from .catalog import capture
+from .catalog import capture, capture_selected
 from .enums import describe_enums
 from .values import read_values
 from ._scope import SessionScope
@@ -106,7 +106,15 @@ class OwnedMenuPanel:
         return label
 
     def _root(self):
-        catalog = capture()
+        if self._selected_results:
+            # Read the owned tree and expected root identities freshly. Their
+            # class/outer closures are sufficient to decode RootWidget; unrelated
+            # objects do not need enumeration. Missing/changed references fail.
+            objects = (self.tree,) if self.canvas is None else (self.tree, self.canvas)
+            catalog = capture_selected(self.scope.pid,
+                tuple((obj.index, obj.serial, obj.address) for obj in objects))
+        else:
+            catalog = capture()
         return read_values(catalog, catalog.resolve(self.tree)).values[
             self._class('WidgetTree').index, 'RootWidget']
 
@@ -131,7 +139,8 @@ class OwnedMenuPanel:
         self.visible = visibility('Visible')
         self.collapsed = visibility('Collapsed')
         if self._cached_construction:
-            self._planner = self.scope.invocation_planner(selected_results=self._selected_results)
+            self._planner = self.scope.invocation_planner(
+                selected_results=self._selected_results, catalog=self.catalog)
         self.widget = self._construction_call(
             self._default('WidgetBlueprintLibrary'), self._function('WidgetBlueprintLibrary', 'Create'),
             WorldContextObject=self.player, WidgetType=self._class('CommonActivatableWidget'),

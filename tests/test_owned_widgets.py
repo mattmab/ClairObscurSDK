@@ -7,6 +7,24 @@ from expedition33.widgets import OwnedMenuPanel
 
 
 class OwnedWidgetCleanupTests(unittest.TestCase):
+    def test_selected_root_read_has_no_full_scan_or_stale_fallback(self):
+        panel, _ = self.panel()
+        panel._selected_results = True
+        panel.scope.pid = 10
+        panel.tree = SimpleNamespace(index=11, serial=12, address=0x10000)
+        panel.canvas = SimpleNamespace(index=21, serial=22, address=0x20000)
+        panel._class = lambda _: SimpleNamespace(index=31)
+        catalog = SimpleNamespace(resolve=lambda obj: obj)
+        values = SimpleNamespace(values={(31, 'RootWidget'): panel.canvas})
+        with patch('expedition33.widgets.capture', side_effect=AssertionError('full scan')), \
+                patch('expedition33.widgets.capture_selected', return_value=catalog) as selected, \
+                patch('expedition33.widgets.read_values', return_value=values):
+            self.assertIs(OwnedMenuPanel._root(panel), panel.canvas)
+            selected.assert_called_once_with(10, ((11, 12, 0x10000), (21, 22, 0x20000)))
+            selected.side_effect = RuntimeError('identity changed')
+            with self.assertRaisesRegex(RuntimeError, 'identity changed'):
+                OwnedMenuPanel._root(panel)
+
     def panel(self):
         operations = []
         scope = SimpleNamespace(close=lambda: operations.append('release'))

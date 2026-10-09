@@ -98,3 +98,50 @@ planner-metadata-focused.log. This proves the targeted cost reduction, not the
 full-menu acceptance target; a fresh controller/menu measurement is next.
 The current mapped DLL and running controller were not replaced. Frozen release
 completion remains51% until the user-facing performance gate is met.
+
+## Live metadata-cache result
+
+The replacement controller opened the complete native menu in60.215seconds
+(cProfile enabled), down from193.984seconds in the comparable prior profile:
+a69% reduction. Query count fell422->90, describe calls337->24. The menu
+rendered normally. Close took11.215seconds and the existing evidence assertions
+confirmed the identical game viewport, restored viewport focus, zero child
+scopes, and exact pre-open retained-holder baseline. Controller shutdown then
+completed with exit0. These are measurements in the existing game PID39900,
+not fresh-game release acceptance.
+
+Raw artifacts: evidence/management-profile-before-cache.{json,prof},
+management-profile-metadata-cache.{json,prof},
+management-profile-metadata-cache-close.json, metadata-cache-{before,open,after}.json;
+logs/metadata-cache-host.log. Nested costs overlap:7full captures22.23seconds,
+54selected captures18.82seconds,90external queries47.67seconds total.
+
+The performance blocker is reduced but remains open; the frozen score stays51%.
+Next remove redundant full scans and the repeated read-only probe startup/image
+verification cost while preserving current-build and live identity validation.
+The priority order remains menu performance, minimal keys, integration/package,
+then the representative fresh-game acceptance matrix.
+
+## Redundant catalog scans removed and verified
+
+InvocationPlanner accepts an explicit same-process Catalog, using the existing
+refresh_from validation instead of immediately scanning again. The owned panel
+passes its initial observation. Selected-result panels now read RootWidget from
+fresh selected tree/canvas closures, not a full enumeration. Identity failure
+does not retry or fall back. Native dispatch and root compare-and-swap checks
+remain unchanged.
+
+The next live profile completed in48.805seconds; full captures fell7->4,
+with11.57seconds in those captures and39.52seconds across89external queries.
+Close completed in8.542seconds. Before/open/after assertions again confirmed
+shared registry, zero remaining child scopes, exact holder baseline and the
+same viewport with restored focus.28focused prepared-invocation/widget tests
+passed, including the two new failure-boundary tests. Raw artifacts:
+management-profile-selected-root.{json,prof}, management-profile-selected-root-close.json,
+selected-root-{before,open,after}.json; logs/selected-root-host.log.
+
+This is approximately75% less time than the comparable193.984second profile,
+but not a responsive release menu. Completion remains51%; no keybind or
+packaging credit is claimed. Repeated process-backed reader startup is now the
+next measured target, followed by the remaining full captures and observation
+merge overhead if needed. No native DLL was rebuilt or replaced for these fixes.

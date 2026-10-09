@@ -230,11 +230,11 @@ class SessionScope:
             self._leases.append(lease)
         return result
 
-    def invocation_planner(self, *, selected_results=False):
+    def invocation_planner(self, *, selected_results=False, catalog=None):
         """Prepared calls retain the same mod-scope lifetime and result ownership."""
         self._check()
         from .prepared_invocation import InvocationPlanner
-        return InvocationPlanner(self._session, scope=self, selected_results=selected_results)
+        return InvocationPlanner(self._session, scope=self, selected_results=selected_results, catalog=catalog)
 
     @property
     def supports_object_leases(self):

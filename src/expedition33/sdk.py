@@ -287,7 +287,7 @@ class Session:
                             _trace_plan=self._trace_plan_for(function))
         return self._invoke_retained_plan(plan, catalog)
 
-    def invocation_planner(self, *, selected_results=False):
+    def invocation_planner(self, *, selected_results=False, catalog=None):
         """Explicit reusable observations; native gates still validate each call.
 
         A planner shares one catalog across prepared retained calls. Refresh it
@@ -296,9 +296,11 @@ class Session:
         selected_results=True reads only returned identities and dependencies,
         then combines compatible planning observations. Untouched rows do not
         become fresh. Changed identities fail without a full-scan fallback.
+        An explicit catalog reuses that observation without another full scan;
+        its type and process are checked, and native dispatch checks still apply.
         """
         from .prepared_invocation import InvocationPlanner
-        return InvocationPlanner(self, selected_results=selected_results)
+        return InvocationPlanner(self, selected_results=selected_results, catalog=catalog)
 
     def _invoke_retained_plan(self, plan, catalog, *, _return_catalog=False, _selected_results=False):
         self._check()

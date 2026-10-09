@@ -18,7 +18,7 @@ from .invocation import UnsupportedInvocation
 
 
 class InvocationPlanner:
-    def __init__(self, session, *, scope=None, selected_results=False):
+    def __init__(self, session, *, scope=None, selected_results=False, catalog=None):
         session._check()
         if type(selected_results) is not bool:
             raise ValueError('selected_results must be bool')
@@ -33,7 +33,10 @@ class InvocationPlanner:
         self._catalog = None
         from ._planning_metadata import MetadataObservations
         self._metadata = MetadataObservations()
-        self.refresh()
+        if catalog is None:
+            self.refresh()
+        else:
+            self.refresh_from(catalog)
 
     def _check(self):
         if self._closed:
