@@ -827,3 +827,19 @@ or v17 controller-loss cleanup. The added --remove-focused-control probe variant
 removes green's callback before menu close and uses separate evidence filenames;
 that variant still needs its own live run. The corrected DLL is now pinned in
 PID21568 and must not be rebuilt while that game remains alive.
+
+### Persistent v17 management host
+
+The source launcher accepts `management --multi-controls` (also console and
+introspection), selecting the existing strict v17 Session negotiation. Other
+launcher commands reject the flag before attaching. Older backend flags keep
+their existing behavior; the package has not yet been regenerated for v17.
+
+On PID21568, `mods select sdk.management` followed by `mods action shutdown`
+cooperatively ended the v16 host with exit0. The v17 management host then started
+without restarting the game. A command entered through the native console
+printed `sdk.supports_multi_controls == True` and the original Harness status:
+typed structs/enums and retained values available, parity_complete still False.
+This proves console/Python/Harness coexistence in the persistent v17 session,
+not the outstanding focused-callback-removal or controller-loss menu cases.
+Evidence: multi-v17-persistent-handover.log and multi-v17-persistent-process.json.
