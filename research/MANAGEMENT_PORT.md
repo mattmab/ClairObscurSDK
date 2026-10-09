@@ -831,3 +831,31 @@ typed editor metadata, reset, callback failures and protected controls. All244
 Python tests pass. This is an offline-tested presenter, not a rendered or live-
 tested management menu. Next connect reusable owned UMG widgets to these frames,
 then validate actual mod selection/actions/settings and reopen/cleanup live.
+
+### Native renderer candidate — 2026-10-09
+
+`widgets.OwnedMenuPanel` now constructs a reusable owned UMG tree through the
+verified reflected base classes, numeric layout, copied text, typed visibility,
+root assignment and native menu lifecycle APIs. It uses no research-script
+imports or separate controller. Twelve buttons and their labels are reused
+across presenter pages. Native close must finish before root restoration,
+child removal and scoped lease release; uncertain mutation outcomes prohibit
+automatic retries and preserve the owner for session cleanup.
+
+`management_native.NativeManagementMenu` connects presenter frames to the v17
+control pool. Input is revoked before refresh/removal and only re-enabled after
+every new binding succeeds. Old queued callbacks carry the old frame identity.
+Boolean settings toggle and choices cycle through registry-declared values;
+actions use the same registry dispatcher. Text/numeric/JSON input editors,
+sliders and key capture are pending. The existing console remains independent.
+This candidate is not yet wired into the management mod's startup/lifecycle.
+
+Six additional tests exercise renderer navigation/settings, revoked callbacks,
+deferred teardown, native-before-tree-before-lease cleanup, and unknown-outcome
+retention. All250 Python tests pass. The first live construction began at14:37:25
+in persistent game21568/controller host33780 using `my_mod.registry`; it is not
+yet a successful live acceptance test. `verify_native_management_state.py`
+captures exact focus/holder baselines before and after this interactive run.
+The older shell attempts without src on sys.path failed before querying the game;
+their native-menu-before-* files are not the baseline. The authoritative new
+baseline is `evidence/native-management-before.json`, captured by persistent Python.
