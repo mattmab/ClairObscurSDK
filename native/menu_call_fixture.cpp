@@ -1,4 +1,5 @@
 #include "menu_call_contract.h"
+#include "menu_protocol.h"
 #include <cstdio>
 
 static CallPacket plan(MenuCall call) {
@@ -42,6 +43,22 @@ int main() {
     if(valid_menu_call(p,MenuCall::UserFocus)) return 10;
     p=plan(MenuCall::KeyboardFocus); p.data[0]=1;
     if(valid_menu_call(p,MenuCall::KeyboardFocus)) return 11;
+    // Static storage mirrors the native envelope without a large stack frame.
+    static MenuPacket wire{};
+    wire.version=1; wire.operation=static_cast<uint32_t>(MenuOperation::Prepare);
+    wire.owner=2; wire.widget_lease=3; wire.child_lease=4;
+    wire.engine=wire.widget=wire.child=wire.player=wire.library={1,2,0x1000};
+    for(uint32_t i=0;i<kMenuCalls;++i) wire.plans[i]=plan(static_cast<MenuCall>(i));
+    if(!valid_menu_request(wire)) return 12;
+    wire.child_lease=3; if(valid_menu_request(wire)) return 13;
+    wire.child_lease=4; wire.outcome=1; if(valid_menu_request(wire)) return 14;
+    wire.outcome=0; wire.engine.index=-1; if(valid_menu_request(wire)) return 15;
+    wire.engine.index=1; wire.plans[8].entry_rva=0; if(valid_menu_request(wire)) return 16;
+    wire.operation=static_cast<uint32_t>(MenuOperation::Close);
+    if(!valid_menu_request(wire)) return 17; // Close never consumes preparation plans.
+    wire.owner=0; if(valid_menu_request(wire)) return 18;
+    wire.owner=2; wire.operation=6; if(valid_menu_request(wire)) return 19;
     std::puts("Menu call contracts: ten operations, cross-operation rejection, malformed inputs and outcomes passed.");
+    std::puts("Menu envelope: owner, operation, identity, lease and preparation-plan validation passed.");
     return 0;
 }

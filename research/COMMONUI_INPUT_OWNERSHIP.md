@@ -338,3 +338,37 @@ This remains an uninstalled candidate. Native protocol integration, protected
 lease-release enforcement, pre-registration baseline cleanup, backend-close
 ordering and live controller-loss/relaunch tests remain required. Compilation
 and synthetic packets do not establish live cleanup support.
+
+## Native session integration candidate
+
+`menu_session.h` adds durable protection during baseline capture, before
+MenuLifetime registration. Rejected registration releases only the prepared
+baseline; deferred cleanup preserves the record; interrupted ownership is
+quarantined. A new owner cannot reuse the record until complete cleanup.
+
+The isolated E33_MENU_SESSION/v14 path now carries a versioned MenuPacket with
+Prepare, Attach, Focus, Close and Status operations. Prepare copies all identities
+and ten verified call plans into pinned native storage before acquiring ownership.
+The shared IPC mapping is never retained as cleanup storage. The request message
+and mapping names are distinct from v13. No controller implementation or installed
+v14 binary exists yet.
+
+Runtime integration rejects explicit release of either protected widget lease.
+On session close, menu cleanup precedes pool cleanup. A deferred menu keeps
+cleanup pending where the existing transport permits; an unresolved menu pins
+the entire bounded pool while console/observer teardown continues. A subsequent
+session open rejects an active old record. The existing v13 path is unchanged
+unless E33_MENU_SESSION is explicitly selected.
+
+Validation: four native fixtures pass, including preparation rejection, deferred
+baseline cleanup, ownership interruption, no-replay quarantine and malformed
+menu envelopes. The target adapter, existing v13 runtime and isolated v14 runtime
+translation units compile under /W4 /WX. Evidence:
+`evidence/menu-session-adapter-build.log`. These tests do not exercise actual
+engine reference ownership or backend-close behavior inside the game.
+
+Next: implement controller serialization/transport and an isolated v14 build;
+validate normal close, protected-release rejection, controller death, unrelated
+focus and relaunch. Only then expose interactive menu actions/key dispatch.
+General UMG/per-user restoration remains outside the proven single-user
+viewport baseline and needs additional target investigation.

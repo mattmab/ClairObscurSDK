@@ -1,4 +1,11 @@
 #pragma once
+#ifdef E33_MENU_SESSION
+#ifndef E33_ENUM_SESSION
+#error Menu candidate requires the complete enum session feature set
+#endif
+#include "menu_protocol.h"
+constexpr uint32_t SessionMenu=107;
+#endif
 #if defined(E33_ENUM_SESSION) && !defined(E33_TEXT_SESSION)
 #error Enum session requires the complete v12 capability chain
 #endif
@@ -23,7 +30,11 @@
 #ifdef E33_TEXT_SESSION
 #include "text_call_protocol.h"
 #ifdef E33_ENUM_SESSION
+#ifdef E33_MENU_SESSION
+constexpr wchar_t kSessionMessage[] = L"E33SDK.Session.v14";
+#else
 constexpr wchar_t kSessionMessage[] = L"E33SDK.Session.v13";
+#endif
 #else
 constexpr wchar_t kSessionMessage[] = L"E33SDK.Session.v12";
 #endif
@@ -91,9 +102,14 @@ struct SessionPacket {
 #ifdef E33_TEXT_SESSION
     TextCallPacket text;
 #endif
+#ifdef E33_MENU_SESSION
+    MenuPacket menu;
+#endif
 };
 inline void session_mapping_name(wchar_t (&name)[96], DWORD controller, uint64_t nonce) {
-#ifdef E33_ENUM_SESSION
+#ifdef E33_MENU_SESSION
+    swprintf_s(name, L"Local\\E33Session14_%lu_%016llx", controller, nonce);
+#elif defined(E33_ENUM_SESSION)
     swprintf_s(name, L"Local\\E33Session13_%lu_%016llx", controller, nonce);
 #elif defined(E33_TEXT_SESSION)
     swprintf_s(name, L"Local\\E33Session12_%lu_%016llx", controller, nonce);

@@ -40,6 +40,55 @@ static uint64_t lease_session=0;
 static SchedulePacket target{};
 static ObserverBuffer session_events{};
 static uint64_t runtime_base = 0, target_object = 0, target_function = 0;
+#ifdef E33_MENU_SESSION
+#include "target_menu_ops.h"
+static TargetMenuStorage session_menu;
+static MenuResult menu_command(MenuPacket& wire) {
+    auto& s=session_menu;
+    TargetMenuOps<StrongLeasePool<>> ops{s,session_leases};
+    const auto operation=static_cast<MenuOperation>(wire.operation);
+    if(operation==MenuOperation::Prepare) {
+        if(s.menu.active()) return MenuResult::Busy;
+        // Copy before acquiring any ownership; IPC is never cleanup storage.
+        s.base=runtime_base; s.session=lease_session; s.owner=wire.owner;
+        s.widget_lease=wire.widget_lease; s.child_lease=wire.child_lease;
+        s.engine=wire.engine; s.widget=wire.widget; s.child=wire.child;
+        s.player=wire.player; s.library=wire.library;
+        std::memcpy(s.plans,wire.plans,sizeof(s.plans));
+        return s.menu.prepare(ops,s.session,s.owner,s.widget_lease,s.child_lease);
+    }
+    if(s.menu.active() && (s.session!=lease_session || s.owner!=wire.owner)) return MenuResult::Invalid;
+    switch(operation) {
+    case MenuOperation::Attach: return s.menu.attach(ops,lease_session,wire.owner);
+    case MenuOperation::Focus: return s.menu.focus(ops,lease_session,wire.owner);
+    case MenuOperation::Close: return s.menu.close(ops,lease_session,wire.owner);
+    case MenuOperation::Status: return MenuResult::Ok;
+    default: return MenuResult::Invalid;
+    }
+}
+static void guarded_menu_command(MenuPacket& wire) {
+    if(!valid_menu_request(wire)) { wire.error=810; return; }
+    wire.outcome=static_cast<uint32_t>(MenuOutcome::Unknown);
+    __try {
+        auto result=menu_command(wire);
+        wire.error=result==MenuResult::Ok ? 0 : 810+static_cast<uint32_t>(result);
+        wire.outcome=static_cast<uint32_t>(MenuOutcome::Returned);
+    } __except(EXCEPTION_EXECUTE_HANDLER) {
+        session_menu.menu.quarantine();
+        wire.error=816;
+    }
+    wire.active=session_menu.menu.active() ? 1 : 0;
+}
+static MenuResult guarded_menu_close() {
+    __try {
+        TargetMenuOps<StrongLeasePool<>> ops{session_menu,session_leases};
+        return session_menu.menu.close_session(ops);
+    } __except(EXCEPTION_EXECUTE_HANDLER) {
+        session_menu.menu.quarantine();
+        return MenuResult::Quarantined;
+    }
+}
+#endif
 static bool observing = false;
 static unsigned console_toggle_key=0;
 #ifdef E33_TEXT_SESSION
@@ -98,6 +147,9 @@ static bool lifetime_valid() {
         fixed_slot(runtime_base, target.function_index, target.function_serial) == target_function;
 }
 uint32_t backend_open(SessionPacket* packet) {
+#ifdef E33_MENU_SESSION
+    if(session_menu.menu.active()) return 800;
+#endif
 #ifdef E33_TEXT_SESSION
     // Failed ownership from a previous session is never adopted by a new owner.
     if(!session_text.frame.available()) return 230;
@@ -120,6 +172,10 @@ uint32_t backend_open(SessionPacket* packet) {
 uint32_t backend_command(SessionPacket* packet) {
     if (!lifetime_valid()) return 61;
     switch (packet->request.action) {
+#ifdef E33_MENU_SESSION
+    case SessionMenu:
+        guarded_menu_command(packet->menu); return 0;
+#endif
 #ifdef E33_TEXT_SESSION
     case SessionTextInvoke: {
         if(!session_text.frame.available()) { packet->text.retained.call.error=230; return 0; }
@@ -191,8 +247,13 @@ uint32_t backend_command(SessionPacket* packet) {
         StrongLeaseResult result=StrongLeaseResult::Ok;
         if(packet->request.action==SessionLeaseAcquire)
             result=session_leases.acquire(ops,lease_session,lease.object.address,lease.token);
-        else if(packet->request.action==SessionLeaseRelease)
+        else if(packet->request.action==SessionLeaseRelease) {
+#ifdef E33_MENU_SESSION
+            if(session_menu.menu.protects(lease_session,lease.token)) result=StrongLeaseResult::Busy;
+            else
+#endif
             result=session_leases.release(ops,lease_session,lease.token);
+        }
         lease.error=static_cast<uint32_t>(result);
         lease.active=session_leases.active();
         lease.outcome=LeaseCompleted;
@@ -282,7 +343,17 @@ uint32_t backend_close() {
     // the bounded frame. It is not unloaded, reset, or reused by a new session.
 #endif
 #ifdef E33_LEASE_SESSION
+#ifdef E33_MENU_SESSION
+    const auto menu_cleanup=guarded_menu_close();
+    if(menu_cleanup==MenuResult::Deferred && !backend_shutting_down()) return kSessionCloseDeferred;
+    const bool menu_released=menu_cleanup==MenuResult::Ok && !session_menu.menu.active();
+    if(!menu_released && !lease_cleanup_error) lease_cleanup_error=801;
+    // An unresolved menu pins the pool. Continue detaching console/observer
+    // hooks, but never release its widgets or adopt them in another session.
+    if(lease_session && menu_released) {
+#else
     if(lease_session) {
+#endif
         auto result=guarded_lease_close();
         // A normal GC interval may defer release. Keep the GT cleanup hook and
         // owner tracking until a subsequent message can finish the close.

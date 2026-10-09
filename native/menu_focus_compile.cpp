@@ -11,9 +11,9 @@ SlateReferenceResult compile_menu_release(TargetMenuFocusOwner& owner,uint64_t b
 }
 MenuResult compile_menu_operations(TargetMenuStorage& storage,StrongLeasePool<>& leases) {
     TargetMenuOps<StrongLeasePool<>> ops{storage,leases};
-    auto result=storage.lifetime.register_owned(ops,storage.session,storage.owner,storage.widget_lease,storage.child_lease);
-    if(result==MenuResult::Ok) result=storage.lifetime.attach(ops,storage.session,storage.owner);
-    if(result==MenuResult::Ok) result=storage.lifetime.focus(ops,storage.session,storage.owner);
-    if(result==MenuResult::Ok) result=storage.lifetime.close(ops,storage.session,storage.owner);
+    auto result=storage.menu.prepare(ops,storage.session,storage.owner,storage.widget_lease,storage.child_lease);
+    if(result==MenuResult::Ok) result=storage.menu.attach(ops,storage.session,storage.owner);
+    if(result==MenuResult::Ok) result=storage.menu.focus(ops,storage.session,storage.owner);
+    if(result==MenuResult::Ok) result=storage.menu.close(ops,storage.session,storage.owner);
     return result;
 }

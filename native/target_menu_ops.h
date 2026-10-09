@@ -3,6 +3,7 @@
 #include "menu_call_contract.h"
 #include "target_menu_focus.h"
 #include "strong_lease_pool.h"
+#include "menu_session.h"
 
 // Candidate only. Copy verified request data here before touching the engine;
 // never retain a pointer into IPC. The containing runtime owns this storage and
@@ -12,7 +13,8 @@ struct TargetMenuStorage {
     CallIdentity widget{-1,0,0}, child{-1,0,0}, player{-1,0,0}, library{-1,0,0};
     CallPacket plans[kMenuCalls]{};
     TargetMenuFocusOwner focus;
-    MenuLifetime lifetime;
+    CallIdentity engine{-1,0,0};
+    MenuSession menu;
 };
 template<class Pool>
 struct TargetMenuOps {
@@ -77,8 +79,11 @@ struct TargetMenuOps {
         return data.focus.observe(data.base,current);
     }
     bool validate_owned(uint64_t session,uint64_t owner,uint64_t widget,uint64_t child) const {
+        return prior_target_valid() && validate_preparation(session,owner,widget,child);
+    }
+    bool validate_preparation(uint64_t session,uint64_t owner,uint64_t widget,uint64_t child) const {
         if(session!=data.session || owner!=data.owner || widget!=data.widget_lease ||
-           child!=data.child_lease || context()!=MenuContext::Ready || !prior_target_valid()) return false;
+           child!=data.child_lease || context()!=MenuContext::Ready) return false;
         for(uint32_t i=0;i<kMenuCalls;++i) {
             if(!plan_valid(static_cast<MenuCall>(i))) return false;
             auto packet=data.plans[i];
@@ -86,6 +91,16 @@ struct TargetMenuOps {
                packet.outcome!=CallNotDispatched) return false;
         }
         return true;
+    }
+    MenuResult capture_baseline() {
+        auto result=data.focus.capture(data.base,data.engine);
+        return result==SlateReferenceResult::Ok ? MenuResult::Ok : MenuResult::Invalid;
+    }
+    MenuResult release_prepared_baseline() {
+        auto result=data.focus.release(data.base);
+        if(result==SlateReferenceResult::Ok) return MenuResult::Ok;
+        if(result==SlateReferenceResult::Deferred) return MenuResult::Deferred;
+        return MenuResult::Quarantined;
     }
     bool invoke(MenuCall op,bool* result=nullptr) {
         if(context()!=MenuContext::Ready || !plan_valid(op)) return false;

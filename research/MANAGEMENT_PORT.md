@@ -599,3 +599,11 @@ unchanged at its existing call sites. This advances the native menu prerequisite
 identified by the console dumps, but remains uninstalled until protocol and lease
 release gates are integrated. The shared console fallback and Harness remain the
 usable management paths; actionable native controls and key dispatch are pending.
+
+Native v14 candidate integration now tracks pre-registration baseline ownership,
+offers a separate menu request envelope, protects explicit lease release and
+orders menu cleanup before pool cleanup on controller disconnect. Deferred or
+uncertain records block reuse. Offline failure-path/request fixtures and v13/v14
+compilation pass. Controller transport and live v14 cleanup/relaunch acceptance
+remain pending; this is not yet an installed capability. Keep the existing v13
+Harness/console session until an isolated candidate is ready for handover.
