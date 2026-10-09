@@ -174,8 +174,9 @@ std::string read_name(const Reader& reader, uint64_t pool, uint32_t id, uint32_t
 #include "thread_ping.h"
 #include "fixed_observer_controller.h"
 #include "session_controller.h"
+#include "reader_session.h"
 
-int main(int argc, char** argv) {
+int run_query(int argc, char** argv) {
     try {
         if (argc == 3 && std::string(argv[1]) == "--check-image") {
             // Exactly the startup fingerprint gate, without finding/attaching a process.
@@ -242,10 +243,10 @@ int main(int argc, char** argv) {
         MODULEENTRY32W module{}; module.dwSize = sizeof(module);
         require(Module32FirstW(snapshot.value, &module) != FALSE, "MODULE_NOT_FOUND");
         require(_wcsicmp(module.szModule, L"SandFall-Win64-Shipping.exe") == 0, "UNEXPECTED_MAIN_MODULE");
-        auto image = supported_image(std::filesystem::path(module.szExePath));
         const std::string fingerprint = "218a2478aad5b3a1674b5d7097ec1ac4f994abb95466f9da1407fcd39d639618";
-        auto registry = resolve_anchor(image, "48 8d 0d ?? ?? ?? ?? 48 8b d7 89 5c 24 20 44 8d 4b ff e8 ?? ?? ?? ?? 48 8b cf");
-        auto names = resolve_anchor(image, "4c 8d 05 ?? ?? ?? ?? eb 16 48 8d 0d ?? ?? ?? ?? e8 ?? ?? ?? ?? 4c 8b c0 c6 05 ?? ?? ?? ?? 01 8b d3 0f b7 c3 c1 ea 10 89 44 24 44 89 54 24 40");
+        auto anchors = observed_image_anchors(pid, module);
+        const auto& registry = anchors.first;
+        const auto& names = anchors.second;
         require(registry.global_rva == 0x9361b60 && names.global_rva == 0x92aadc0,
                 "DISCOVERY_DISAGREES_WITH_STATIC_EVIDENCE");
         const uint64_t base = reinterpret_cast<uint64_t>(module.modBaseAddr);
@@ -1061,5 +1062,11 @@ int main(int argc, char** argv) {
         std::cerr << "{\"event\":\"error\",\"message\":" << quote(error.what()) << "}\n";
         return 1;
     }
+}
+
+int main(int argc, char** argv) {
+    if (argc == 3 && std::string(argv[1]) == "--reader-session")
+        return run_reader_session(argv[2], run_query);
+    return run_query(argc, argv);
 }
 

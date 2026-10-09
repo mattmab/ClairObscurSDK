@@ -114,7 +114,25 @@ class Catalog:
                 raise RuntimeQueryError('Planning class relation changed; full refresh required')
         objects = dict(self.by_index); objects.update(observed.by_index)
         classes = dict(self.classes); classes.update(observed.classes)
-        return Catalog(self.pid, objects.values(), tuple(classes.values()))
+        # Both inputs already validated their complete dependency closures.
+        # Intersection checks above rule out recycled identities or changed
+        # class relations, so untouched rows cannot gain missing dependencies.
+        # Rebuilding every row's graph after each leased return is redundant.
+        combined = Catalog.__new__(Catalog)
+        combined.pid = self.pid
+        combined.objects = tuple(objects.values())
+        combined.by_index = MappingProxyType(objects)
+        combined.classes = MappingProxyType(classes)
+        combined._ancestors = {**self._ancestors, **observed._ancestors}
+        combined._classes_by_name = dict(self._classes_by_name)
+        for index, cls in observed.classes.items():
+            if index not in self.classes:
+                previous = combined._classes_by_name.get(cls.name, ())
+                combined._classes_by_name[cls.name] = [*previous, cls]
+        # A same-identity row may have a newly observed outer. Paths need to be
+        # recomputed; never retain a cached path through a changed relationship.
+        combined._paths = {}
+        return combined
 
     def outer_chain(self, observed):
         """Root-first ownership chain. No unverified Unreal path punctuation."""

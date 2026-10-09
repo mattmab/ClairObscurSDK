@@ -132,7 +132,7 @@ class OwnedWidgetCleanupTests(unittest.TestCase):
 
     def test_planner_cleanup_follows_native_cleanup(self):
         panel, operations = self.panel()
-        panel._planner = SimpleNamespace(refresh=lambda: operations.append('refresh'),
+        panel._planner = SimpleNamespace(_catalog=None, refresh=lambda: operations.append('refresh'),
             close=lambda: operations.append('planner-close'))
         panel._render_call = lambda child, *a: operations.append('remove-' + child)
         self.assertTrue(panel.close())
@@ -143,7 +143,7 @@ class OwnedWidgetCleanupTests(unittest.TestCase):
 
     def test_cached_cleanup_refresh_failure_preserves_children_and_leases(self):
         panel, operations = self.panel()
-        panel._planner = SimpleNamespace(refresh=Mock(side_effect=RuntimeError('scan failed')),
+        panel._planner = SimpleNamespace(_catalog=None, refresh=Mock(side_effect=RuntimeError('scan failed')),
                                          close=Mock())
         with self.assertRaisesRegex(RuntimeError, 'scan failed'): panel.close()
         self.assertEqual(operations, ['native-close', 'restore-root'])
@@ -155,7 +155,7 @@ class OwnedWidgetCleanupTests(unittest.TestCase):
         panel, operations = self.panel()
         panel._function = lambda *args: args
         prepared = SimpleNamespace(invoke=Mock(side_effect=lambda: nullcontext()))
-        planner = SimpleNamespace(refresh=Mock(), prepare=Mock(return_value=prepared), close=Mock())
+        planner = SimpleNamespace(_catalog=None, refresh=Mock(), prepare=Mock(return_value=prepared), close=Mock())
         panel._planner = planner
         panel.scope.invoke = Mock(side_effect=AssertionError('uncached fallback forbidden'))
         self.assertTrue(panel.close())
@@ -172,7 +172,7 @@ class OwnedWidgetCleanupTests(unittest.TestCase):
         panel, operations = self.panel()
         panel._function = lambda *args: args
         prepared = SimpleNamespace(invoke=Mock(side_effect=RuntimeError('lost reply')))
-        panel._planner = SimpleNamespace(refresh=Mock(), prepare=Mock(return_value=prepared), close=Mock())
+        panel._planner = SimpleNamespace(_catalog=None, refresh=Mock(), prepare=Mock(return_value=prepared), close=Mock())
         with self.assertRaisesRegex(RuntimeError, 'lost reply'): panel.close()
         self.assertEqual(panel.children, ['button', 'label'])
         self.assertTrue(panel.uncertain)

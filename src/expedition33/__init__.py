@@ -333,6 +333,14 @@ def observe_proof(callback) -> ObserverProof:
 
 
 def _query(arguments: list[str]) -> tuple[dict, list[dict]]:
+    from ._reader import active_reader
+    reader = active_reader()
+    if reader is not None:
+        try:
+            return _decode_query(reader.query(arguments))
+        except BaseException:
+            reader.close()
+            raise
     root = Path(__file__).resolve().parents[2]
     executable = root / 'build' / 'research-probe' / 'research_probe.exe'
     if not executable.is_file():
@@ -345,8 +353,12 @@ def _query(arguments: list[str]) -> tuple[dict, list[dict]]:
         raise RuntimeQueryError(f'Native bridge execution failed: {error}') from error
     if result.returncode:
         raise RuntimeQueryError(f'Native bridge rejected query: {result.stderr.strip()}')
+    return _decode_query(result.stdout)
+
+
+def _decode_query(output):
     try:
-        records = [json.loads(line) for line in result.stdout.splitlines()]
+        records = [json.loads(line) for line in output.splitlines()]
         start, end = records[0], records[-1]
         if start['event'] != 'snapshot_start' or end['event'] != 'snapshot_end':
             raise ValueError('Missing snapshot boundary')

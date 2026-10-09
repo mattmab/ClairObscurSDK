@@ -25,6 +25,7 @@ for directory, pattern in [('src', '*.py'), ('mods', '*.py'), ('scripts', '*.py'
                             ('scripts', '*.ps1'), ('native', '*.h'), ('native', '*.cpp'), ('tests', '*.py'), ('research', '*.md')]:
     files.extend((root / directory).rglob(pattern))
 for relative in ['build/research-probe/research_probe.exe', 'build/runtime-session/runtime_session_v5.dll',
+                 'build/readonly-worker/research_probe.exe',
                  'build/research-probe-v6/research_probe.exe', 'build/runtime-session-v6/runtime_session_v6.dll',
                  'build/research-probe-v7/research_probe.exe', 'build/runtime-session-v7/runtime_session_v7.dll',
                  'build/research-probe-v8/research_probe.exe', 'build/runtime-session-v8/runtime_session_v8.dll',

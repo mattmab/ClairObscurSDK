@@ -6,10 +6,12 @@ editor without creating separate state or bypassing Registry validation.
 """
 import logging
 import textwrap
+from contextlib import nullcontext
 
 from .management_view import ManagementView
 from .management import ManagementError
 from .widgets import OwnedMenuPanel
+from ._reader import ReadBatch
 
 
 def display_line(text, width):
@@ -33,10 +35,13 @@ def display_detail(text, *, width=42, height=18):
 
 
 class NativeManagementMenu:
-    def __init__(self, session, registry, *, cached_planning=False, cached_construction=False, selected_results=False):
+    def __init__(self, session, registry, *, cached_planning=False, cached_construction=False, selected_results=False, read_batches=False):
         if type(cached_planning) is not bool or type(cached_construction) is not bool:
             raise ValueError('Planning options must be bool')
         self._cached_planning = cached_planning
+        if type(read_batches) is not bool:
+            raise ValueError('read_batches must be bool')
+        self._read_batches = read_batches
         self.view = ManagementView(registry)
         self.panel = OwnedMenuPanel(session, cached_construction=cached_construction,
                                     selected_results=selected_results)
@@ -47,6 +52,15 @@ class NativeManagementMenu:
         self._logged_detail = None
 
     def open(self):
+        with self._read_operation():
+            return self._open()
+
+    def _read_operation(self):
+        if self._read_batches and self.panel.state != 'closed':
+            return ReadBatch(self.panel.scope.pid)
+        return nullcontext()
+
+    def _open(self):
         self.panel.build()
         if self._cached_planning:
             self.panel.enable_cached_planning()
@@ -121,6 +135,10 @@ class NativeManagementMenu:
         return self.frame
 
     def close(self):
+        with self._read_operation():
+            return self._close()
+
+    def _close(self):
         self._accept_input = False
         self.view.close()
         # Panel's native close revokes every registration, including any whose

@@ -3,7 +3,7 @@ from dataclasses import dataclass
 
 from . import ObjectSnapshot, RuntimeQueryError
 from . import _assignment_wire as wire
-from .catalog import capture
+from .catalog import Catalog, capture
 from .reflection import describe
 from .invocation import InvocationError
 
@@ -19,7 +19,7 @@ class AssignmentResult:
     outcome: str = 'dispatch_returned'
 
 
-def assign(session, obj, owner, name, value, *, expected, element, allow_mutation):
+def assign(session, obj, owner, name, value, *, expected, element, allow_mutation, catalog=None):
     if allow_mutation is not True:
         raise ValueError('Object assignment requires literal allow_mutation=True')
     if not session.supports_object_assignment:
@@ -31,7 +31,10 @@ def assign(session, obj, owner, name, value, *, expected, element, allow_mutatio
             continue
         if not isinstance(reference, ObjectSnapshot) or reference.pid != session.pid:
             raise ValueError('Assignment references must belong to this session')
-    catalog = capture()
+    if catalog is None:
+        catalog = capture()
+    elif not isinstance(catalog, Catalog) or catalog.pid != session.pid:
+        raise ValueError('Expected a planning catalog from this process')
     obj, owner = catalog.resolve(obj), catalog.resolve(owner)
     expected = catalog.resolve(expected) if expected is not None else None
     value = catalog.resolve(value) if value is not None else None

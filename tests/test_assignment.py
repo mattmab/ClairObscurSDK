@@ -51,7 +51,7 @@ class AssignmentTests(unittest.TestCase):
                 self.assertTrue(session.supports_object_assignment)
                 self.assertIn('research-probe-v10', str(factory.call_args.kwargs['_executable']))
 
-    def exercise(self, mode):
+    def exercise(self, mode, *, cached=False):
         session = Mock(pid=123, supports_object_assignment=True)
         leases = [Mock(active=True, _token=11), Mock(active=True, _token=12)]
         session.retain.side_effect = leases
@@ -62,17 +62,20 @@ class AssignmentTests(unittest.TestCase):
             return {'assignment_packet': self.response(sent, 4, 0) if mode == 'stale' else
                     'bad' if mode == 'bad' else self.response(sent)}
         session._transport.command.side_effect = command
-        with patch('expedition33.assignment.capture', return_value=self.catalog), \
+        with patch('expedition33.assignment.capture', return_value=self.catalog) as capture, \
              patch('expedition33.assignment.describe', return_value={2:SimpleNamespace(properties=[self.prop])}):
             if mode == 'ok':
                 result = assign(session, self.obj, self.owner, 'Child', self.obj,
-                                expected=None, element=0, allow_mutation=True)
+                                expected=None, element=0, allow_mutation=True,
+                                catalog=self.catalog if cached else None)
                 self.assertEqual(result.after, self.obj)
             else:
                 with self.assertRaises(InvocationError) as caught:
                     assign(session, self.obj, self.owner, 'Child', self.obj,
-                           expected=None, element=0, allow_mutation=True)
+                           expected=None, element=0, allow_mutation=True,
+                           catalog=self.catalog if cached else None)
                 self.assertEqual(caught.exception.outcome, 'unknown' if mode == 'bad' else 'not_dispatched')
+        self.assertEqual(capture.call_count, 0 if cached else 1)
         self.assertEqual(session._transport.command.call_count, 1)
         if mode == 'bad':
             session._abort_ownership.assert_called_once()
@@ -82,6 +85,16 @@ class AssignmentTests(unittest.TestCase):
             for lease in leases: lease.release.assert_called_once()
 
     def test_success_releases_temporary_owners(self): self.exercise('ok')
+    def test_planning_catalog_preserves_success_rejection_and_unknown_outcome(self):
+        for mode in ('ok', 'stale', 'bad'): self.exercise(mode, cached=True)
+
+    def test_foreign_catalog_cannot_acquire_or_dispatch(self):
+        session = Mock(pid=123, supports_object_assignment=True)
+        with self.assertRaisesRegex(ValueError, 'catalog from this process'):
+            assign(session, self.obj, self.owner, 'Child', self.obj, expected=None,
+                   element=0, allow_mutation=True, catalog=Catalog(124, (), ()))
+        session.retain.assert_not_called()
+        session._transport.command.assert_not_called()
     def test_changed_old_value_is_not_retried(self): self.exercise('stale')
     def test_malformed_ack_aborts_ownership_without_retry(self): self.exercise('bad')
     def test_explicit_mutation_required_before_io(self):

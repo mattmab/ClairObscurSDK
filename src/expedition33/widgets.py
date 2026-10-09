@@ -170,7 +170,8 @@ class OwnedMenuPanel:
             self._enabled[index] = True
             log.info('Native menu construction: control %d/%d retained', index + 1, self.count)
         self._mutate(self.scope.assign_object, self.tree, self._class('WidgetTree'),
-            'RootWidget', self.canvas, expected=None, allow_mutation=True)
+            'RootWidget', self.canvas, expected=None, allow_mutation=True,
+            catalog=self._planner._catalog if self._planner is not None else None)
         self.assigned = True
         root = self._root()
         if root is None or (root.index, root.serial) != (self.canvas.index, self.canvas.serial):
@@ -224,7 +225,8 @@ class OwnedMenuPanel:
     def open(self):
         if self.state != 'built':
             raise RuntimeError('Build and paint the panel before opening it')
-        self.menu = self._mutate(self.scope.prepare_menu, self.widget, self.buttons[0], self.player)
+        self.menu = self._mutate(self.scope.prepare_menu, self.widget, self.buttons[0], self.player,
+            catalog=self._planner._catalog if self._planner is not None else None)
         if not self._mutate(self.menu.attach) or not self._mutate(self.menu.focus):
             raise RuntimeError('Native panel attachment/focus deferred; close the panel')
         self.state = 'open'
@@ -251,7 +253,8 @@ class OwnedMenuPanel:
             raise RuntimeError('Panel tree outcome unknown; preserve owner for session cleanup')
         if self.assigned:
             self._mutate(self.scope.assign_object, self.tree, self._class('WidgetTree'),
-                'RootWidget', None, expected=self.canvas, allow_mutation=True)
+                'RootWidget', None, expected=self.canvas, allow_mutation=True,
+                catalog=self._planner._catalog if self._planner is not None else None)
             self.assigned = False
             if self._root() is not None:
                 raise RuntimeError('Panel root was not restored')

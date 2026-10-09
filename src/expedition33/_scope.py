@@ -212,10 +212,10 @@ class SessionScope:
         self._check()
         return self._session.supports_enum_values
 
-    def assign_object(self, obj, owner, name, value, *, expected, element=0, allow_mutation=False):
+    def assign_object(self, obj, owner, name, value, *, expected, element=0, allow_mutation=False, catalog=None):
         self._check()
         return self._session.assign_object(obj, owner, name, value, expected=expected,
-                                           element=element, allow_mutation=allow_mutation)
+                                           element=element, allow_mutation=allow_mutation, catalog=catalog)
 
     def invoke_retained(self, obj, function, **arguments):
         self._check()
@@ -270,14 +270,14 @@ class SessionScope:
         self._check()
         return self._session.failures
 
-    def prepare_menu(self, widget, child, player, *, z_order=1000):
+    def prepare_menu(self, widget, child, player, *, z_order=1000, catalog=None):
         """Prepare native lifecycle ownership for this scope's retained widgets."""
         self._check()
         from .menu import prepare
         self._menus = [menu for menu in self._menus if menu.active]
         before = set(self._session._menus)
         try:
-            return prepare(self._session, widget, child, player, self._leases, z_order=z_order)
+            return prepare(self._session, widget, child, player, self._leases, z_order=z_order, catalog=catalog)
         finally:
             self._menus.extend(self._session._menus - before)
 

@@ -20,6 +20,36 @@ def fixture():
 
 
 class CatalogTests(unittest.TestCase):
+    def test_combined_closure_matches_full_revalidation_without_mutating_inputs(self):
+        objects, classes = fixture()
+        old = Catalog(123, objects[:-1], classes)
+        observed = Catalog(123, objects, classes)
+        merged = old.with_observations(observed)
+        rebuilt = Catalog(123, merged.objects, tuple(merged.classes.values()))
+        self.assertEqual(merged.objects, rebuilt.objects)
+        self.assertEqual(merged.classes, rebuilt.classes)
+        for cls in classes:
+            self.assertEqual(merged.ancestors(cls.index), rebuilt.ancestors(cls.index))
+            self.assertEqual(merged.select(cls.name), rebuilt.select(cls.name))
+        self.assertEqual(merged.outer_chain(merged.by_index[5]), rebuilt.outer_chain(rebuilt.by_index[5]))
+        self.assertNotIn(5, old.by_index)
+        changed = Catalog(123, [replace(o, outer_index=-1, outer_serial=0) if o.index == 5 else o
+                               for o in objects], classes)
+        updated = merged.with_observations(changed)
+        self.assertEqual(len(updated.outer_chain(updated.by_index[5])), 1)
+        self.assertEqual(len(merged.outer_chain(merged.by_index[5])), 2)
+
+    def test_combined_new_class_keeps_ambiguity_checks_and_old_name_index(self):
+        objects, classes = fixture()
+        old = Catalog(123, objects[:3] + [objects[4]], classes[:3])
+        classes[3] = replace(classes[3], name='Actor')
+        objects[3] = replace(objects[3], name='Actor')
+        objects[5] = replace(objects[5], class_name='Actor')
+        merged = old.with_observations(Catalog(123, objects, classes))
+        with self.assertRaises(RuntimeQueryError): merged.find_class('Actor')
+        self.assertEqual(old.find_class('Actor').index, 2)
+        self.assertEqual(merged.ancestors(3), (3, 2, 0))
+
     def test_subclass_and_ownership(self):
         c = Catalog(123, *fixture())
         self.assertEqual([o.index for o in c.select('Actor')], [4, 5])

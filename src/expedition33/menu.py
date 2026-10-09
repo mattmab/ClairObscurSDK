@@ -135,7 +135,7 @@ class NativeMenu:
     def __exit__(self, *_exc): self.close()
 
 
-def prepare(session, widget, child, player, leases, *, z_order=1000):
+def prepare(session, widget, child, player, leases, *, z_order=1000, catalog=None):
     session._check()
     if getattr(session._transport, 'menu_protocol', 0) != 1:
         raise MenuError('Menu ownership requires v14', outcome='not_started')
@@ -153,7 +153,13 @@ def prepare(session, widget, child, player, leases, *, z_order=1000):
                    (obj.pid,obj.index,obj.serial,obj.address))
     selected = (owned(widget), owned(child))
     if selected[0] is selected[1]: raise ValueError('Menu widget and child need distinct owned leases')
-    catalog = capture()
+    if catalog is None:
+        catalog = capture()
+    else:
+        from .catalog import Catalog
+        if not isinstance(catalog, Catalog) or catalog.pid != session.pid:
+            raise ValueError('Expected a planning catalog from this process')
+    # Observations only: every plan and menu identity is validated natively.
     widget, child, player = (catalog.resolve(obj) for obj in (widget, child, player))
     library = one(o for o in catalog.select('WidgetBlueprintLibrary') if o.name=='Default__WidgetBlueprintLibrary')
     engine = one(o for o in catalog.select('GameEngine') if not o.object_flags & 0x10)

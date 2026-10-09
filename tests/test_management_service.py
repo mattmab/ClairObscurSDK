@@ -1,4 +1,5 @@
 import unittest
+from contextlib import nullcontext
 from types import SimpleNamespace
 from unittest.mock import Mock, patch
 
@@ -58,7 +59,11 @@ class ChildScopeTests(unittest.TestCase):
 
 
 class NativeServiceTests(unittest.TestCase):
-    setUp = test_management.ManagementTests.setUp
+    def setUp(self):
+        test_management.ManagementTests.setUp(self)
+        patcher = patch('expedition33.management_native.NativeManagementMenu._read_operation',
+                        side_effect=lambda: nullcontext())
+        patcher.start(); self.addCleanup(patcher.stop)
     tearDown = test_management.ManagementTests.tearDown
 
     def service(self):

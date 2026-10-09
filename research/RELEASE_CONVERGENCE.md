@@ -145,3 +145,46 @@ but not a responsive release menu. Completion remains51%; no keybind or
 packaging credit is claimed. Repeated process-backed reader startup is now the
 next measured target, followed by the remaining full captures and observation
 merge overhead if needed. No native DLL was rebuilt or replaced for these fixes.
+
+## Operation-scoped reader and catalog reuse (2026-10-09)
+
+Menu open/close now own a read-only child process for that operation. The worker
+verifies the build and resolves disk anchors once under a deny-write/delete file
+handle, pins the original process, and rechecks process/module/file identity and
+live anchor bytes for every request. Runtime observations remain fresh reads.
+Both protocol layers reject mutation commands; failed/truncated/malformed replies
+close the worker without a retry or one-shot fallback. Closing the operation
+closes its child, which owns no game hooks, widgets or retained values.
+
+The live ten-query equality benchmark took 3.421 seconds with ordinary queries
+versus 0.446 seconds with the worker, including startup. Worker exit was zero,
+the reader thread stopped, and a direct native mutation opcode was rejected.
+The first integrated menu profile was 18.696 seconds open / 6.882 seconds close.
+
+Explicit same-process planning catalogs now eliminate redundant assignment and
+menu-preparation scans. Merging already validated observations preserves identity
+and class-relation checks without rebuilding every unchanged class index. Native
+schema checks, object identity, compare-and-swap and lease ownership are unchanged.
+The resulting live profile was 10.191 seconds open / 4.276 seconds close, with
+two full captures instead of four. All twelve controls rendered. Before/open/after
+assertions passed for shared registry, restored viewport focus, zero child scopes
+and the exact retained-holder baseline. These runs used existing PID39900, not
+fresh-game acceptance. All 392 unit tests passed.
+
+Raw evidence: readonly-worker-benchmark.json;
+management-profile-readonly-worker.{json,prof},
+management-profile-readonly-worker-close.json, readonly-worker-{before,open,after}.json;
+management-profile-worker-catalog.{json,prof},
+management-profile-worker-catalog-close.json, worker-catalog-{before,open,after}.json;
+menu-worker-catalog-regression.log; logs/readonly-worker-host.log and
+logs/worker-catalog-host.log. Profile timings include instrumentation overhead.
+The timing helper now supports profile=False with separate timing artifacts.
+The frozen completion score remains 51% pending the user-facing performance gate.
+
+The subsequent unprofiled rebuild measured 9.493 seconds open, 0.193 seconds
+refresh and 3.968 seconds close. All before/open/after assertions passed again.
+Evidence: management-timing-{open,refresh,close}.json and
+worker-timing-{before,open,after}.json. Refresh is not a measured physical-click
+navigation test. Opening still misses the five-second target. Remaining measured
+cost includes two full captures and per-line cross-thread reader delivery;
+optimize that delivery before considering additional native engine primitives.

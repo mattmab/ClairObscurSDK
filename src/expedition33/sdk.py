@@ -194,15 +194,17 @@ class Session:
         return (self.supports_retained_invocation and self.supports_pod_values and
                 getattr(self._transport, 'text_value_protocol', 0) == 1)
 
-    def assign_object(self, obj, owner, name, value, *, expected, element=0, allow_mutation=False):
+    def assign_object(self, obj, owner, name, value, *, expected, element=0, allow_mutation=False, catalog=None):
         """Assign an ObjectProperty with an explicit old value and temporary leases.
 
         Does not roll back on scope/session closure. Never retry unknown outcomes.
+        An explicit catalog is a planning observation only; schema is read now
+        and native identity/schema/compare-and-swap validation still applies.
         """
         self._check()
         from .assignment import assign
         return assign(self, obj, owner, name, value, expected=expected,
-                      element=element, allow_mutation=allow_mutation)
+                      element=element, allow_mutation=allow_mutation, catalog=catalog)
 
     @property
     def pid(self):
