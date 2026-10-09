@@ -91,3 +91,34 @@ It removed the owned tree and restored the exact strong-holder baseline.
 Evidence: `button-events-live.json`, `button-event-specimen-live.json`,
 `button-event-specimen-run.log`. These corroborate live storage and identity,
 not a validated event hook, callback ABI under execution or teardown adapter.
+
+## Concrete Slate owner candidate
+
+The live-correlated reference-controller vtable6e65f20 has destroy-object entry
+1632a80 (calls161aee0 on controller+10) and destroy-controller entry161d960
+(resets the base controller vtable and frees a398-byte allocation when requested).
+Allocation1610f90 initializes strong/weak counts at8/c, constructs the embedded
+388-byte SButton at10 and follows the same decrement/destroy/weak-release order
+as the independently verified viewport controller. Evidence:
+`button-reference-vtable.json`, `button-reference-functions.json`.
+
+`target_slate_reference.h` now uses compile-time profiles for these two exact
+target types. The existing viewport alias keeps its original verified constants;
+the SButton profile has its own vtables/destructor entries. No generic arbitrary
+addresses or destructor callbacks are accepted from Python. The same durable
+OwnedSlateReference states guard acquisition/release and quarantine interruption.
+
+`target_button_reference.h` adds a candidate that checks the exact live Button
+class and identity, game-thread/GC/exit context, cached shared owner, delegate
+vtable/allocation units, weak identity, original click method and adjustment.
+It publishes its capture before acquisition and can later detect changed Slate
+or delegate storage. Holding the SButton can protect its allocation while an
+adapter unregisters, but does not by itself prevent delegate replacement or
+solve copied callbacks. The caller must keep the UButton lease and revoke any
+event adapter before releasing the captured Slate owner.
+
+Validation: existing native lifecycle/reference/request/session fixtures pass;
+the new capture adapter and v13/v14 runtime translation units compile with /W4
+/WX (`button-reference-candidate-build.log`). No loaded DLL was rebuilt. SButton
+native retention/release is NOT live-validated or installed; it is a prerequisite
+candidate for the eventual callback adapter, not a completed click API.

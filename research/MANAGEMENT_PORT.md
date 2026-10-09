@@ -649,3 +649,11 @@ cloning copies the callback pointer, so a single-slot swap/restore is insufficie
 proof of teardown. Next choose and verify an owned delegate/receiver mechanism
 with bounded transport events and persistent Python dispatch before adding menu
 actions. No button callback hook or action registration is implemented yet.
+
+The SButton reference-controller allocation and destruction path are now traced,
+with a compile-tested exact-build ownership candidate sharing the existing
+durable reference state machine. It validates the live Button/delegate chain
+before capturing an independent Slate owner, which is needed to unregister an
+event adapter before detaching widgets. Actual SButton retention and callback
+delivery still require isolated native/live validation; cloning remains a
+separate unregistration constraint. See BUTTON_EVENTS.md.

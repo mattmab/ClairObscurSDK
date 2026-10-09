@@ -1,5 +1,13 @@
 #include "target_menu_focus.h"
 #include "target_menu_ops.h"
+#include "target_button_reference.h"
+SlateReferenceResult compile_button_reference(TargetButtonReference& storage,uint64_t base,const CallIdentity& button) {
+    auto result=storage.capture(base,button);
+    if(result!=SlateReferenceResult::Ok) return result;
+    auto valid=storage.unchanged(base);
+    result=storage.release(base);
+    return valid ? result : SlateReferenceResult::Invalid;
+}
 SlateReferenceResult compile_menu_capture(TargetMenuFocusOwner& owner,uint64_t base,const CallIdentity& engine) {
     return owner.capture(base,engine);
 }
