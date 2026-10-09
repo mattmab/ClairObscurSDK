@@ -21,7 +21,7 @@ class Mod:
                 Action('request', 'Explorer JSON request', self.request)))
 
     def enable(self, session):
-        self.harness = Harness()
+        self.harness = Harness(session=session)
         session.console.expose('introspection', self.harness)
         self._commands.append(session.console.register(
             'e33i.status', lambda _args: self.request({'op': 'status'}), owner=self))

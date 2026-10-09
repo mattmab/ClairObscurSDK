@@ -510,6 +510,12 @@ engine-owned value construction/cleanup and retention for nontrivial types; then
 wire the general call API into the unchanged original Explorer invoke operation.
 # Reflected invocation candidate — 2026-10-09
 
+Follow-up: the candidate is now exposed through opt-in `Session(reflected=True)`
+and borrowed-session Harness `invoke`. Live SDK, Harness and in-game Python
+console getter paths passed;93 tests pass. See INVOCATION.md for usage, named out
+parameter differences, non-owning result limits and the remaining parity gates.
+`launch.cmd management --reflected` selects this path; default v5 remains available.
+
 The isolated v6 native session now accepts bounded, identity-bearing call plans
 and revalidates them on the game thread. It compares target/function identities,
 function ownership and metadata, parameter layout, native thunk RVA, primitive
@@ -529,7 +535,7 @@ Wire outcomes distinguish not_dispatched, dispatch_returned and unknown. A
 dispatcher returning does not prove an RPC/body executed; faults/timeouts must
 never trigger automatic retry. Object bytes are represented by separately
 validated identity observations, not owned/retained native values. Public
-Session.call and Harness invoke are not expanded by this candidate. Native
+Session.call was not expanded by the initial candidate. Native
 strings, names, enums, structs/FKey, containers, Blueprint frames, retained
 objects and widget creation remain unsupported or unvalidated.
 

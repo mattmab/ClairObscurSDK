@@ -1,4 +1,4 @@
-"""Build invocation arguments from observed metadata. No dispatch is exposed yet.
+"""Plan typed invocation arguments and decode copied, non-owning results.
 
 Plans are immutable observations, not authority to call an address. The native
 game-thread backend must revalidate every identity and layout, materialize object
@@ -9,7 +9,8 @@ from dataclasses import dataclass
 import math
 import struct
 
-from . import ObjectSnapshot
+from types import MappingProxyType
+from . import ObjectSnapshot, RuntimeQueryError
 from .reflection import describe
 
 PARM, OUT, RETURN, REFERENCE = 0x80, 0x100, 0x400, 0x8000000
@@ -17,6 +18,76 @@ PARM, OUT, RETURN, REFERENCE = 0x80, 0x100, 0x400, 0x8000000
 
 class UnsupportedInvocation(ValueError):
     pass
+
+
+class InvocationError(RuntimeQueryError):
+    """Failure with an explicit dispatch outcome. Never retry automatically."""
+    def __init__(self, message, *, outcome, native_error=None):
+        super().__init__(f'{message} [outcome={outcome}; do not retry automatically]')
+        self.outcome, self.native_error = outcome, native_error
+
+
+@dataclass(frozen=True)
+class InvocationResult:
+    return_value: object
+    outputs: object
+    outcome: str = 'dispatch_returned'
+
+
+def decode_result(plan, reply, catalog):
+    """Decode copied results using a fresh catalog; references are not retained."""
+    if reply.outcome != 'dispatch_returned' or reply.error:
+        raise InvocationError(f'Native invocation rejected or incomplete ({reply.error})',
+                              outcome=reply.outcome, native_error=reply.error)
+    try:
+        if catalog.pid != plan.target.pid or len(reply.data) != plan.parameter_size:
+            raise ValueError('Result process or parameter extent changed')
+        references = {}
+        for offset, index, serial, address in reply.objects:
+            if offset in references:
+                raise ValueError('Duplicate result reference')
+            observed = catalog.by_index.get(index)
+            if observed is None or observed.serial != serial or observed.address != address:
+                raise ValueError('Returned object no longer matches the live registry')
+            references[offset] = observed
+        value, outputs = None, {}
+        valid_slots = set()
+        for parameter in plan.parameters:
+            values = []
+            for element in range(parameter.dimension):
+                at = parameter.offset + element * parameter.width
+                if parameter.kind in ('ObjectProperty', 'ClassProperty'):
+                    valid_slots.add(at)
+                    if any(reply.data[at:at + 8]):
+                        raise ValueError('Raw pointer in result buffer')
+                    item = references.get(at)
+                    constraint = catalog.resolve(parameter.constraint)
+                    if item is not None:
+                        cls = item.index if parameter.kind == 'ClassProperty' else item.class_index
+                        if parameter.kind == 'ClassProperty' and cls not in catalog.classes:
+                            raise ValueError('Class result is not a class object')
+                        if constraint.index not in catalog.ancestors(cls):
+                            raise ValueError('Returned object violates its class constraint')
+                elif parameter.kind == 'BoolProperty':
+                    encoding = parameter.boolean_encoding
+                    bits = reply.data[at + ((encoding >> 8) & 255)] & (encoding >> 24)
+                    if bits not in (0, (encoding >> 16) & 255):
+                        raise ValueError('Invalid result bool encoding')
+                    item = bool(bits)
+                else:
+                    item = struct.unpack_from('<' + _FORMATS[parameter.kind][0], reply.data, at)[0]
+                values.append(item)
+            decoded = tuple(values) if parameter.dimension > 1 else values[0]
+            if parameter.flags & RETURN:
+                value = decoded
+            elif parameter.flags & OUT:
+                outputs[parameter.name] = decoded
+        if set(references) - valid_slots:
+            raise ValueError('Unexpected result reference slot')
+        return InvocationResult(value, MappingProxyType(outputs))
+    except (ValueError, KeyError, IndexError, struct.error, RuntimeQueryError) as error:
+        raise InvocationError(f'Dispatch returned but result validation failed: {error}',
+                              outcome='dispatch_returned') from error
 
 
 @dataclass(frozen=True)

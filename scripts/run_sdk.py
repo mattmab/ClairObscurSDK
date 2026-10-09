@@ -7,6 +7,7 @@ from logging.handlers import RotatingFileHandler
 from pathlib import Path
 import sys
 import time
+from contextlib import nullcontext
 
 ROOT = Path(__file__).resolve().parents[1]
 if sys.version_info[:3] != (3, 13, 15):
@@ -27,6 +28,7 @@ sys.path.insert(0, str(ROOT / 'src'))
 import expedition33
 from expedition33.mods import ModLoader
 from expedition33.settings import SettingsStore
+from expedition33.sdk import Session
 
 if not Path(expedition33.__file__).resolve().is_relative_to(ROOT):
     raise SystemExit('SDK import resolved outside this bundle')
@@ -36,7 +38,10 @@ def main():
     parser.add_argument('command', choices=['objects', 'example', 'smoke', 'console', 'introspection', 'management'])
     parser.add_argument('--seconds', type=float, default=0, help='Console duration; 0 runs until Ctrl+C')
     parser.add_argument('--console-key', choices=[f'F{i}' for i in range(1, 13)], help='Optional additional console toggle')
+    parser.add_argument('--reflected', action='store_true', help='Use experimental v6 reflected invocation backend')
     args = parser.parse_args()
+    if args.reflected and args.command not in ('console', 'introspection', 'management'):
+        parser.error('--reflected requires console, introspection or management')
     log_dir = ROOT / 'logs'
     log_dir.mkdir(exist_ok=True)
     logging.basicConfig(level=logging.INFO, format='%(asctime)s %(levelname)s %(name)s: %(message)s',
@@ -48,7 +53,8 @@ def main():
             store = SettingsStore(ROOT / 'settings/management.json') if args.command == 'management' else None
             if store is not None and store.recovery:
                 log.warning('Management settings recovery: %s', store.recovery)
-            with ModLoader(ROOT / 'mods', settings=store) as loader:
+            with (Session(reflected=True) if args.reflected else nullcontext(None)) as runtime, \
+                    ModLoader(ROOT / 'mods', settings=store, session=runtime) as loader:
                 if args.command == 'management':
                     loader.load('SDKManagement')
                     loader.enable('SDKManagement', console=True, console_key=args.console_key)

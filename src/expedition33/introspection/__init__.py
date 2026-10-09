@@ -60,6 +60,32 @@ class _Object:
     def __getattr__(self, name):
         if name.startswith('_'):
             raise AttributeError(name)
+        if self._backend.session is not None:
+            for owner in self._backend.catalog.ancestors(self._observed.class_index):
+                matches = [fn for fn in self._backend.function_children.get(owner, ()) if fn.name == name]
+                if len(matches) > 1:
+                    raise RuntimeQueryError('Ambiguous reflected member')
+                if matches:
+                    function = matches[0]
+                    def invoke(**arguments):
+                        def unwrap(value):
+                            if isinstance(value, _Object): return value._observed
+                            if type(value) in (list, tuple): return tuple(unwrap(item) for item in value)
+                            return value
+                        result = self._backend.session.invoke(self._observed, function,
+                            **{key: unwrap(value) for key, value in arguments.items()})
+                        try:
+                            self._backend.refresh()
+                            returned = _adapt(self._backend, result.return_value)
+                            if not result.outputs:
+                                return returned
+                            return {'return': returned, 'out': {key: _adapt(self._backend, value)
+                                    for key, value in result.outputs.items()}}
+                        except RuntimeQueryError as error:
+                            from ..invocation import InvocationError
+                            raise InvocationError(f'Dispatch returned; Harness result observation failed: {error}',
+                                                  outcome='dispatch_returned') from error
+                    return invoke
         if self._observed.index not in self._backend.observations:
             self._backend.observations[self._observed.index] = read_values(self._backend.catalog, self._observed)
         observation = self._backend.observations[self._observed.index]
@@ -136,7 +162,8 @@ class _Backend:
     unreal = SimpleNamespace(UObject=_Object, UFunction=_Function,
         WrappedStruct=_StructValue, WrappedArray=StoredArray)
 
-    def __init__(self):
+    def __init__(self, session=None):
+        self.session = session
         self.catalog = None
         self.descriptors, self.properties, self.function_children = {}, {}, {}
         self.observations = {}
@@ -157,6 +184,7 @@ class _Backend:
         self.observations.clear()
 
     def wrap(self, obj):
+        obj = self.catalog.resolve(obj)
         lineage = self.catalog.ancestors(obj.class_index)
         kind = _Function if self._function_class in lineage else _Struct if self._struct_class in lineage else _Object
         return kind(self, obj)
@@ -204,9 +232,11 @@ class Harness:
     """Persistent original Explorer with an external owner-thread SDK adapter."""
     SUPPORTED = frozenset(('status', 'roots', 'search', 'schema', 'inspect', 'snapshot', 'diff'))
 
-    def __init__(self):
+    def __init__(self, session=None):
         self._owner = threading.get_ident()
-        self._backend = _Backend()
+        enabled = session is not None and session.supports_reflected_invocation
+        self.SUPPORTED = type(self).SUPPORTED | (frozenset(('invoke',)) if enabled else frozenset())
+        self._backend = _Backend(session if enabled else None)
         self._explorer = _Explorer(self._backend)
         self._closed = False
         self._running = False
@@ -221,6 +251,8 @@ class Harness:
         if request['op'] not in self.SUPPORTED:
             raise UnsupportedCapability(
                 f"{request['op']!r} is not ported yet; see research/INTROSPECTION_PORT.md")
+        if request['op'] == 'invoke' and request.get('retain') is not None:
+            raise UnsupportedCapability('Retained native result ownership is not implemented; no call dispatched')
         self._running = True
         try:
             if request['op'] not in ('status', 'diff'):
@@ -242,13 +274,15 @@ class Harness:
                 result['original_operations'] = result['operations']
                 result['operations'] = sorted(self.SUPPORTED)
                 result['original_argument_types'] = result['argument_types']
-                result['argument_types'] = []
+                result['argument_types'] = (['primitive', '$object', 'fixed_array'] if 'invoke' in self.SUPPORTED else [])
                 result['parity_complete'] = False
                 result['limitations'] = ['Stored scalars, strings, references, selected arrays and bounded reflected structs; opaque native state is not owned',
-                    'Writes, invocation, traces and agent bridge pending',
+                    'Writes, traces and agent bridge pending; invocation requires opt-in v6 and supported parameter types',
+                    'Invocation retain and opaque native values unsupported; out parameters use named return/out result fields',
                     'Container/string/enum-valued struct members, map/set and additional property variants pending',
                     'Function pages use registry identity order within each declaring class']
-                result['execution'] = 'external Python owner thread; read-only native catalog'
+                result['execution'] = ('external Python owner thread; native calls on game thread' if 'invoke' in self.SUPPORTED
+                                       else 'external Python owner thread; read-only native catalog')
             return result
         finally:
             self._backend.clear()

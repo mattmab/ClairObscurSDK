@@ -278,7 +278,11 @@ pre-dispatch rejection cases; only run it after cooperative shutdown of any
 existing SDK host, and restore the persistent host afterward. The v6 DLL is
 pinned until game exit, so do not rebuild over it while that game is running.
 
-The candidate is not enabled by the public Session.call/Harness invoke APIs and
-is not in the existing private v0.1 ZIP. Native UMG, arbitrary key dispatch,
+Follow-up: `Session(reflected=True).invoke` and borrowed-session Harness invoke
+are now available, including `launch.cmd management --reflected`;93 tests pass
+and the live SDK/Harness/in-game-console getter paths passed. See
+research/INVOCATION.md for supported types and limits. Session.call retains the
+fixed getter. This feature is not in the existing private v0.1 ZIP.
+Native UMG, arbitrary key dispatch,
 native value ownership, full harness parity and game-relaunch validation remain
 open. Details and evidence references are in research/INTROSPECTION_PORT.md.

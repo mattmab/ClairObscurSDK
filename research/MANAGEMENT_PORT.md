@@ -345,6 +345,10 @@ or authorize borrowing/copying those pointers. Evidence:
 evidence/invoke-lifetime-paths.json and key-details-path.json.
 # Invocation progress — 2026-10-09
 
+The transport is now accessible to scoped mods and the persistent Harness through
+the opt-in v6 host. The live console-to-Python-to-Harness-to-engine getter passed.
+See INVOCATION.md. Native UMG ownership/focus and keybind acceptance remain open.
+
 An isolated v6 game-thread dispatcher passed the live read-only
 Controller.IsLocalController specimen and rejection checks. See
 INTROSPECTION_PORT.md for the exact tested boundary. This removes the missing

@@ -95,6 +95,15 @@ class SessionScope:
         self._check()
         return self._session.call(obj, target)
 
+    @property
+    def supports_reflected_invocation(self):
+        self._check()
+        return self._session.supports_reflected_invocation
+
+    def invoke(self, obj, function, **arguments):
+        self._check()
+        return self._session.invoke(obj, function, **arguments)
+
     def hook(self, obj, target, callback):
         self._check()
         if not callable(callback):
