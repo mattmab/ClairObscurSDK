@@ -27,6 +27,10 @@ def main(argv=None):
     for verb in ('enable', 'disable'):
         lifecycle = sub.add_parser(verb, help=f'{verb.title()} an already-loaded mod')
         lifecycle.add_argument('mod', help='Loader folder name from mods')
+    for verb in ('reload', 'reload-changed'):
+        lifecycle = sub.add_parser(verb, help='Reload installed mod.py; dependencies and staged archives excluded')
+        lifecycle.add_argument('mod', help='Already-loaded non-core mod folder')
+        lifecycle.add_argument('--expected-sha256', required=True, help='SHA256 of installed mod.py bytes')
     logs = sub.add_parser('logs', help='Read a bounded SDK log tail')
     logs.add_argument('--contains', default='')
     logs.add_argument('--limit', type=int, default=30)
@@ -43,6 +47,11 @@ def main(argv=None):
             request = {'op': 'action', 'name': args.name, 'args': values}
         elif args.op in ('enable', 'disable'):
             request = {'op': 'mod_' + args.op, 'mod': args.mod}
+        elif args.op in ('reload', 'reload-changed'):
+            if len(args.expected_sha256) != 64 or any(c not in '0123456789abcdef' for c in args.expected_sha256):
+                raise ValueError('--expected-sha256 must be 64 lowercase hex characters')
+            request = {'op': 'mod_reload' if args.op == 'reload' else 'reload_changed_mod',
+                       'mod': args.mod, 'expected_sha256': args.expected_sha256}
         else:
             request = {'op': 'logs', 'contains': args.contains, 'limit': args.limit}
         request['allow_mutation'] = args.allow_mutation

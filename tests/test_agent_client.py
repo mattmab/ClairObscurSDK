@@ -23,6 +23,10 @@ class AgentClientTests(unittest.TestCase):
             (['action', 'sample.add', '--args', '{"n":3}'], {'op': 'action', 'name': 'sample.add', 'args': {'n':3}}),
             (['enable', 'Sample'], {'op': 'mod_enable', 'mod': 'Sample'}),
             (['disable', 'Sample'], {'op': 'mod_disable', 'mod': 'Sample'}),
+            (['reload', 'Sample', '--expected-sha256', 'a' * 64],
+             {'op': 'mod_reload', 'mod': 'Sample', 'expected_sha256': 'a' * 64}),
+            (['reload-changed', 'Sample', '--expected-sha256', 'b' * 64],
+             {'op': 'reload_changed_mod', 'mod': 'Sample', 'expected_sha256': 'b' * 64}),
             (['logs', '--contains', 'match', '--limit', '2'], {'op': 'logs', 'contains': 'match', 'limit':2})]
         for argv, expected in examples:
             code, _, sender = self.call(['--allow-mutation', '--timeout', '27', '--data', 'custom'] + argv)
@@ -40,6 +44,9 @@ class AgentClientTests(unittest.TestCase):
             self.assertEqual(sender.call_count, 1)
 
     def test_local_validation_and_unknown_outcome_do_not_retry(self):
+        code, _, sender = self.call(['reload', 'Sample', '--expected-sha256', 'invalid'])
+        self.assertEqual(code, 1)
+        sender.assert_not_called()
         for text in ('{', '[]', 'null'):
             code, _, sender = self.call(['action', 'test', '--args', text])
             self.assertEqual(code, 1)

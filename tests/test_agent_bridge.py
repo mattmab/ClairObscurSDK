@@ -56,7 +56,8 @@ class AgentTests(unittest.TestCase):
         self.assertFalse(self.request(op='action', name='specimen.add', args={'n': 2})['success'])
         self.assertTrue(self.request(op='mod_enable', mod='Specimen', allow_mutation=True)['success'])
         self.assertEqual(self.request(op='mod_list')['result'],
-        [{'name': 'Specimen', 'enabled': True, 'version': 'test', 'cleanup_error': None}])
+        [{'name': 'Specimen', 'enabled': True, 'version': 'test', 'cleanup_error': None,
+          'source_sha256': self.loader.status()[0].source_sha256}])
 
     def test_failure_diagnostics_no_retry_mutation_and_reentry(self):
         scope = self.loader._loaded['Specimen'][2]
@@ -144,7 +145,7 @@ class AgentTests(unittest.TestCase):
         self.assertTrue(result['success'])
         self.assertEqual(result['result'], 10)
         self.assertIn('dev_status', harness.request({'op': 'status'})['operations'])
-        self.assertNotIn('mod_reload', harness.SUPPORTED)
+        self.assertIn('mod_reload', harness.SUPPORTED)
         for name in ('IntrospectionHarness', 'SDKManagement'):
             self.assertFalse(self.request(op='mod_disable', mod=name, allow_mutation=True)['success'])
 

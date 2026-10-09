@@ -898,3 +898,56 @@ the cleanup error in mod_list. Evidence: evidence/reload-cleanup-tests.log.
 This is source/test validation, not a live fault-injection claim; the running
 immutable candidate remains on its previously validated code. Staged digest
 reload, dependency replacement and original core reload are still pending.
+
+## Digest-checked installed entry-point reload — 2026-10-09
+
+Implemented ModLoader.reload and Registry.reload, plus original protocol names
+mod_reload and reload_changed_mod. CLI commands are reload and reload-changed,
+with required --expected-sha256 and global --allow-mutation. The digest covers
+exact installed mod.py bytes (maximum 4 MiB), not an archive or dependency tree.
+mod_list exposes the digest of the source actually loaded. The original staged
+.sdkmod installer, dependency replacement and core reload are still pending;
+dev_status explicitly describes this narrower adapter scope.
+
+Reload requires an already-loaded, non-protected, non-servicing-core mod. It
+captures and compiles source, checks the supplied lowercase SHA256, then cleans
+up the old scope before executing the captured code under a new module identity.
+No timestamp-based .pyc cache can replace verified source. Edits during cleanup
+cannot change the captured replacement. reload_changed_mod skips only when the
+captured digest matches loaded source. Enabled/disabled state is preserved;
+Registry selections and old scoped actions become stale. The sole owned Session
+and its persistent Python namespace survive successful replacement. There is no
+automatic rollback or retry after cleanup/import/enable failure. Failed cleanup
+blocks replacement through the previous milestone's loader-lifetime guard.
+Import/enable failures after cleanup may leave the mod absent or disabled; inspect
+mod_list before attempting recovery. No running core module is hot-reloaded.
+
+All314 tests pass, covering bad hashes, syntax rejection before cleanup, same-size
+and same-timestamp stale bytecode, edits during cleanup, cleanup failure, import
+failure without rollback, stale actions/selections, disabled-state preservation,
+protected-mod rejection, and sole-session/namespace preservation. CLI tests cover
+both operations and local digest validation. Evidence: evidence/mod-reload-tests.log.
+
+LIVE PROVEN on game39900 after normal package-controller shutdown (exit0): the
+source controller's persistent native console ran scripts/verify_live_mod_reload.py
+against a borrowed live Session. Two retained research sources produced different
+labels while both called Actor.IsActorBeingDestroyed on the game thread. Consent
+and wrong-digest rejection, old-scope revocation, one active replacement hook,
+unchanged-source skip, final disable and stale action rejection passed. Hook count
+returned from one to the original zero baseline. The original installed example
+was not modified. Raw evidence and both sources:
+evidence/mod-reload-545123a1205043a38e4823a0629c5158/.
+
+The main Harness file transport also accepted CLI reload of disabled
+ManagementExample and reload-changed then reported changed=false. Session was
+2b610a0521904902a39949867b8fbb03. Evidence: evidence/mod-reload-cli.json,
+evidence/mod-reload-cli-unchanged.json and logs/mod-reload-host.log. Borrowed-session
+replacement is live-validated; sole-owned-session preservation is unit-tested.
+No new release package or gameplay/travel validation is claimed.
+
+Example (hash the installed file after editing; never reuse a pre-edit digest):
+
+```text
+python -I -S -B scripts/e33_agent.py --allow-mutation reload MyMod --expected-sha256 <64-lowercase-hex-digest>
+python -I -S -B scripts/e33_agent.py --allow-mutation reload-changed MyMod --expected-sha256 <64-lowercase-hex-digest>
+```

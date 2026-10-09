@@ -57,6 +57,7 @@ class BoundedText(io.TextIOBase):
 
 class AgentBridge:
     OPERATIONS = frozenset(('dev_status', 'mod_list', 'mod_enable', 'mod_disable',
+                           'mod_reload', 'reload_changed_mod',
                            'action', 'call_debug_action', 'run_test_action', 'logs'))
 
     def __init__(self, registry, log_path):
@@ -155,15 +156,17 @@ class AgentBridge:
         if op == 'dev_status':
             return dict(transport='local files; no network listener', allow_dev_exec=False,
                 raw_exec_supported=False, execution='external Python owner thread',
-                adapters={'registry': ['mod_list', 'mod_enable', 'mod_disable']},
-                unsupported=['mod_reload', 'reload_changed_mod', 'kart_*'],
+                adapters={'registry': ['mod_list', 'mod_enable', 'mod_disable',
+                                      'mod_reload', 'reload_changed_mod']},
+                reload_scope='installed mod.py bytes only; expected_sha256 required; no dependency/core reload',
+                unsupported=['staged_archive_install', 'core_reload', 'kart_*'],
                 actions=[dict(name=n, **{k: v for k, v in a.items()
                     if k not in ('callback', 'token')}) for n, a in self.actions.items()], last=self.last)
         if op == 'mod_list':
             return [dict(name=v['folder'], enabled=v['enabled'], version=v['version'],
-                         cleanup_error=v.get('cleanup_error'))
+                         cleanup_error=v.get('cleanup_error'), source_sha256=v.get('source_sha256'))
                     for v in self.registry.views()][:128]
-        if op in ('mod_enable', 'mod_disable'):
+        if op in ('mod_enable', 'mod_disable', 'mod_reload', 'reload_changed_mod'):
             if request.get('allow_mutation') is not True:
                 raise ValueError('This action requires allow_mutation: true')
             name = request.get('mod')
@@ -172,6 +175,10 @@ class AgentBridge:
             rows = [v for v in self.registry.views() if v['folder'] == name]
             if len(rows) != 1:
                 raise ValueError('Mod must already be loaded')
+            if op in ('mod_reload', 'reload_changed_mod'):
+                return self.registry.reload(self.registry.select(rows[0]['id']),
+                    expected_sha256=request.get('expected_sha256'),
+                    changed_only=op == 'reload_changed_mod')
             selection = self.registry.set_enabled(self.registry.select(rows[0]['id']), op == 'mod_enable')
             return {'enabled': self.registry.view(selection)['enabled']}
         if op == 'logs':
