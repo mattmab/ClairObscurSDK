@@ -102,3 +102,35 @@ values; schema-specific copying and object identity conversion are still needed.
 No live frame was read, no trace hook was installed, no resident DLL was replaced,
 and Harness trace operations remain unavailable. Next work is immutable observer
 slots and game-thread schema/frame validation followed by live capture proof.
+
+## Immutable observer-slot lifecycle fixture — 2026-10-09
+
+native/trace_slots.h adds a candidate pool of distinct native thunks with immutable
+original function pointers. The default supports16 simultaneous registrations
+and128 lifetime slots per module. Published slots are never reassigned, including
+after removal; late callers cannot reach a later registration's event context.
+Failed publication can also consume a slot. Exhaustion currently returns failure
+and must become an explicit transport/API diagnostic rather than silent reuse.
+
+Installation pins the containing module, publishes the original before the thunk,
+and uses compare/exchange against the expected function entry. Original execution
+runs outside the storage lock. POST delivery checks registration state again under
+the lock, so removal during the original call suppresses the pending observation.
+The POST collector must do bounded copying only, never engine/Python calls or
+registration operations while holding that lock. Normal remove detaches context
+regardless of slot conflict and never overwrites a third-party entry. Terminal
+storage detach touches no engine address and permanently prevents new installs.
+
+scripts/test-trace-slots.cmd compiles with /W4 /WX and runs a C++ fixture covering
+two independent functions, active limits, a retained old callback after replacement,
+concurrent in-flight removal with the original blocked on another thread, external
+entry conflict, terminal detach with a callback still published, and lifetime
+exhaustion. All passed; raw evidence is evidence/trace-slots-fixture.log. This is
+an executable fixture, not code installed in the game. No resident DLL changed.
+
+The runtime adapter must still validate target/function identities, entry ownership,
+game-thread mutation and slot lifetime before install/remove. The pool does not
+establish those facts or decode FFrame. A function-identity/schema layer, bounded
+event queue, versioned transport, live frame proof and Harness integration remain
+required. Multiple subscriptions to one function also need coordinated ownership;
+the current primitive rejects a second active registration at the same address.
