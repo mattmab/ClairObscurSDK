@@ -11,8 +11,9 @@ sys.path.insert(0, str(ROOT / 'src'))
 from expedition33 import sdk
 
 
-def run(session):
-    path = ROOT / 'evidence/multi-button-progress.json'
+def run(session, *, remove_focused_control=False):
+    prefix = 'multi-button-removed-focus' if remove_focused_control else 'multi-button'
+    path = ROOT / f'evidence/{prefix}-progress.json'
     evidence = {'passed': False, 'phase': 'preparing', 'pid': session.pid, 'events': []}
     def save(): path.write_text(json.dumps(evidence, indent=2), encoding='utf-8')
     save()
@@ -59,13 +60,16 @@ def run(session):
         wait('click_removed_blue_then_green', 3)
         assert [e['control'] for e in evidence['events']] == ['blue', 'green', 'green']
         assert not lifecycle.blue.failures and not lifecycle.green.failures
+        if remove_focused_control:
+            assert lifecycle.green.remove()
+            evidence['focused_callback_removed_before_close'] = True
         evidence['independent_routing'] = evidence['removed_control_no_delivery'] = True
         evidence['phase'] = 'cleaning'; save()
         return {'two_controls': True, 'selective_removal': True}
     result = runpy.run_path(str(ROOT / 'scripts/verify_live_widget_visible.py'))['run'](
         session, activatable=True, button_enabled=True, two_buttons=True,
         native_lifecycle=lifecycle, on_display=interact, hold_seconds=0,
-        evidence_name='multi-button-widget-live.json')
+        evidence_name=f'{prefix}-widget-live.json')
     assert result['passed'] and result['holder_baseline_restored'] and result['second_child_removed']
     evidence['holder_baseline_restored'] = True
     save()
@@ -76,6 +80,10 @@ def run(session):
 
 
 if __name__ == '__main__':
+    import argparse
+    parser = argparse.ArgumentParser(description=__doc__)
+    parser.add_argument('--remove-focused-control', action='store_true')
+    args = parser.parse_args()
     with sdk.Session(multi_controls=True) as session:
-        run(session)
+        run(session, remove_focused_control=args.remove_focused_control)
     print('Two native controls, independent routing, selective removal and exact cleanup passed.')

@@ -802,3 +802,28 @@ compiles under /W4 /WX. This is a source correction, NOT a successful live rerun
 PID16344 still has the earlier v17 binary pinned. Rebuild only after that process
 exits, then rerun the two-control probe, removed-control focus closure and
 controller-disconnect cleanup before promoting this backend.
+
+### Corrected v17 live rerun — 2026-10-09
+
+Normal game UI exit ended PID16344; its management/Harness host observed normal
+game exit, unloaded and exited0. Only after verifying the game process absent,
+the corrected v17 candidate was rebuilt. Steam relaunched PID21568, whose loaded
+module inventory confirmed build/runtime-session-v17/runtime_session_v17.dll.
+DLL SHA256:20711AF456865C0A27BC98CE2562E710D0E95D4AB32E863B6063B423FD8B6B9D.
+
+The fresh-game two-control probe PASSED with exit0: real blue/green clicks,
+blue callback removal, silent removed-blue click, surviving green event, exact
+viewport focus restoration while green was focused, native menu close,
+WidgetTree root restoration, both child removals and exact holder baseline.
+No engine mutation had an unknown outcome. Both widgets visibly disappeared.
+The earlier failure artifacts remain as multi-button-pre-fix-progress.json and
+multi-button-pre-fix-widget.json. Successful evidence is multi-button-progress.json,
+multi-button-widget-live.json, multi-v17-focus-run.log, multi-v17-focus-build.json
+and multi-v17-focus-loaded-module.json under evidence/.
+
+This establishes the previously failing second-control focus case at the main
+menu. It does not establish full Mods Menu functionality, gameplay/map changes,
+or v17 controller-loss cleanup. The added --remove-focused-control probe variant
+removes green's callback before menu close and uses separate evidence filenames;
+that variant still needs its own live run. The corrected DLL is now pinned in
+PID21568 and must not be rebuilt while that game remains alive.
