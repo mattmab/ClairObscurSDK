@@ -114,10 +114,55 @@ class OwnedWidgetCleanupTests(unittest.TestCase):
 
     def test_planner_cleanup_follows_native_cleanup(self):
         panel, operations = self.panel()
-        panel._planner = SimpleNamespace(close=lambda: operations.append('planner-close'))
+        panel._planner = SimpleNamespace(refresh=lambda: operations.append('refresh'),
+            close=lambda: operations.append('planner-close'))
+        panel._render_call = lambda child, *a: operations.append('remove-' + child)
         self.assertTrue(panel.close())
+        self.assertEqual(operations[:5], ['native-close', 'restore-root', 'refresh',
+                                         'remove-label', 'remove-button'])
         self.assertEqual(operations[-2:], ['planner-close', 'release'])
         self.assertIsNone(panel._planner)
+
+    def test_cached_cleanup_refresh_failure_preserves_children_and_leases(self):
+        panel, operations = self.panel()
+        panel._planner = SimpleNamespace(refresh=Mock(side_effect=RuntimeError('scan failed')),
+                                         close=Mock())
+        with self.assertRaisesRegex(RuntimeError, 'scan failed'): panel.close()
+        self.assertEqual(operations, ['native-close', 'restore-root'])
+        self.assertEqual(panel.children, ['button', 'label'])
+        self.assertFalse(panel.uncertain)  # No child mutation was dispatched.
+        panel._planner.close.assert_not_called()
+
+    def test_cached_cleanup_removes_each_child_through_validated_prepared_calls(self):
+        panel, operations = self.panel()
+        panel._function = lambda *args: args
+        prepared = SimpleNamespace(invoke=Mock(side_effect=lambda: nullcontext()))
+        planner = SimpleNamespace(refresh=Mock(), prepare=Mock(return_value=prepared), close=Mock())
+        panel._planner = planner
+        panel.scope.invoke = Mock(side_effect=AssertionError('uncached fallback forbidden'))
+        self.assertTrue(panel.close())
+        planner.refresh.assert_called_once_with()
+        self.assertEqual([call.args for call in planner.prepare.call_args_list],
+            [('label', ('Widget', 'RemoveFromParent')), ('button', ('Widget', 'RemoveFromParent'))])
+        self.assertEqual(prepared.invoke.call_count, 2)
+        panel.scope.invoke.assert_not_called()
+        self.assertEqual(panel.children, [])
+        self.assertFalse(panel.uncertain)
+        self.assertEqual(operations[-1], 'release')
+
+    def test_cached_cleanup_unknown_reply_keeps_owner_and_does_not_retry(self):
+        panel, operations = self.panel()
+        panel._function = lambda *args: args
+        prepared = SimpleNamespace(invoke=Mock(side_effect=RuntimeError('lost reply')))
+        panel._planner = SimpleNamespace(refresh=Mock(), prepare=Mock(return_value=prepared), close=Mock())
+        with self.assertRaisesRegex(RuntimeError, 'lost reply'): panel.close()
+        self.assertEqual(panel.children, ['button', 'label'])
+        self.assertTrue(panel.uncertain)
+        with self.assertRaisesRegex(RuntimeError, 'preserve owner'): panel.close()
+        prepared.invoke.assert_called_once_with()
+        panel._planner.refresh.assert_called_once_with()
+        panel._planner.close.assert_not_called()
+        self.assertNotIn('release', operations)
 
     def test_partial_visibility_failure_preserves_unknown_outcome(self):
         panel, _ = self.panel()

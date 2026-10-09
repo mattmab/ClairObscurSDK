@@ -236,9 +236,18 @@ class OwnedMenuPanel:
             self.assigned = False
             if self._root() is not None:
                 raise RuntimeError('Panel root was not restored')
+        if self._planner is not None and self.children:
+            # Native input is detached and the root readback has succeeded.
+            # All children remain leased. Refresh once for teardown; native
+            # identity/schema gates still run for every removal. A failed
+            # refresh does not dispatch or fall back to another mutation path.
+            self._planner.refresh()
         while self.children:
             child = self.children[-1]
-            self._call(child, 'Widget', 'RemoveFromParent')
+            if self._planner is not None:
+                self._render_call(child, 'Widget', 'RemoveFromParent')
+            else:
+                self._call(child, 'Widget', 'RemoveFromParent')
             self.children.pop()
         if self._planner is not None:
             self._planner.close()

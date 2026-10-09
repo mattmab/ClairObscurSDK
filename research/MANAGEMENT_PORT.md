@@ -1101,3 +1101,32 @@ new package. Five-minute construction and slow cleanup remain release blockers.
 282 offline tests pass. GitHub metadata independently confirmed private=True and
 visibility=private using the existing authorized Git credential; the connector
 itself returned404 for this private repository. No visibility setting was changed.
+
+### Shared teardown planning — 2026-10-09
+
+Panels with an existing invocation planner now refresh it once after native
+menu detachment, root restoration and readback, then prepare child removals from
+that observation. Each removal still goes through the native retained-invocation
+identity/schema gates. Children stay leased until removal succeeds. A refresh
+failure leaves children and leases owned; an uncertain dispatch latches the
+existing no-retry state. Uncached panels retain their previous path. This replaces
+one full pre-call catalog scan per child with one teardown planning scan; root
+restoration and readback retain their separate validation.
+
+285 offline tests pass, including removal ordering, one refresh, no uncached
+fallback, refresh failure preserving ownership, and unknown replies preventing
+repeat mutation or premature lease release. The previous host exited0 normally;
+fresh source host started15:45:12 against the unchanged resident v17 DLL.
+
+PROVEN on game21568: `verify_cached_panel_cleanup.py` built a caller-owned
+two-control panel under SDKManagement's scope. Its labels appeared in the real
+game and the native console remained usable. At15:48:44 the close measurement
+returned11.240466699993704 seconds, state closed, uncertainty false, no remaining
+children, exact retained-holder baseline and exact original viewport focus.
+Raw evidence: `evidence/cached-cleanup-before.json`,
+`evidence/cached-cleanup-after.json`, `logs/cached-cleanup-host.log`.
+
+This is functional validation of the changed teardown path on six canvas
+children, not a same-size before/after benchmark, full 12-control menu timing,
+disconnect/relaunch coverage or a packaging claim. Full-menu timing and the much
+larger widget-construction cost remain open performance gates.
