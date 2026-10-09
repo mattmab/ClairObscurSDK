@@ -859,3 +859,26 @@ captures exact focus/holder baselines before and after this interactive run.
 The older shell attempts without src on sys.path failed before querying the game;
 their native-menu-before-* files are not the baseline. The authoritative new
 baseline is `evidence/native-management-before.json`, captured by persistent Python.
+
+#### Renderer latency investigation
+
+The first live construction advances about one control per57 seconds. A separate
+read-only `profile_widget_planning.py` run on the same PID measured a full catalog
+(96075 objects,102528 native rows) at2.714 seconds. Planning SetIsEnabled and SetText
+each took about0.356 seconds; SetBackgroundColor took0.701 seconds because its
+LinearColor descriptor adds another query. No engine functions were executed by
+the profiler. Raw evidence: `evidence/widget-planning-profile.json`.
+
+Session.invoke/invoke_retained currently capture the complete catalog for every
+call, plus another capture for object results. A panel control needs two objects,
+two slots, layout calls, visibility/text and color operations. This explains much
+of the observed initial construction cost; it is not yet acceptable menu-open
+latency. Read-only timings are not a complete runtime profiler or a speedup claim.
+
+Future optimization should reuse bounded planning observations or prepared calls
+while preserving native game-thread identity/schema/context gates and same-call
+object-result retention. `reflected_invocation.h` checks these gates immediately
+before dispatch, including field offsets/types/extents and argument constraints;
+text allocation triggers further identity/context revalidation. This supports
+investigating reduced external catalog traffic, not skipping native validation.
+Do not retrofit a new dispatch path into the currently running construction.
