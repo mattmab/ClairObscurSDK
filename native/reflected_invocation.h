@@ -47,10 +47,15 @@ struct CallRetention {
     uint32_t (*preflight)(void*,const CallPacket&);
     uint32_t (*capture)(void*,uint32_t,CallIdentity&);
 };
-inline uint32_t reflected_call(uint64_t base,CallPacket& packet,const CallRetention* retention=nullptr) {
-    if(auto invalid=validate_call_packet(packet)) return invalid;
+struct CallPodValidation {
+    bool (*validate)(uint64_t,uint64_t,PodValueKind,const CallIdentity&);
+};
+inline uint32_t reflected_call(uint64_t base,CallPacket& packet,const CallRetention* retention=nullptr,
+                               const CallPodValidation* pod=nullptr) {
+    const bool pod_enabled=pod && pod->validate;
+    if(auto invalid=validate_call_packet(packet,pod_enabled)) return invalid;
     packet.outcome=CallNotDispatched;
-    if(packet.version!=kCallVersion || packet.parameter_size>kCallBytes ||
+    if((packet.version!=kCallVersion && !(pod_enabled && packet.version==kPodCallVersion)) || packet.parameter_size>kCallBytes ||
        packet.parameter_size>packet.allocation_extent || packet.allocation_extent>65536 ||
        packet.field_count>kCallFields || packet.object_count>kCallObjects) return 200;
     if(local_read<DWORD>(base+0x9272d30)!=GetCurrentThreadId() ||
@@ -77,14 +82,15 @@ inline uint32_t reflected_call(uint64_t base,CallPacket& packet,const CallRetent
     auto property=local_read<uint64_t>(function+0x50);
     unsigned seen=0, walked=0, returns=0;
     const char* kinds[]={"", "BoolProperty","ByteProperty","UInt16Property","IntProperty",
-                         "FloatProperty","DoubleProperty","ObjectProperty","ClassProperty"};
+                         "FloatProperty","DoubleProperty","ObjectProperty","ClassProperty",
+                         "StructProperty","StructProperty","StructProperty","StructProperty"};
     for(;property;property=local_read<uint64_t>(property+0x18)) {
         if(++walked>4096) return 207;
         auto flags=local_read<uint64_t>(property+0x38);
         if(!(flags&0x80)) continue;
         if(seen>=packet.field_count) return 208;
         const auto& field=packet.fields[seen++];
-        if(field.kind<CallBool || field.kind>CallClass || !field.name[0] || field.name[95] ||
+        if(field.kind<CallBool || field.kind>(pod_enabled && packet.version==kPodCallVersion ? CallAnchors : CallClass) || !field.name[0] || field.name[95] ||
            field.flags!=flags || local_read<uint64_t>(property+0x10)!=(function|1) ||
            !exact_name(base,property+0x20,field.name) ||
            !exact_name(base,local_read<uint64_t>(property+8),kinds[field.kind]) ||
@@ -94,6 +100,10 @@ inline uint32_t reflected_call(uint64_t base,CallPacket& packet,const CallRetent
         if(flags&0x400) { ++returns; if(field.offset!=packet.return_offset || field.dimension!=1) return 210; }
         unsigned width=field.kind==CallByte ? 1 : field.kind==CallUInt16 ? 2 :
             field.kind==CallInt32 || field.kind==CallFloat ? 4 : 8;
+        if(call_pod_kind(field.kind)) {
+            width=pod_value_width(call_pod_profile(field.kind));
+            if(!pod->validate(base,property,call_pod_profile(field.kind),field.constraint)) return 225;
+        }
         uint8_t mask=255, byte_offset=0;
         if(field.kind==CallBool) {
             auto encoding=local_read<uint32_t>(property+0x70);
@@ -151,6 +161,10 @@ inline uint32_t reflected_call(uint64_t base,CallPacket& packet,const CallRetent
     packet.object_count=0;
     for(unsigned f=0;f<packet.field_count;++f) {
         const auto& field=packet.fields[f];
+        if(call_pod_kind(field.kind)) {
+            for(unsigned i=0;i<field.dimension;++i)
+                if(!valid_pod_value(call_pod_profile(field.kind),arguments+field.offset+i*field.width,field.width)) return 226;
+        }
         if(field.kind!=CallObject && field.kind!=CallClass) continue;
         for(unsigned i=0;i<field.dimension;++i) {
             auto offset=field.offset+i*8;

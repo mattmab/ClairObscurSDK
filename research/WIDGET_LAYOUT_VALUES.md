@@ -2,8 +2,9 @@
 
 2026-10-09; Steam build23765773, executable SHA256
 218a2478aad5b3a1674b5d7097ec1ac4f994abb95466f9da1407fcd39d639618.
-This is a candidate value contract, not enabled struct invocation or a rendered
-Mods Menu. The running v10 host is unchanged.
+The opt-in v11 backend implements this value contract with native schema checks.
+It does not establish a rendered Mods Menu. Live results are recorded below when
+available; offline tests alone do not prove engine behavior.
 
 `scripts/inspect_widget_layout.py` reads live function descriptors and recursively
 expands their struct references. On game PID 25560 it found all 27 requested functions,
@@ -59,13 +60,28 @@ float encoding, nested values, immutable results, changed/owned/extra fields,
 wrong nested identities, nonfinite values and narrowing overflow.
 The complete source Python suite passes all 146 tests.
 
-Neither codec is wired into invocation yet. The next native backend must validate
-the struct identity and full allowed field shape again on the game thread, match
-the parameter's FStructProperty reference, and reject unsupported profiles before
-dispatch. Preserve old capability rejection, current packet correlation and
-unknown-outcome behavior. Then expose copied struct inputs/results through the
-SDK and original Harness adapter, and test position/size round trips on an
-SDK-owned widget before connecting menu layout to the shared registry.
+The codecs are connected to v11 invocation. `Session(pod_values=True)` selects
+the separately named controller/runtime and requires `pod_value_protocol:1` in
+the handshake. Call packet v2 preserves the existing byte layout, adds four
+explicit kinds and stores the observed ScriptStruct identity in the constraint
+slot. Older sessions reject v2. Both retained and ordinary calls share the same
+validator; numeric structs acquire no native-owned storage or lease tokens.
+Native schema rejection is not dispatched; invalid numeric results after a call
+leave its outcome unknown and must not be retried. Existing object-output
+retention and pointer scrubbing remain in place.
+
+Python requires exact named dictionaries, validates live descriptors, and returns
+immutable copied mappings. For example, with observed slot/function identities:
+
+```python
+sdk.invoke(slot, set_position, InPosition={'X': 160.25, 'Y': 32.5})
+position = sdk.invoke(slot, get_position).return_value
+```
+
+`launch.cmd management --pod-values` exposes this opt-in backend. The original
+Harness's typed `$struct` construction/result adaptation remains separate pending
+work; its core is unchanged. Arbitrary structs, FText/font/FKey ownership,
+EnumProperty input modes and visible/focused menu behavior remain unsupported.
 
 Native gate follow-up: `pod_schema.h` now implements the exact four-profile
 walker; `target_pod_schema.h` supplies the real game-thread, GC/shutdown, registry,
@@ -80,8 +96,34 @@ contain access faults. No native constructor, setter or dispatcher is called.
 /W4 /WX and runs a synthetic-memory fixture through the actual schema walker.
 Four valid profiles and parameter binding pass; 24 altered-schema, identity and
 context cases are rejected. This is offline validation, not a claim that the
-gate has run on the game's thread. Transport capability negotiation, call-plan
-encoding, dispatcher integration and live position/size round trips remain next.
+gate has run on the game's thread. Native packet tests cover explicit version
+gating, zeroed outputs, identity/width checks and invalid numeric values. The
+151-test Python suite includes cross-language packets for all four profiles,
+return decoding, altered descriptors and pre-write capability rejection.
+
+`scripts/verify_live_widget_layout.py` runs through the existing retained-child
+lifecycle probe on the persistent owner thread, with no viewport or input change.
+It checks position/size readback and margin effects, submits anchors/color, then
+removes the child and compares the holder baseline. Dispatch-only color/anchor
+results are explicitly distinguished from readback and rendered behavior.
+
+## Live v11 result
+
+2026-10-09 03:38:37 local, game PID 25560, persistent Python PID 8316 and native
+controller PID 4152: the complete scoped probe passed. SetPosition/GetPosition
+round-tripped `{X:160.25,Y:32.5}` and SetSize/GetSize round-tripped
+`{X:640,Y:360}`. SetOffsets with `{Left:120,Top:80,Right:500,Bottom:300}` was
+independently checked by subsequent position/size calls. SetAnchors and
+Button.SetBackgroundColor returned from native dispatch; no rendered effect or
+independent color/anchor readback is claimed. The child was removed, its count
+returned to zero, and the exact native holder baseline was restored.
+
+The v10 controller shut down cooperatively before v11 started; no second
+persistent controller was attached. Native console Python dispatch and the
+integrated mod host remained operational. Live evidence is
+`evidence/widget-layout-live.json` and `logs/management-v11.stderr.log`.
+The new pair is included by the packaging script, but isolated-package startup
+and fresh-game relaunch for v11 still need validation.
 
 Local raw evidence: `evidence/widget-layout-schema.json`,
 `evidence/widget-layout-schema.log`, `evidence/widget-layout-thunks.json` and its

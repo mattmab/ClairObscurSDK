@@ -9,6 +9,13 @@ incomplete. Updated 2026-10-09. Earlier dated sections describe prior boundaries
 
 ## v10 original set integration — 2026-10-09
 
+Latest reusable primitive: v11 adds verified numeric struct invocation for
+Vector2D, LinearColor, Margin and Anchors. Position/size round trips and margin
+effects passed live with scoped holder cleanup. The preserved Explorer core is
+unchanged; its `make_struct` adapter and typed returned-struct representation are
+the next integration step, so `$struct` parity is not yet claimed. See
+WIDGET_LAYOUT_VALUES.md for the exact proof and unsupported owned-value types.
+
 The preserved Explorer core now reaches the reusable `assign_object` primitive
 through the adapter's reflected-property lookup and object setter. Scalar
 ObjectProperty writes require the original literal `allow_mutation:true`; the

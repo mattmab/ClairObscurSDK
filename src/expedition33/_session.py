@@ -39,6 +39,7 @@ class SessionTransport:
             self.retained_protocol = ready.get('retained_protocol', 0)
             self.stable_identity_protocol = ready.get('stable_identity_protocol', 0)
             self.object_assignment_protocol = ready.get('object_assignment_protocol', 0)
+            self.pod_value_protocol = ready.get('pod_value_protocol', 0)
             if (self.start.get('event') != 'snapshot_start' or
                 any(row.get('event') != 'object' for row in self.objects) or
                 ready.get('event') != 'session_ready' or ready['pid'] != self.start['pid'] or
@@ -128,6 +129,9 @@ class SessionTransport:
             if len(encoded) > (8192 if command == 'console-execute' else 65536):
                 raise ValueError('Console payload is too long')
             suffix = ' ' + encoded.hex()
+        if (reflected or retained) and int.from_bytes(payload[:4], 'little') == 2:
+            if getattr(self, 'pod_value_protocol', 0) != 1:
+                raise ValueError('Native session does not support POD value invocation')
         try:
             self._process.stdin.write(command + suffix + '\n')
             self._process.stdin.flush()

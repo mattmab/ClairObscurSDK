@@ -1,7 +1,7 @@
-"""Candidate codecs for four target-verified, pointer-free reflected structs.
+"""Copied codecs for four target-verified, pointer-free reflected structs.
 
-Not an invocation capability: the native dispatcher must independently validate
-the same schema before these bytes may be used. No arbitrary struct serialization.
+The opt-in v11 dispatcher independently validates the schema on the game thread.
+No arbitrary struct serialization or native-owned value construction.
 """
 from dataclasses import dataclass
 import math

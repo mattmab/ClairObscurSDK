@@ -43,8 +43,9 @@ def main():
     parser.add_argument('--retained', action='store_true', help='Use experimental v8 retained invocation and Harness values')
     parser.add_argument('--stable-returns', action='store_true', help='Use experimental v9 stable retained object returns')
     parser.add_argument('--object-assignment', action='store_true', help='Use experimental v10 owned ObjectProperty assignment')
+    parser.add_argument('--pod-values', action='store_true', help='Use experimental v11 verified numeric struct invocation')
     args = parser.parse_args()
-    if (args.reflected or args.leases or args.retained or args.stable_returns or args.object_assignment) and args.command not in ('console', 'introspection', 'management'):
+    if (args.reflected or args.leases or args.retained or args.stable_returns or args.object_assignment or args.pod_values) and args.command not in ('console', 'introspection', 'management'):
         parser.error('Experimental session flags require console, introspection or management')
     log_dir = ROOT / 'logs'
     log_dir.mkdir(exist_ok=True)
@@ -57,8 +58,8 @@ def main():
             store = SettingsStore(ROOT / 'settings/management.json') if args.command == 'management' else None
             if store is not None and store.recovery:
                 log.warning('Management settings recovery: %s', store.recovery)
-            with (Session(reflected=args.reflected, leases=args.leases, retained=args.retained, stable_returns=args.stable_returns, object_assignment=args.object_assignment)
-                  if args.reflected or args.leases or args.retained or args.stable_returns or args.object_assignment else nullcontext(None)) as runtime, \
+            with (Session(reflected=args.reflected, leases=args.leases, retained=args.retained, stable_returns=args.stable_returns, object_assignment=args.object_assignment, pod_values=args.pod_values)
+                  if args.reflected or args.leases or args.retained or args.stable_returns or args.object_assignment or args.pod_values else nullcontext(None)) as runtime, \
                     ModLoader(ROOT / 'mods', settings=store, session=runtime) as loader:
                 if args.command == 'management':
                     loader.load('SDKManagement')

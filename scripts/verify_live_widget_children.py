@@ -16,8 +16,9 @@ from expedition33._scope import SessionScope
 ROOT = Path(__file__).resolve().parents[1]
 
 
-def run(session):
+def run(session, *, slot_probe=None, evidence_name='widget-children-live.json'):
     assert session.supports_stable_returns
+    assert Path(evidence_name).name == evidence_name
     helpers = runpy.run_path(str(ROOT/'scripts/verify_live_widget_lifecycle.py'))
     one, holders = helpers['one'], helpers['holders']
     catalog, library, functions, arguments = helpers['preflight']()
@@ -67,6 +68,8 @@ def run(session):
         evidence['created'] = {name: asdict(obj) for name, obj in
                                (('widget', widget), ('tree', tree), ('canvas', canvas), ('button', button), ('slot', slot))}
         evidence['child_count_and_slot_verified'] = True
+        if slot_probe is not None:
+            evidence['layout'] = slot_probe(scope, slot, button, catalog)
         attached = False  # No retry if removal acknowledgement is unknown.
         scope.invoke(button, functions['RemoveFromParent'])
         assert scope.invoke(canvas, count).return_value == 0
@@ -77,9 +80,9 @@ def run(session):
                 scope.invoke(button, functions['RemoveFromParent'])
         finally:
             scope.close()
-            (ROOT/'evidence/widget-children-live.json').write_text(json.dumps(evidence, indent=2), encoding='utf-8')
+            (ROOT/'evidence'/evidence_name).write_text(json.dumps(evidence, indent=2), encoding='utf-8')
     assert holders() == baseline
     evidence['holder_baseline_restored'] = evidence['passed'] = True
-    (ROOT/'evidence/widget-children-live.json').write_text(json.dumps(evidence, indent=2), encoding='utf-8')
+    (ROOT/'evidence'/evidence_name).write_text(json.dumps(evidence, indent=2), encoding='utf-8')
     print('Canvas/Button construction, retained slot, child attachment/removal and scoped cleanup passed; nothing displayed.')
     return evidence

@@ -13,12 +13,12 @@ static CallPacket baseline() {
     return p;
 }
 int main(int argc,char** argv) {
-    if(argc==2) {
+    if(argc==2 || (argc==3 && std::strcmp(argv[2],"--pod")==0)) {
         CallPacket packet{};
         std::ifstream file(argv[1],std::ios::binary);
         file.read(reinterpret_cast<char*>(&packet),sizeof(packet));
         if(file.gcount()!=sizeof(packet) || file.peek()!=std::char_traits<char>::eof()) return 2;
-        auto error=validate_call_packet(packet);
+        auto error=validate_call_packet(packet,argc==3);
         std::printf("%u\n",error);
         return error ? 1 : 0;
     }
@@ -52,6 +52,28 @@ int main(int argc,char** argv) {
     p=baseline(); p.parameter_size=4; p.fields[0]={CallFloat,0,4,1,0x80,0,"Float",{-1,0,0}};
     float n=std::numeric_limits<float>::infinity(); std::memcpy(p.data,&n,4); if(!check(p,308)) return 1;
     p=baseline(); p.fields[0].dimension=0; if(!check(p,301)) return 1;
+    for(uint32_t kind=CallVector2D;kind<=CallAnchors;++kind) {
+        p=baseline(); p.version=kPodCallVersion;
+        p.parameter_size=p.allocation_extent=pod_value_width(call_pod_profile(kind));
+        p.fields[0]={kind,0,p.parameter_size,1,0x80,0,"Value",{5,6,0x9999}};
+        std::memset(p.data,0,sizeof(p.data));
+        if(!check(p,300) || validate_call_packet(p,true)) return 1;
+        p.version=1; if(validate_call_packet(p,true)!=301) return 1;
+        p.version=2; p.fields[0].constraint.address=0;
+        if(validate_call_packet(p,true)!=314) return 1;
+        p.fields[0].constraint.address=0x9999; p.fields[0].width=8;
+        if(validate_call_packet(p,true)!=304) return 1;
+        p.fields[0].width=p.parameter_size; p.fields[0].bool_encoding=1;
+        if(validate_call_packet(p,true)!=314) return 1;
+        p.fields[0].bool_encoding=0;
+        if(kind==CallVector2D || kind==CallAnchors) {
+            double bad=1e100; std::memcpy(p.data,&bad,8);
+        } else {
+            float bad=std::numeric_limits<float>::infinity(); std::memcpy(p.data,&bad,4);
+        }
+        if(validate_call_packet(p,true)!=315) return 1;
+    }
+    std::printf("Four POD profiles: explicit v2 gate, identities, widths, reserved encoding and numeric rejection passed.\n");
     std::printf("%u native packet checks passed; packet bytes=%zu\n",checks,sizeof(CallPacket));
     RetainedCallPacket retained{};
     if(!retained_call_empty(retained)) return 1;

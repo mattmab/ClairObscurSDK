@@ -14,6 +14,8 @@ OBJECTS_AT = FIELDS_AT + MAX_FIELDS * FIELD.size
 DATA_AT = OBJECTS_AT + MAX_OBJECTS * OBJECT.size
 KINDS = ('BoolProperty', 'ByteProperty', 'UInt16Property', 'IntProperty',
          'FloatProperty', 'DoubleProperty', 'ObjectProperty', 'ClassProperty')
+POD_KINDS = ('/Script/CoreUObject.Vector2D', '/Script/CoreUObject.LinearColor',
+             '/Script/SlateCore.Margin', '/Script/Slate.Anchors')
 
 
 def _identity(value):
@@ -32,14 +34,18 @@ def encode_plan(plan):
             len(plan.data) != plan.parameter_size):
         raise UnsupportedInvocation('Plan exceeds v6 transport bounds')
     packet = bytearray(SIZE)
-    HEADER.pack_into(packet, 0, 1, plan.parameter_size, plan.allocation_extent,
+    if type(plan.wire_version) is not int or plan.wire_version not in (1, 2):
+        raise UnsupportedInvocation('Unsupported invocation wire version')
+    HEADER.pack_into(packet, 0, plan.wire_version, plan.parameter_size, plan.allocation_extent,
                      plan.return_offset, plan.function_flags, plan.entry_rva,
                      len(plan.parameters), len(plan.objects), 0, 0)
     IDENTITY.pack_into(packet, HEADER.size, *_identity(plan.target))
     IDENTITY.pack_into(packet, HEADER.size + IDENTITY.size, *_identity(plan.function))
     for number, parameter in enumerate(plan.parameters):
         try:
-            kind = KINDS.index(parameter.kind) + 1
+            kind = (9 + POD_KINDS.index(parameter.pod_profile)
+                    if parameter.kind == 'StructProperty' and plan.wire_version == 2
+                    else KINDS.index(parameter.kind) + 1)
             name = parameter.name.encode('ascii')
         except (ValueError, UnicodeError) as error:
             raise UnsupportedInvocation('Unsupported wire parameter kind or name') from error

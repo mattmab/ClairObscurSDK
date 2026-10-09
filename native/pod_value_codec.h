@@ -4,8 +4,8 @@
 #include <cmath>
 #include <limits>
 
-// Candidate value contract, derived from this build's reflected fields and UMG
-// thunks. It is not wired into reflected_call; no struct calls are enabled yet.
+// Value contract derived from this build's reflected fields and UMG thunks.
+// Invocation requires the separate v11 capability and native schema validator.
 enum class PodValueKind : uint32_t { Vector2D=1, LinearColor, Margin, Anchors };
 inline uint32_t pod_value_width(PodValueKind kind) {
     switch (kind) {

@@ -2,6 +2,18 @@
 #include "fixed_invocation.h"
 #include "observer_core.h"
 #include "console_attachment.h"
+#ifdef E33_POD_SESSION
+#include "target_pod_schema.h"
+static bool validate_target_pod(uint64_t base,uint64_t property,PodValueKind kind,const CallIdentity& id) {
+    TargetPodSchemaOps ops{base};
+    return validate_pod_parameter(ops,property,kind,id);
+}
+static const CallPodValidation pod_validation{validate_target_pod};
+static const CallPodValidation* session_pod_validation=&pod_validation;
+#elif defined(E33_REFLECTED_SESSION)
+#include "reflected_invocation.h"
+static const CallPodValidation* session_pod_validation=nullptr;
+#endif
 #ifdef E33_ASSIGNMENT_SESSION
 #include "target_object_assignment.h"
 #endif
@@ -99,7 +111,7 @@ uint32_t backend_command(SessionPacket* packet) {
         auto& retained=packet->retained;
         if(!retained_call_empty(retained)) { retained.call.error=412; return 0; }
         CallRetention retention{&retained,retain_preflight,retain_output};
-        retained.call.error=reflected_call(runtime_base,retained.call,&retention);
+        retained.call.error=reflected_call(runtime_base,retained.call,&retention,session_pod_validation);
         return 0;
     }
 #endif
@@ -131,7 +143,7 @@ uint32_t backend_command(SessionPacket* packet) {
 #endif
 #ifdef E33_REFLECTED_SESSION
     case SessionReflectedInvoke:
-        packet->call.error=reflected_call(runtime_base,packet->call);
+        packet->call.error=reflected_call(runtime_base,packet->call,nullptr,session_pod_validation);
         return 0; // A rejected plan is a normal response, not a transport failure.
 #endif
     case SessionConsoleKey: {

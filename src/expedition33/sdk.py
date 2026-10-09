@@ -47,12 +47,13 @@ class Session:
     thread, build, layout and lifetime checks remain authoritative for each call.
     Close explicitly or use a context manager to remove hooks deterministically.
     """
-    def __init__(self, *, reflected=False, leases=False, retained=False, stable_returns=False, object_assignment=False):
-        if any(type(flag) is not bool for flag in (reflected, leases, retained, stable_returns, object_assignment)):
+    def __init__(self, *, reflected=False, leases=False, retained=False, stable_returns=False, object_assignment=False, pod_values=False):
+        if any(type(flag) is not bool for flag in (reflected, leases, retained, stable_returns, object_assignment, pod_values)):
             raise ValueError('Session capability flags must be bools')
+        object_assignment = object_assignment or pod_values
         stable_returns = stable_returns or object_assignment
         retained = retained or stable_returns
-        backend = ('research-probe-v10' if object_assignment else 'research-probe-v9' if stable_returns else 'research-probe-v8' if retained
+        backend = ('research-probe-v11' if pod_values else 'research-probe-v10' if object_assignment else 'research-probe-v9' if stable_returns else 'research-probe-v8' if retained
                    else 'research-probe-v7' if leases else 'research-probe-v6')
         self._transport = (SessionTransport(_executable=Path(__file__).resolve().parents[2] /
                            f'build/{backend}/research_probe.exe') if reflected or leases or retained else SessionTransport())
@@ -67,6 +68,11 @@ class Session:
                 self._transport.close()
             finally:
                 raise RuntimeQueryError('Object assignment backend handshake missing')
+        if pod_values and getattr(self._transport, 'pod_value_protocol', 0) != 1:
+            try:
+                self._transport.close()
+            finally:
+                raise RuntimeQueryError('POD value backend handshake missing')
         self._dispatcher = CallbackDispatcher()
         self._hooks = []
         self._leases = set()
@@ -95,6 +101,11 @@ class Session:
     def supports_object_assignment(self):
         self._check()
         return getattr(self._transport, 'object_assignment_protocol', 0) == 1
+
+    @property
+    def supports_pod_values(self):
+        self._check()
+        return getattr(self._transport, 'pod_value_protocol', 0) == 1
 
     def assign_object(self, obj, owner, name, value, *, expected, element=0, allow_mutation=False):
         """Assign an ObjectProperty with an explicit old value and temporary leases.
@@ -170,7 +181,7 @@ class Session:
         if not isinstance(obj, ObjectSnapshot) or obj.pid != self.pid:
             raise ValueError('Invocation target must belong to this session')
         catalog = capture()
-        plan = prepare_call(catalog, obj, function, arguments)
+        plan = prepare_call(catalog, obj, function, arguments, pod_values=self.supports_pod_values)
         request = wire.encode_plan(plan)
         try:
             response = self._transport.command('retained-invoke', request)
@@ -296,7 +307,7 @@ class Session:
         if not isinstance(obj, ObjectSnapshot) or obj.pid != self.pid:
             raise ValueError('Invocation target must belong to this session')
         catalog = capture()
-        plan = prepare_call(catalog, obj, function, arguments)
+        plan = prepare_call(catalog, obj, function, arguments, pod_values=self.supports_pod_values)
         request = encode_plan(plan)
         try:
             response = self._transport.command('reflected-invoke', request)

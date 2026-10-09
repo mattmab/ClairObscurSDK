@@ -21,6 +21,7 @@ All live results below apply only to the recorded executable fingerprint.
 | Gameplay/map transitions | Not validated; current live console/relationship evidence is from the main menu. |
 | Private v0.1 | Functional release criteria passed; package verification is recorded in research/MILESTONES.md. The recovered Ghidra research pass is tracked separately. |
 | Unified management (current checkout) | Registry, typed settings/actions and console menu implemented; console lifecycle/setting restoration live-tested. Native UMG and general keybinds pending. Not included in the existing v0.1 archive. |
+| Numeric UMG struct calls (opt-in v11) | Vector2D position/size and Margin effects verified live on owned widgets; Anchors/LinearColor dispatch returned. Native schema validation and cleanup tested. Visible menu, typed Harness `$struct`, packaged v11 startup and relaunch pending. |
 
 ## Interactive native console
 

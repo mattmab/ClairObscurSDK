@@ -1,4 +1,7 @@
 #pragma once
+#if defined(E33_POD_SESSION) && (!defined(E33_REFLECTED_SESSION) || !defined(E33_ASSIGNMENT_SESSION) || !defined(E33_STABLE_SESSION) || !defined(E33_RETAINED_SESSION) || !defined(E33_LEASE_SESSION))
+#error POD session requires the complete v10 capability chain
+#endif
 #include "scheduling_protocol.h"
 #include "observer_fixture_protocol.h"
 #ifdef E33_REFLECTED_SESSION
@@ -10,7 +13,11 @@
 #ifdef E33_STABLE_SESSION
 #ifdef E33_ASSIGNMENT_SESSION
 #include "assignment_protocol.h"
+#ifdef E33_POD_SESSION
+constexpr wchar_t kSessionMessage[] = L"E33SDK.Session.v11";
+#else
 constexpr wchar_t kSessionMessage[] = L"E33SDK.Session.v10";
+#endif
 #else
 constexpr wchar_t kSessionMessage[] = L"E33SDK.Session.v9";
 #endif

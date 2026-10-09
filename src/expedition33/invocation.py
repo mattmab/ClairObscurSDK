@@ -12,6 +12,7 @@ import struct
 from types import MappingProxyType
 from . import ObjectSnapshot, RuntimeQueryError
 from .reflection import describe
+from . import _pod_values
 
 PARM, OUT, RETURN, REFERENCE = 0x80, 0x100, 0x400, 0x8000000
 
@@ -74,6 +75,8 @@ def decode_result(plan, reply, catalog):
                     if bits not in (0, (encoding >> 16) & 255):
                         raise ValueError('Invalid result bool encoding')
                     item = bool(bits)
+                elif parameter.kind == 'StructProperty':
+                    item = _pod_values.decode(parameter.pod_profile, reply.data[at:at + parameter.width])
                 else:
                     item = struct.unpack_from('<' + _FORMATS[parameter.kind][0], reply.data, at)[0]
                 values.append(item)
@@ -100,6 +103,7 @@ class Parameter:
     flags: int
     boolean_encoding: int | None = None
     constraint: object = None
+    pod_profile: str | None = None
 
     @property
     def input(self):
@@ -124,6 +128,7 @@ class CallPlan:
     parameters: tuple
     data: bytes
     objects: tuple
+    wire_version: int = 1
 
 
 _FORMATS = {'ByteProperty': ('B', 1, 0, 255), 'UInt16Property': ('H', 2, 0, 65535),
@@ -131,23 +136,52 @@ _FORMATS = {'ByteProperty': ('B', 1, 0, 255), 'UInt16Property': ('H', 2, 0, 6553
             'FloatProperty': ('f', 4, None, None), 'DoubleProperty': ('d', 8, None, None)}
 
 
-def prepare_call(catalog, target, function, arguments):
+def prepare_call(catalog, target, function, arguments, *, pod_values=False):
     """Describe a current UFunction and prepare named arguments without executing it.
 
 Zeroed object slots have separate identity patches; caller-supplied integer
 addresses are never accepted. All inputs are explicit, with no guessed defaults.
 Output/return types must also be supported before a plan can be built.
 """
+    if type(pod_values) is not bool:
+        raise ValueError('POD capability flag must be bool')
     target, function = catalog.resolve(target), catalog.resolve(function)
     if catalog.find_class('Function').index not in catalog.ancestors(function.class_index):
         raise ValueError('Expected a reflected Function identity')
     if function.outer_index not in catalog.ancestors(target.class_index):
         raise ValueError('Function owner is not in the target class hierarchy')
     descriptor = describe(catalog, (function,))[function.index]
-    return _prepare(catalog, target, function, descriptor, arguments)
+    return _prepare(catalog, target, function, descriptor, arguments, pod_values=pod_values)
 
 
-def _prepare(catalog, target, function, descriptor, arguments):
+def _struct_reference(catalog, row):
+    obj = catalog.by_index[row['struct_index']]
+    if obj.serial != row['struct_serial'] or obj.name != row['struct_name']:
+        raise ValueError('POD struct reference changed')
+    if obj.class_name != 'ScriptStruct' or catalog.path_name(obj) not in _pod_values.PROFILES:
+        raise UnsupportedInvocation('Struct requires an additional verified codec/lifetime contract')
+    return obj
+
+
+def _observed_pod_profile(catalog, row, descriptors):
+    obj = _struct_reference(catalog, row)
+    pending = {obj.index: obj}
+    # Only Anchors -> Vector2D nesting is allowed. Bound metadata acquisition;
+    # validate_profile below enforces the actual shape, not just type names.
+    for _ in range(2):
+        pending = {index: value for index, value in pending.items() if index not in descriptors}
+        if not pending:
+            break
+        current = describe(catalog, pending.values())
+        descriptors.update(current)
+        nested = [_struct_reference(catalog, field) for d in current.values()
+                  for field in d.properties if field['type'] == 'StructProperty']
+        pending = {child.index: child for child in nested}
+    profile = _pod_values.validate_profile(catalog, descriptors[obj.index], descriptors)
+    return obj, profile
+
+
+def _prepare(catalog, target, function, descriptor, arguments, *, pod_values=False):
     if type(arguments) is not dict or any(type(key) is not str for key in arguments):
         raise ValueError('Arguments must be a dictionary of parameter names')
     info = descriptor.function
@@ -157,7 +191,7 @@ def _prepare(catalog, target, function, descriptor, arguments):
     if (type(size) is not int or type(extent) is not int or not 0 <= size <= extent <= 65536 or
             type(returned) is not int or not (returned == 65535 or 0 <= returned < size)):
         raise ValueError('Invalid parameter size, extent or return offset')
-    parameters, occupied, names = [], set(), set()
+    parameters, occupied, names, pod_descriptors = [], set(), set(), {}
     for row in descriptor.properties:
         if not row['flags'] & PARM:
             continue  # Function locals are initialized by the engine dispatcher.
@@ -170,7 +204,7 @@ def _prepare(catalog, target, function, descriptor, arguments):
         names.add(name)
         if len(names) > 128:
             raise ValueError('Parameter count exceeds 128')
-        encoding, constraint = None, None
+        encoding, constraint, pod_profile = None, None, None
         if kind == 'BoolProperty':
             encoding = int(row['bool_encoding'], 16)
             byte_offset, field_mask = (encoding >> 8) & 255, (encoding >> 24) & 255
@@ -183,6 +217,9 @@ def _prepare(catalog, target, function, descriptor, arguments):
                          for element in range(dimension) for bit in range(8) if field_mask & (1 << bit)}
         else:
             expected = _FORMATS[kind][1] if kind in _FORMATS else 8 if kind in ('ObjectProperty', 'ClassProperty') else None
+            if kind == 'StructProperty' and pod_values:
+                constraint, profile = _observed_pod_profile(catalog, row, pod_descriptors)
+                pod_profile, expected = profile.path, profile.width
             if expected is None:
                 raise UnsupportedInvocation(f'{name}: {kind} needs an additional verified codec/lifetime contract')
             if width != expected:
@@ -197,7 +234,7 @@ def _prepare(catalog, target, function, descriptor, arguments):
         if occupied & locations:
             raise ValueError('Parameter storage overlaps')
         occupied.update(locations)
-        parameters.append(Parameter(name, kind, offset, width, dimension, row['flags'], encoding, constraint))
+        parameters.append(Parameter(name, kind, offset, width, dimension, row['flags'], encoding, constraint, pod_profile))
     returns = [parameter for parameter in parameters if parameter.flags & RETURN]
     if (len(returns) > 1 or (returned == 65535) != (len(returns) == 0) or
             (returns and (returns[0].offset != returned or returns[0].dimension != 1))):
@@ -219,6 +256,8 @@ def _prepare(catalog, target, function, descriptor, arguments):
                 if type(item) is not bool: raise ValueError(f'{parameter.name}: expected bool')
                 if item:
                     data[at + ((parameter.boolean_encoding >> 8) & 255)] |= (parameter.boolean_encoding >> 16) & 255
+            elif parameter.kind == 'StructProperty':
+                data[at:at + parameter.width] = _pod_values.encode(parameter.pod_profile, item)
             elif parameter.kind in ('ObjectProperty', 'ClassProperty'):
                 if item is None: continue
                 if not isinstance(item, ObjectSnapshot): raise ValueError('Object arguments require observed identities, not addresses')
@@ -241,4 +280,4 @@ def _prepare(catalog, target, function, descriptor, arguments):
                 try: struct.pack_into('<' + fmt, data, at, item)
                 except (OverflowError, struct.error) as error: raise ValueError(f'{parameter.name}: value cannot fit storage') from error
     return CallPlan(target, function, info['flags'], int(info['entry_rva'], 16), size, extent, returned,
-                    tuple(parameters), bytes(data), tuple(patches))
+                    tuple(parameters), bytes(data), tuple(patches), 2 if pod_values else 1)
