@@ -152,6 +152,15 @@ class Session:
         from ._traces import start
         return start(self, function, exemplar, target=target, duration_ms=duration_ms, limit=limit)
 
+    def _trace_plan_for(self, function):
+        self._check()
+        keys = ('pid', 'index', 'serial', 'address')
+        for trace in getattr(self, '_traces', ()):
+            if trace.state not in ('forgotten', 'unknown', 'session_closed') and all(
+                    getattr(trace.plan.function, key) == getattr(function, key) for key in keys):
+                return trace.plan
+        return None
+
     @property
     def supports_multi_controls(self):
         self._check()
@@ -237,6 +246,8 @@ class Session:
                 self.supports_object_leases and self.supports_reflected_invocation)
 
     def _abort_ownership(self):
+        for trace in getattr(self, '_traces', ()):
+            trace._state = 'unknown'
         for menu in getattr(self, '_menus', ()):
             action = getattr(menu, '_action', None)
             if action is not None: action._revoke('unknown')
@@ -272,7 +283,8 @@ class Session:
             raise ValueError('Invocation target must belong to this session')
         catalog = capture()
         plan = prepare_call(catalog, obj, function, arguments, pod_values=self.supports_pod_values,
-                            text_values=self.supports_text_values, enum_values=self.supports_enum_values)
+                            text_values=self.supports_text_values, enum_values=self.supports_enum_values,
+                            _trace_plan=self._trace_plan_for(function))
         return self._invoke_retained_plan(plan, catalog)
 
     def invocation_planner(self, *, selected_results=False):
@@ -446,7 +458,8 @@ class Session:
         if not isinstance(obj, ObjectSnapshot) or obj.pid != self.pid:
             raise ValueError('Invocation target must belong to this session')
         catalog = capture()
-        plan = prepare_call(catalog, obj, function, arguments, pod_values=self.supports_pod_values)
+        plan = prepare_call(catalog, obj, function, arguments, pod_values=self.supports_pod_values,
+                            _trace_plan=self._trace_plan_for(function))
         request = encode_plan(plan)
         try:
             response = self._transport.command('reflected-invoke', request)

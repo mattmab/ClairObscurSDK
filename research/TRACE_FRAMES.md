@@ -468,3 +468,30 @@ These are mocked transport/fixture checks. This API has not been validated live;
 scope ownership, original-entry metadata for invocation planning, Harness adapter
 and live/relaunch evidence remain pending. The existing deployed controller and
 v17 DLL are unchanged.
+
+## Scope cleanup and traced invocation planning — 2026-10-09
+
+SessionScope now exposes supports_traces and trace with a scope-checked wrapper.
+Normal scope close forgets only its own traces; child scopes close recursively.
+Manual trace close removes the scope's cleanup obligation. Retained wrappers
+cannot read/stop a trace after their scope is revoked. If native trace cleanup
+fails after scope revocation, all session traces become unknown and controller
+abort requests the native watcher's deferred close path. This failure path can
+close other mods' shared native resources; the scope reports the failure rather
+than claiming isolated cleanup succeeded.
+
+The external reflection probe explicitly rejects FUNCTION_ENTRY_OUTSIDE_MODULE,
+so describing a currently traced function cannot be used to prepare invocation.
+TracePlan now retains the immutable descriptor observed before installation.
+Session invoke, retained invoke and reusable invocation planning select it only
+for the matching session trace function identity. prepare_call still resolves the
+current function/target identities and hierarchy and validates arguments against
+the retained schema. The native dispatch independently revalidates the full live
+schema and exact owned entry; cached metadata is not treated as current authority.
+General ownership abort also revokes trace handles.
+
+All368 tests pass (evidence/trace-scope-tests.log). New checks cover isolated and
+child-scope unload, manual close, cleanup failure, revoked wrappers and planning
+without the external hooked-entry reader, including stale identity and invalid
+argument rejection. Live evidence is still pending. The original Harness adapter
+is the next integration step; no v18 runtime was loaded during these tests.

@@ -63,6 +63,47 @@ class ScopedConsole:
             self._exposed.clear()
 
 
+class ScopedTrace:
+    """A trace handle whose public operations require its mod scope to be live."""
+    def __init__(self, scope, native):
+        self._scope, self._native = scope, native
+
+    @property
+    def state(self):
+        self._scope._check()
+        return self._native.state
+
+    @property
+    def plan(self):
+        self._scope._check()
+        return self._native.plan
+
+    def read(self):
+        self._scope._check()
+        return self._native.read()
+
+    def status(self):
+        self._scope._check()
+        return self._native.status()
+
+    def stop(self):
+        self._scope._check()
+        return self._native.stop()
+
+    def close(self):
+        self._scope._check()
+        self._native.close()
+        if self._native in self._scope._traces:
+            self._scope._traces.remove(self._native)
+
+    def __enter__(self):
+        self._scope._check()
+        return self
+
+    def __exit__(self, *_exc):
+        self.close()
+
+
 class SessionScope:
     """A mod can release its resources without closing another mod's transport.
 
@@ -81,6 +122,7 @@ class SessionScope:
         self._owner = threading.get_ident()
         self._closed = False
         self._hooks = []
+        self._traces = []
         self._leases = []
         self._menus = []
         self.console = ScopedConsole(self)
@@ -96,6 +138,18 @@ class SessionScope:
             if parent is None or parent._closed:
                 raise RuntimeError('Parent resource scope is closed')
         self._session._check()
+
+    @property
+    def supports_traces(self):
+        self._check()
+        return self._session.supports_traces
+
+    def trace(self, function, exemplar, *, target=None, duration_ms=10000, limit=100):
+        self._check()
+        native = self._session.trace(function, exemplar, target=target,
+                                     duration_ms=duration_ms, limit=limit)
+        self._traces.append(native)
+        return ScopedTrace(self, native)
 
     @property
     def supports_multi_controls(self):
@@ -247,6 +301,23 @@ class SessionScope:
             except BaseException as error:
                 errors.append(type(error).__name__)
         self._children.clear()
+        trace_cleanup_failed = False
+        for trace in reversed(self._traces):
+            try:
+                trace.close()
+            except BaseException as error:
+                trace_cleanup_failed = True
+                errors.append('trace cleanup: ' + type(error).__name__)
+        self._traces.clear()
+        if trace_cleanup_failed:
+            # The scope is already revoked and cannot own a deferred retry.
+            # Controller exit invokes the target-owned close/retry machinery.
+            for trace in getattr(self._session, '_traces', ()):
+                trace._state = 'unknown'
+            try:
+                self._session._transport._abort()
+            except BaseException as error:
+                errors.append('trace controller cleanup: ' + type(error).__name__)
         menus_closed = True
         for menu in reversed(self._menus):
             try:

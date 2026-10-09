@@ -2,13 +2,31 @@ from types import SimpleNamespace
 from unittest.mock import patch
 import unittest
 import struct
+from dataclasses import replace
+from expedition33 import RuntimeQueryError
 
 from expedition33.tracing import prepare_trace, decode_trace
-from expedition33.invocation import PARM, OUT, RETURN, REFERENCE
+from expedition33.invocation import PARM, OUT, RETURN, REFERENCE, prepare_call
 import test_invocation
 
 
 class TraceSchemaTests(unittest.TestCase):
+    def test_traced_invocation_uses_retained_descriptor_with_current_identity_checks(self):
+        field = self.fixture.field('Input', 'IntProperty', 0, 4)
+        trace = self.plan([field], 4)
+        with patch('expedition33.invocation.describe', side_effect=AssertionError('hooked entry cannot be described')):
+            plan = prepare_call(self.fixture.catalog, self.fixture.target, self.fixture.function,
+                                {'Input': 7}, _trace_plan=trace)
+            self.assertEqual(plan.entry_rva, 0x1234)
+            self.assertEqual(plan.data, struct.pack('<i', 7))
+            with self.assertRaises(ValueError):
+                prepare_call(self.fixture.catalog, self.fixture.target, self.fixture.function,
+                             {}, _trace_plan=trace)
+            stale = replace(trace, function=replace(trace.function, serial=999))
+            with self.assertRaises(RuntimeQueryError):
+                prepare_call(self.fixture.catalog, self.fixture.target, self.fixture.function,
+                             {'Input': 7}, _trace_plan=stale)
+
     def setUp(self):
         self.fixture = test_invocation.InvocationTests()
         self.fixture.setUp()

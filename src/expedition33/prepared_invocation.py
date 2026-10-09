@@ -76,7 +76,8 @@ class InvocationPlanner:
         from .invocation import prepare_call
         plan = prepare_call(self._catalog, obj, function, arguments,
             pod_values=session.supports_pod_values, text_values=session.supports_text_values,
-            enum_values=session.supports_enum_values)
+            enum_values=session.supports_enum_values,
+            _trace_plan=getattr(session, '_trace_plan_for', lambda _: None)(function))
         return PreparedInvocation(self, plan)
 
     def close(self):

@@ -158,7 +158,8 @@ _FORMATS = {'ByteProperty': ('B', 1, 0, 255), 'UInt16Property': ('H', 2, 0, 6553
             'FloatProperty': ('f', 4, None, None), 'DoubleProperty': ('d', 8, None, None)}
 
 
-def prepare_call(catalog, target, function, arguments, *, pod_values=False, text_values=False, enum_values=False):
+def prepare_call(catalog, target, function, arguments, *, pod_values=False, text_values=False, enum_values=False,
+                 _trace_plan=None):
     """Describe a current UFunction and prepare named arguments without executing it.
 
 Zeroed object slots have separate identity patches; caller-supplied integer
@@ -173,7 +174,15 @@ Output/return types must also be supported before a plan can be built.
         raise ValueError('Expected a reflected Function identity')
     if function.outer_index not in catalog.ancestors(target.class_index):
         raise ValueError('Function owner is not in the target class hierarchy')
-    descriptor = describe(catalog, (function,))[function.index]
+    if _trace_plan is None:
+        descriptor = describe(catalog, (function,))[function.index]
+    else:
+        # Registered observers retain pre-install metadata because the external
+        # reader rejects our DLL thunk as an out-of-image native entry. This is
+        # an old observation, not dispatch authority; native validation remains.
+        if catalog.resolve(_trace_plan.function) != function:
+            raise ValueError('Trace plan belongs to a different function')
+        descriptor = _trace_plan.descriptor
     return _prepare(catalog, target, function, descriptor, arguments, pod_values=pod_values, text_values=text_values, enum_values=enum_values)
 
 

@@ -34,6 +34,7 @@ class TracePlan:
     parameters: tuple
     fields: tuple
     capture_size: int
+    descriptor: object
 
 
 @dataclass(frozen=True)
@@ -108,4 +109,4 @@ Their layouts must not silently fall back to copying pointer-bearing bytes.
     if len(fields) > 128 or destination > 4096:
         raise ValueError('Trace normalized capture exceeds bounded capacity')
     return TracePlan(function, info['flags'], entry, size, extent, returned, parameters,
-                     tuple(fields), destination)
+                     tuple(fields), destination, descriptor)
