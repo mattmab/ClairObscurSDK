@@ -1,18 +1,27 @@
 # MILESTONES
 
-Updated: 2026-10-08
+Updated: 2026-10-09
 
 Evidence labels: OBSERVED = directly seen; PROVEN = reproduced with a stated test; INFERRED = supported interpretation; HYPOTHESIS = untested; STALE/DISPROVEN = superseded or contradicted.
 
 ## Status
 
-Stages 0-12 are established within the documented private v0.1 scope, including live Python objects, console/mod control, packaging and completed analysis persistence.
+The original bootstrap release below is historical. The expanded user goal is
+INCOMPLETE: actual BL4 Harness parity, unified native management and keybinds,
+and updated package/lifecycle validation remain active. Live object enumeration,
+native console/persistent Python and selected Harness operations work.
+
+The first full native management panel has now passed a real Close click and
+exact viewport-focus/retained-holder restoration (2026-10-09, game PID21568).
+Its original construction took about14 minutes. Shared invocation planning is
+being tested to reduce this cost; do not infer a live speedup from offline tests.
+See MANAGEMENT_PORT.md and INTROSPECTION_PORT.md for current evidence and gaps.
 
 ## Evidence discipline
 
 Record source or command, artifact path, game fingerprint, confidence, and reproduction steps with each finding. Reference SDK behavior is not target-game evidence.
 
-## Current state: private v0.1 scope complete
+## Historical bootstrap release: original private v0.1 scope
 
 0. Environment inventoried — D: tree and installed apps inspected; MSVC 14.44.35207 and Windows SDK 10.0.26100.0 installed; x64 fixture compilation and execution proven.
 1. Target game/build fingerprinted — SHA256, x64 PE headers, local Steam build identified.

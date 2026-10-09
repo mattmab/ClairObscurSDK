@@ -13,12 +13,15 @@ from ._scope import SessionScope
 
 
 class OwnedMenuPanel:
-    def __init__(self, session, *, controls=12):
+    def __init__(self, session, *, controls=12, cached_construction=False):
         session._check()
         if not session.supports_multi_controls:
             raise ValueError('Owned menu panels require v17 multi-control support')
         if type(controls) is not int or not 1 <= controls <= 16:
             raise ValueError('A panel requires between1 and16 controls')
+        if type(cached_construction) is not bool:
+            raise ValueError('cached_construction must be bool')
+        self._cached_construction = cached_construction
         self.scope = SessionScope(session)
         self.count = controls
         self.state = 'new'
@@ -59,15 +62,27 @@ class OwnedMenuPanel:
         return result
 
     def _call(self, obj, owner, name, **args):
+        if self.state == 'building' and self._planner is not None:
+            with self._construction_call(obj, self._function(owner, name), **args):
+                pass
+            return
         return self._mutate(self.scope.invoke, obj, self._function(owner, name), **args)
 
+    def _construction_call(self, obj, function, **arguments):
+        if self._planner is None:
+            return self._mutate(self.scope.invoke_retained, obj, function, **arguments)
+        prepared = self._planner.prepare(obj, function, **arguments)
+        # Creation returns were already captured and decoded under native leases.
+        # Reuse that catalog, never synthesize entries for newly created objects.
+        return self._mutate(prepared.invoke, refresh_from_result=True)
+
     def _spawn(self, name):
-        return self._mutate(self.scope.invoke_retained,
+        return self._construction_call(
             self._default('GameplayStatics'), self._function('GameplayStatics', 'SpawnObject'),
             ObjectClass=self._class(name), Outer=self.tree).return_value
 
     def _place(self, child, x, y, width, height):
-        slot = self._mutate(self.scope.invoke_retained, self.canvas,
+        slot = self._construction_call(self.canvas,
             self._function('CanvasPanel', 'AddChildToCanvas'), Content=child).return_value
         self.children.append(child)
         self._call(slot, 'CanvasPanelSlot', 'SetPosition', InPosition={'X':float(x),'Y':float(y)})
@@ -80,7 +95,7 @@ class OwnedMenuPanel:
         self._place(label, x, y, width, height)
         # HitTestInvisible controls input without applying the disabled tint.
         self._call(label, 'Widget', 'SetIsEnabled', bInIsEnabled=True)
-        with self._mutate(self.scope.invoke_retained, label,
+        with self._construction_call(label,
                 self._function('Widget', 'SetVisibility'), InVisibility=self.invisible):
             pass
         return label
@@ -110,7 +125,9 @@ class OwnedMenuPanel:
         self.invisible = visibility('HitTestInvisible')
         self.visible = visibility('Visible')
         self.collapsed = visibility('Collapsed')
-        self.widget = self._mutate(self.scope.invoke_retained,
+        if self._cached_construction:
+            self._planner = self.scope.invocation_planner()
+        self.widget = self._construction_call(
             self._default('WidgetBlueprintLibrary'), self._function('WidgetBlueprintLibrary', 'Create'),
             WorldContextObject=self.player, WidgetType=self._class('CommonActivatableWidget'),
             OwningPlayer=self.player).return_value

@@ -102,13 +102,28 @@ class PreparedInvocation:
         planner, _ = self._check()
         return planner.prepare(self._plan.target, self._plan.function, **arguments)
 
-    def invoke(self):
+    def invoke(self, *, refresh_from_result=False):
+        """Optionally reuse the validated object-result catalog for future plans.
+
+        This revokes all existing plans before dispatch. A failed operation leaves
+        the planner empty, so a caller must explicitly refresh before proceeding.
+        Scalar-only success reuses the input catalog; it does not claim freshness.
+        """
+        if type(refresh_from_result) is not bool:
+            raise ValueError('refresh_from_result must be bool')
         planner, session = self._check()
         scope = planner._scope() if planner._scope is not None else None
         if planner._scope is not None and scope is None:
             raise RuntimeError('Invocation resource scope no longer exists')
-        result = session._invoke_retained_plan(self._plan, planner._catalog)
+        catalog = planner._catalog
+        if refresh_from_result:
+            planner._generation += 1
+            planner._catalog = None
+        result, observed = session._invoke_retained_plan(
+            self._plan, catalog, _return_catalog=True)
         if scope is not None:
             # Hold scope alive through dispatch and use the existing adoption path.
             scope._adopt_retained(result)
+        if refresh_from_result:
+            planner._catalog = observed
         return result

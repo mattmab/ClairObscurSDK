@@ -963,3 +963,80 @@ Live prepared calls, repaint speedup and this renderer's full close/reopen remai
 UNVERIFIED. This candidate does not solve the approximately 14-minute initial
 construction time. Next performance work must measure this repaint path and
 reduce construction scans without weakening identity or ownership validation.
+
+### Construction planning candidate — 2026-10-09
+
+The optional `cached_construction=True` argument on NativeManagementMenu and
+OwnedMenuPanel now uses shared planning during widget creation and layout, and
+keeps that planner for repainting. Defaults remain unchanged pending live proof.
+Each successful retained object return already captures a fresh full catalog;
+`PreparedInvocation.invoke(refresh_from_result=True)` reuses that exact decoded
+catalog for the next preparation, avoiding a second scan. No entries or class
+relations are synthesized for newly created widgets. Scalar-only calls reuse
+the existing observation and do not imply a new capture.
+
+This option revokes all prior prepared calls before dispatch. A native rejection,
+unknown acknowledgement or failed result conversion leaves the planner without
+a catalog, requiring an explicit refresh. Returned-object ownership still comes
+from same-call native leases, including scope adoption. Teardown continues to use
+ordinary fresh invocation, and does not depend on cached plans.
+
+272 offline tests pass. Added coverage checks reuse of a catalog containing a
+newly returned object, one result scan, old-plan revocation, capture failure,
+rejected dispatch with an existing owner, construction uncertainty without
+fallback, and frontend opt-in routing. Live construction timing remains pending.
+
+### Full initial renderer close and controller handover — 2026-10-09
+
+After the user explicitly resumed Computer Use, a real Close-button click
+removed the e32fc60 renderer from the viewport. The persistent console then ran
+`print(native_menu.panel.state, native_menu.panel.uncertain)` and
+`menu_evidence('after')`. At15:11:17 the host reported `closed False` (closed
+state, uncertainty false), and exact baseline verification passed. Raw evidence:
+`evidence/native-management-after.json`, compared with the preserved before file.
+The verified focus is the same game viewport and the complete retained-holder
+map matches. This closes the previously missing normal-close check; it does not
+prove relaunch or disconnect behavior of the full renderer.
+
+The original host exited0 after the cooperative registry shutdown command at
+15:11:54. A fresh source host started15:12:20 with the same pinned v17 binary.
+`scripts/benchmark_native_management.py` is called from that persistent console
+with a caller-owned `native_menu`, so failed construction does not lose the
+cleanup owner. It saves before-state, completion/failure, duration and uncertainty,
+and provides a separate exact-baseline close check. The cached-construction
+candidate began at15:13:30. Timing/visual/lifecycle results follow when complete.
+
+### Cached-construction live result — 2026-10-09
+
+PROVEN on the same game PID21568 with fresh source Python36472/native15856:
+`NativeManagementMenu(sdk, my_mod.registry, cached_construction=True)` opened in
+297.6137235 seconds. The previous uncached run took approximately850 seconds;
+these are consecutive development observations, not a controlled statistical
+benchmark. Repeated controls took approximately19.6 seconds versus56.8 seconds.
+The object-result capture and unchanged native gates remained active throughout.
+Loaded v17 DLL SHA256 remained
+`20711AF456865C0A27BC98CE2562E710D0E95D4AB32E863B6063B423FD8B6B9D`.
+
+Real mouse clicks navigated Harness details -> Actions -> Port status. The
+original Harness result appeared in the panel and SDK log at15:19:39. Visual
+inspection confirmed brighter labels, wrapped descriptions, collapsed unused
+rows, and an explicit 'More text in the SDK log' footer for the long result.
+The panel remains a rough prototype over the main menu; scrolling, responsive
+metrics, input editors, keybinds and full lifecycle integration remain pending.
+Navigation works but was not precisely timed in this run.
+
+A real Close click detached the panel. A subsequent persistent Python console
+call to `bench['verify_closed'](native_menu)` passed at15:21:50: state closed,
+uncertainty false, same PID and exact viewport identity, viewport focus restored,
+and the complete retained-holder map equal to the pre-build baseline. The
+controller remains alive and native/Python console input was demonstrated after
+close. Raw evidence: `evidence/native-management-cached-open.json`,
+`evidence/native-management-cached-after.json`, and
+`logs/native-management-cached-host.log`. The earlier full renderer's independent
+before/after evidence was preserved.
+
+The candidate materially reduces construction cost but five-minute opening and
+slow ordinary teardown remain unacceptable for release. Reopen/relaunch,
+full-renderer controller-loss cleanup, gameplay transitions and updated packaging
+are not established by this test. Cached options remain explicit while those
+validation gates and further performance work are open.

@@ -85,6 +85,33 @@ class OwnedWidgetCleanupTests(unittest.TestCase):
         self.assertEqual(prepared.invoke.call_count, 2)
         panel.scope.invoke_retained.assert_not_called()
 
+    def test_construction_uses_result_catalog_and_keeps_scalar_result_scoped(self):
+        panel, _ = self.panel()
+        panel.state = 'building'
+        panel._function = lambda *args: args
+        prepared = SimpleNamespace(invoke=Mock(return_value=nullcontext()))
+        planner = SimpleNamespace(prepare=Mock(return_value=prepared))
+        panel._planner = planner
+        # Restore the actual method hidden by the cleanup fixture.
+        OwnedMenuPanel._call(panel, 'slot', 'CanvasPanelSlot', 'SetSize', InSize={'X':10., 'Y':20.})
+        planner.prepare.assert_called_once_with('slot', ('CanvasPanelSlot', 'SetSize'), InSize={'X':10., 'Y':20.})
+        prepared.invoke.assert_called_once_with(refresh_from_result=True)
+        self.assertFalse(panel.uncertain)
+
+    def test_failed_construction_retains_unknown_state_without_fallback(self):
+        panel, _ = self.panel()
+        panel.state = 'building'
+        prepared = SimpleNamespace(invoke=Mock(side_effect=RuntimeError('lost acknowledgement')))
+        panel._planner = SimpleNamespace(prepare=Mock(return_value=prepared))
+        panel.scope.invoke_retained = Mock(side_effect=AssertionError('fallback forbidden'))
+        with self.assertRaisesRegex(RuntimeError, 'lost acknowledgement'):
+            panel._construction_call('target', 'function')
+        with self.assertRaisesRegex(RuntimeError, 'no retry'):
+            panel._construction_call('target', 'function')
+        self.assertTrue(panel.uncertain)
+        self.assertEqual(prepared.invoke.call_count, 1)
+        panel.scope.invoke_retained.assert_not_called()
+
     def test_planner_cleanup_follows_native_cleanup(self):
         panel, operations = self.panel()
         panel._planner = SimpleNamespace(close=lambda: operations.append('planner-close'))

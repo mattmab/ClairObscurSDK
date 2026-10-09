@@ -8,7 +8,8 @@ from expedition33.management_native import NativeManagementMenu, display_line, d
 
 
 class FakePanel:
-    def __init__(self, session):
+    def __init__(self, session, *, cached_construction=False):
+        self.cached_construction = cached_construction
         self.count = 12
         self.title, self.detail = 'title', 'detail'
         self.buttons = list(range(12))
@@ -18,6 +19,7 @@ class FakePanel:
         self.menu = SimpleNamespace(bind_control=self.bind)
         self.defer = False
     def build(self): self.operations.append('build')
+    def enable_cached_planning(self): self.operations.append('planner')
     def open(self): self.operations.append('open')
     def set_text(self, label, text): self.text[label] = text
     def set_enabled(self, index, enabled): self.enabled[index] = enabled
@@ -52,6 +54,14 @@ class NativeManagementTests(unittest.TestCase):
         control = next(c for c in self.menu.frame.controls if c.label == label)
         handle = next(h for h in self.menu.actions if h.button == control.token)
         handle.callback(None)
+
+    def test_explicit_planning_options_reach_panel_before_attachment(self):
+        with patch('expedition33.management_native.OwnedMenuPanel', FakePanel):
+            menu = NativeManagementMenu(None, self.registry, cached_planning=True, cached_construction=True)
+        menu.open()
+        self.assertTrue(menu.panel.cached_construction)
+        self.assertEqual(menu.panel.operations[:3], ['build', 'planner', 'open'])
+        menu.close()
 
     def test_click_navigation_updates_native_labels_and_shared_registry(self):
         self.start()

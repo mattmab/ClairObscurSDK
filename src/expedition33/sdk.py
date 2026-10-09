@@ -267,7 +267,7 @@ class Session:
         from .prepared_invocation import InvocationPlanner
         return InvocationPlanner(self)
 
-    def _invoke_retained_plan(self, plan, catalog):
+    def _invoke_retained_plan(self, plan, catalog, *, _return_catalog=False):
         self._check()
         from .invocation import decode_result, UnsupportedInvocation, InvocationError
         from .ownership import ObjectLease, RetainedInvocation
@@ -315,7 +315,8 @@ class Session:
             identities = {offset: index for offset, index, *_ in reply.objects}
             for offset, lease in acquired:
                 lease._object = current.by_index[identities[offset]]
-            return RetainedInvocation(self, result, tuple(lease for _, lease in acquired))
+            owned = RetainedInvocation(self, result, tuple(lease for _, lease in acquired))
+            return (owned, current) if _return_catalog else owned
         except BaseException as error:
             # A construction failure before all tokens were adopted must close
             # the controller; otherwise clean up only this invocation's owners.

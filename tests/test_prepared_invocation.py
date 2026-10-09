@@ -92,6 +92,51 @@ class PreparedRetainedTests(unittest.TestCase):
         self.assertTrue(existing.active)
         self.assertEqual(len(self.transport.tokens), 1)
 
+    def test_creation_catalog_is_reused_without_second_scan_and_old_plans_revoked(self):
+        from dataclasses import replace
+        from expedition33.catalog import Catalog
+        planner, prepared = self.planner()
+        original = self.p.catalog
+        created = replace(self.p.target, index=max(original.by_index) + 1,
+                          address=self.p.target.address + 0x10000, name='Created')
+        observed = Catalog(original.pid, (*original.objects, created), tuple(original.classes.values()))
+        self.transport.obj = created
+        self.assertNotIn(created.index, original.by_index)
+        with patch('expedition33.catalog.capture', return_value=observed) as capture:
+            result = prepared.invoke(refresh_from_result=True)
+            self.assertEqual(result.return_value, created)
+            self.assertIs(planner._catalog, observed)
+            with self.assertRaisesRegex(RuntimeError, 'revoked'): prepared.invoke()
+            with patch('expedition33.invocation.prepare_call', return_value=prepared._plan) as prepare:
+                planner.prepare(created, self.p.function)
+                self.assertIs(prepare.call_args.args[0], observed)
+                self.assertEqual(prepare.call_args.args[1], created)
+            self.assertEqual(capture.call_count, 1)
+        self.assertTrue(result.active)
+        result.release()
+        self.assertFalse(self.transport.tokens)
+
+    def test_failed_result_refresh_leaves_no_catalog_and_does_not_repeat_dispatch(self):
+        planner, prepared = self.planner()
+        with patch('expedition33.catalog.capture', side_effect=RuntimeQueryError('capture failed')):
+            with self.assertRaises(InvocationError): prepared.invoke(refresh_from_result=True)
+        self.assertIsNone(planner._catalog)
+        with self.assertRaisesRegex(RuntimeError, 'Refresh the planner'):
+            planner.prepare(self.p.target, self.p.function)
+        with self.assertRaisesRegex(RuntimeError, 'revoked'): prepared.invoke()
+        self.assertEqual(self.transport.calls.count('retained-invoke'), 1)
+        self.assertFalse(self.transport.tokens)
+
+    def test_rejected_result_refresh_preserves_existing_owner_but_revokes_plans(self):
+        planner, prepared = self.planner()
+        owner = self.session.retain(self.p.target)
+        self.transport.error, self.transport.outcome = 401, 0
+        with self.assertRaises(InvocationError): prepared.invoke(refresh_from_result=True)
+        self.assertTrue(owner.active)
+        self.assertIsNone(planner._catalog)
+        with self.assertRaisesRegex(RuntimeError, 'revoked'): prepared.invoke()
+        self.assertEqual(self.transport.calls.count('retained-invoke'), 1)
+
     def test_scoped_prepared_results_share_existing_cleanup(self):
         scope = SessionScope(self.session)
         with patch('expedition33.catalog.capture', return_value=self.p.catalog):
