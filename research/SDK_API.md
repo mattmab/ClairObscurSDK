@@ -285,3 +285,10 @@ values; use registry views to render current state.
 Offline integration tests cover native event delivery, stale-generation rejection,
 menu-close revocation and argument isolation. The adapter itself is not yet live
 validated and does not implement a multi-control Mods Menu or general keybinds.
+
+Live follow-up: the management callback adapter passed three real mouse clicks in
+game16344: original dispatch, stale-selection rejection after reload, then dispatch
+to a refreshed selection after rebinding. Native menu/holder/focus cleanup and
+normal Session close passed. See MANAGEMENT_PORT.md and
+`scripts/verify_live_management_button.py`. This proves the single-button bridge;
+multiple controls and keyboard dispatch remain pending.

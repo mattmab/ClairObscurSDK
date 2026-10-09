@@ -763,3 +763,27 @@ Three new offline tests cover actual ButtonAction event decoding into registry
 invocation, unload/reload rejection, menu-close revocation, immutable argument
 snapshots and binding validation. All20 targeted management/button tests pass.
 Live adapter validation, multiple controls and keyboard dispatch remain pending.
+
+### Live registry-button validation — 2026-10-09
+
+`verify_live_management_button.py` passed in game16344. Three separate real mouse
+clicks exercised the shared registry: the original mod received one copied JSON
+argument; after unload/reload, the still-bound old selection raised ManagementError
+without invoking either instance; after explicit unbind/rebind, the replacement
+received exactly one invocation. The error remained in ButtonAction's failure
+history. The visible labelled button was removed, viewport focus restored, root
+and children removed, and exact native holder baseline restored. The borrowed
+loader closed; the outer Session and probe exited normally with code0.
+
+The previous packaged management host was first closed through native-console
+`mods select sdk.management` / `mods action shutdown`; retained process handles
+confirmed Python16692 and controller24140 both exited0. Game16344 stayed running.
+The probe used source Python23876/controller7140 and the already-resident v16
+runtime. This is a live source-adapter test, not a new package/relaunch test.
+The persistent source management/Harness host was then restarted normally.
+
+Evidence: `management-button-progress.json`, `management-button-widget-live.json`,
+`management-button-run.log`, `management-button-package-exit.json`, and the immutable
+per-run result under `evidence/management-button-260f9a3ddd794df3b6d8af8aa70a25ea/`.
+No gameplay, keyboard activation or multi-control menu was exercised. The next
+UI gate remains multiple independently owned controls and keyboard input ownership.
