@@ -1238,3 +1238,18 @@ with confirmed native cleanup, not recovery from uncertain native hooks. It
 validates a fresh loader inside one controller/game session. Full game relaunch,
 controller restart with the recovered fixture, broader Harness parity and menu/
 keybind requirements remain open. This candidate is not a finished release.
+
+### General trace frame audit — 2026-10-09
+
+Fresh Ghidra disassembly establishes dispatcher-relative frame fields and confirms
+that helper141280940 installs/restores a distinct current-function field at+90.
+The known Actor thunk writes its return through a separate pointer; out parameters
+have caller-buffer addresses in a linked chain. Copying only frame locals would
+therefore not reproduce the original Harness POST argument/result semantics.
+See TRACE_FRAMES.md for exact instruction evidence, scope and next native proof
+requirements. Raw assembly is in evidence/trace-frame-{dispatch,invoke}.json and
+trace-getter-thunk.json. General trace operations remain unadvertised and disabled.
+
+Also corrected stale Harness status text that still described staged installation
+as pending. The original BL4 core is unchanged. All348 source tests pass in
+evidence/trace-audit-tests.log. No resident DLL/controller was replaced this turn.

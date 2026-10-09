@@ -481,7 +481,7 @@ class Harness:
                 result['write_types'] = ['ObjectProperty'] if self._backend.assignment else []
                 result['limitations'] = ['Stored scalars, strings, references, selected arrays and bounded reflected structs; opaque native state is not owned',
                     ('Set supports scalar ObjectProperty only; other writes pending' if self._backend.assignment else 'Writes pending') +
-                    '; general traces and staged mod reload pending; invocation requires opt-in v6 and supported parameter types',
+                    '; general traces pending; staged installation is available through the management agent; invocation requires opt-in v6 and supported parameter types',
                     ('Retain supports copied primitives and leased object outputs; opaque native values unsupported'
                      if self._backend.retained else 'Invocation retain and opaque native values unsupported') +
                     '; out parameters use named return/out result fields',
