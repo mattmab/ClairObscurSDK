@@ -638,3 +638,14 @@ widget/controller and both keyboard/user focus getters, then both test scopes
 clean up to exact holder baselines and restore the viewport. Game relaunch and
 deferred scope cleanup remain separate gates. Native actionable controls,
 shared-registry presentation and key dispatch are still incomplete.
+
+Button action investigation now establishes the actual live/static callback
+chain (BUTTON_EVENTS.md): OnClicked is a multicast field, and the owned SButton
+uses a weak-UObject native delegate whose click method broadcasts that field.
+The signature entry is shared dispatch, while IsPressed is only a state query;
+neither supplies a verified click event hook. Live constructed-button storage
+matches the derived delegate layout and the specimen cleans up exactly. Delegate
+cloning copies the callback pointer, so a single-slot swap/restore is insufficient
+proof of teardown. Next choose and verify an owned delegate/receiver mechanism
+with bounded transport events and persistent Python dispatch before adding menu
+actions. No button callback hook or action registration is implemented yet.
