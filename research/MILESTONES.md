@@ -6,6 +6,12 @@ Evidence labels: OBSERVED = directly seen; PROVEN = reproduced with a stated tes
 
 ## Status
 
+User-directed release convergence now supersedes exhaustive parity as the v0.1
+target. See [RELEASE_CONVERGENCE.md](RELEASE_CONVERGENCE.md): frozen-scope baseline
+51%, explicitly a changed denominator rather than newly completed engineering.
+Execution order: menu performance, minimal keys, integration/portable package,
+then the nine representative fresh-process acceptance checks.
+
 Current expanded-release assessment: [V01_PROGRESS.md](V01_PROGRESS.md),
 2026-10-09 at implementation6c0cfc8:49% overall,56% functional,45% live coverage,
 36% release readiness. These are evidence-based planning estimates, not a release

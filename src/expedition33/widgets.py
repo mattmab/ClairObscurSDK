@@ -46,15 +46,17 @@ class OwnedMenuPanel:
         return rows[0]
 
     def _function(self, owner, name):
+        owner_index = self._class(owner).index
         return self._one(o for o in self.catalog.objects
-            if o.outer_index == self._class(owner).index and o.name == name)
+            if o.outer_index == owner_index and o.name == name)
 
     def _class(self, name):
         return self.catalog.by_index[self.catalog.find_class(name).index]
 
     def _default(self, name):
+        class_index = self._class(name).index
         return self._one(o for o in self.catalog.objects
-            if o.class_index == self._class(name).index and o.name == 'Default__' + name)
+            if o.class_index == class_index and o.name == 'Default__' + name)
 
     def _mutate(self, method, *args, **kwargs):
         if self.uncertain:

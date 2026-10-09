@@ -1,5 +1,17 @@
 # Unified management harness: source audit and feature matrix
 
+Release convergence update: full workspace parity is deferred per the user.
+The native-menu blocker remains responsiveness and the minimal complete keybind
+flow. scripts/profile_native_management.py profiles a single operation on the
+existing owner without attaching another controller or retrying mutations.
+A read-only live-catalog microbenchmark (PID39900,96072objects,100lookups) measured
+1.30245s for repeated class resolution inside each object scan versus0.20920s
+with owner resolution hoisted outside the scan; identities matched exactly.
+widgets.py now hoists those invariant lookups in _function and _default without
+caching new metadata or changing native validation. The12owned-widget tests pass.
+This is a bounded lookup improvement, not a demonstrated full-menu speedup.
+Evidence: evidence/widget-lookup-profile.json and evidence/menu-lookup-tests.log.
+
 Updated2026-10-08. Status: shared registry/settings/actions and console frontend
 implemented; no E33 native menu or general keybind implementation is claimed. The existing E33 console and Introspection
 Harness remain operational. The full additional request, including all17 live

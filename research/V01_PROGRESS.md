@@ -1,5 +1,10 @@
 # Expanded v0.1 progress assessment
 
+Historical scope baseline: the user's subsequent release-convergence instruction
+explicitly defers exhaustive parity. See RELEASE_CONVERGENCE.md for the frozen
+release denominator, mandatory gates and execution order. Do not use this report's
+expanded-scope workload estimate as the reduced release ETA.
+
 Assessment date: 2026-10-09. Implementation baseline: 6c0cfc8.
 This assesses the expanded user goal: independent SDK, original BL4 Harness,
 native management workspace, console fallback, configurable keybinds and a
