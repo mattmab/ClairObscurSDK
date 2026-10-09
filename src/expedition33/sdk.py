@@ -40,19 +40,21 @@ class Hook:
 
 
 class Session:
-    """One native session with fixed observation and opt-in reflected calls.
+    """One native session with fixed observation, opt-in calls and object leases.
 
     Object snapshots are observations, never owning pointers. Native identity,
     thread, build, layout and lifetime checks remain authoritative for each call.
     Close explicitly or use a context manager to remove hooks deterministically.
     """
-    def __init__(self, *, reflected=False):
-        if type(reflected) is not bool:
-            raise ValueError('reflected must be a bool')
+    def __init__(self, *, reflected=False, leases=False):
+        if type(reflected) is not bool or type(leases) is not bool:
+            raise ValueError('reflected and leases must be bools')
+        backend = 'research-probe-v7' if leases else 'research-probe-v6'
         self._transport = (SessionTransport(_executable=Path(__file__).resolve().parents[2] /
-                           'build/research-probe-v6/research_probe.exe') if reflected else SessionTransport())
+                           f'build/{backend}/research_probe.exe') if reflected or leases else SessionTransport())
         self._dispatcher = CallbackDispatcher()
         self._hooks = []
+        self._leases = set()
         self._enabled = False
         self._closed = False
         self._polling = False
@@ -98,6 +100,74 @@ class Session:
     def supports_reflected_invocation(self):
         self._check()
         return getattr(self._transport, 'reflected_protocol', 0) == 1
+
+    @property
+    def supports_object_leases(self):
+        self._check()
+        return getattr(self._transport, 'lease_protocol', 0) == 1
+
+    def _lease_command(self, command, **kwargs):
+        from . import _lease_wire as wire
+        from .ownership import LeaseError
+        packet = wire.request(command, **kwargs)
+        try:
+            response = self._transport.command(command, packet)
+            reply = wire.decode(command, packet, response['lease_packet'])
+        except (RuntimeQueryError, ValueError, KeyError) as error:
+            # A bad acknowledgement may follow successful native mutation.
+            # End this controller so target-owned cleanup runs; never retry it.
+            for lease in self._leases:
+                lease._state = 'unknown'
+            if not getattr(self._transport, '_closed', False):
+                self._transport._abort()
+            raise LeaseError(f'Lease acknowledgement unavailable: {error}', outcome='unknown') from error
+        if reply.outcome != 'completed':
+            if reply.outcome == 'unknown':
+                for lease in self._leases:
+                    lease._state = 'unknown'
+                self._transport._abort()
+            raise LeaseError('Native lease operation did not complete', outcome=reply.outcome, native_error=reply.error)
+        return reply
+
+    def retain(self, obj):
+        """Retain an existing observed object with an independent native lease.
+
+        Requires Session(leases=True). This separate operation is not suitable
+        for retaining a newly created invocation result across a GC gap.
+        """
+        self._check()
+        from .ownership import ObjectLease, LeaseError
+        if not self.supports_object_leases:
+            raise LeaseError('This session has no object lease backend', outcome='not_dispatched')
+        if not isinstance(obj, ObjectSnapshot) or obj.pid != self.pid:
+            raise ValueError('Retained object must belong to this session')
+        reply = self._lease_command('lease-acquire', object=obj)
+        if reply.error:
+            raise LeaseError('Native object acquisition rejected', outcome=reply.outcome, native_error=reply.error)
+        lease = ObjectLease(self, reply.token, obj)
+        self._leases.add(lease)
+        return lease
+
+    def _release_lease(self, lease):
+        self._check()
+        from .ownership import LeaseError
+        if lease not in self._leases:
+            raise LeaseError('Lease does not belong to this session', outcome='not_dispatched')
+        reply = self._lease_command('lease-release', token=lease._token)
+        if reply.error == 407:
+            lease._state = 'pending_release'
+            return False
+        if reply.error:
+            lease._state = 'invalid'
+            raise LeaseError('Native lease release rejected', outcome=reply.outcome, native_error=reply.error)
+        lease._state = 'released'
+        self._leases.remove(lease)
+        return True
+
+    def _release_pending_leases(self):
+        for lease in tuple(getattr(self, '_leases', ())):
+            if lease.release_pending:
+                self._release_lease(lease)
 
     def invoke(self, obj, function, **arguments):
         """Invoke an observed native UFunction through the opt-in v6 backend.
@@ -160,6 +230,7 @@ class Session:
         self._polling = True
         delivered = 0
         try:
+            self._release_pending_leases()
             batch = self._transport.command('drain')
             self.dropped_events += batch['dropped']
             identity = ObservedIdentity(self._object.pid, self._object.index, self._object.serial,
@@ -184,9 +255,16 @@ class Session:
         self._transport._check_thread()
         if self._closed:
             return
+        leases_closed = False
+        transport_was_closed = getattr(self._transport, '_closed', False)
         try:
             self._transport.close()
+            leases_closed = not transport_was_closed
         finally:
+            for lease in getattr(self, '_leases', ()):
+                lease._state = 'released' if leases_closed and lease._state != 'unknown' else 'unknown'
+            if hasattr(self, '_leases'):
+                self._leases.clear()
             self.console._close()
             self._dispatcher.close()
             self._hooks.clear()

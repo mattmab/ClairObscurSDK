@@ -1,5 +1,6 @@
 """Mod-owned resources on a shared controller Session; trusted code, not a sandbox."""
 import threading
+import weakref
 
 
 class ScopedConsole:
@@ -73,6 +74,7 @@ class SessionScope:
         self._owner = threading.get_ident()
         self._closed = False
         self._hooks = []
+        self._leases = []
         self.console = ScopedConsole(self)
 
     def _check(self):
@@ -104,6 +106,19 @@ class SessionScope:
         self._check()
         return self._session.invoke(obj, function, **arguments)
 
+    @property
+    def supports_object_leases(self):
+        self._check()
+        return self._session.supports_object_leases
+
+    def retain(self, obj):
+        self._check()
+        lease = self._session.retain(obj)
+        lease._scope = weakref.ref(self)
+        self._leases = [value for value in self._leases if value.active or value.release_pending]
+        self._leases.append(lease)
+        return lease
+
     def hook(self, obj, target, callback):
         self._check()
         if not callable(callback):
@@ -133,6 +148,12 @@ class SessionScope:
         # Revoke callback access before any transport operation can fail.
         self._closed = True
         errors = []
+        for lease in reversed(self._leases):
+            try:
+                lease.release()
+            except BaseException as error:
+                errors.append(type(error).__name__)
+        self._leases.clear()
         for hook in reversed(self._hooks):
             try:
                 hook.remove()

@@ -1,8 +1,9 @@
 # Experimental native object leases — 2026-10-09
 
-An isolated v7 transport now implements target-derived strong UObject leases.
-This is an internal SDK primitive, not full Explorer retain or a public Python
-ownership API. Target: Steam23765773, executable SHA256
+The v7 transport implements target-derived strong UObject leases, exposed through
+Session and mod scopes for existing objects. Full Explorer result retention is
+unfinished. The initial native proof and subsequent public API proof are recorded
+below. Target: Steam23765773, executable SHA256
 218a2478aad5b3a1674b5d7097ec1ac4f994abb95466f9da1407fcd39d639618.
 
 ## Implementation
@@ -72,9 +73,57 @@ independent duplicate ownership, stale/session tokens, deferred close, rejection
 rollback and uncertain registration/destruction. The18 invocation packet checks
 and default v5 compilation pass; all97 Python tests pass.
 
-Next: expose scoped Python leases, release them on mod/Harness lifecycle changes,
-and retain object-valued invocation outputs inside the SAME game-thread request.
+Next: retain object-valued invocation outputs inside the SAME game-thread request
+and connect ownership to the original Harness lifecycle.
 Separate acquire after returning Create's result would still leave a GC gap.
 Then validate a bounded widget create/add/remove/release specimen, collection
 survival, focus restoration, game relaunch and isolated packaging. Full Harness
 parity, native UMG and key dispatch remain unfinished.
+
+## Public and mod-scoped Python ownership — subsequent milestone
+
+The initial internal-only boundary above is superseded for existing objects:
+`Session(leases=True).retain(observation)` now returns an `ObjectLease`. It also
+enables reflected invocation. `launch.cmd management --leases` selects this
+backend for the persistent mod host; default and `--reflected` remain available.
+
+```python
+# Use the session supplied to your mod; do not open a second native owner.
+with session.retain(existing_object) as lease:
+    result = session.invoke(lease.object, verified_function)
+```
+
+`lease.object` is an identity observation accessible while the lease is active,
+not permission to dereference native memory or bypass future identity checks.
+`release()` returns True after acknowledgement. A confirmed GC deferral returns
+False, revokes access immediately and queues cleanup on the session's owner-thread
+poll path. `release_pending` reports that state. Unknown acknowledgements abort
+the controller for native watcher cleanup and never trigger automatic retries.
+`LeaseError` exposes outcome and native_error. A failed/unknown close does not
+pretend that individual releases were acknowledged.
+
+ModLoader-provided scopes track their own leases. Closing one scope releases or
+queues only that scope's holders, blocks subsequent access, and keeps the shared
+session/other mods usable. Dropping a Python lease does not invoke native code:
+the root session retains bookkeeping until explicit release or shutdown. Use a
+context manager or release explicitly to avoid exhausting the128-holder bound.
+
+Live test `scripts/verify_live_python_leases.py` observed both mod holders in the
+engine list, closed one scope, and invoked IsLocalController through the other
+scope's leased observation. It also passed context-manager cleanup, stale-serial
+rejection and session cleanup. The exact baseline set of holder addresses and
+object identities was restored, not only its count. Evidence:
+`evidence/python-leases-live.json`. All106 Python tests pass, including deferred
+scope cleanup, malformed acknowledgements, wrong-thread rejection and failed
+close state handling.
+
+Persistent v7 host20776/session7d916f8d7f91485c8d80c76d86a7cbe1 was started after
+the controlled test. File-service roots work. In-game Python executed
+`with sdk.retain(sdk.find_object("Default__Actor")) as lease: print("lease active:", lease.active)`
+and printed True; the subsequent native probe found only the three baseline
+generic holders. Logs: `logs/management-host-v7.stderr.log`.
+
+Still pending: atomic retention of object-valued invocation outputs, original
+Explorer retain/release semantics, new-widget collection survival and relaunch
+validation. This existing-object API cannot close the gap between Create's return
+and a later Python retain command. It must not be used to claim that gap is solved.

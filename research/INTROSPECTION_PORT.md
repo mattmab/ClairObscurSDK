@@ -573,3 +573,10 @@ restored and its console/file-service paths verified. Explorer retain remains
 unavailable until scoped Python ownership and atomic invocation-output retention
 are connected; the original Explorer core remains unchanged. This is progress
 toward full parity, not a replacement of the retained-value requirement.
+
+Public existing-object leases now work through Session and mod scopes, with live
+peer-scope cleanup and invocation proof. The persistent host runs v7 via
+`management --leases`. The original Explorer retain option is still rejected:
+object-valued results must be retained inside their invocation request before
+the original retain/release protocol can be enabled without a GC gap. The
+Explorer core remains unchanged. See OBJECT_LEASES.md for API and106-test proof.

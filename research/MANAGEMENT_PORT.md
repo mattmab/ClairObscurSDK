@@ -381,3 +381,9 @@ controller-exit cleanup proof (OBJECT_LEASES.md). Next connect scoped leases and
 retain Create's output before returning it to Python, then test a bounded widget
 lifecycle and input/focus restoration. The UMG-independent console management
 host was restored and Python execution verified after the isolated test.
+
+Mod resource scopes now expose explicit existing-object leases. Live closing of
+one scope removed only its holder; another scope's reflected getter still worked.
+The persistent management host runs v7 with `--leases`, and console-driven lease
+creation/context-manager release passed. Next native step remains atomic
+invocation-output ownership, then a widget lifecycle/focus specimen.

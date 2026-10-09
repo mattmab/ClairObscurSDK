@@ -56,4 +56,19 @@ The target restriction is intentional and enforced. This is not a general UObjec
 
 `register("my_mod.command", callback, owner=mod)` returns a removable registration; the callback receives the remaining argument string. `remove_owner(mod)` removes that owner's commands. `expose("my_mod", instance)` adds a non-reserved Python identifier. `history` returns copied dispatcher history and `complete(prefix)` returns lexical suggestions; native Up/Tab navigation for intercepted commands is unsupported. Registration changes discard queued SDK commands to prevent delivering old input to a replacement owner.
 
-`ModLoader.enable(name, console=True, console_key="F10")` enables the console before the mod and exposes its instance as `my_mod`. One enabled mod/session is supported. Trusted Python code can block its controller; the GameThread only queues input and executes scheduled native work. See DEVELOPMENT.md and CONSOLE.md for bounded queues, lifecycle evidence and shipping-build limitations.
+`ModLoader.enable(name, console=True, console_key="F10")` enables the console before the mod and exposes its instance as `my_mod`. Shared sessions support multiple enabled mods with separate resource scopes. Trusted Python code can block its controller; the GameThread only queues input and executes scheduled native work. See DEVELOPMENT.md and CONSOLE.md for bounded queues, lifecycle evidence and shipping-build limitations.
+
+## Explicit native ownership (experimental v7)
+
+`Session(leases=True)` supports `retain(existing_observation)` as well as reflected
+invocation. A mod receives the same API through its resource scope. Check
+`supports_object_leases` before using it. `ObjectLease` exposes `object`, `active`,
+`release_pending`, `release()` and context-manager cleanup. Closing a mod scope
+revokes its leases without closing peers. Only confirmed GC-deferred releases
+are queued for a later owner-thread poll; unknown operations are never retried.
+
+Snapshots alone remain non-owning. No finalizer performs engine calls. Release
+explicitly or use `with session.retain(obj) as lease:`; the native128-holder bound
+applies across all mods in the session. See OBJECT_LEASES.md for tested behavior,
+errors and limitations. Atomic retention of newly created invocation results and
+the Harness's original retain protocol are not yet implemented.
