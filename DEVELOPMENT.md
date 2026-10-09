@@ -21,7 +21,7 @@ All live results below apply only to the recorded executable fingerprint.
 | Gameplay/map transitions | Not validated; current live console/relationship evidence is from the main menu. |
 | Private v0.1 | Functional release criteria passed; package verification is recorded in research/MILESTONES.md. The recovered Ghidra research pass is tracked separately. |
 | Unified management (current checkout) | Registry, typed settings/actions and console menu implemented; console lifecycle/setting restoration live-tested. Native UMG and general keybinds pending. Not included in the existing v0.1 archive. |
-| Numeric UMG struct calls (opt-in v11) | Vector2D position/size and Margin effects verified live; a disabled UMG Button rendered in an owned canvas and cleaned up exactly. Original Harness `$struct` results and retained `$value` reuse/release passed live. Functional Mods Menu, packaged v11 startup and relaunch pending. |
+| Numeric UMG struct calls (opt-in v11) | Vector2D position/size and Margin effects verified live; a disabled UMG Button rendered and cleaned up exactly. Original Harness `$struct`/`$value` passed from an isolated v11 package after fresh game launch. Normal v11 shutdown passed. Functional Mods Menu, owned text and focus/key dispatch remain pending. |
 
 ## Interactive native console
 
@@ -390,3 +390,31 @@ The source follow-up also preserves True from already-acknowledged lease
 releases after later target exit; its ownership regression tests pass. Directly
 launching the shipping EXE did not remain running in this environment; use Steam
 for game relaunch. No game save or gameplay session was selected.
+
+## Fresh v11 package and Harness validation (2026-10-09)
+
+Candidate `expedition33-0.1.0-candidate-20261009T075928Z` contains clean source
+`3981117e93ce4e2e6e37e0c23130453c4c2fb912`. ZIP SHA256:
+`7870d6a31d6d5b1d48d6dc1d78455984711b1e2d466d14dc299d5ebd8f03b340`.
+All229 manifest files match the directory and archive; runtime logs/settings/raw
+evidence are excluded. Isolated CPython3.13.15 ran156 tests successfully, with
+two native-fixture tests skipped because those executables are not bundled.
+
+Following the visible control specimen, game25560, Python28004 and native39856
+all exited0 through normal game UI quit at04:00:50. The old Harness heartbeat
+became disabled and no shutdown traceback occurred. Steam relaunched game12912;
+package Python36508/native35688 started at04:02:14. The fresh game loaded v11
+from this candidate's own DLL path, verified from its module inventory.
+
+Native-console Python confirmed the package import path and ran its unchanged
+original-Harness typed-value specimen. At04:05:10 it passed `$struct` input and
+typed result, retained `$value` reuse/release, unsupported-type and released-value
+rejection, nested Anchors dispatch, child removal and exact holder cleanup.
+The new persistent session remains enabled. No save/gameplay session was selected.
+
+Evidence: `evidence/visible-v11-package*.json`,
+`evidence/visible-v11-package-tests.log`, `evidence/visible-v11-source-exit.json`
+and `logs/visible-v11-package.stderr.log`. This validates fresh package startup
+and v11 operation after relaunch, not gameplay/map-transition/forced-GC coverage,
+full Mods Menu behavior or text/font/key ownership. The previous private release
+archive remains unchanged; this is a development candidate.

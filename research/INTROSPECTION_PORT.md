@@ -48,9 +48,16 @@ restored. No viewport, focus or menu visibility behavior was exercised.
 Evidence: `evidence/harness-pod-live.json`,
 `logs/management-v11-harness.stderr.log`, `evidence/harness-pod-python-tests.log`.
 The preceding host was closed through its existing management action before
-loading the updated adapter. The replacement persistent host remains running.
-The native v11 DLL was reused, not rebuilt while loaded. Packaging and relaunch
-of this adapter revision remain separate pending validation.
+loading the updated adapter. The native v11 DLL was reused, not rebuilt while
+loaded. That source host subsequently exited normally with the game.
+
+Packaging/relaunch follow-up at04:05:10: isolated candidate20261009T075928Z,
+source3981117, loaded its own v11 DLL into fresh Steam-launched game12912.
+Python36508/native35688 ran the packaged original-Harness specimen successfully:
+typed values, retained reuse/release, rejection checks and exact holder cleanup
+all passed again. The console confirmed the SDK import path inside the bundle.
+The new persistent package host remains running. See DEVELOPMENT.md and
+`evidence/visible-v11-package-harness-live.json` for the package/lifecycle record.
 
 ## v10 original set integration — 2026-10-09
 

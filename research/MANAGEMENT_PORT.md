@@ -45,6 +45,12 @@ Next add owned text values and usable labels, then connect controls to the share
 registry/actions with verified input/focus restoration. The visible specimen is
 not yet a functioning Mods Menu or a general keybind implementation.
 
+The v11 source host/game completed normal exit with all exit codes0. Isolated
+candidate20261009T075928Z then loaded its own DLL into a fresh Steam launch and
+passed the original Harness typed-value probe with exact holder cleanup. The
+persistent management/console host now runs from that package. See DEVELOPMENT.md
+for the source revision, hashes, process identities and evidence.
+
 ## Preserved implementation references
 
 Primary source is the installed BL4 sdk_mods directory. Nineteen original files

@@ -123,8 +123,9 @@ The v10 controller shut down cooperatively before v11 started; no second
 persistent controller was attached. Native console Python dispatch and the
 integrated mod host remained operational. Live evidence is
 `evidence/widget-layout-live.json` and `logs/management-v11.stderr.log`.
-The new pair is included by the packaging script, but isolated-package startup
-and fresh-game relaunch for v11 still need validation.
+The new pair is included by the packaging script. The later candidate20261009T075928Z
+passed fresh-package startup after normal game exit/relaunch and the original
+Harness's typed-value/lifetime specimen; see DEVELOPMENT.md for current evidence.
 
 Clean-source package check: candidate `20261009T074043Z`, source `9b5ee40`,
 contains 226 manifest-hashed files including both v11 binaries. Directory and ZIP
@@ -176,3 +177,41 @@ is passed through virtual calls at+8 and+10 around that operation. These lifetim
 operations reinforce the ownership boundary: a16-byte FText is not a numeric POD
 or raw Python string. Constructor, copy and destructor semantics still require
 independent verification before a reusable owned text API can be implemented.
+
+## Owned text API investigation
+
+Read-only `inspect_widget_text.py` found four exact descriptors on fresh game
+PID12912; none was executed. `widget-text-schema.json` records their identities,
+parameter flags, offsets and types:
+
+| Function | Entry VA | Parameters |
+| --- | --- | --- |
+| TextBlock.GetText |1430ff930| TextProperty return at0,16bytes |
+| TextBlock.SetText |14310b570| TextProperty input at0,16bytes |
+| KismetTextLibrary.Conv_StringToText |143289f40| StrProperty input at0; TextProperty return at16;32bytes total |
+| KismetTextLibrary.Conv_TextToString |14328a000| TextProperty input at0; StrProperty return at16;32bytes total |
+
+The correlated target code in `widget-text-conversion.json`,
+`widget-text-constructor.json` and `widget-text-value-paths.json` establishes these
+static observations, not a validated callable SDK ABI:
+
+- Default text initializer1410a2cc0 obtains a shared value from1410baed0,
+  invokes its virtual+8 when non-null and sets the value's flag word to zero.
+  The shared getter has guarded initialization and exit cleanup registration.
+- Getter1430ff930 obtains the text from the widget or its Slate representation,
+  invokes virtual+8, transfers it through1410a65f0 and invokes virtual+10 on
+  the remaining local value. A read is therefore not just a16-byte copy.
+- Transfer1410a65f0 moves the data pointer, invokes virtual+10 on the destination's
+  former value, copies flags and restores the source to the default shared value.
+- String-to-text goes through1438074a0 to1410add50; its thunk releases its local
+  text value and frees its local string through14107c7d0.
+- Text-to-string calls1410bab10 then string-copy helper141027170. Its thunk moves
+  the resulting string allocation into the result, clearing the source fields,
+  and releases temporary text/string state.
+
+Next verify1410add50/1410bab10/141027170, allocator/free contracts and property
+initialization/destruction paths. A reusable implementation must materialize and
+destroy native parameters on the game thread, copy only bounded textual results
+back to Python, and explicitly own any retained native text. It must preserve
+unknown-outcome handling and avoid retrying calls after ambiguous dispatch.
+No text/font support, string conversion or label rendering is claimed yet.
