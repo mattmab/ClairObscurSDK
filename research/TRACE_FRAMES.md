@@ -134,3 +134,35 @@ establish those facts or decode FFrame. A function-identity/schema layer, bounde
 event queue, versioned transport, live frame proof and Harness integration remain
 required. Multiple subscriptions to one function also need coordinated ownership;
 the current primitive rejects a second active registration at the same address.
+
+## Composed native event delivery — 2026-10-09
+
+native/trace_events.h adds a mutex-protected, fixed-capacity, one-registration
+queue. The default retains64 copied records, each with at most4096 payload bytes.
+It owns all record bytes, clears payload tails and rejects invalid object identity
+shapes, wrong thread IDs, stale session/registration tickets and invalid sizes.
+It retains no engine pointers. Runtime identity validity remains an adapter duty.
+
+Stop preserves queued events for the original Harness trace_read-after-stop
+behavior. Close clears data and revokes the ticket permanently; a queue cannot
+be reopened for a later registration. Expiry is checked on offer and status, with
+an upper duration of300seconds and maximum observation count1000. Overflow drops
+new arrivals, increments a dropped counter and leaves visible sequence gaps.
+The native observation budget counts dropped arrivals too, bounding activity;
+the eventual Harness adapter must distinguish observed/dropped/delivered counts.
+A capped/expired queue stops accepting data but does not itself restore the thunk;
+the owning game-thread adapter must remove that registration.
+
+scripts/test-trace-events.cmd compiled under /W4 /WX and passed an executable
+fixture. It covers wraparound, overflow, caps, deadline boundaries, stale tickets,
+zeroed payload tails, permanent close and stop retention. A composed test installs
+an actual fixture thunk through TraceSlots, copies its separate return value using
+trace_copy, offers it to Events, and drains it. A foreign-thread call still forwards
+to the original function but contributes no event; a stale thunk after removal
+also forwards without adding data. Evidence: evidence/trace-events-fixture.log.
+
+No game-memory frame access or live hook installation is claimed. These candidate
+primitives still require reflected schema/value codecs, identity/lifetime checks,
+versioned runtime transport and original Harness integration. Lock order is slot
+storage then queue; queue operations must not call back into slot registration.
+The callback must be detached before destroying its stable queue/context owner.
