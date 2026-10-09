@@ -514,3 +514,36 @@ validated release: fresh-game bundle startup, full-menu lifecycle/relaunch and
 packaged bridge actions still require live validation. The current game remains
 attached to the source controller, whose corresponding features were validated
 separately in MANAGEMENT_PORT.md and INTROSPECTION_PORT.md.
+
+## v17 candidate live startup and menu cleanup — 2026-10-09
+
+The source controller exited with code 0 after normal game exit; its Harness
+heartbeat became disabled. Fresh game PID 39900 started at 16:30:37 local.
+Candidate Python PID 28636 then started with isolated -I -S -B from the bundle.
+The game's loaded v17 DLL path points inside candidate 20261009T202751Z and its
+SHA256 is 20711AF456865C0A27BC98CE2562E710D0E95D4AB32E863B6063B423FD8B6B9D.
+Console Python also printed the candidate's expedition33 import path.
+
+Backtick opened the native console. The packaged agent verifier passed original
+request aliases, mutation-consent rejection, the game-thread Actor getter,
+invalid-argument rejection, disable/unregister, stale-action rejection, and
+re-enable/disable cleanup. Fresh session: ab81ae6686eb410baaa03c36e80f7b6d.
+
+The packaged full native menu opened and matched the shared Registry with one
+child scope. Construction began at 16:34:59; open verification finished at
+16:37:53 (about 175 seconds including the verification read). Its native Close
+button dismissed it. Before explicitly clearing the completed service owner,
+console assertions confirmed panel state closed, no uncertain ownership, and
+zero child scopes. The after capture exactly matched the before holder baseline
+and game viewport identity/focus. The four console commands and persistent
+Python Harness remained usable. No gameplay/save was loaded.
+
+Evidence: evidence/agent-v17-source-exit.json,
+evidence/agent-v17-package-relaunch.json, evidence/agent-v17-package-bridge.json,
+evidence/package-management-{before,open,after}.json and
+logs/agent-v17-package-host.log. This verifies fresh-game candidate startup and
+one full-menu open/close cycle, not full-renderer controller-loss recovery,
+repeated reopen, candidate shutdown, travel/GC, or complete Harness parity.
+General keybinds, native numeric/text/JSON editors, broader tracing/reload and
+acceptable menu startup performance remain unfinished. The candidate is not a
+finished release; its archive and manifest were not modified.
