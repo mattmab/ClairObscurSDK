@@ -1,5 +1,37 @@
 # BL4 Introspection Harness port
 
+## Companion CLI — 2026-10-09
+
+scripts/e33_agent.py ports the original bl4_agent.py command shapes for status,
+mods, action NAME --args JSON, enable MOD, disable MOD and logs. Global options
+include --allow-mutation, --data and --timeout. It uses the existing isolated
+local-file client with no mutation retry. Exit status is zero only when both the
+outer protocol ok and inner bridge success are true. Invalid local JSON arguments
+are rejected before sending. BL4-specific choices and staged reload commands are
+not exposed without an Expedition 33 lifecycle adapter.
+
+LIVE PROVEN on game21568/controller31152: CLI status, example enable, the real
+game-thread Actor getter action, disable and stale action rejection all passed.
+The stale request returned outer ok=true, inner success=false and CLI exit1.
+Evidence: evidence/agent-cli-{status,enable,action,disable,stale}.json.
+All306 Python tests pass, including request shapes, both failure layers, local
+argument validation and one-send-only timeout behavior. Packaging now includes
+v17 runtime/controller binaries and verifies isolated launcher/client help;
+candidate validation is separate from fresh-game package validation.
+
+Example from the repository using the configured Python executable:
+
+```text
+python -I -S -B scripts/e33_agent.py status
+python -I -S -B scripts/e33_agent.py --allow-mutation enable ManagementExample
+python -I -S -B scripts/e33_agent.py action example.observe_actor
+python -I -S -B scripts/e33_agent.py --allow-mutation disable ManagementExample
+```
+
+Load ManagementExample first with `mods load ManagementExample` in the native
+console. Action failures include diagnostics in the JSON result, not just an
+exit status. A timeout does not prove that a claimed mutation did not execute.
+
 ## Original action bridge port — 2026-10-09
 
 The original agent.py's named-action registry, request aliases, small argument

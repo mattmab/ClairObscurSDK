@@ -26,7 +26,7 @@ def main():
         assert path.is_relative_to(root) and not forbidden.intersection(Path(relative).parts)
         assert path.suffix.lower() not in ('.pak','.utoc','.ucas','.pdb')
         assert hashlib.sha256(path.read_bytes()).hexdigest()==digest
-    for version in (13,14,15,16):
+    for version in (13,14,15,16,17):
         assert f'build/runtime-session-v{version}/runtime_session_v{version}.dll' in expected
         assert f'build/research-probe-v{version}/research_probe.exe' in expected
     with zipfile.ZipFile(archive) as zipped:
@@ -34,10 +34,14 @@ def main():
         for name in expected:
             assert zipped.read(name)==(root/name).read_bytes()
     help_text=subprocess.check_output([sys.executable,'-I','-S','-B',str(root/'scripts/run_sdk.py'),'--help'],text=True)
-    assert all(flag in help_text for flag in ('--menu-ownership', '--button-references', '--button-actions'))
+    assert all(flag in help_text for flag in ('--menu-ownership', '--button-references', '--button-actions', '--multi-controls'))
+    assert {'scripts/e33_agent.py', 'scripts/e33_introspect.py',
+            'src/expedition33/introspection/agent.py'}.issubset(expected)
+    agent_help=subprocess.check_output([sys.executable,'-I','-S','-B',str(root/'scripts/e33_agent.py'),'--help'],text=True)
+    assert all(command in agent_help for command in ('status', 'mods', 'action', 'enable', 'disable', 'logs'))
     print(json.dumps(dict(directory=str(root),archive=str(archive),files=len(expected),
                          archive_sha256=metadata['sha256'],manifest_verified=True,zip_bytes_verified=True,
-                         exclusions_verified=True,isolated_launcher_help=True,
+                         exclusions_verified=True,isolated_launcher_help=True,isolated_agent_help=True,
                          live_bundle_validation=False),indent=2))
 
 
