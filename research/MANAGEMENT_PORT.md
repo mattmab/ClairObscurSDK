@@ -101,6 +101,13 @@ InMouseLockMode as a one-byte EnumProperty referencing EMouseLockMode with a
 ByteProperty underlying field. That metadata does not yet authorize enum calls:
 verify members and the native schema gate before connecting focus transitions.
 
+Native UEnum member observation now passed live for EMouseLockMode and ENetRole,
+including native stale-identity/wrong-type rejection. The reusable source API is
+`expedition33.enums.describe_enums`; see REFLECTION.md for target derivation and
+limits. This establishes mouse-lock values without guessing, but the invocation
+codec and owned input/focus restoration remain the next gates. The running v12
+package has not been changed, and neither input mode nor focus was mutated.
+
 ## Preserved implementation references
 
 Primary source is the installed BL4 sdk_mods directory. Nineteen original files

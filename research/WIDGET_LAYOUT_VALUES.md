@@ -462,7 +462,9 @@ observations, not live invocation or a reversible input-state contract.
 The enum type-formatting path at RVA12aa430 independently reads the referenced
 UEnum from EnumProperty+78, corroborating the external descriptor reader. Live
 schema previously identified EMouseLockMode and a one-byte ByteProperty child.
-Member/value decoding, game-thread enum identity validation and the call codec
+Member/value decoding subsequently passed live through the read-only API recorded
+in REFLECTION.md: DoNotLock0, LockOnCapture1, LockAlways2, LockInFullscreen3 and
+the generated MAX4 entry. Game-thread enum identity validation and the call codec
 remain missing. Do not pass an untyped zero or bypass the EnumProperty gate.
 Before changing focus, identify the active CommonUI ownership/context and how to
 restore that context without forcing GameOnly over an existing game menu. The

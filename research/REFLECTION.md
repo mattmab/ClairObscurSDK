@@ -33,3 +33,45 @@ import expedition33
 for prop in expedition33.reflect_class("Actor").properties:
     print(prop.name, prop.type, prop.struct_name, prop.enum_name, prop.inner_type)
 ```
+
+## Native enum member observations — 2026-10-09
+
+`expedition33.enums.describe_enums(catalog, objects)` now returns immutable copied
+member names and signed64-bit values for this build's exact native UEnum type.
+The native `--describe-enums PID index:serial:address,...` reader verifies the
+executable fingerprint, CoreUObject Enum ancestry, exact UEnum vtable, bounded
+array, member-name uniqueness, registry identity and repeated header/data reads.
+Aliases are preserved. This is an external observation, not an atomic GC snapshot,
+an enum-valued property reader, or authorization to invoke a function with a value.
+UserDefinedEnum/subclass layouts and enum invocation remain unsupported.
+
+Derivation: EMouseLockMode registration RVA3273ff0 calls its generated constructor
+3278400; record RVA90b03e8 is consumed by13ad330. That builder creates16-byte
+FName/int64 pairs. UEnum constructor12953a0 sets vtable6dee0b0; slot+2e8 resolves
+to12f26d0, which copies those pairs into the array at+40 with count+48/capacity+4c.
+The setter may append a generated `_MAX` entry. Do not filter away that evidence
+or treat sentinel membership as proof of a usable function argument.
+
+Live game21804 at09:16:03 local returned EMouseLockMode values DoNotLock0,
+LockOnCapture1, LockAlways2, LockInFullscreen3 and EMouseLockMode_MAX4. ENetRole
+returned ROLE_None0, ROLE_SimulatedProxy1, ROLE_AutonomousProxy2, ROLE_Authority3
+and ROLE_MAX4. Direct native stale-serial and wrong-type queries were rejected.
+No game write or engine call occurred; the packaged console host remained intact.
+
+```python
+from expedition33.catalog import capture
+from expedition33.enums import describe_enums
+
+catalog = capture()
+enum = catalog.find_path('/Script/Engine.EMouseLockMode', 'Enum')
+for member in describe_enums(catalog, [enum])[enum.index].members:
+    print(member.name, member.value)
+```
+
+Reproduce with `scripts/verify_live_enums.py` after building the source reader.
+Evidence: `enum-registration.json`, `enum-construction.json`, `enum-builder.json`,
+`enum-ctor.json`, `enum-setter-slot.json`, `enum-setter.json`,
+`enum-members-live.json`, `enum-reader-build.log` and `enum-python-tests.log` under
+local evidence/. All177 Python tests pass, including hostile/incomplete replies,
+signed limits, aliases and immutable copied results. The original Harness core
+and the running v12 package are unchanged; this new API is currently source-only.

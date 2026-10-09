@@ -188,7 +188,7 @@ int main(int argc, char** argv) {
         std::string bool_object;
         std::string function_owner, function_name;
         DWORD descriptor_pid = 0;
-        bool read_values = false;
+        bool read_values = false, read_enums = false;
         std::unordered_map<int32_t, std::pair<int32_t, uint64_t>> descriptors;
         bool thread_ping = argc == 2 && std::string(argv[1]) == "--thread-ping";
         bool invoke_proof = argc == 2 && std::string(argv[1]) == "--invoke-proof";
@@ -212,8 +212,9 @@ int main(int argc, char** argv) {
                     "FUNCTION_NAME_REQUIRES_OWNER_DOT_NAME");
             function_owner = qualified.substr(0, dot); function_name = qualified.substr(dot + 1); limit = 0;
         }
-        else if (argc == 4 && (std::string(argv[1]) == "--describe" || std::string(argv[1]) == "--read-values")) {
+        else if (argc == 4 && (std::string(argv[1]) == "--describe" || std::string(argv[1]) == "--read-values" || std::string(argv[1]) == "--describe-enums")) {
             read_values = std::string(argv[1]) == "--read-values";
+            read_enums = std::string(argv[1]) == "--describe-enums";
             descriptor_pid = std::stoul(argv[2]);
             std::istringstream tokens(argv[3]); std::string token;
             while (std::getline(tokens, token, ',')) {
@@ -369,7 +370,7 @@ int main(int argc, char** argv) {
             auto class_name = read_name(reader, pool, cls.name_id, cls.name_number);
             auto meta_name = read_name(reader, pool, meta.name_id, meta.name_number);
             bool descriptor_function = false;
-            if (!descriptors.empty() && !read_values) {
+            if (!descriptors.empty() && !read_values && !read_enums) {
                 // Validate UStruct membership through the observed metaclass chain;
                 // never reinterpret arbitrary UObject bytes as reflection metadata.
                 std::unordered_set<uint64_t> seen_types;
@@ -452,6 +453,46 @@ int main(int argc, char** argv) {
             }
             std::cout << "}\n";
             ++emitted;
+            if (read_enums) {
+                // Builder 1413ad330 creates FName/int64 pairs; UEnum setter
+                // 1412f26d0 copies them to +40, count +48/capacity +4c.
+                // Exact native UEnum only: subclasses need separate verification.
+                require(derives_from_core_type(object.cls, "Enum") &&
+                        object.vtable == base + 0x6dee0b0, "ENUM_TARGET_TYPE_UNSUPPORTED");
+                struct Members { uint64_t data; int32_t count, capacity; };
+                struct Member { uint32_t name, number; int64_t value; };
+                static_assert(sizeof(Members) == 16 && sizeof(Member) == 16);
+                auto members = reader.get<Members>(item.object + 0x40);
+                require(members.count >= 0 && members.count <= members.capacity &&
+                        members.capacity <= 65536 && (!members.count || members.data),
+                        "ENUM_MEMBER_BOUNDS_INVALID");
+                std::vector<Member> values(members.count), verify(members.count);
+                if (members.count) reader.read(members.data, values.data(), values.size()*sizeof(Member));
+                std::vector<std::string> member_names;
+                std::unordered_set<std::string> unique_names;
+                for (const auto& value : values) {
+                    auto member_name = read_name(reader, pool, value.name, value.number);
+                    require(unique_names.insert(member_name).second, "ENUM_MEMBER_NAME_DUPLICATE");
+                    member_names.push_back(member_name);
+                }
+                if (members.count) reader.read(members.data, verify.data(), verify.size()*sizeof(Member));
+                auto final_members = reader.get<Members>(item.object + 0x40);
+                auto final_item = item_at(i);
+                auto final_header = reader.get<ObjectHeader>(item.object);
+                require(std::memcmp(&members, &final_members, sizeof(members)) == 0 &&
+                        (values.empty() || std::memcmp(values.data(), verify.data(), values.size()*sizeof(Member)) == 0) &&
+                        final_item.object == item.object && final_item.serial == item.serial &&
+                        std::memcmp(&object, &final_header, sizeof(object)) == 0,
+                        "ENUM_CHANGED_DURING_READ");
+                std::cout << "{\"event\":\"enum_metadata\",\"index\":" << i << ",\"members\":[";
+                for (size_t member = 0; member < values.size(); ++member) {
+                    if (member) std::cout << ',';
+                    std::cout << "{\"name\":" << quote(member_names[member])
+                              << ",\"value\":" << values[member].value << '}';
+                }
+                std::cout << "]}\n";
+                continue;
+            }
             if (!function_name.empty() || descriptor_function) {
                 auto reported_owner = function_owner;
                 if (descriptor_function) {
