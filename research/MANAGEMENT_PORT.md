@@ -614,3 +614,13 @@ a live empty-menu transport handshake/status/normal-close smoke test alongside
 the unchanged v13 host. Native widget ownership/cleanup remains unvalidated live.
 Next run the owned-widget specimen through v14, followed by disconnect and
 relaunch acceptance; do not count transport-only proof as Mods Menu support.
+
+The v14 owned-widget specimen now passes live Prepare/Attach/Focus/Close,
+protected-release rejection, reflected removal/deactivation and exact
+root/child/holder cleanup. A separate controller-death run bypasses all Python
+cleanup and proves native restoration to the same viewport, exact holder cleanup
+and an empty fresh v14 session. Both preserve the existing v13 Harness host.
+This establishes the narrow native lifecycle prerequisite for reusable menu
+ownership. Next validate unrelated-focus and game-relaunch behavior, integrate
+ownership into mod scopes, then add actionable controls and real key dispatch.
+General per-user/UMG focus restoration is still unsupported.

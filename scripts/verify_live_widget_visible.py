@@ -20,7 +20,7 @@ ROOT = Path(__file__).resolve().parents[1]
 
 
 def run(session, *, hold_seconds=30, label_text=None, activatable=False,
-        button_enabled=False, on_display=None, evidence_name=None):
+        button_enabled=False, on_display=None, evidence_name=None, native_lifecycle=None):
     if type(hold_seconds) is not int or not 0 <= hold_seconds <= 45:
         raise ValueError('Observation delay must be an integer from 0 through 45')
     if type(activatable) is not bool or type(button_enabled) is not bool:
@@ -56,6 +56,7 @@ def run(session, *, hold_seconds=30, label_text=None, activatable=False,
     widget = tree = canvas = button = label = None
     label_attached = False
     attached = assigned = added = uncertain = activated = False
+    native_attempted = False
     def mutate(callback, *values, **keywords):
         nonlocal uncertain
         uncertain = True
@@ -104,9 +105,13 @@ def run(session, *, hold_seconds=30, label_text=None, activatable=False,
         assigned = True
         observed = root()
         assert observed.index == canvas.index and observed.serial == canvas.serial
-        mutate(scope.invoke, widget, functions['AddToViewport'], ZOrder=1000)
-        added = True
-        if activatable:
+        if native_lifecycle is not None:
+            native_attempted = True
+            mutate(native_lifecycle.open, scope, widget, button, args['OwningPlayer'])
+        else:
+            mutate(scope.invoke, widget, functions['AddToViewport'], ZOrder=1000)
+            added = True
+        if activatable and native_lifecycle is None:
             mutate(scope.invoke, widget, fn('CommonActivatableWidget', 'ActivateWidget'))
             activated = True
             assert scope.invoke(widget, fn('CommonActivatableWidget', 'IsActivated')).return_value is True
@@ -127,6 +132,12 @@ def run(session, *, hold_seconds=30, label_text=None, activatable=False,
         time.sleep(hold_seconds)
     finally:
         try:
+            if native_attempted:
+                native_attempted = False
+                mutate(native_lifecycle.close)
+                assert scope.invoke(widget, functions['IsInViewport']).return_value is False
+                assert scope.invoke(widget, fn('CommonActivatableWidget', 'IsActivated')).return_value is False
+                evidence['native_closed'] = True
             if activated and not uncertain:
                 activated = False
                 mutate(scope.invoke, widget, fn('CommonActivatableWidget', 'DeactivateWidget'))

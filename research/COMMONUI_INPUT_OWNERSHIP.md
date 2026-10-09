@@ -407,3 +407,52 @@ Next live gate: construct owned widget/child plans, prepare native ownership,
 attach/focus, reject protected lease release, close and verify exact restoration
 and holder counts. Then validate controller death, unrelated focus and relaunch.
 The successful empty-session transport test does not establish those behaviors.
+
+## Live native v14 owned-widget close
+
+`verify_live_native_menu.py` now passes against the same verified build/PID21804.
+The specimen constructs the existing SDK-owned CommonActivatableWidget, Canvas,
+enabled Button and text, then serializes ten live reflected plans into v14.
+Prepare, Attach, Focus and Close each return error0. Both widget and button
+lease-release attempts return Busy403 while the native record protects them.
+The test uses raw release requests so that the intentionally rejected operation
+does not revoke the Python lease handles needed for subsequent cleanup.
+
+Independent Slate observation confirms focus leaves the GameEngine viewport and
+returns to the exact same viewport after native Close. Reflected readback confirms
+the widget is no longer active/in the viewport. Python then removes its owned
+tree references/children and releases the remaining scope; the complete strong
+holder set exactly matches its pre-test baseline. No input mode was changed.
+Evidence: `native-menu-progress.json`, `native-menu-live.json`,
+`native-menu-run.log`. This is functional/readback evidence, not a new screenshot
+or finished menu appearance claim.
+
+The visible-widget research helper accepts a separate native lifecycle adapter
+so the proven construction/layout specimen can exercise native ownership instead
+of duplicating Python Add/Activate/Remove calls. It closes the adapter before
+changing RootWidget or releasing scoped resources. Unknown native operations are
+not retried; the native durable state remains authoritative.
+
+Controller-death cleanup, unrelated-focus behavior and game relaunch still need
+their own live evidence. Normal explicit Close is not proof of those paths.
+
+## Live native controller-death cleanup
+
+The separate `verify_live_menu_disconnect.py` run passed. Its worker prepared,
+attached and focused another SDK-owned widget through v14, confirmed protected
+lease rejection, then killed only its own native controller and exited with
+os._exit(23). No Python scope/session finally handler ran. The parent observed
+the original GameEngine viewport focus and the exact pre-test strong-holder set
+restored on its first post-exit observation. A fresh v14 Session then opened,
+reported no active menu record and closed normally. The original v13 persistent
+Harness/controller processes remained live.
+
+Evidence: `native-menu-disconnect-progress.json` records acknowledged native
+Prepare/Attach/Focus and the deliberate disconnect; `native-menu-disconnect-live.json`
+records the constructed objects and baseline before exit;
+`native-menu-disconnect-result.json` records independent post-exit Slate/holder
+observations and new-session acceptance. `native-menu-disconnect-run.log` records
+the successful parent verifier. This proves the single-user viewport-baseline
+controller-exit cleanup path on the current process/build. It does not prove
+game-exit/relaunch, unrelated focus preservation, general UMG focus restoration,
+or recovery from an interrupted engine mutation.
