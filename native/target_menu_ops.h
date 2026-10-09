@@ -7,6 +7,12 @@
 #ifdef E33_BUTTON_REFERENCE_SESSION
 #include "target_button_reference.h"
 #endif
+#ifdef E33_BUTTON_ACTION_SESSION
+#ifndef E33_BUTTON_REFERENCE_SESSION
+#error Button actions require retained SButton ownership
+#endif
+#include "target_button_actions.h"
+#endif
 
 // Candidate only. Copy verified request data here before touching the engine;
 // never retain a pointer into IPC. The containing runtime owns this storage and
@@ -18,6 +24,9 @@ struct TargetMenuStorage {
     TargetMenuFocusOwner focus;
 #ifdef E33_BUTTON_REFERENCE_SESSION
     TargetButtonReference child_slate;
+#endif
+#ifdef E33_BUTTON_ACTION_SESSION
+    TargetButtonActions actions;
 #endif
     CallIdentity engine{-1,0,0};
     MenuSession menu;

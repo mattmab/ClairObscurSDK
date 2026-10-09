@@ -1,6 +1,12 @@
 #include "target_button_delegate.h"
+#include "target_button_actions.h"
 
 static TargetButtonDelegateTable target_table;
+static TargetButtonActions target_actions;
+ButtonDelegateResult compile_action_binding(uint64_t base,uint64_t session,uint64_t owner,uint64_t action,
+                                            TargetButtonReference& retained) {
+    return target_actions.bind(base,session,owner,action,retained);
+}
 using TargetActionQueue=MenuActionEvents<>;
 using TargetActionBinding=OwnedButtonDelegate<TargetActionQueue>;
 

@@ -331,3 +331,34 @@ compilation pass /W4 /WX (`button-target-compile.log`). No existing runtime DLL
 was rebuilt. Next integrate the adapter's binding/revocation before menu detach
 and lease release, expose bounded action IPC, and validate an isolated runtime
 live before connecting persistent Python callbacks and registry controls.
+
+## Runtime ownership integration candidate (v16)
+
+`TargetButtonActions` now owns the queue, binding, pinned table and three
+forwarding entrypoints in durable module storage. It publishes one immutable
+thunk owner per module and keeps the same retained-reference record across
+sessions, so a late thunk cannot route through a replacement owner. Binding
+uses copied session/owner/action IDs; close clears the queue only after the
+delegate lifecycle returns Ok. Drain checks the control gate before reading
+events and reports bounded overflow. The current menu contract owns one button;
+multiple native controls remain a later extension, not a claimed capability.
+
+The E33_BUTTON_ACTION_SESSION runtime candidate stores this owner alongside its
+retained SButton. Explicit menu close and backend/controller-loss cleanup both
+close actions before entering menu focus/deactivate/detach/reference cleanup.
+Deferred action close stops menu cleanup; quarantined/unknown outcomes quarantine
+the menu and preserve lease protection. Menu commands consult the action fault
+gate before operating. Outer SEH also quarantines action ownership.
+
+The candidate uses separate v16 message/mapping names, preventing accidental
+adoption through the existing v15 transport. The payload currently retains the
+existing layout; action binding/drain wire commands are not yet exposed. No v16
+DLL/controller was built or loaded, and no live action binding occurred.
+
+`test-menu-action-events.cmd` passes all three fixtures, target adapter compilation,
+both v15-compatible and action-enabled runtime translation units, and v16 layout
+compilation/execution. Output confirms E33SDK.Session.v16 / E33Session16 names
+with the current456192-byte packet (`button-action-owner-compile.log`). Native
+integration exposed observer-global name-shadowing warnings, corrected without
+changing the observer implementation. Remaining gates: binding/drain protocol,
+controller/Python integration, isolated v16 build and real input/lifecycle tests.

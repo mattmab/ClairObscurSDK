@@ -710,3 +710,12 @@ fixture revokes pending events without touching freed storage after a latched
 thread fault. Runtime publication, teardown ordering, IPC and Python action
 delivery remain the next integration gates; this compile-tested adapter has not
 been installed in the game.
+
+The v16 action-owner candidate is integrated into both explicit menu close and
+controller-loss cleanup before menu restoration/detachment/reference release.
+Deferred and quarantined action cleanup blocks further release. Separate v16
+message/mapping names isolate the candidate from v15; existing packet layout is
+still unchanged and action IPC is pending. Three fixtures, target compilation,
+v15/action-runtime compilation and v16 layout execution pass. Next expose bounded
+bind/drain operations and persistent Python dispatch, build the isolated runtime,
+then validate actual clicks and cleanup. No live action support is claimed yet.

@@ -33,13 +33,13 @@ public:
     }
     template<class Ops>
     ButtonDelegateResult install(Ops& ops,uint64_t session,uint64_t owner,uint64_t action,
-                                 uint64_t instance,uint64_t original,uint64_t shadow) {
+                                 uint64_t instance,uint64_t expected_table,uint64_t shadow) {
         if(state_!=ButtonDelegateState::Empty) return ButtonDelegateResult::Busy;
-        if(!ops.on_thread() || !instance || !original || !shadow || original==shadow ||
-           !ops.validate(instance,original,shadow)) return ButtonDelegateResult::Invalid;
+        if(!ops.on_thread() || !instance || !expected_table || !shadow || expected_table==shadow ||
+           !ops.validate(instance,expected_table,shadow)) return ButtonDelegateResult::Invalid;
         auto ticket=queue_.bind(session,owner,action,instance);
         if(!ticket.registration) return ButtonDelegateResult::Invalid;
-        instance_=instance; original_=original; shadow_=shadow; ticket_=ticket;
+        instance_=instance; original_=expected_table; shadow_=shadow; ticket_=ticket;
         state_=ButtonDelegateState::Installing;
         if(ops.exchange(instance_,shadow_,original_)!=original_) {
             queue_.revoke(ticket_); clear(); return ButtonDelegateResult::Invalid;
@@ -71,7 +71,7 @@ public:
            state_==ButtonDelegateState::Quarantined) {
             quarantine(); return ButtonDelegateResult::Quarantined;
         }
-        queue_.revoke(ticket_); // Revoke delivery before waiting for original calls.
+        queue_.revoke(ticket_); // Revoke delivery before waiting for expected_table calls.
         if(state_!=ButtonDelegateState::Destroyed) state_=ButtonDelegateState::Revoked;
         if(executing_) return ButtonDelegateResult::Deferred;
         if(state_==ButtonDelegateState::Destroyed) { clear(); return ButtonDelegateResult::Ok; }

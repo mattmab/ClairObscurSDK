@@ -43,10 +43,25 @@ static uint64_t runtime_base = 0, target_object = 0, target_function = 0;
 #ifdef E33_MENU_SESSION
 #include "target_menu_ops.h"
 static TargetMenuStorage session_menu;
+static MenuResult close_menu_actions() {
+#ifdef E33_BUTTON_ACTION_SESSION
+    auto result=session_menu.actions.close();
+    if(result==ButtonDelegateResult::Deferred) return MenuResult::Deferred;
+    if(result!=ButtonDelegateResult::Ok) {
+        session_menu.menu.quarantine(); return MenuResult::Quarantined;
+    }
+#endif
+    return MenuResult::Ok;
+}
 static MenuResult menu_command(MenuPacket& wire) {
     auto& s=session_menu;
     TargetMenuOps<StrongLeasePool<>> ops{s,session_leases};
     const auto operation=static_cast<MenuOperation>(wire.operation);
+#ifdef E33_BUTTON_ACTION_SESSION
+    const auto gate=s.actions.gate();
+    if(gate==ButtonDelegateResult::Deferred) return MenuResult::Deferred;
+    if(gate!=ButtonDelegateResult::Ok) { s.menu.quarantine(); return MenuResult::Quarantined; }
+#endif
     if(operation==MenuOperation::Prepare) {
         if(s.menu.active()) return MenuResult::Busy;
         // Copy before acquiring any ownership; IPC is never cleanup storage.
@@ -61,7 +76,10 @@ static MenuResult menu_command(MenuPacket& wire) {
     switch(operation) {
     case MenuOperation::Attach: return s.menu.attach(ops,lease_session,wire.owner);
     case MenuOperation::Focus: return s.menu.focus(ops,lease_session,wire.owner);
-    case MenuOperation::Close: return s.menu.close(ops,lease_session,wire.owner);
+    case MenuOperation::Close: {
+        auto result=close_menu_actions();
+        return result==MenuResult::Ok ? s.menu.close(ops,lease_session,wire.owner) : result;
+    }
     case MenuOperation::Status: return MenuResult::Ok;
     default: return MenuResult::Invalid;
     }
@@ -74,6 +92,9 @@ static void guarded_menu_command(MenuPacket& wire) {
         wire.error=result==MenuResult::Ok ? 0 : 810+static_cast<uint32_t>(result);
         wire.outcome=static_cast<uint32_t>(MenuOutcome::Returned);
     } __except(EXCEPTION_EXECUTE_HANDLER) {
+#ifdef E33_BUTTON_ACTION_SESSION
+        session_menu.actions.quarantine();
+#endif
         session_menu.menu.quarantine();
         wire.error=816;
     }
@@ -81,9 +102,14 @@ static void guarded_menu_command(MenuPacket& wire) {
 }
 static MenuResult guarded_menu_close() {
     __try {
+        auto result=close_menu_actions();
+        if(result!=MenuResult::Ok) return result;
         TargetMenuOps<StrongLeasePool<>> ops{session_menu,session_leases};
         return session_menu.menu.close_session(ops);
     } __except(EXCEPTION_EXECUTE_HANDLER) {
+#ifdef E33_BUTTON_ACTION_SESSION
+        session_menu.actions.quarantine();
+#endif
         session_menu.menu.quarantine();
         return MenuResult::Quarantined;
     }

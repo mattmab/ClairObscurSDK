@@ -75,9 +75,9 @@ struct TargetButtonDelegateOps {
     bool on_thread() const { return table.on_thread(); }
     bool faulted() { return table.faulted(); }
     void foreign_call() { table.foreign_call(); }
-    bool validate(uint64_t instance,uint64_t original,uint64_t shadow) {
+    bool validate(uint64_t instance,uint64_t expected_table,uint64_t shadow) {
         return on_thread() && !faulted() && instance>=0x10000 && !(instance&7) &&
-            original==table.original_table() && shadow==table.shadow_table() &&
+            expected_table==table.original_table() && shadow==table.shadow_table() &&
             retained.slate.state==SlateReferenceState::Live && instance==retained.delegate &&
             table.original_unchanged() && retained.unchanged(table.base());
     }

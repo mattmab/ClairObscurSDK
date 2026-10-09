@@ -15,13 +15,13 @@ struct ButtonDelegateForward {
         if(ops.faulted()) { binding.quarantine(); return {}; }
         return binding.enter(reinterpret_cast<uint64_t>(instance));
     }
-    static void* execute(Binding& binding,Ops& ops,ButtonDelegateContract::Execute original,
+    static void* execute(Binding& binding,Ops& ops,ButtonDelegateContract::Execute engine_entry,
                          void* instance,void* reply) {
         const auto ticket=begin(binding,ops,instance);
         void* result=nullptr;
         bool returned=false;
         __try {
-            result=original(instance,reply);
+            result=engine_entry(instance,reply);
             returned=true;
         } __finally {
             if(ticket.registration) {
@@ -32,12 +32,12 @@ struct ButtonDelegateForward {
         // Preserve exactly the original return pointer and reply bytes.
         return result;
     }
-    static bool execute_if_safe(Binding& binding,Ops& ops,ButtonDelegateContract::ExecuteIfSafe original,
+    static bool execute_if_safe(Binding& binding,Ops& ops,ButtonDelegateContract::ExecuteIfSafe engine_entry,
                                 void* instance) {
         const auto ticket=begin(binding,ops,instance);
         bool result=false, returned=false;
         __try {
-            result=original(instance);
+            result=engine_entry(instance);
             returned=true;
         } __finally {
             if(ticket.registration) {
@@ -47,7 +47,7 @@ struct ButtonDelegateForward {
         }
         return result;
     }
-    static void* destroy(Binding& binding,Ops& ops,ButtonDelegateContract::Destroy original,
+    static void* destroy(Binding& binding,Ops& ops,ButtonDelegateContract::Destroy engine_entry,
                          void* instance,uint32_t flags) {
         if(!ops.on_thread()) ops.foreign_call();
         else {
@@ -61,6 +61,6 @@ struct ButtonDelegateForward {
                 binding.quarantine();
             }
         }
-        return original(instance,flags);
+        return engine_entry(instance,flags);
     }
 };
