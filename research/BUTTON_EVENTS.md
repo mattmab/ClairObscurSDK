@@ -736,3 +736,20 @@ multi-control transport tests then passed. No live attachment was performed.
 Menu control handles, protected lease bookkeeping, shared event routing and live
 multiple-control validation remain pending; the session opt-in alone exposes no
 new menu frontend.
+
+### Python menu control ownership and shared dispatch
+
+`NativeMenu.bind_control(child, callback)` now creates v17 ControlAction handles
+under one MenuControls owner. Session.poll drains each menu once, validates the
+entire batch against its live registration map, and invokes callbacks on the
+external owner thread. Session abort/close and NativeMenu.close revoke all control
+callbacks. Each protected child lease stays owned until native cleanup is
+acknowledged; failed binding conservatively requires menu closure. Selective
+removal preserves other controls. Already-drained events for a callback removed
+by an earlier callback are skipped, without redirecting them to replacement binds.
+
+All238 Python tests pass. Six new dispatcher tests cover two controls/one drain,
+whole-batch rejection before effects, callback-driven removal and menu closure,
+exception containment, deferred-remove lease protection, and duplicate/unowned
+control rejection. v17 live two-control validation remains required. No running
+controller, native DLL, or game state changed in this implementation step.

@@ -222,6 +222,8 @@ class Session:
         for menu in getattr(self, '_menus', ()):
             action = getattr(menu, '_action', None)
             if action is not None: action._revoke('unknown')
+            controls = getattr(menu, '_controls', None)
+            if controls is not None: controls.revoke('unknown')
         for lease in self._leases:
             lease._state = 'unknown'
         if not getattr(self._transport, '_closed', False):
@@ -457,6 +459,8 @@ class Session:
                 if self._closed: break
                 action = getattr(menu, '_action', None)
                 if action is not None: delivered += action._poll()
+                controls = getattr(menu, '_controls', None)
+                if controls is not None: delivered += controls.poll()
             return delivered
         finally:
             self._polling = False
@@ -478,6 +482,8 @@ class Session:
             for menu in getattr(self, '_menus', ()):
                 action = getattr(menu, '_action', None)
                 if action is not None: action._revoke('closed' if leases_closed else 'unknown')
+                controls = getattr(menu, '_controls', None)
+                if controls is not None: controls.revoke('closed' if leases_closed else 'unknown')
                 menu._state = 'closed' if leases_closed else 'unknown'
             if hasattr(self, '_menus'):
                 self._menus.clear()

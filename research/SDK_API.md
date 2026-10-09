@@ -292,3 +292,31 @@ to a refreshed selection after rebinding. Native menu/holder/focus cleanup and
 normal Session close passed. See MANAGEMENT_PORT.md and
 `scripts/verify_live_management_button.py`. This proves the single-button bridge;
 multiple controls and keyboard dispatch remain pending.
+
+### Experimental v17 controls
+
+```python
+with sdk.Session(multi_controls=True) as session:
+    # After creating retained SDK-owned children and attaching an owned menu:
+    first = menu.bind_control(first_button, registry.action_callback(selection, 'first'))
+    second = menu.bind_control(second_button, registry.action_callback(selection, 'second'))
+    session.poll()
+    first.remove()
+    menu.close()
+```
+
+The snippet shows the action API, not a complete layout builder. Each child must
+have exactly one active lease in the same session and belong to the owned menu's
+WidgetTree (native validation). The menu protects those leases until acknowledged
+control removal or menu cleanup. One shared drain validates the whole event batch
+against current registration/action IDs before executing any callbacks. Removal
+or menu/session closure revokes callbacks immediately, including later events in
+an already-drained batch. Callback failures are bounded in each handle's
+`failures`; dropped native events are counted on the menu's internal dispatcher.
+A failed/deferred bind retains conservative ownership until menu closure. Unknown
+transport outcomes abort ownership and never replay engine operations.
+
+This API and its ownership/dispatch tests are implemented; two-control operation
+has not yet been tested in-game. It does not implement layout, keyboard routing,
+settings widgets or the complete Mods Menu. Existing v16 bind_action remains
+available, but do not bind both backends to the same control.

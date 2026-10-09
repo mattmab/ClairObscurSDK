@@ -27,6 +27,7 @@ class NativeMenu:
         self._state = 'preparing'
         self._button_reference_state = None
         self._action = None
+        self._controls = None
 
     @property
     def active(self):
@@ -37,7 +38,8 @@ class NativeMenu:
         return self._state == 'close_pending'
 
     def protects(self, lease):
-        return self.active and lease in self._leases
+        return self.active and (lease in self._leases or
+                                (self._controls is not None and self._controls.protects(lease)))
 
     def _send(self, operation, **kwargs):
         session = self._session()
@@ -102,9 +104,17 @@ class NativeMenu:
         if self._state == 'closed': return True
         action = self._action
         if action is not None: action._revoke('menu_closing')
+        if self._controls is not None: self._controls.revoke('menu_closing')
         result = self._send('close')
         if result and action is not None: action._revoke()
+        if result and self._controls is not None: self._controls.revoke()
         return result
+
+    def bind_control(self, child, callback):
+        if self._controls is None:
+            from .multi_controls import MenuControls
+            self._controls = MenuControls(self)
+        return self._controls.bind(child, callback)
 
     def bind_action(self, callback):
         session = self._session()
