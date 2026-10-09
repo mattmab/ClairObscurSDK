@@ -394,3 +394,9 @@ The next integration is a public owned-result wrapper and Harness lifecycle,
 followed by the bounded Create/add/remove/release widget specimen. Native menu,
 focus recovery and actual key dispatch remain unimplemented. The persistent v7
 console management host was restored after testing; see OBJECT_LEASES.md.
+
+Public v8 result ownership and original Harness retain/release/expiry now have
+live evidence, including two independent mod scopes and exact holder cleanup.
+The launcher exposes `management --retained`. Shared native ownership is now
+available for the bounded widget lifecycle specimen; native UMG, focus handling
+and key dispatch remain pending. See OBJECT_LEASES.md for limits and proof.

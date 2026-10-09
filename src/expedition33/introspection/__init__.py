@@ -72,15 +72,21 @@ class _Object:
                             if isinstance(value, _Object): return value._observed
                             if type(value) in (list, tuple): return tuple(unwrap(item) for item in value)
                             return value
-                        result = self._backend.session.invoke(self._observed, function,
+                        call = (self._backend.session.invoke_retained if self._backend.retained
+                                else self._backend.session.invoke)
+                        result = call(self._observed, function,
                             **{key: unwrap(value) for key, value in arguments.items()})
+                        if self._backend.retained:
+                            self._backend.pending_owner = result
                         try:
                             self._backend.refresh()
                             returned = _adapt(self._backend, result.return_value)
-                            if not result.outputs:
-                                return returned
-                            return {'return': returned, 'out': {key: _adapt(self._backend, value)
-                                    for key, value in result.outputs.items()}}
+                            value = (returned if not result.outputs else
+                                     {'return': returned, 'out': {key: _adapt(self._backend, value)
+                                      for key, value in result.outputs.items()}})
+                            if self._backend.retained:
+                                self._backend.pending_value = value
+                            return value
                         except RuntimeQueryError as error:
                             from ..invocation import InvocationError
                             raise InvocationError(f'Dispatch returned; Harness result observation failed: {error}',
@@ -137,6 +143,52 @@ class _Property:
 
 class _Explorer(Explorer):
     """Add copied inner-type metadata without modifying the preserved core."""
+    def __init__(self, sdk):
+        super().__init__(sdk)
+        self._owners = {}
+
+    def _sweep_owners(self):
+        errors = []
+        for name, (value, owner) in tuple(self._owners.items()):
+            if name in self.values and self.values[name] is value:
+                continue
+            del self._owners[name]
+            try:
+                owner.release()
+            except BaseException as error:
+                errors.append(error)
+        if errors:
+            raise errors[0]
+
+    def expire(self):
+        super().expire()
+        self._sweep_owners()
+
+    def close(self):
+        try:
+            super().close()
+        finally:
+            self._sweep_owners()
+
+    def dispatch(self, request):
+        try:
+            return super().dispatch(request)
+        finally:
+            owner = getattr(self.sdk, 'pending_owner', None)
+            if owner is not None:
+                value = self.sdk.pending_value
+                self.sdk.pending_owner = None
+                self.sdk.pending_value = object()
+                name = request.get('retain') if request['op'] == 'invoke' else None
+                if isinstance(name, str) and name in self.values and self.values[name] is value:
+                    previous = self._owners.get(name)
+                    self._owners[name] = (value, owner)
+                    if previous is not None:
+                        previous[1].release()
+                else:
+                    owner.release()
+            self._sweep_owners()
+
     def encode(self, value, depth=2, budget=None):
         result = super().encode(value, depth, budget)
         if isinstance(value, _StructValue) and '$struct' in result and value._observation.truncated:
@@ -164,6 +216,9 @@ class _Backend:
 
     def __init__(self, session=None):
         self.session = session
+        self.retained = bool(session is not None and getattr(session, 'supports_retained_invocation', False))
+        self.pending_owner = None
+        self.pending_value = object()
         self.catalog = None
         self.descriptors, self.properties, self.function_children = {}, {}, {}
         self.observations = {}
@@ -237,6 +292,8 @@ class Harness:
         enabled = session is not None and session.supports_reflected_invocation
         self.SUPPORTED = type(self).SUPPORTED | (frozenset(('invoke',)) if enabled else frozenset())
         self._backend = _Backend(session if enabled else None)
+        if self._backend.retained:
+            self.SUPPORTED |= frozenset(('release_value',))
         self._explorer = _Explorer(self._backend)
         self._closed = False
         self._running = False
@@ -251,11 +308,12 @@ class Harness:
         if request['op'] not in self.SUPPORTED:
             raise UnsupportedCapability(
                 f"{request['op']!r} is not ported yet; see research/INTROSPECTION_PORT.md")
-        if request['op'] == 'invoke' and request.get('retain') is not None:
+        if request['op'] == 'invoke' and request.get('retain') is not None and not self._backend.retained:
             raise UnsupportedCapability('Retained native result ownership is not implemented; no call dispatched')
         self._running = True
         try:
-            if request['op'] not in ('status', 'diff'):
+            self._explorer.expire()
+            if request['op'] not in ('status', 'diff', 'release_value'):
                 self._backend.refresh()
             if request['op'] == 'schema':
                 cls = (self._backend.find_object('Struct', request['struct']) if 'struct' in request
@@ -275,10 +333,14 @@ class Harness:
                 result['operations'] = sorted(self.SUPPORTED)
                 result['original_argument_types'] = result['argument_types']
                 result['argument_types'] = (['primitive', '$object', 'fixed_array'] if 'invoke' in self.SUPPORTED else [])
+                if self._backend.retained:
+                    result['argument_types'].append('$value')
                 result['parity_complete'] = False
                 result['limitations'] = ['Stored scalars, strings, references, selected arrays and bounded reflected structs; opaque native state is not owned',
                     'Writes, traces and agent bridge pending; invocation requires opt-in v6 and supported parameter types',
-                    'Invocation retain and opaque native values unsupported; out parameters use named return/out result fields',
+                    ('Retain supports copied primitives and leased object outputs; opaque native values unsupported'
+                     if self._backend.retained else 'Invocation retain and opaque native values unsupported') +
+                    '; out parameters use named return/out result fields',
                     'Container/string/enum-valued struct members, map/set and additional property variants pending',
                     'Function pages use registry identity order within each declaring class']
                 result['execution'] = ('external Python owner thread; native calls on game thread' if 'invoke' in self.SUPPORTED
@@ -288,14 +350,21 @@ class Harness:
             self._backend.clear()
             self._running = False
 
+    def poll(self):
+        if threading.get_ident() != self._owner or self._closed or self._running:
+            raise RuntimeError('Harness expiry requires an idle owning thread')
+        self._explorer.expire()
+
     def close(self):
         if threading.get_ident() != self._owner:
             raise RuntimeError('Harness cleanup must run on the owning Python thread')
         if self._running:
             raise RuntimeError('Cannot close during a harness request')
-        self._explorer.close()
-        self._backend.clear()
-        self._closed = True
+        try:
+            self._explorer.close()
+        finally:
+            self._backend.clear()
+            self._closed = True
 
     def __enter__(self):
         return self

@@ -69,3 +69,71 @@ class ObjectLease:
 
     def __exit__(self, *_exc):
         self.release()
+
+
+class RetainedInvocation:
+    """A result plus its independent native output leases, with explicit release.
+
+    Object/class output slots own leases; scalar and null results do not. The
+    owning scope/session also revokes access. Keeping a copied ObjectSnapshot
+    after releasing this handle does not keep the engine object alive.
+    """
+    def __init__(self, session, result, leases):
+        self._session = weakref.ref(session)
+        self._scope = None
+        self._result = result
+        self._leases = leases
+        self._released = False
+
+    @property
+    def active(self):
+        session = self._session()
+        scope = self._scope() if self._scope is not None else None
+        return (not self._released and session is not None and not session._closed and
+                not getattr(session._transport, '_closed', False) and
+                (self._scope is None or (scope is not None and not scope._closed)) and
+                all(lease.active for lease in self._leases))
+
+    def _check(self):
+        session = self._session()
+        if session is not None:
+            session._transport._check_thread()
+        if not self.active:
+            raise LeaseError('Retained invocation is no longer active', outcome='released_or_unavailable')
+
+    @property
+    def return_value(self):
+        self._check()
+        return self._result.return_value
+
+    @property
+    def outputs(self):
+        self._check()
+        return self._result.outputs
+
+    @property
+    def outcome(self):
+        return self._result.outcome
+
+    def release(self):
+        session = self._session()
+        if session is not None:
+            session._transport._check_thread()
+        self._released = True
+        completed = True
+        errors = []
+        for lease in self._leases:
+            try:
+                completed = lease.release() and completed
+            except BaseException as error:
+                errors.append(error)
+        if errors:
+            raise errors[0]
+        return completed
+
+    def __enter__(self):
+        self._check()
+        return self
+
+    def __exit__(self, *_exc):
+        self.release()

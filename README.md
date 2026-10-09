@@ -4,6 +4,8 @@ Current development: porting the actual BL4 Introspection Harness. Live roots,
 search, generated-class/function/struct schema, selected stored-value inspection,
 and snapshot/diff are working through the original core and local-file protocol.
 Recursive values and the remaining operations are still in progress.
+The experimental `management --retained` host adds verified native calls and
+owned object results with the original Harness retain/release/expiry protocol.
 See [the port inventory](research/INTROSPECTION_PORT.md). This work does not change
 the previously packaged private v0.1 archive.
 

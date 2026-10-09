@@ -286,3 +286,29 @@ fixed getter. This feature is not in the existing private v0.1 ZIP.
 Native UMG, arbitrary key dispatch,
 native value ownership, full harness parity and game-relaunch validation remain
 open. Details and evidence references are in research/INTROSPECTION_PORT.md.
+
+## Retained calls and Harness values (experimental v8)
+
+`launch.cmd management --retained` selects v8 for the shared management/Harness
+host. It includes reflected calls and existing-object leases; default v5,
+`--reflected` v6 and `--leases` v7 remain available. Use the session supplied to
+your mod, never attach a second controller alongside the persistent host.
+
+`session.invoke_retained(obj, function, **arguments)` returns an owned result:
+use `with ... as owned:` or call `owned.release()`. Its `return_value` and named
+`outputs` remain observations, with engine holders keeping non-null object
+outputs alive until release. Mod-scope and session cleanup also release them.
+This does not prevent explicit engine destruction or bypass identity checks.
+
+On v8, original Explorer `invoke` requests may include `"retain":"name"`.
+Later arguments may use `{"$value":{"name":"name"}}`; release with
+`{"op":"release_value","name":"name"}`. The original16-result limit and
+60-second expiry apply. Replacement/expiry/close release the associated native
+owners. Non-retained calls release after encoding. Opaque structs, strings,
+containers and other unimplemented invocation types remain rejected before
+dispatch. See research/OBJECT_LEASES.md for the exact validation boundary.
+
+Build with `scripts/build-retained-call-candidate.cmd` only after the game exits;
+v8 stays pinned until process shutdown. No newly created widget, forced-GC
+survival, native UMG frontend or general key dispatch is established by these
+existing-object ownership tests. The immutable earlier v0.1 archive is unchanged.

@@ -172,3 +172,38 @@ report ready. Logs: `logs/management-host-v7-restored.stderr.log`.
 At01:39:53 the restored in-game console executed Python and logged
 `Persistent v7 console restored after retained-call validation`. The console
 closed normally after submission. The private GitHub remote was reverified.
+
+## Public retained results and original Harness lifecycle — 2026-10-09
+
+The internal-only limitation above is superseded: `Session(retained=True)` and
+mod scopes expose `invoke_retained`. Its `RetainedInvocation` owns output leases,
+provides return_value/outputs/active/release and supports a context manager.
+Every token is adopted before result catalog/decoding; conversion failure cleans
+up that call's holders. A malformed/unknown acknowledgement or aliased existing
+session token aborts ownership without retry. Scope close revokes scalar/null
+results too. No finalizer calls native code; abandoned handles retain resources
+until explicit scope/session cleanup.
+
+The unchanged original Explorer core now supports retain/release_value/$value
+through the v8 adapter. Each native result owner lives beside the core's retained
+value. Replacement, expiry and close release owners; unretained results release
+after encoding. Failed encoding of an explicitly retained value keeps its owner.
+The original16-name,64-character and60-second limits remain. Expiry runs from the
+mod pump and before requests. v6/v7 Harness retain stays gated before dispatch.
+
+Live proof: `scripts/verify_live_retained_results.py`, gamePID34604, evidence in
+`evidence/retained-results-live.json`. Two independent mod scopes held the same
+controller; closing one preserved the other. Public context-manager cleanup
+passed. Through the actual original Explorer, retain, `$value` reuse as an
+argument, same-name replacement and release_value passed. The original timer
+expired after60.09748 seconds. Expiry, Harness close and session close restored
+the exact three baseline holder addresses and object identities.
+
+All123 Python tests pass: conversion failure, deferred cleanup, malformed/partial
+acknowledgements, token alias rejection, scope isolation, original retention
+limits/replacement/expiry and retained encoding failure. Core SHA256 remains
+6c043cb1664e71daa6a6b3a50f9d04f284854101d071ac0b21ce18b1469fe543.
+The launcher adds `management --retained`; packaging includes the v8 binary pair.
+Newly created widgets, forced-GC survival, v8 game relaunch, opaque native values
+and full Harness parity remain pending. Next is a bounded verified widget
+create/add/remove/release specimen, then focus and key dispatch integration.

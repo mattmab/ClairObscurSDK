@@ -46,12 +46,12 @@ class Session:
     thread, build, layout and lifetime checks remain authoritative for each call.
     Close explicitly or use a context manager to remove hooks deterministically.
     """
-    def __init__(self, *, reflected=False, leases=False):
-        if type(reflected) is not bool or type(leases) is not bool:
-            raise ValueError('reflected and leases must be bools')
-        backend = 'research-probe-v7' if leases else 'research-probe-v6'
+    def __init__(self, *, reflected=False, leases=False, retained=False):
+        if any(type(flag) is not bool for flag in (reflected, leases, retained)):
+            raise ValueError('reflected, leases and retained must be bools')
+        backend = 'research-probe-v8' if retained else 'research-probe-v7' if leases else 'research-probe-v6'
         self._transport = (SessionTransport(_executable=Path(__file__).resolve().parents[2] /
-                           f'build/{backend}/research_probe.exe') if reflected or leases else SessionTransport())
+                           f'build/{backend}/research_probe.exe') if reflected or leases or retained else SessionTransport())
         self._dispatcher = CallbackDispatcher()
         self._hooks = []
         self._leases = set()
@@ -105,6 +105,82 @@ class Session:
     def supports_object_leases(self):
         self._check()
         return getattr(self._transport, 'lease_protocol', 0) == 1
+
+    @property
+    def supports_retained_invocation(self):
+        self._check()
+        return (getattr(self._transport, 'retained_protocol', 0) == 1 and
+                self.supports_object_leases and self.supports_reflected_invocation)
+
+    def _abort_ownership(self):
+        for lease in self._leases:
+            lease._state = 'unknown'
+        if not getattr(self._transport, '_closed', False):
+            self._transport._abort()
+
+    def invoke_retained(self, obj, function, **arguments):
+        """Invoke and own object outputs before the game-thread request returns.
+
+        Requires Session(retained=True). Release the returned owner explicitly,
+        use its context manager, or rely on mod-scope/session cleanup. Copied
+        snapshots remain observations and are not ownership handles themselves.
+        """
+        self._check()
+        from .invocation import prepare_call, decode_result, UnsupportedInvocation, InvocationError
+        from .ownership import ObjectLease, RetainedInvocation
+        from . import _retained_wire as wire
+        from .catalog import capture
+        if not self.supports_retained_invocation:
+            raise UnsupportedInvocation('This session has no retained invocation backend')
+        if not isinstance(obj, ObjectSnapshot) or obj.pid != self.pid:
+            raise ValueError('Invocation target must belong to this session')
+        catalog = capture()
+        plan = prepare_call(catalog, obj, function, arguments)
+        request = wire.encode_plan(plan)
+        try:
+            response = self._transport.command('retained-invoke', request)
+            reply, tokens = wire.decode_reply(request, response['retained_packet'])
+        except BaseException as error:
+            self._abort_ownership()
+            if not isinstance(error, Exception):
+                raise
+            raise InvocationError(f'Retained acknowledgement unavailable: {error}', outcome='unknown') from error
+        if reply.outcome == 'unknown':
+            self._abort_ownership()
+        if reply.outcome != 'dispatch_returned' or reply.error:
+            return decode_result(plan, reply, catalog)
+        acquired = []
+        try:
+            if {token for _, token in tokens} & {lease._token for lease in self._leases}:
+                raise ValueError('Native output token aliases existing session ownership')
+            # Adopt every native token before a catalog read or result conversion
+            # can fail. A failed conversion still has deterministic cleanup.
+            for offset, token in tokens:
+                lease = ObjectLease(self, token, None)
+                self._leases.add(lease)
+                acquired.append((offset, lease))
+            current = capture() if reply.objects else catalog
+            result = decode_result(plan, reply, current)
+            identities = {offset: index for offset, index, *_ in reply.objects}
+            for offset, lease in acquired:
+                lease._object = current.by_index[identities[offset]]
+            return RetainedInvocation(self, result, tuple(lease for _, lease in acquired))
+        except BaseException as error:
+            # A construction failure before all tokens were adopted must close
+            # the controller; otherwise clean up only this invocation's owners.
+            if len(acquired) != len(tokens):
+                self._abort_ownership()
+            else:
+                for _, lease in acquired:
+                    try:
+                        lease.release()
+                    except BaseException:
+                        self._abort_ownership()
+                        break
+            if not isinstance(error, Exception):
+                raise
+            raise InvocationError(f'Dispatch returned; retained result could not be exposed: {error}',
+                                  outcome='dispatch_returned') from error
 
     def _lease_command(self, command, **kwargs):
         from . import _lease_wire as wire

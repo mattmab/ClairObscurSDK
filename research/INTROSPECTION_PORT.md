@@ -1,8 +1,11 @@
 # BL4 Introspection Harness port
 
 Status: original roots/search/schema, selected stored-value inspection, snapshots
-and diffs are live-validated; the local-file protocol is ported. No Expedition 33
-harness parity is claimed yet. Updated 2026-10-08.
+and diffs are live-validated; the local-file protocol is ported. Bounded native
+invocation and explicit object leases are available. v8 integrates original
+retained-value semantics; see the current ownership checkpoint below and
+OBJECT_LEASES.md for validation. Full Expedition 33 Harness parity remains
+incomplete. Updated 2026-10-09. Earlier dated sections describe prior boundaries.
 
 ## Original and provenance
 
@@ -35,8 +38,8 @@ That is the sole Python difference from the installed archive. Use source/staged
 | encode | Primitives, nonfinite floats, object refs, bounded structs/arrays/dicts, opaque summaries | Build verified SDK value wrappers; 64 elements, depth and shared node budgets preserved |
 | decode | JSON primitives/arrays, $object, $struct, $value, $gamedata, $gbxdef | Reusable conversion and lifetime handling needed; Gearbox types are game-specific, not presumed present |
 | set | Exact reflected property, explicit literal allow_mutation:true, before/after values | Verified game-thread property writes with type/lifetime validation needed |
-| invoke | Reflected member lookup and named argument conversion; bounded result depth | General dispatch/marshalling needed; fixed Actor getter is only current proven specimen |
-| retained results | Up to 16 named original SDK values, indexed $value paths, 60-second TTL, explicit release | Preserve allocation ownership and reject stale world/session references; snapshots are not native-owned values |
+| invoke | Reflected member lookup and named argument conversion; bounded result depth | Native primitive/object/class calls supported through verified dispatcher; nontrivial native types and Blueprint frames pending |
+| retained results | Up to 16 named original SDK values, indexed $value paths, 60-second TTL, explicit release | v8 owns object outputs within invocation and integrates original retain/release/expiry; opaque native values remain unsupported; snapshots alone do not own memory |
 | traces | Exact reflected function POST observation, optional target, 16 slots, 300 seconds/1000 events maximum; copy args/result, stop/forget/cap/expiry | Reusable reflected event observation needed; current fixed getter hook is a limited starting point |
 | agent registry | 128 named callbacks with owner, description, small argument schema, mutating default, duplicate rejection/unregister | Preserve ownership, schema and cleanup; callbacks execute on external Python owner thread, engine work routed to game thread |
 | action aliases | action/call_debug_action/run_test_action; kart_* aliases | General action aliases portable; Kart aliases depend on a future port of that mod |
@@ -587,3 +590,15 @@ It closes the native round-trip ownership gap for its bounded supported types;
 the original Explorer retain protocol remains gated until Python result owners,
 scope adoption, replacement, expiry and release_value are connected and tested.
 No original core changes were made.111 Python tests pass.
+
+## Current retained-value checkpoint — 2026-10-09
+
+The v8 Python owner and mod-scope integration is now implemented. Live original
+Explorer retain, `$value` argument reuse, replacement, `release_value`,60.10-second
+expiry and close passed against the real PlayerController. Each cleanup restored
+the exact baseline engine-holder set. The core is byte-for-byte unchanged;123
+Python tests pass. `management --retained` enables this capability, while v6/v7
+continue rejecting retain. Supported copied primitives/object outputs are
+covered; opaque native struct/container ownership is not. See OBJECT_LEASES.md
+and evidence/retained-results-live.json. Traces, writes, agent/log/loader parity,
+UMG and native key dispatch remain active work.

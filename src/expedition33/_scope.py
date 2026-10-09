@@ -107,6 +107,21 @@ class SessionScope:
         return self._session.invoke(obj, function, **arguments)
 
     @property
+    def supports_retained_invocation(self):
+        self._check()
+        return self._session.supports_retained_invocation
+
+    def invoke_retained(self, obj, function, **arguments):
+        self._check()
+        result = self._session.invoke_retained(obj, function, **arguments)
+        result._scope = weakref.ref(self)
+        self._leases = [value for value in self._leases if value.active or value.release_pending]
+        for lease in result._leases:
+            lease._scope = weakref.ref(self)
+            self._leases.append(lease)
+        return result
+
+    @property
     def supports_object_leases(self):
         self._check()
         return self._session.supports_object_leases

@@ -70,5 +70,36 @@ are queued for a later owner-thread poll; unknown operations are never retried.
 Snapshots alone remain non-owning. No finalizer performs engine calls. Release
 explicitly or use `with session.retain(obj) as lease:`; the native128-holder bound
 applies across all mods in the session. See OBJECT_LEASES.md for tested behavior,
-errors and limitations. Atomic retention of newly created invocation results and
-the Harness's original retain protocol are not yet implemented.
+errors and limitations. A separate v8 path below retains invocation outputs;
+the standalone v7 acquire API still cannot bridge a creation-to-retain gap.
+
+## Owned invocation results (experimental v8)
+
+`Session(retained=True)` enables `invoke_retained(obj, function, **arguments)`
+and the v7/v6 capabilities. Mod scopes expose the same method and
+`supports_retained_invocation`. The returned `RetainedInvocation` owns every
+non-null object/class output before the native request returns. Its
+`return_value` and `outputs` have the same shapes as ordinary `invoke`; `active`,
+`release()` and context-manager cleanup control ownership. Access is revoked on
+release, scope close or session close, including scalar/null-only results.
+
+```python
+# obj and function are verified observations; use your existing mod session.
+with session.invoke_retained(obj, function, **arguments) as owned:
+    result = owned.return_value
+    # Use result while its owner remains active. It is still an observation.
+```
+
+No finalizer calls the engine. Dropping the result leaves its native leases owned
+by the session/scope until shutdown; release explicitly to avoid exhausting the
+shared128-holder limit. Result-conversion failures release acquired holders.
+Unknown acknowledgements abort the controller for native cleanup without retry.
+Deferred releases are revoked immediately and retried on session polling.
+Ordinary `invoke` retains its non-owning behavior.
+
+The Harness on v8 uses retained invocation internally, preserving the original
+`retain`, `$value`, `release_value`,16-name limit and60-second expiry. Unretained
+results release after encoding. `Harness.poll()` expires values on the owner
+thread; the IntrospectionHarness mod calls it from its regular pump. Closing the
+Harness releases its owners without closing the shared transport. Opaque native
+values, additional argument types and full Harness parity remain unsupported.

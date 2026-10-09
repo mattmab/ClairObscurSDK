@@ -33,6 +33,8 @@ class Mod:
         self.service = FileService(data, self.harness, session.pid)
 
     def poll(self):
+        if self.harness is not None:
+            self.harness.poll()
         if self.service is not None:
             self.service.pump()
 
