@@ -585,3 +585,9 @@ controller loss restores/detaches before object leases are released. Python-only
 finally cleanup is insufficient. Per-user/UMG restoration, unrelated focus
 changes, actions and key dispatch remain pending. See the proof and cleanup
 ordering discussion in COMMONUI_INPUT_OWNERSHIP.md.
+
+A native MenuLifetime candidate now implements the ordered close/protection
+state machine and passes adversarial offline adapter tests. It is not connected
+to the live session. The next implementation gate is the target adapter plus
+protocol/backend lease-release enforcement, followed by controller-loss and
+relaunch validation. Do not count this candidate as native cleanup support yet.

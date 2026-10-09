@@ -233,3 +233,39 @@ focus to unrelated UI without stealing it back, stale prior targets, multiple
 users, mod-scope close and terminal engine teardown explicitly. A native bounded
 ownership record and game-thread cleanup tests are the next prerequisite to
 shipping an interactive menu; no speculative generic callback should be exposed.
+
+## Native lifetime candidate (offline only)
+
+`native/menu_lifetime.h` adds a durable MenuLifetime record for this cleanup
+ordering. Registration binds a session, lifecycle owner and distinct widget/child
+lease tokens after read-only target validation. Its protection query is intended
+to gate explicit lease release. The record is published before attachment and
+focus dispatch; every engine mutation enters an Unknown state before calling the
+adapter. Interrupted calls and failed postcondition verification quarantine the
+record, preserve protection and forbid replay or reuse.
+
+Close observes current focus, restores only if it still belongs to the owned UI,
+then deactivates and detaches before dropping protection. This includes focus
+acquired implicitly by attachment/activation. Deferred cleanup keeps its exact
+stage; it rechecks focus before a pending restoration and does not repeat already
+completed steps. Unrelated focus is preserved. Stale prior targets and terminal
+teardown quarantine without speculative engine calls. The target adapter must
+validate the game thread/GC/lifetime context and own its restoration data in
+native storage; client pointers or callbacks are not part of this contract.
+
+`scripts/test-menu-lifetime.cmd` compiles under MSVC /W4 /WX and passes the
+fixture: exact call ordering, foreign owner/session rejection, lease protection,
+already-prior/unrelated focus, attachment-acquired focus, deferral before cleanup
+and between steps, external focus changes during deferral, interrupted calls at
+all five mutation stages, rejected postconditions at all stages, stale targets,
+terminal teardown, and close before attachment. Log:
+`evidence/menu-lifetime-fixture.log`. These are simulated adapter operations;
+they do not validate engine ABI or controller-exit cleanup live.
+
+This header is not yet included in runtime_session.cpp. Remaining integration:
+provide the build-verified target adapter; register native records before menu
+attachment; gate every explicit protected lease release; close records before
+backend_close releases the pool; keep unresolved records/leases pinned; map the
+operations through an isolated protocol version; expose mod-scope ownership;
+exercise normal close, controller exit, unrelated-focus change and relaunch live.
+The full native Mods Menu and key-dispatch feature remains incomplete.
