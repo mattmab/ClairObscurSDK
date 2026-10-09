@@ -21,5 +21,11 @@ int main() {
                << L",\"text_size\":" << sizeof(TextCallPacket)
                << L",\"text_action\":" << SessionTextInvoke;
 #endif
+#ifdef E33_MENU_SESSION
+    std::wcout << L",\"menu_offset\":" << offsetof(SessionPacket,menu)
+               << L",\"menu_size\":" << sizeof(MenuPacket)
+               << L",\"menu_plans_offset\":" << offsetof(MenuPacket,plans)
+               << L",\"menu_action\":" << SessionMenu;
+#endif
     std::wcout << L"}\n";
 }

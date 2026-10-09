@@ -372,3 +372,38 @@ validate normal close, protected-release rejection, controller death, unrelated
 focus and relaunch. Only then expose interactive menu actions/key dispatch.
 General UMG/per-user restoration remains outside the proven single-user
 viewport baseline and needs additional target investigation.
+
+## v14 transport built and tested live
+
+Controller-side menu transport now advertises menu_protocol=1, selects the v14
+DLL, and exchanges exact-size menu envelopes. Python checks the full capability
+chain and reply correlation, preserving returned/deferred/unknown outcomes.
+`Session(menu_ownership=True)` selects this experimental backend; it does not
+expose a finished Mods Menu. The internal wire API requires the ten plans in
+MenuCall order and the native adapter still validates their live metadata.
+
+`build-menu-candidate.cmd` produced isolated v14 DLL/controller artifacts.
+Native layout fixtures verify separate v13/v14 mapping/message names, preserved
+existing payload offsets, 246608-byte MenuPacket and plans at byte128. All193
+Python tests pass, including malformed/cross-request acknowledgements and the
+complete transport capability gate. Native lifecycle fixtures also pass.
+
+`verify_live_menu_transport.py` passed against game PID21804, thread38100 and
+the verified executable hash: v14 handshake, ping, empty menu Status and normal
+session close. No widgets, focus changes or console attachment occurred. The
+existing v13 Python23916/probe19188 and Harness UUID5537552beed74b01b66b8a96c7f0d377
+remained live afterward. Evidence: `menu-transport-live.json`,
+`menu-python-tests.log`, `menu-transport-fixture-build.log`, `menu-v14-build.log`.
+
+Pinned v14 DLL SHA256:
+794a396f782560df4561fe63f0edec3ba85806494999d6d0914a61c6b9e7211d.
+Controller SHA256:
+2daec85e4ffc2cfef248d8eb4d22c240ff7e461fc014388f72fc43b711d1f252.
+Do not rebuild/overwrite this DLL while PID21804 remains alive, even though its
+test session closed: the runtime module is pinned. Any required native change
+needs a cooperative game relaunch or a separately isolated candidate version.
+
+Next live gate: construct owned widget/child plans, prepare native ownership,
+attach/focus, reject protected lease release, close and verify exact restoration
+and holder counts. Then validate controller death, unrelated focus and relaunch.
+The successful empty-session transport test does not establish those behaviors.

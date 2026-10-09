@@ -83,7 +83,9 @@ inline void run_runtime_session(DWORD pid, DWORD thread, int32_t object_index, i
     packet.request.object_index = object_index; packet.request.object_serial = object_serial;
     packet.request.function_index = function_index; packet.request.function_serial = function_serial;
     wchar_t executable[32768]; require(GetModuleFileNameW(nullptr, executable, 32768) != 0, "SESSION_SELF_PATH");
-#ifdef E33_ENUM_SESSION
+#ifdef E33_MENU_SESSION
+    auto path = std::filesystem::path(executable).parent_path().parent_path() / L"runtime-session-v14" / L"runtime_session_v14.dll";
+#elif defined(E33_ENUM_SESSION)
     auto path = std::filesystem::path(executable).parent_path().parent_path() / L"runtime-session-v13" / L"runtime_session_v13.dll";
 #elif defined(E33_TEXT_SESSION)
     auto path = std::filesystem::path(executable).parent_path().parent_path() / L"runtime-session-v12" / L"runtime_session_v12.dll";
@@ -135,6 +137,9 @@ inline void run_runtime_session(DWORD pid, DWORD thread, int32_t object_index, i
 #ifdef E33_ENUM_SESSION
               << ",\"enum_value_protocol\":1"
 #endif
+#ifdef E33_MENU_SESSION
+              << ",\"menu_protocol\":1"
+#endif
               << "}\n" << std::flush;
     std::string command;
     while (std::getline(std::cin, command)) {
@@ -145,6 +150,20 @@ inline void run_runtime_session(DWORD pid, DWORD thread, int32_t object_index, i
         bool retained=false;
         bool assignment=false;
         bool text=false;
+        bool menu=false;
+#ifdef E33_MENU_SESSION
+        menu=command.substr(0,separator)=="menu";
+        if(menu) {
+            require(separator!=std::string::npos,"MENU_PAYLOAD_MISSING");
+            const auto encoded=command.substr(separator+1);
+            require(encoded.size()==sizeof(MenuPacket)*2,"MENU_PAYLOAD_SIZE");
+            auto* destination=reinterpret_cast<uint8_t*>(&packet.menu);
+            auto digit=[](char c)->unsigned { if(c>='0'&&c<='9') return c-'0'; if(c>='a'&&c<='f') return c-'a'+10;
+                throw std::runtime_error("MENU_PAYLOAD_ENCODING"); };
+            for(size_t i=0;i<sizeof(MenuPacket);++i) destination[i]=static_cast<uint8_t>(digit(encoded[i*2])*16+digit(encoded[i*2+1]));
+            command.resize(separator);
+        }
+#endif
 #ifdef E33_TEXT_SESSION
         text=command.substr(0,separator)=="text-invoke";
         if(text) {
@@ -213,7 +232,7 @@ inline void run_runtime_session(DWORD pid, DWORD thread, int32_t object_index, i
             command.resize(separator);
         }
 #endif
-        if(!reflected && !leased && !retained && !assignment && !text && separator!=std::string::npos) { decode_console_payload(command.substr(separator+1),packet.console_text); command.resize(separator); }
+        if(!reflected && !leased && !retained && !assignment && !text && !menu && separator!=std::string::npos) { decode_console_payload(command.substr(separator+1),packet.console_text); command.resize(separator); }
         DWORD action = command == "enable" ? SessionEnable : command == "disable" ? SessionDisable :
             command == "invoke" ? SessionInvoke : command == "drain" ? SessionDrain :
             command == "ping" ? SessionPing : command == "close" ? SessionClose :
@@ -236,6 +255,9 @@ inline void run_runtime_session(DWORD pid, DWORD thread, int32_t object_index, i
 #ifdef E33_TEXT_SESSION
         if(text) action=SessionTextInvoke;
 #endif
+#ifdef E33_MENU_SESSION
+        if(menu) action=SessionMenu;
+#endif
         require(action != 0, "SESSION_UNKNOWN_COMMAND");
         connection.command(action);
         std::cout << "{\"event\":\"session_response\",\"command\":" << quote(command)
@@ -254,6 +276,15 @@ inline void run_runtime_session(DWORD pid, DWORD thread, int32_t object_index, i
             }
         }
         std::cout << ']';
+#ifdef E33_MENU_SESSION
+        if(menu) {
+            static const char digits[]="0123456789abcdef";
+            const auto* source=reinterpret_cast<const uint8_t*>(&packet.menu);
+            std::string encoded(sizeof(MenuPacket)*2,'0');
+            for(size_t i=0;i<sizeof(MenuPacket);++i) { encoded[i*2]=digits[source[i]>>4]; encoded[i*2+1]=digits[source[i]&15]; }
+            std::cout << ",\"menu_packet\":" << quote(encoded);
+        }
+#endif
 #ifdef E33_TEXT_SESSION
         if(text) {
             static const char digits[]="0123456789abcdef";

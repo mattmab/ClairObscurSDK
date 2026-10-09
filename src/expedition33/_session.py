@@ -42,6 +42,7 @@ class SessionTransport:
             self.pod_value_protocol = ready.get('pod_value_protocol', 0)
             self.text_value_protocol = ready.get('text_value_protocol', 0)
             self.enum_value_protocol = ready.get('enum_value_protocol', 0)
+            self.menu_protocol = ready.get('menu_protocol', 0)
             if (self.start.get('event') != 'snapshot_start' or
                 any(row.get('event') != 'object' for row in self.objects) or
                 ready.get('event') != 'session_ready' or ready['pid'] != self.start['pid'] or
@@ -93,6 +94,12 @@ class SessionTransport:
         retained = command == 'retained-invoke'
         assignment = command == 'object-assign'
         text = command == 'text-invoke'
+        menu = command == 'menu'
+        if menu and any(getattr(self, name, 0) != 1 for name in
+                        ('menu_protocol', 'enum_value_protocol', 'text_value_protocol', 'pod_value_protocol',
+                         'object_assignment_protocol', 'stable_identity_protocol', 'retained_protocol',
+                         'lease_protocol', 'reflected_protocol')):
+            raise ValueError('Native session does not support menu ownership')
         if text and any(getattr(self, capability, 0) != 1 for capability in
                         ('text_value_protocol', 'pod_value_protocol', 'object_assignment_protocol',
                          'stable_identity_protocol', 'retained_protocol', 'lease_protocol', 'reflected_protocol')):
@@ -106,10 +113,15 @@ class SessionTransport:
             raise ValueError('Native session does not support object leases')
         if reflected and getattr(self, 'reflected_protocol', 0) != 1:
             raise ValueError('Native session does not support reflected invocation')
-        if not reflected and not leased and not retained and not assignment and not text and command not in ('enable', 'disable', 'invoke', 'drain', 'ping', 'close', 'console-attach', 'console-detach', 'console-status', 'console-poll', 'console-execute', 'console-print', 'console-names', 'console-key'):
+        if not reflected and not leased and not retained and not assignment and not text and not menu and command not in ('enable', 'disable', 'invoke', 'drain', 'ping', 'close', 'console-attach', 'console-detach', 'console-status', 'console-poll', 'console-execute', 'console-print', 'console-names', 'console-key'):
             raise ValueError('Unsupported native session command')
         suffix = ''
-        if text:
+        if menu:
+            from ._menu_wire import SIZE
+            if type(payload) is not bytes or len(payload) != SIZE or int.from_bytes(payload[:4], 'little') != 1:
+                raise ValueError('Invalid menu ownership payload')
+            suffix = ' ' + payload.hex()
+        elif text:
             from ._text_wire import SIZE, VERSION
             if type(payload) is not bytes or len(payload) != SIZE or int.from_bytes(payload[:4], 'little') != VERSION:
                 raise ValueError('Invalid owned text invocation payload')

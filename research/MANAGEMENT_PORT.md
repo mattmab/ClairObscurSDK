@@ -607,3 +607,10 @@ uncertain records block reuse. Offline failure-path/request fixtures and v13/v14
 compilation pass. Controller transport and live v14 cleanup/relaunch acceptance
 remain pending; this is not yet an installed capability. Keep the existing v13
 Harness/console session until an isolated candidate is ready for handover.
+
+v14 controller serialization and Python request/reply validation are implemented;
+193 Python tests and native fixtures pass. The isolated DLL/controller now pass
+a live empty-menu transport handshake/status/normal-close smoke test alongside
+the unchanged v13 host. Native widget ownership/cleanup remains unvalidated live.
+Next run the owned-widget specimen through v14, followed by disconnect and
+relaunch acceptance; do not count transport-only proof as Mods Menu support.
