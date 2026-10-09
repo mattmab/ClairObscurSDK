@@ -591,3 +591,11 @@ state machine and passes adversarial offline adapter tests. It is not connected
 to the live session. The next implementation gate is the target adapter plus
 protocol/backend lease-release enforcement, followed by controller-loss and
 relaunch validation. Do not count this candidate as native cleanup support yet.
+
+The target operation adapter now compiles with fixed, independently verified
+reflected calls, pre-attachment schema validation and unrelated-focus protection.
+Its packet, lifecycle and reference fixtures pass; the v13 runtime also compiles
+unchanged at its existing call sites. This advances the native menu prerequisite
+identified by the console dumps, but remains uninstalled until protocol and lease
+release gates are integrated. The shared console fallback and Harness remain the
+usable management paths; actionable native controls and key dispatch are pending.

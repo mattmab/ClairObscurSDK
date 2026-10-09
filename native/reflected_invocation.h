@@ -70,7 +70,7 @@ struct CallEnumValidation {
 };
 inline uint32_t reflected_call(uint64_t base,CallPacket& packet,const CallRetention* retention=nullptr,
                                const CallPodValidation* pod=nullptr,const CallTextHandling* text=nullptr,
-                               const CallEnumValidation* enums=nullptr) {
+                               const CallEnumValidation* enums=nullptr,bool validate_only=false) {
     const bool pod_enabled=pod && pod->validate;
     const bool enum_enabled=enums && enums->packet && &enums->packet->call==&packet && enums->validate &&
         pod_enabled && retention && retention->preflight && retention->capture && !text;
@@ -190,6 +190,9 @@ inline uint32_t reflected_call(uint64_t base,CallPacket& packet,const CallRetent
         }
         if(!matched) return 220;
     }
+    // Read-only schema/identity preflight for durable native cleanup plans.
+    // Stop before ownership callbacks, text construction or ProcessEvent.
+    if(validate_only) return 0;
     if(retention) {
         auto error=retention->preflight(retention->context,packet);
         if(error) return error;

@@ -310,3 +310,31 @@ Remaining target adapter work includes verified reflected attachment/focus/
 deactivation/removal operations, owned-child focus attribution, protocol capture
 and release gates, and backend_close ordering. Native controller-loss restoration
 is still unsupported pending that integration and live validation.
+
+## Reflected menu operation adapter candidate
+
+`target_menu_ops.h` now binds ten fixed attachment, activation, focus, query and
+cleanup calls to durable native plans. `menu_call_contract.h` constrains each
+operation to its target-verified native entry, parameter schema and permitted
+target. Registration preflights all live UFunction/FProperty metadata through
+the existing reflected dispatcher without executing ProcessEvent. Actual calls
+repeat validation and require a returned outcome and appropriate readback.
+
+The candidate requires distinct SDK leases, the exact base CommonActivatableWidget
+and Button, child ownership through the widget's WidgetTree, and no assigned
+InputMapping. Attachment requires the captured viewport still to own focus;
+focus acquisition rejects unrelated UI. Restoration rechecks ownership and
+leaves unrelated focus alone. These narrow constraints reflect the successful
+specimen, not general CommonUI or arbitrary mod-widget support.
+
+Validation: menu lifecycle and Slate reference adversarial fixtures pass; the
+new packet fixture checks all ten contracts, cross-operation substitutions,
+invalid outcomes, Z-order bounds, missing player arguments and malformed output
+fields. The complete target adapter and existing v13 runtime translation unit
+compile with /W4 /WX in an isolated directory. Evidence:
+`evidence/menu-ops-adapter-build.log`. The loaded v13 DLL was not rebuilt.
+
+This remains an uninstalled candidate. Native protocol integration, protected
+lease-release enforcement, pre-registration baseline cleanup, backend-close
+ordering and live controller-loss/relaunch tests remain required. Compilation
+and synthetic packets do not establish live cleanup support.
