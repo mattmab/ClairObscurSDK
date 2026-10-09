@@ -435,7 +435,27 @@ already passed in the source suite. Evidence: `evidence/text-v12-package.json`,
 
 The source v12 host passed TextBlock string round trips, original Harness text
 retain/reuse/release, visible native labels, and exact scoped cleanup. This package
-has not yet undergone a fresh-game handover or relaunch; the persistent source
-host remains running. Those lifecycle checks are next, alongside the remaining
-input/focus and interactive Mods Menu work. This candidate does not replace the
-previous immutable private release archive.
+subsequently passed fresh-game startup and the original Harness text probe as
+recorded below. This candidate does not replace the previous immutable private
+release archive.
+
+At09:02:24 local, normal game UI quit ended source game12912, Python37296 and
+native36608 with exit code0 for all three. The old Harness session became
+disabled. Steam then launched game21804; isolated package Python10640/native35208
+started the management host. The game module inventory confirms that its v12 DLL
+came from this candidate directory, with SHA256
+`D72C129112135B4B1F6C9C72759465FF774A46FE5BE03E8BEFC687F42192671F`.
+
+The native console opened with tilde. Console Python confirmed the bundle import
+path and ran its text specimen, passing at09:08:06. ASCII, Unicode and empty text
+round trips, invalid-input rejection, original Harness text retain/reuse/release,
+child removal and exact holder cleanup passed. The fresh persistent session is
+`ccde198317c844bbb7f11a15879a7959`. No save/gameplay session was selected and no
+focus/input mode was changed. The packaged host remains running; this does not
+claim its shutdown, gameplay/map transitions or complete native Mods Menu behavior.
+
+Evidence: `evidence/text-v12-source-exit.json`,
+`evidence/text-v12-source-disabled.json`, `evidence/text-v12-package-relaunch.json`,
+`evidence/text-v12-package-live.json`, `evidence/text-v12-package-progress.json`,
+and `logs/text-v12-package.stderr.log`. The earlier offline package validation
+record remains a historical pre-live result.

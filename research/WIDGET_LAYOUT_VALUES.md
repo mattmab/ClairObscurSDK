@@ -439,3 +439,31 @@ Evidence: `evidence/widget-visible-text-live.json`,
 older no-label specimen and accepts an optional label_text for this v12 path.
 The package manifest now includes the v12 controller and DLL; isolated package
 and relaunch validation remain separate gates.
+
+Fresh-game package follow-up: at09:08:06 local the isolated v12 candidate passed
+the original Harness copied-text specimen after a normal source-game exit and
+Steam relaunch. The loaded DLL and Python import both came from the candidate.
+Unicode/empty round trips, invalid-input rejection, retained text reuse/release
+and exact holder cleanup passed. See DEVELOPMENT.md and
+`evidence/text-v12-package-relaunch.json`. This run did not display widgets or
+change focus/input mode; the visible-label proof above is from the source run.
+
+## Input-mode prerequisite investigation
+
+Read-only Ghidra follow-up (`evidence/input-mode-enum.json`) corroborates the
+archived reflected schemas for GameAndUIEx (RVA31401e0), UIOnlyEx (31405c0) and
+GameOnly (31404c0). Both widget-bearing thunks read a one-byte mouse-lock argument
+and obtain a Slate shared reference through RVA30f7f70 when the widget is nonnull.
+They construct different input-mode objects (vtables73c0e88/73c0e70 respectively)
+and invoke the player controller's virtual slot+d48. Their flush flag separately
+controls virtual slot+d90. GameOnly uses vtable73c0ea0. These are static target
+observations, not live invocation or a reversible input-state contract.
+
+The enum type-formatting path at RVA12aa430 independently reads the referenced
+UEnum from EnumProperty+78, corroborating the external descriptor reader. Live
+schema previously identified EMouseLockMode and a one-byte ByteProperty child.
+Member/value decoding, game-thread enum identity validation and the call codec
+remain missing. Do not pass an untyped zero or bypass the EnumProperty gate.
+Before changing focus, identify the active CommonUI ownership/context and how to
+restore that context without forcing GameOnly over an existing game menu. The
+console dump's registered CommonUI diagnostics remain unexecuted candidates.

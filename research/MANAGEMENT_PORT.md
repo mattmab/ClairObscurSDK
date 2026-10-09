@@ -92,6 +92,15 @@ This supplies a verified native label building block. The original BL4 menu's
 context-dependent input/focus restoration still needs an E33-specific contract;
 its blanket ignore-input resets are not adopted without ownership tracking.
 
+The v12 package now also passed a fresh Steam launch and native-console-driven
+original Harness text probe, including exact holder cleanup. The source game
+and both controllers exited normally with code0 before this launch. The current
+persistent management host runs from candidate20261009T125943Z; see DEVELOPMENT.md.
+Next input dependency: the target's GameAndUIEx/UIOnlyEx thunks describe
+InMouseLockMode as a one-byte EnumProperty referencing EMouseLockMode with a
+ByteProperty underlying field. That metadata does not yet authorize enum calls:
+verify members and the native schema gate before connecting focus transitions.
+
 ## Preserved implementation references
 
 Primary source is the installed BL4 sdk_mods directory. Nineteen original files
