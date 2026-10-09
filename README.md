@@ -54,7 +54,7 @@ The source checkout also has an experimental native Mods Menu. Start
 `launch.cmd management --multi-controls`, then enter `mods ui` in the native
 console. `mods ui close`, `mods ui refresh`, and `mods ui status` use the same
 SDK Management owner and mod registry as the console commands. Construction
-currently takes about five minutes and cleanup is also slow; this is not yet a
+currently takes about three minutes and cleanup is also slow; this is not yet a
 release-ready menu. Numeric/text/JSON editors and general keybinds remain pending.
 The previously packaged private archive does not include this source feature.
 

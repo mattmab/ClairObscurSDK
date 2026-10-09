@@ -8,8 +8,9 @@ from expedition33.management_native import NativeManagementMenu, display_line, d
 
 
 class FakePanel:
-    def __init__(self, session, *, cached_construction=False):
+    def __init__(self, session, *, cached_construction=False, selected_results=False):
         self.cached_construction = cached_construction
+        self.selected_results = selected_results
         self.state = "new"
         self.count = 12
         self.title, self.detail = 'title', 'detail'
@@ -59,9 +60,11 @@ class NativeManagementTests(unittest.TestCase):
 
     def test_explicit_planning_options_reach_panel_before_attachment(self):
         with patch('expedition33.management_native.OwnedMenuPanel', FakePanel):
-            menu = NativeManagementMenu(None, self.registry, cached_planning=True, cached_construction=True)
+            menu = NativeManagementMenu(None, self.registry, cached_planning=True,
+                                        cached_construction=True, selected_results=True)
         menu.open()
         self.assertTrue(menu.panel.cached_construction)
+        self.assertTrue(menu.panel.selected_results)
         self.assertEqual(menu.panel.operations[:3], ['build', 'planner', 'open'])
         menu.close()
 

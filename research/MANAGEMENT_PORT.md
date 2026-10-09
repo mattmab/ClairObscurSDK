@@ -1194,3 +1194,29 @@ explicit observation revocation. This opt-in is validated on the bounded
 specimen only. Full management service adoption, full-menu timing, relaunch
 coverage, general keybinds and updated packaging remain pending. The resident
 native DLL was not rebuilt or replaced.
+
+### Full service selected-result validation — 2026-10-09
+
+SDKManagement's NativeMenuService now enables selected retained-result reads
+for its full 12-control panel. The public frontend also accepts the explicit
+selected_results option. Registry, native input and ownership paths are unchanged.
+
+PROVEN on game21568 with a fresh source controller: full service open took
+169.0852387 seconds, compared with296.568 seconds in the preceding full service
+run. This is approximately43% less opening time in these main-menu observations;
+it is not a responsiveness or gameplay benchmark. Native mouse navigation reached
+Introspection Harness -> Actions -> Live roots. The original Harness returned
+the actual World, game-specific GameInstance and PlayerController, LocalPlayer,
+and empty Pawn list. The bounded display showed the result and the complete
+result was logged. Native Close removed the panel. A subsequent persistent
+Python command verified closed state, no uncertainty and no remaining children
+before releasing the service's completed owner. Exact retained-holder and
+viewport baselines, viewport focus, zero child scopes, shared Registry and all
+four console commands were verified. The same persistent Harness answered status
+afterward and still correctly reports parity_complete=false.
+
+Evidence: `logs/management-selected-host.log` and
+`evidence/management-selected-{before,open,after}.json`. All296 source tests pass.
+Source README timing is updated; the existing private package remains unchanged.
+Further performance work, native editors/keybinds, full-menu controller-loss and
+relaunch coverage, original general traces and agent bridge remain incomplete.

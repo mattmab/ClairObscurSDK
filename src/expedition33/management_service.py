@@ -44,7 +44,8 @@ class NativeMenuService:
             if self.menu.panel.state != 'closed':
                 raise ManagementError('Previous native menu still owns resources; close it before reopening')
         # Assign before construction: failures must not discard the cleanup owner.
-        self.menu = NativeManagementMenu(self.scope, self.registry, cached_construction=True)
+        self.menu = NativeManagementMenu(self.scope, self.registry,
+            cached_construction=True, selected_results=True)
         logging.getLogger(__name__).info('Opening experimental native menu; construction may take several minutes')
         try:
             self.menu.open()

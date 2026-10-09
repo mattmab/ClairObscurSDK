@@ -78,6 +78,7 @@ class NativeServiceTests(unittest.TestCase):
         self.assertIn('not_created', dispatch.execute('mods ui status').output)
         self.assertIn('opened', dispatch.execute('mods ui').output)
         original = service.menu
+        self.assertTrue(original.panel.selected_results)
         self.assertIn('already open', dispatch.execute('mods ui open').output)
         self.assertIs(original, service.menu)
         self.assertEqual(dispatch.execute('stat fps').route, 'native')

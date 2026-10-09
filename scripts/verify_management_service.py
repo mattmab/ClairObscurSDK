@@ -10,16 +10,18 @@ import runpy
 ROOT = Path(__file__).resolve().parents[1]
 
 
-def capture(phase, management):
+def capture(phase, management, *, prefix='management-service'):
     if phase not in ('before', 'open', 'after'):
         raise ValueError('Unsupported evidence phase')
+    if not prefix or any(c not in 'abcdefghijklmnopqrstuvwxyz0123456789-' for c in prefix):
+        raise ValueError('Invalid evidence prefix')
     service = management.native
     state = runpy.run_path(str(ROOT / 'scripts/benchmark_native_management.py'))['observe']()
     state['service'] = service.status()
     state['child_scopes'] = len(service.scope._children)
     state['shared_registry'] = service.registry is management.registry
     state['commands'] = list(service.scope._session.console.dispatcher.command_names)
-    path = ROOT / 'evidence' / ('management-service-' + phase + '.json')
+    path = ROOT / 'evidence' / (prefix + '-' + phase + '.json')
     path.write_text(json.dumps(state, indent=2), encoding='utf-8')
     assert state['shared_registry'] and 'mods' in state['commands']
     if phase == 'open':
@@ -28,7 +30,7 @@ def capture(phase, management):
         assert state['service']['state'] == 'not_created' and state['child_scopes'] == 0
         assert state['focus']['users'][0]['matches_game_viewport']
     if phase == 'after':
-        before = json.loads((ROOT / 'evidence/management-service-before.json').read_text())
+        before = json.loads((ROOT / 'evidence' / (prefix + '-before.json')).read_text())
         assert state['focus']['pid'] == before['focus']['pid']
         assert state['focus']['game_viewport'] == before['focus']['game_viewport']
         assert json.loads(json.dumps(state['holders'])) == before['holders']
