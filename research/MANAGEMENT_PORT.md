@@ -631,3 +631,10 @@ session polling retains deferred cleanup. Protected release rejection preserves
 Python handles. All201 tests pass and the public scoped specimen restores exact
 focus/root/child/holder state live. Next gates remain unrelated-focus/relaunch,
 actionable controls, shared registry rendering and actual key-event dispatch.
+
+The unrelated-focus close gate now has live evidence: an independent UserWidget
+button takes focus, closing the primary native menu preserves that exact Slate
+widget/controller and both keyboard/user focus getters, then both test scopes
+clean up to exact holder baselines and restore the viewport. Game relaunch and
+deferred scope cleanup remain separate gates. Native actionable controls,
+shared-registry presentation and key dispatch are still incomplete.

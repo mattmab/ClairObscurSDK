@@ -499,3 +499,27 @@ Evidence: `scoped-menu-progress.json`, `scoped-menu-live.json`,
 `menu-ownership-python-tests.log`. Native binaries were not changed or rebuilt.
 Live scope-close deferral, unrelated-focus changes and game relaunch still need
 their own evidence; the offline scope-ordering tests do not prove those paths.
+
+## Live unrelated-widget focus preservation
+
+`verify_live_menu_unrelated_focus.py` passes on the verified v14 runtime in
+PID21804. It opens/focuses the scope-owned CommonActivatableWidget menu, then
+constructs an independent, separately retained UserWidget/Canvas/Button tree.
+The latter receives SetUserFocus and reports both keyboard and user focus.
+Its Slate widget differs from the menu button. Closing the primary NativeMenu
+preserves the independent widget's exact Slate widget/controller identities;
+both reflected focus getters still return true afterward.
+
+Only after recording that result does the specimen restore the original
+GameEngine viewport for cleanup of its independent test UI. Both widget scopes
+then restore their root/children and exact strong-holder baselines. Final Slate
+observation confirms viewport focus. The test changes no input mode or game
+settings and performs no action/keybinding registration.
+
+Evidence: `menu-unrelated-focus-progress.json` records the distinct focused
+widgets, identity-preserving close, viewport restoration and passed result;
+`menu-unrelated-primary-live.json` and `menu-unrelated-secondary-live.json` record
+the independent scope lifecycles and holder baselines;
+`menu-unrelated-focus-run.log` records normal completion. This is live evidence
+for preserving another widget's focus during close, not proof of arbitrary
+CommonUI routing, multiple users, deferred scope cleanup or game relaunch.
