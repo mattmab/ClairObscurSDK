@@ -67,6 +67,20 @@ class MenuOwnershipTests(unittest.TestCase):
         lease = ObjectLease(s,7,object()); s._leases.add(lease); m._leases=(lease,)
         with self.assertRaises(LeaseError): Session._release_lease(s,lease)
         self.assertEqual(lease._state,'active'); self.assertEqual(s.calls,[])
+    def test_button_reference_acknowledgement(self):
+        for state in (None,True,0,1,3,4,5):
+            s,m=self.make(); s._transport.button_reference_protocol=1
+            original=s.command
+            s._transport.command=lambda command,sent: dict(original(command,sent),button_reference_state=state)
+            with self.assertRaises(MenuError): m.attach()
+            self.assertTrue(s.aborted)
+        s,m=self.make(); s._transport.button_reference_protocol=1
+        original=s.command
+        s._transport.command=lambda command,sent: dict(original(command,sent),button_reference_state=2)
+        self.assertTrue(m.attach()); self.assertEqual(m._button_reference_state,2)
+        s.reply=(0,2,0)
+        s._transport.command=lambda command,sent: dict(original(command,sent),button_reference_state=0)
+        self.assertTrue(m.close()); self.assertEqual(m._button_reference_state,0)
     def test_scope_close_orders_menu_before_leases(self):
         events=[]
         s=FakeSession(); scope=SessionScope(s)

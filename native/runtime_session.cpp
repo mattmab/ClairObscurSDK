@@ -174,7 +174,11 @@ uint32_t backend_command(SessionPacket* packet) {
     switch (packet->request.action) {
 #ifdef E33_MENU_SESSION
     case SessionMenu:
-        guarded_menu_command(packet->menu); return 0;
+        guarded_menu_command(packet->menu);
+#ifdef E33_BUTTON_REFERENCE_SESSION
+        packet->request.result=static_cast<uint32_t>(session_menu.child_slate.slate.state);
+#endif
+        return 0;
 #endif
 #ifdef E33_TEXT_SESSION
     case SessionTextInvoke: {

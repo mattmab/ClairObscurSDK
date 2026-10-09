@@ -83,7 +83,9 @@ inline void run_runtime_session(DWORD pid, DWORD thread, int32_t object_index, i
     packet.request.object_index = object_index; packet.request.object_serial = object_serial;
     packet.request.function_index = function_index; packet.request.function_serial = function_serial;
     wchar_t executable[32768]; require(GetModuleFileNameW(nullptr, executable, 32768) != 0, "SESSION_SELF_PATH");
-#ifdef E33_MENU_SESSION
+#ifdef E33_BUTTON_REFERENCE_SESSION
+    auto path = std::filesystem::path(executable).parent_path().parent_path() / L"runtime-session-v15" / L"runtime_session_v15.dll";
+#elif defined(E33_MENU_SESSION)
     auto path = std::filesystem::path(executable).parent_path().parent_path() / L"runtime-session-v14" / L"runtime_session_v14.dll";
 #elif defined(E33_ENUM_SESSION)
     auto path = std::filesystem::path(executable).parent_path().parent_path() / L"runtime-session-v13" / L"runtime_session_v13.dll";
@@ -139,6 +141,9 @@ inline void run_runtime_session(DWORD pid, DWORD thread, int32_t object_index, i
 #endif
 #ifdef E33_MENU_SESSION
               << ",\"menu_protocol\":1"
+#endif
+#ifdef E33_BUTTON_REFERENCE_SESSION
+              << ",\"button_reference_protocol\":1"
 #endif
               << "}\n" << std::flush;
     std::string command;
@@ -283,6 +288,9 @@ inline void run_runtime_session(DWORD pid, DWORD thread, int32_t object_index, i
             std::string encoded(sizeof(MenuPacket)*2,'0');
             for(size_t i=0;i<sizeof(MenuPacket);++i) { encoded[i*2]=digits[source[i]>>4]; encoded[i*2+1]=digits[source[i]&15]; }
             std::cout << ",\"menu_packet\":" << quote(encoded);
+#ifdef E33_BUTTON_REFERENCE_SESSION
+            std::cout << ",\"button_reference_state\":" << packet.request.result;
+#endif
         }
 #endif
 #ifdef E33_TEXT_SESSION

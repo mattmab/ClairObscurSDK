@@ -4,6 +4,9 @@
 #include "target_menu_focus.h"
 #include "strong_lease_pool.h"
 #include "menu_session.h"
+#ifdef E33_BUTTON_REFERENCE_SESSION
+#include "target_button_reference.h"
+#endif
 
 // Candidate only. Copy verified request data here before touching the engine;
 // never retain a pointer into IPC. The containing runtime owns this storage and
@@ -13,6 +16,9 @@ struct TargetMenuStorage {
     CallIdentity widget{-1,0,0}, child{-1,0,0}, player{-1,0,0}, library{-1,0,0};
     CallPacket plans[kMenuCalls]{};
     TargetMenuFocusOwner focus;
+#ifdef E33_BUTTON_REFERENCE_SESSION
+    TargetButtonReference child_slate;
+#endif
     CallIdentity engine{-1,0,0};
     MenuSession menu;
 };
@@ -119,10 +125,16 @@ struct TargetMenuOps {
         bool value=false; return invoke(op,&value) && value==expected;
     }
     bool attach() {
-        return focus_owner()==MenuFocusOwner::Prior &&
+        const bool attached=focus_owner()==MenuFocusOwner::Prior &&
             check(MenuCall::InViewport,false) && check(MenuCall::Active,false) &&
             invoke(MenuCall::Add) && check(MenuCall::InViewport,true) &&
             invoke(MenuCall::Activate) && check(MenuCall::Active,true);
+#ifdef E33_BUTTON_REFERENCE_SESSION
+        return attached && data.child_slate.capture(data.base,data.child)==SlateReferenceResult::Ok &&
+            data.child_slate.unchanged(data.base);
+#else
+        return attached;
+#endif
     }
     bool focus() {
         auto current=focus_owner();
@@ -148,5 +160,10 @@ struct TargetMenuOps {
     }
     bool deactivate() { return invoke(MenuCall::Deactivate) && check(MenuCall::Active,false); }
     bool detach() { return invoke(MenuCall::Remove) && check(MenuCall::InViewport,false); }
-    bool release_baseline() { return data.focus.release(data.base)==SlateReferenceResult::Ok; }
+    bool release_baseline() {
+#ifdef E33_BUTTON_REFERENCE_SESSION
+        if(data.child_slate.release(data.base)!=SlateReferenceResult::Ok) return false;
+#endif
+        return data.focus.release(data.base)==SlateReferenceResult::Ok;
+    }
 };

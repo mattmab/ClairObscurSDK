@@ -48,16 +48,17 @@ class Session:
     thread, build, layout and lifetime checks remain authoritative for each call.
     Close explicitly or use a context manager to remove hooks deterministically.
     """
-    def __init__(self, *, reflected=False, leases=False, retained=False, stable_returns=False, object_assignment=False, pod_values=False, text_values=False, enum_values=False, menu_ownership=False):
-        if any(type(flag) is not bool for flag in (reflected, leases, retained, stable_returns, object_assignment, pod_values, text_values, enum_values, menu_ownership)):
+    def __init__(self, *, reflected=False, leases=False, retained=False, stable_returns=False, object_assignment=False, pod_values=False, text_values=False, enum_values=False, menu_ownership=False, button_references=False):
+        if any(type(flag) is not bool for flag in (reflected, leases, retained, stable_returns, object_assignment, pod_values, text_values, enum_values, menu_ownership, button_references)):
             raise ValueError('Session capability flags must be bools')
+        menu_ownership = menu_ownership or button_references
         enum_values = enum_values or menu_ownership
         text_values = text_values or enum_values
         pod_values = pod_values or text_values
         object_assignment = object_assignment or pod_values
         stable_returns = stable_returns or object_assignment
         retained = retained or stable_returns
-        backend = ('research-probe-v14' if menu_ownership else 'research-probe-v13' if enum_values else 'research-probe-v12' if text_values else 'research-probe-v11' if pod_values else 'research-probe-v10' if object_assignment else 'research-probe-v9' if stable_returns else 'research-probe-v8' if retained
+        backend = ('research-probe-v15' if button_references else 'research-probe-v14' if menu_ownership else 'research-probe-v13' if enum_values else 'research-probe-v12' if text_values else 'research-probe-v11' if pod_values else 'research-probe-v10' if object_assignment else 'research-probe-v9' if stable_returns else 'research-probe-v8' if retained
                    else 'research-probe-v7' if leases else 'research-probe-v6')
         self._transport = (SessionTransport(_executable=Path(__file__).resolve().parents[2] /
                            f'build/{backend}/research_probe.exe') if reflected or leases or retained else SessionTransport())
@@ -92,6 +93,11 @@ class Session:
                 self._transport.close()
             finally:
                 raise RuntimeQueryError('Menu ownership backend handshake missing')
+        if button_references and getattr(self._transport, 'button_reference_protocol', 0) != 1:
+            try:
+                self._transport.close()
+            finally:
+                raise RuntimeQueryError('Button reference backend handshake missing')
         self._dispatcher = CallbackDispatcher()
         self._hooks = []
         self._leases = set()

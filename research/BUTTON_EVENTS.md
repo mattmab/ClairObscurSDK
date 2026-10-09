@@ -122,3 +122,40 @@ the new capture adapter and v13/v14 runtime translation units compile with /W4
 /WX (`button-reference-candidate-build.log`). No loaded DLL was rebuilt. SButton
 native retention/release is NOT live-validated or installed; it is a prerequisite
 candidate for the eventual callback adapter, not a completed click API.
+
+## v15 menu-owned SButton reference integration and live normal close
+
+The isolated E33_BUTTON_REFERENCE_SESSION/v15 runtime now captures the exact
+child's SButton reference after successful menu attachment/activation, inside
+the durable AttachUnknown interval. Native cleanup releases it after widget
+detachment and before the captured viewport baseline. Failed/uncertain acquisition
+or release stays protected by the existing menu/session quarantine; no captured
+state borrows the controller mapping. No callback pointer is modified.
+
+`Session(button_references=True)` opts into v15 and its full v14 capability chain.
+Its separate message/mapping names prevent adoption by a v14 controller. Payload
+layout is unchanged; menu responses additionally report the native reference
+state. Python checks that successful prepare/close report Empty0 and successful
+attach/focus report Live2. Missing, malformed or inconsistent state acknowledgements
+abort ownership rather than infer success.
+
+Live `verify_live_scoped_menu.py --button-references` passed on PID21804:
+prepare reported0, attach/focus reported2, and explicit native close reported0.
+The original viewport focus, root/children and exact UObject holder baseline
+were restored. Evidence: `button-reference-progress.json`,
+`button-reference-live.json`, `button-reference-run.log`.
+All203 Python tests pass; native fixtures and v13/v14/v15 layout compilation pass
+(`button-reference-python-tests.log`, `button-reference-integration-fixtures.log`,
+`button-reference-v15-build.log`). This proves normal acquisition/release, not
+that the final-strong-owner destructor branch was exercised live.
+
+Pinned v15 DLL SHA256:
+96f167748196f71c28cb430a0272de32270afad8500f06424c805954096b9af8.
+Controller SHA256:
+3f98e72f0473634379a3b583154369f25b7241ee7a3cf8b93a4f6adf9a353f95.
+Do not overwrite/rebuild the DLL while PID21804 remains alive. The existing v13
+persistent controller and v14 runtime artifact were preserved.
+
+Remaining: v15 controller-loss and relaunch tests; callback binding/observation,
+cloning-aware revocation, transport queue and persistent Python action dispatch.
+The v14 controller-loss result does not prove the additional v15 reference path.

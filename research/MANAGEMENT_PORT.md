@@ -657,3 +657,11 @@ before capturing an independent Slate owner, which is needed to unregister an
 event adapter before detaching widgets. Actual SButton retention and callback
 delivery still require isolated native/live validation; cloning remains a
 separate unregistration constraint. See BUTTON_EVENTS.md.
+
+The v15 candidate now integrates SButton retention into menu ownership and passes
+live normal attach/focus/close with native Live/Empty state acknowledgements,
+viewport restoration and exact holder cleanup. The Python opt-in is
+`Session(button_references=True)`; v14 stays the default menu backend. All203
+tests pass. Next validate the additional reference during controller loss and
+relaunch, then implement a callback mechanism with verified cloning/revocation.
+No click action, general key dispatch or completed Mods Menu is claimed.

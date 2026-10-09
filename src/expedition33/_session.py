@@ -43,6 +43,7 @@ class SessionTransport:
             self.text_value_protocol = ready.get('text_value_protocol', 0)
             self.enum_value_protocol = ready.get('enum_value_protocol', 0)
             self.menu_protocol = ready.get('menu_protocol', 0)
+            self.button_reference_protocol = ready.get('button_reference_protocol', 0)
             if (self.start.get('event') != 'snapshot_start' or
                 any(row.get('event') != 'object' for row in self.objects) or
                 ready.get('event') != 'session_ready' or ready['pid'] != self.start['pid'] or

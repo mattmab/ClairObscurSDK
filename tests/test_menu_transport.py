@@ -51,3 +51,13 @@ class MenuTransportTests(unittest.TestCase):
         self.assertEqual(new['menu_size'], wire.SIZE)
         self.assertEqual(new['menu_plans_offset'], wire.PLANS_AT)
         self.assertEqual(new['menu_action'], 107)
+
+    def test_button_reference_version_isolated_with_same_payload_layout(self):
+        root = Path(__file__).resolve().parents[1] / 'build/menu-lifetime-fixture'
+        paths = [root / f'session_layout_v{version}.exe' for version in (14, 15)]
+        if not all(path.exists() for path in paths): self.skipTest('Build menu native fixtures first')
+        old, new = [json.loads(subprocess.check_output([str(path)], text=True)) for path in paths]
+        self.assertEqual(new.pop('message'), 'E33SDK.Session.v15')
+        self.assertTrue(new.pop('mapping').startswith('Local\\E33Session15_'))
+        old.pop('message'); old.pop('mapping')
+        self.assertEqual(old, new)

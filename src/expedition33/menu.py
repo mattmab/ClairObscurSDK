@@ -25,6 +25,7 @@ class NativeMenu:
         self._leases = tuple(leases)
         self._owner = secrets.randbits(64) or 1
         self._state = 'preparing'
+        self._button_reference_state = None
 
     @property
     def active(self):
@@ -52,7 +53,15 @@ class NativeMenu:
         previous = self._state
         self._state = 'unknown'
         try:
-            reply = wire.decode(sent, session._transport.command('menu', sent)['menu_packet'])
+            response = session._transport.command('menu', sent)
+            reply = wire.decode(sent, response['menu_packet'])
+            if getattr(session._transport, 'button_reference_protocol', 0) == 1:
+                state = response.get('button_reference_state')
+                if type(state) is not int or state not in range(5):
+                    raise ValueError('Invalid button reference acknowledgement')
+                if not reply.error and state != (2 if operation in ('attach', 'focus') else 0):
+                    raise ValueError('Unexpected button reference ownership state')
+                self._button_reference_state = state
         except (RuntimeQueryError, ValueError, KeyError) as error:
             session._abort_ownership()
             raise MenuError('Menu acknowledgement unavailable', outcome='unknown') from error
