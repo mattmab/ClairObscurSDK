@@ -575,3 +575,13 @@ verified, but affects multiple eligible Slate users and fallback focus state.
 Next validate an explicitly single-user viewport-to-owned-child-to-viewport
 specimen with readback and exact cleanup. General per-user/disconnect restoration
 and real key dispatch remain separate acceptance gates.
+
+The single-user viewport focus specimen now passes live: the owned button gains
+keyboard/user focus, SetFocusToGameViewport restores the exact prior viewport,
+and restoration survives widget removal with exact holder cleanup. This used the
+existing v13 reflected invocation paths and no input-mode changes. Before exposing
+interactive native menu open/close, add native ownership/cleanup records so
+controller loss restores/detaches before object leases are released. Python-only
+finally cleanup is insufficient. Per-user/UMG restoration, unrelated focus
+changes, actions and key dispatch remain pending. See the proof and cleanup
+ordering discussion in COMMONUI_INPUT_OWNERSHIP.md.

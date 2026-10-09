@@ -8,12 +8,13 @@ from ctypes import wintypes
 import json
 from pathlib import Path
 import struct
+import time
 
 from expedition33 import _query
 from expedition33.catalog import capture
 
 
-def main():
+def _observe_once():
     start, _ = _query(['--limit', '1'])
     assert start['sha256'] == '218a2478aad5b3a1674b5d7097ec1ac4f994abb95466f9da1407fcd39d639618'
     base = int(start['module_base'], 16)
@@ -104,6 +105,25 @@ def main():
         assert u64(app+0x690) == mapping
     finally:
         kernel.CloseHandle(handle)
+    return result
+
+
+def observe():
+    # Refcounts can change while the engine processes a console transition.
+    # Retry the read-only snapshot; never retry an engine mutation here.
+    for attempt in range(3):
+        try:
+            result = _observe_once()
+            result['observation_attempts'] = attempt + 1
+            return result
+        except AssertionError:
+            if attempt == 2:
+                raise
+            time.sleep(.05)
+
+
+def main():
+    result = observe()
     (Path(__file__).resolve().parents[1]/'evidence/slate-focus-dispatch.json').write_text(
         json.dumps(result, indent=2), encoding='utf-8')
     print(json.dumps(result, indent=2))

@@ -194,3 +194,42 @@ Evidence chain: `slate-focus-query.json`, `slate-focus-dispatch-functions.json`,
 `slate-focused-allocation.json`, `slate-viewport-callers.json`,
 `set-focus-game-viewport-schema.json`, `set-focus-game-viewport.json`,
 `slate-restore-viewport.json` and `slate-focus-all-users.json`.
+
+## Single-user viewport focus transfer passed
+
+`verify_live_viewport_focus.py` passed on the existing v13 Python23916/game21804
+session at10:44:56 on2026-10-09. It required exactly Slate user0, the verified
+keyboard-user mapping, and matching current/GameEngine/registered viewport
+references before construction and again before the focus setter. It displayed
+an owned CommonActivatableWidget with an enabled Button and "SDK focus test"
+label, then invoked Widget.SetUserFocus for the live local player controller.
+
+Both HasKeyboardFocus and HasUserFocus returned true for the owned button; a
+separate Slate observation no longer matched the original viewport. After an
+acknowledged setter, the probe revalidated the viewport identity and single-user
+baseline, invoked SetFocusToGameViewport once and verified exact viewport focus
+restoration. Both button getters then returned false. After deactivation, viewport
+removal, root/child cleanup and exact holder-baseline restoration, another Slate
+observation still matched the original viewport. Visual observation confirmed the
+panel appeared and disappeared. No input mode, binding or menu action changed.
+
+Evidence: `viewport-focus-progress.json`, `viewport-focus-live.json`, and the
+existing persistent host log. `commonui-native-after-focus.json` still shows the
+original main-menu/TitleScreen active bits, router root and absent optional input
+configuration. These are scoped observations, not a claim of all engine state
+being identical. The initial probe stopped before creation/setters because a
+reference count changed between read-only observations. The reader now retries
+the entire read-only observation at most three times, retaining all identity and
+stability assertions. It never retries an engine mutation.
+
+This is normal-close proof for a single-user viewport baseline, not a general
+focus API or controller-loss guarantee. Current native backend_close releases
+object leases before console detachment; it has no menu-specific restoration or
+viewport removal record. Production menu ownership must therefore register a
+native cleanup record before transferring focus, and run its guarded restoration
+and viewport detachment before releasing owned widgets. Python finally blocks
+cannot provide that guarantee after controller termination. Handle changes of
+focus to unrelated UI without stealing it back, stale prior targets, multiple
+users, mod-scope close and terminal engine teardown explicitly. A native bounded
+ownership record and game-thread cleanup tests are the next prerequisite to
+shipping an interactive menu; no speculative generic callback should be exposed.
