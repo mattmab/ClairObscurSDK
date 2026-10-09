@@ -2,6 +2,11 @@
 #include "fixed_invocation.h"
 #include "target_trace_schema.h"
 #include "target_trace_collector.h"
+#include "target_trace_registry.h"
+
+static e33_trace::Registry<TargetTraceOps> compile_registry;
+void compile_registry_command(e33_trace::Packet& packet) { compile_registry.command(packet); }
+uint32_t compile_registry_close(bool terminal) { return compile_registry.close(terminal); }
 
 // Compile the real target adapter with the production identity/layout validator.
 // Executable fixture coverage is separate; this is not a live validation claim.

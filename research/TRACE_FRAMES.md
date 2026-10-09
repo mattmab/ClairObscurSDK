@@ -372,3 +372,44 @@ copied-value checks. Evidence: trace-protocol-fixture.log, trace-wire-tests.log 
 trace-wire-cross-language.log under evidence/, with raw packets in its
 trace-wire-cross-language/ directory. SessionPacket/controller/runtime wiring is
 still pending. The deployed v17 ABI and loaded DLL remain unchanged.
+
+## v18 native session integration candidate — 2026-10-09
+
+trace_registry.h now owns up to16 stable native registration/context pairs and
+implements the wire operations. Owner plus native-assigned monotonically advancing
+registration IDs identify entries; IDs are not reused across session reopening.
+Stopped/capped/expired registrations retain events until drain/forget. Duplicate
+function hooks are rejected by the immutable pool. Forget closes before destroying
+context. GC-sensitive cleanup returns934 for later game-thread retry; lifetime
+loss detaches callbacks without reading the lost entry. Terminal close revokes all
+contexts. Unexpected entry conflicts are preserved and reported during cleanup.
+
+TargetTraceOps supplies guarded build-specific storage checks. Registry preparation
+copies the reflected schema out of IPC before hook ownership begins. The registry
+fixture passes actual thunk tests for owner isolation, duplicate rejection,
+cap/drain, forgotten IDs, deferred close, wrong-thread close and session reopening.
+The existing immutable-slot tests also pass. Production target adapter compilation
+passes with the registry included.
+
+E33_TRACE_SESSION adds a distinct v18 message/mapping, packet and DLL path, while
+requiring the full v17 capability chain. The controller advertises trace protocol1
+and transports trace packets through action110. Backend open begins the registry;
+each game-thread message maintains expirations; close removes traces before other
+resource cleanup and preserves trace cleanup errors across deferred close passes.
+Trace payload parsing bypasses console text decoding. Existing v17 code paths stay
+under their previous feature macros.
+
+scripts/build-trace-candidate.cmd builds runtime-session-v18/runtime_session_v18.dll
+and research-probe-v18/research_probe.exe successfully under /W4 /WX. Hashes are in
+evidence/trace-v18-build-hashes.json; build log is trace-v18-build.log. The v17
+runtime translation unit and menu/button fixtures also pass after integration
+(test-button-delegate-pool-trace-integration.log). Registry and slot reruns are
+test-trace-registry-trace-integration.log and test-trace-slots-trace-integration.log.
+
+The candidate has not been loaded into the game. Python Session methods and scope
+cleanup, SDK invocation while a function is traced, original Harness routing and
+live/relaunch tests remain pending. In particular, existing reflected invocation
+checks still expect the original entry; calls through SDK invocation must account
+for our own validated observer entry before using them to trigger a live trace.
+No claim of live trace functionality is made by this build. The mapped v17 binary
+and running controller were not overwritten.

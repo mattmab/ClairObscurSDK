@@ -34,11 +34,11 @@ class TraceSlots {
     template<size_t Index>
     static void __fastcall invoke(void* object, void* frame, void* result) {
         auto& slot = slots_[Index];
-        bool observing;
-        { Guard guard; observing = slot.post != nullptr; }
+        bool has_post;
+        { Guard guard; has_post = slot.post != nullptr; }
         // Immutable, release-published before the thunk becomes reachable.
         slot.original.load(std::memory_order_acquire)(object, frame, result);
-        if (observing) {
+        if (has_post) {
             Guard guard;
             if (slot.post) slot.post(slot.context, object, frame, result);
         }
@@ -81,12 +81,12 @@ public:
         if (!handle || handle > used_) return false;
         auto& slot = slots_[handle - 1];
         if (!slot.address) return false;
-        auto original = reinterpret_cast<void*>(slot.original.load(std::memory_order_acquire));
+        auto original_entry = reinterpret_cast<void*>(slot.original.load(std::memory_order_acquire));
         auto thunk = reinterpret_cast<void*>(entries_[handle - 1]);
         // Detach storage even if another owner replaced the function entry.
         slot.post = nullptr; slot.context = nullptr;
-        auto previous = InterlockedCompareExchangePointer(slot.address, original, thunk);
-        return previous == thunk || previous == original;
+        auto previous = InterlockedCompareExchangePointer(slot.address, original_entry, thunk);
+        return previous == thunk || previous == original_entry;
     }
     static bool detach(size_t handle) {
         Guard guard;

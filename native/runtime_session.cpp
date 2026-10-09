@@ -2,6 +2,11 @@
 #include "fixed_invocation.h"
 #include "observer_core.h"
 #include "console_attachment.h"
+#ifdef E33_TRACE_SESSION
+#include "target_trace_registry.h"
+static e33_trace::Registry<TargetTraceOps> session_traces;
+static uint32_t trace_cleanup_error = 0;
+#endif
 #ifdef E33_POD_SESSION
 #include "target_pod_schema.h"
 static bool validate_target_pod(uint64_t base,uint64_t property,PodValueKind kind,const CallIdentity& id) {
@@ -332,9 +337,18 @@ uint32_t backend_open(SessionPacket* packet) {
     target_object = fixed_slot(runtime_base, target.object_index, target.object_serial);
     target_function = fixed_slot(runtime_base, target.function_index, target.function_serial);
     if(!lifetime_valid()) return 60;
+#ifdef E33_TRACE_SESSION
+    if (!session_traces.begin(runtime_base, packet->request.nonce)) return 931;
+    trace_cleanup_error = 0;
+#endif
 #ifdef E33_LEASE_SESSION
     auto lease_error=session_leases.begin(packet->request.nonce);
-    if(lease_error!=StrongLeaseResult::Ok) return static_cast<uint32_t>(lease_error);
+    if(lease_error!=StrongLeaseResult::Ok) {
+#ifdef E33_TRACE_SESSION
+        session_traces.close(false);
+#endif
+        return static_cast<uint32_t>(lease_error);
+    }
     lease_session=packet->request.nonce;
 #endif
     return 0;
@@ -342,6 +356,11 @@ uint32_t backend_open(SessionPacket* packet) {
 uint32_t backend_command(SessionPacket* packet) {
     if (!lifetime_valid()) return 61;
     switch (packet->request.action) {
+#ifdef E33_TRACE_SESSION
+    case SessionTrace:
+        session_traces.command(packet->trace);
+        return 0;
+#endif
 #ifdef E33_BUTTON_ACTION_SESSION
 #ifdef E33_MULTI_BUTTON_SESSION
     case SessionMultiButton:
@@ -521,6 +540,12 @@ static StrongLeaseResult guarded_lease_close() {
 #endif
 uint32_t backend_close() {
     uint32_t lease_cleanup_error=0;
+#ifdef E33_TRACE_SESSION
+    const auto trace_result = session_traces.close(backend_shutting_down());
+    if (trace_result == 934) return kSessionCloseDeferred;
+    if (trace_result) trace_cleanup_error = trace_result;
+    lease_cleanup_error = trace_cleanup_error;
+#endif
 #ifdef E33_TEXT_SESSION
     const auto text_cleanup=guarded_text_cleanup();
     if(text_cleanup==TextFrameResult::CleanupDeferred && !backend_shutting_down())
@@ -565,6 +590,9 @@ uint32_t backend_close() {
     return result;
 }
 void backend_message(MSG* message) {
+#ifdef E33_TRACE_SESSION
+    session_traces.maintain();
+#endif
     if (!console_toggle_key || message->wParam!=console_toggle_key ||
         (message->message!=WM_KEYDOWN && message->message!=WM_SYSKEYDOWN &&
          message->message!=WM_KEYUP && message->message!=WM_SYSKEYUP)) return;

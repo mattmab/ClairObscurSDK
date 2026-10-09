@@ -83,7 +83,9 @@ inline void run_runtime_session(DWORD pid, DWORD thread, int32_t object_index, i
     packet.request.object_index = object_index; packet.request.object_serial = object_serial;
     packet.request.function_index = function_index; packet.request.function_serial = function_serial;
     wchar_t executable[32768]; require(GetModuleFileNameW(nullptr, executable, 32768) != 0, "SESSION_SELF_PATH");
-#ifdef E33_MULTI_BUTTON_SESSION
+#ifdef E33_TRACE_SESSION
+    auto path = std::filesystem::path(executable).parent_path().parent_path() / L"runtime-session-v18" / L"runtime_session_v18.dll";
+#elif defined(E33_MULTI_BUTTON_SESSION)
     auto path = std::filesystem::path(executable).parent_path().parent_path() / L"runtime-session-v17" / L"runtime_session_v17.dll";
 #elif defined(E33_BUTTON_ACTION_SESSION)
     auto path = std::filesystem::path(executable).parent_path().parent_path() / L"runtime-session-v16" / L"runtime_session_v16.dll";
@@ -155,6 +157,9 @@ inline void run_runtime_session(DWORD pid, DWORD thread, int32_t object_index, i
 #ifdef E33_MULTI_BUTTON_SESSION
               << ",\"multi_button_protocol\":1,\"multi_button_capacity\":16"
 #endif
+#ifdef E33_TRACE_SESSION
+              << ",\"trace_protocol\":1,\"trace_capacity\":16"
+#endif
               << "}\n" << std::flush;
     std::string command;
     while (std::getline(std::cin, command)) {
@@ -168,6 +173,21 @@ inline void run_runtime_session(DWORD pid, DWORD thread, int32_t object_index, i
         bool menu=false;
         bool button_action=false;
         bool multi_button=false;
+#ifdef E33_TRACE_SESSION
+        bool trace=command.substr(0,separator)=="trace";
+        if(trace) {
+            require(separator!=std::string::npos,"TRACE_PAYLOAD_MISSING");
+            const auto encoded=command.substr(separator+1);
+            require(encoded.size()==sizeof(e33_trace::Packet)*2,"TRACE_PAYLOAD_SIZE");
+            auto* destination=reinterpret_cast<uint8_t*>(&packet.trace);
+            auto digit=[](char c)->unsigned { if(c>='0'&&c<='9') return c-'0'; if(c>='a'&&c<='f') return c-'a'+10;
+                throw std::runtime_error("TRACE_PAYLOAD_ENCODING"); };
+            for(size_t i=0;i<sizeof(e33_trace::Packet);++i) destination[i]=static_cast<uint8_t>(digit(encoded[i*2])*16+digit(encoded[i*2+1]));
+            require(e33_trace::valid_request(packet.trace),"TRACE_REQUEST_INVALID");
+            command.resize(separator);
+            separator=std::string::npos;
+        }
+#endif
 #ifdef E33_MULTI_BUTTON_SESSION
         multi_button=command.substr(0,separator)=="multi-button";
         if(multi_button) {
@@ -309,6 +329,9 @@ inline void run_runtime_session(DWORD pid, DWORD thread, int32_t object_index, i
 #ifdef E33_MULTI_BUTTON_SESSION
         if(multi_button) action=SessionMultiButton;
 #endif
+#ifdef E33_TRACE_SESSION
+        if(trace) action=SessionTrace;
+#endif
         require(action != 0, "SESSION_UNKNOWN_COMMAND");
         connection.command(action);
         std::cout << "{\"event\":\"session_response\",\"command\":" << quote(command)
@@ -327,6 +350,15 @@ inline void run_runtime_session(DWORD pid, DWORD thread, int32_t object_index, i
             }
         }
         std::cout << ']';
+#ifdef E33_TRACE_SESSION
+        if(trace) {
+            static const char digits[]="0123456789abcdef";
+            const auto* source=reinterpret_cast<const uint8_t*>(&packet.trace);
+            std::string encoded(sizeof(e33_trace::Packet)*2,'0');
+            for(size_t i=0;i<sizeof(e33_trace::Packet);++i) { encoded[i*2]=digits[source[i]>>4]; encoded[i*2+1]=digits[source[i]&15]; }
+            std::cout << ",\"trace_packet\":" << quote(encoded);
+        }
+#endif
 #ifdef E33_MULTI_BUTTON_SESSION
         if(multi_button) {
             static const char digits[]="0123456789abcdef";
