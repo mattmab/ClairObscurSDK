@@ -30,14 +30,20 @@ visible control layout and validated focus/key handling. See DEVELOPMENT.md for
 package evidence and INTROSPECTION_PORT.md for the exact set boundary.
 
 Layout follow-up: WIDGET_LAYOUT_VALUES.md records live parameter/struct metadata
-and Ghidra thunk evidence for Vector2D, LinearColor, Margin and Anchors. Candidate
+and Ghidra thunk evidence for Vector2D, LinearColor, Margin and Anchors.
 The opt-in v11 transport now invokes these profiles through its game-thread
 schema gate. Position/size round trips and margin effects passed live on an
 SDK-owned child; anchors/color dispatch returned and holder cleanup passed.
 The original Harness's typed `$struct` adapter is implemented separately; see
-INTROSPECTION_PORT.md for validation. Next verify visible widget layout.
+INTROSPECTION_PORT.md for validation. A disabled native Button now rendered live
+inside an SDK-created CanvasPanel/UserWidget at the expected position and size.
+The bounded specimen removed its viewport entry and child, restored RootWidget
+and returned every holder to the exact baseline. See WIDGET_LAYOUT_VALUES.md.
 Text/font ownership, enum input modes and focus restoration remain
 separate required capabilities, not assumed consequences of the numeric codecs.
+Next add owned text values and usable labels, then connect controls to the shared
+registry/actions with verified input/focus restoration. The visible specimen is
+not yet a functioning Mods Menu or a general keybind implementation.
 
 ## Preserved implementation references
 

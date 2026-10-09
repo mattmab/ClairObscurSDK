@@ -138,3 +138,41 @@ Evidence: `evidence/pod-v11-package*.json` and `pod-v11-package-tests.log`.
 Local raw evidence: `evidence/widget-layout-schema.json`,
 `evidence/widget-layout-schema.log`, `evidence/widget-layout-thunks.json` and its
 argument/tool files. No functions discovered during this inventory were executed.
+
+## Visible native control specimen
+
+At 03:57–03:58 local on 2026-10-09, game PID25560 and the existing persistent
+v11 host PID28004/controller39856 ran `verify_live_widget_visible.py` through
+native-console Python. It created a UserWidget, its owned tree, a CanvasPanel,
+a disabled Button and a retained CanvasPanelSlot. It assigned RootWidget through
+the verified engine setter and added the UserWidget at viewport ZOrder1000.
+
+The slot read back position80,80 and size420,160 with zero anchors. Computer-use
+screenshots showed a blue-gray rounded rectangle at approximately85,85 through
+533,255 in the2048x1152 game window, consistent with the viewport's UI scaling.
+The control was absent before the probe and after automatic removal. This is
+visual rendering evidence; exact pixel color, hit testing and focus were not
+measured. The button was disabled before attachment, no action was registered,
+and no input-mode or focus-setting call was made.
+
+The30-second observation delay ran only in external Python. On completion,
+IsInViewport returned false, RootWidget read back None, canvas child count returned
+to zero, and the native strong-holder map exactly matched the initial baseline.
+All mutations returned known outcomes. Game/controller/host remained running.
+Raw evidence: `evidence/widget-visible-live.json`, the separate visual observation
+record `evidence/widget-visible-observation.json`, and
+`logs/management-v11-harness.stderr.log` at03:58:15. Screenshots were inspected
+directly in the tool output. No new menu or persistent viewport element remains.
+
+This establishes rendered native widget composition using the reusable SDK
+primitives, not a usable Mods Menu. Text/font ownership, actions, enum input modes,
+focus restoration and key dispatch remain open.
+
+Additional static evidence in `evidence/widget-text-enabled-thunks.json`:
+SetIsEnabled thunk1431064d0 decodes the reflected bool and calls widget virtual
+slot2c0. TextBlock.SetText thunk14310b570 initializes a local value through
+1410a2cc0, decodes TextProperty and calls widget virtual360; its non-null text data
+is passed through virtual calls at+8 and+10 around that operation. These lifetime
+operations reinforce the ownership boundary: a16-byte FText is not a numeric POD
+or raw Python string. Constructor, copy and destructor semantics still require
+independent verification before a reusable owned text API can be implemented.
