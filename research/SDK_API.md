@@ -27,8 +27,10 @@ compares the current reference with `expected`, checks metadata and identities,
 and uses the build's engine setter. Temporary leases span the operation.
 `AssignmentResult.before/after` are non-owning observations. Scope close does not
 undo mutations; mods must restore state in their explicit lifecycle. Failures
-report dispatch outcome and must not be automatically retried. General Harness
-`set`, other property types, visible controls and focus/keybind acceptance remain pending.
+report dispatch outcome and must not be automatically retried. The v10 Harness
+adapter supports scalar ObjectProperty `set`, preserving the original literal
+`allow_mutation:true` gate and before/after JSON. Status reports `write_types`;
+other property types, visible controls and focus/keybind acceptance remain pending.
 
 Updated: 2026-10-08
 

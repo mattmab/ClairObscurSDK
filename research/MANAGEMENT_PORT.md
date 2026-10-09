@@ -18,8 +18,11 @@ unfinished; the lifecycle specimens are not a native Mods Menu.
 
 The RootWidget setter uses the reusable session/mod-scope assign_object API
 and target-verified engine assignment path (WIDGET_OWNERSHIP.md). The persistent
-management host now runs v10. Next connect this primitive to original Harness
-set, then implement visible control layout and validated focus/key handling.
+management host now runs v10. Original Harness scalar ObjectProperty set also
+passed live through a fresh adapter instance sharing that host; its long-lived
+Harness needs a controlled restart to import the updated adapter. Next implement
+visible control layout and validated focus/key handling, while completing the
+v10 package/startup checks. See INTROSPECTION_PORT.md for the exact set boundary.
 
 ## Preserved implementation references
 

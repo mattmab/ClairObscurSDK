@@ -7,6 +7,41 @@ retained-value semantics; see the current ownership checkpoint below and
 OBJECT_LEASES.md for validation. Full Expedition 33 Harness parity remains
 incomplete. Updated 2026-10-09. Earlier dated sections describe prior boundaries.
 
+## v10 original set integration — 2026-10-09
+
+The preserved Explorer core now reaches the reusable `assign_object` primitive
+through the adapter's reflected-property lookup and object setter. Scalar
+ObjectProperty writes require the original literal `allow_mutation:true`; the
+adapter checks unique property declaration/type, supplies the observed old value
+to the native compare-before-write check, and invalidates observations before
+the core reads its after-value. Backend status reports `write_types` explicitly.
+Other types, fixed-array writes through Harness, and custom accessors are not
+advertised as supported. Root/session SDK assignment retains its separate
+fixed-array element API. Original core SHA256 remains
+6c043cb1664e71daa6a6b3a50f9d04f284854101d071ac0b21ce18b1469fe543.
+
+All138 Python tests pass, including original before/after/null restoration,
+mutation opt-in rejection, unsupported type rejection, no retry after native
+rejection, authorization cleanup and completed-dispatch reporting when the
+post-write catalog fails. These tests alone do not prove engine behavior.
+
+Live `scripts/verify_live_harness_set.py` passed at02:49:03 through native console
+Python on game34604 and existing host21172/controller36320. A separate Harness
+instance loaded the updated adapter in an isolated package namespace and shared
+the existing v10 session; the host's existing Harness/wrappers were not hot-reloaded.
+On a newly created UserWidget/tree/canvas, the original core rejected missing
+consent, set RootWidget to the canvas and returned null/object before/after.
+Restoration returned the same object/null pair. An independent stored-value
+read confirmed null; exact generic-holder baseline was restored. No viewport,
+focus/input or GC stress operation ran. Evidence: local
+`evidence/harness-set-live.json` and `logs/management-host-v10.stderr.log`.
+
+The existing host's original long-lived Harness still uses its earlier imported
+adapter; a controlled host/package restart is needed to expose set there.
+The updated on-disk adapter and standalone live specimen are validated.
+Next integrate that startup/package lifecycle, then continue visible menu
+controls, broader value codecs, key/focus handling, traces and agent bridge.
+
 ## Original and provenance
 
 Actual source: `S:/SteamLibrary/steamapps/common/Borderlands 4/sdk_mods/tools/introspection/package/BL4Introspection`.
@@ -37,7 +72,7 @@ That is the sole Python difference from the installed archive. Use source/staged
 | snapshot/diff | 32 named inspection pages; changed/added/removed fields with presence flags | Preserve core logic and original page semantics |
 | encode | Primitives, nonfinite floats, object refs, bounded structs/arrays/dicts, opaque summaries | Build verified SDK value wrappers; 64 elements, depth and shared node budgets preserved |
 | decode | JSON primitives/arrays, $object, $struct, $value, $gamedata, $gbxdef | Reusable conversion and lifetime handling needed; Gearbox types are game-specific, not presumed present |
-| set | Exact reflected property, explicit literal allow_mutation:true, before/after values | Verified game-thread property writes with type/lifetime validation needed |
+| set | Exact reflected property, explicit literal allow_mutation:true, before/after values | v10 adapter supports scalar ObjectProperty via owned game-thread assignment; other types remain pending |
 | invoke | Reflected member lookup and named argument conversion; bounded result depth | Native primitive/object/class calls supported through verified dispatcher; nontrivial native types and Blueprint frames pending |
 | retained results | Up to 16 named original SDK values, indexed $value paths, 60-second TTL, explicit release | v8 owns object outputs within invocation and integrates original retain/release/expiry; opaque native values remain unsupported; snapshots alone do not own memory |
 | traces | Exact reflected function POST observation, optional target, 16 slots, 300 seconds/1000 events maximum; copy args/result, stop/forget/cap/expiry | Reusable reflected event observation needed; current fixed getter hook is a limited starting point |

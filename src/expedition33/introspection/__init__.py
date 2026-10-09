@@ -44,7 +44,29 @@ def _adapt(backend, value):
 
 class _Object:
     def __init__(self, backend, observed):
-        self._backend, self._observed = backend, observed
+        object.__setattr__(self, '_backend', backend)
+        object.__setattr__(self, '_observed', observed)
+
+    def __setattr__(self, name, value):
+        backend = self._backend
+        if not backend.mutation_authorized or not backend.assignment:
+            raise UnsupportedCapability('Writes require an authorized set request and v10 assignment')
+        prop = self.Class._find_prop(name)
+        if prop.Class.Name != 'ObjectProperty' or prop.ArrayDim != 1:
+            raise UnsupportedCapability('Harness set currently supports scalar ObjectProperty only')
+        if value is not None and (not isinstance(value, _Object) or value._backend is not backend):
+            raise ValueError('Object property requires null or a reference from this Harness')
+        before = getattr(self, name)
+        if before is not None and not isinstance(before, _Object):
+            raise UnsupportedCapability('Current object reference could not be observed')
+        backend.session.assign_object(self._observed,
+            backend.catalog.by_index[prop._row['owner_index']], name,
+            value._observed if value is not None else None,
+            expected=before._observed if before is not None else None, allow_mutation=True)
+        backend.mutation_completed = True
+        # Invalidate the before-value cache so the original core's final getattr
+        # performs an independent post-mutation observation.
+        backend.refresh()
 
     @property
     def Name(self):
@@ -104,6 +126,16 @@ class _Object:
 
 
 class _Struct(_Object):
+    def _find_prop(self, name):
+        if type(name) is not str or not name:
+            raise ValueError('Expected a reflected property name')
+        self._backend.ensure_described((self._observed,))
+        rows = self._backend.descriptors[self._observed.index].properties
+        matches = [row for row in rows if row['name'] == name]
+        if len(matches) != 1:
+            raise ValueError('Reflected property is missing or ambiguous')
+        return _Property(self._backend, matches[0])
+
     def _superfields(self):
         self._backend.ensure_described((self._observed,))
         descriptor = self._backend.descriptors[self._observed.index]
@@ -125,6 +157,7 @@ class _Function(_Struct):
 
 class _Property:
     def __init__(self, backend, row):
+        self._row = row
         self.Name, self.Class = row['name'], SimpleNamespace(Name=row['type'])
         self.PropertyFlags, self.ArrayDim, self.Offset_Internal = row['flags'], row['dimension'], row['offset']
         for key, attr in (('struct_index', 'Struct'), ('enum_index', 'Enum'),
@@ -217,6 +250,8 @@ class _Backend:
     def __init__(self, session=None):
         self.session = session
         self.retained = bool(session is not None and getattr(session, 'supports_retained_invocation', False))
+        self.assignment = bool(session is not None and getattr(session, 'supports_object_assignment', False))
+        self.mutation_authorized = self.mutation_completed = False
         self.pending_owner = None
         self.pending_value = object()
         self.catalog = None
@@ -294,6 +329,8 @@ class Harness:
         self._backend = _Backend(session if enabled else None)
         if self._backend.retained:
             self.SUPPORTED |= frozenset(('release_value',))
+        if self._backend.assignment:
+            self.SUPPORTED |= frozenset(('set',))
         self._explorer = _Explorer(self._backend)
         self._closed = False
         self._running = False
@@ -311,6 +348,8 @@ class Harness:
         if request['op'] == 'invoke' and request.get('retain') is not None and not self._backend.retained:
             raise UnsupportedCapability('Retained native result ownership is not implemented; no call dispatched')
         self._running = True
+        self._backend.mutation_authorized = request['op'] == 'set' and request.get('allow_mutation') is True
+        self._backend.mutation_completed = False
         try:
             self._explorer.expire()
             if request['op'] not in ('status', 'diff', 'release_value'):
@@ -336,8 +375,10 @@ class Harness:
                 if self._backend.retained:
                     result['argument_types'].append('$value')
                 result['parity_complete'] = False
+                result['write_types'] = ['ObjectProperty'] if self._backend.assignment else []
                 result['limitations'] = ['Stored scalars, strings, references, selected arrays and bounded reflected structs; opaque native state is not owned',
-                    'Writes, traces and agent bridge pending; invocation requires opt-in v6 and supported parameter types',
+                    ('Set supports scalar ObjectProperty only; other writes pending' if self._backend.assignment else 'Writes pending') +
+                    '; traces and agent bridge pending; invocation requires opt-in v6 and supported parameter types',
                     ('Retain supports copied primitives and leased object outputs; opaque native values unsupported'
                      if self._backend.retained else 'Invocation retain and opaque native values unsupported') +
                     '; out parameters use named return/out result fields',
@@ -346,7 +387,14 @@ class Harness:
                 result['execution'] = ('external Python owner thread; native calls on game thread' if 'invoke' in self.SUPPORTED
                                        else 'external Python owner thread; read-only native catalog')
             return result
+        except RuntimeQueryError as error:
+            if request['op'] == 'set' and self._backend.mutation_completed:
+                from ..invocation import InvocationError
+                raise InvocationError(f'Assignment returned; Harness after-observation failed: {error}',
+                                      outcome='dispatch_returned') from error
+            raise
         finally:
+            self._backend.mutation_authorized = self._backend.mutation_completed = False
             self._backend.clear()
             self._running = False
 
