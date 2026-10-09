@@ -6,6 +6,12 @@ Evidence labels: OBSERVED = directly seen; PROVEN = reproduced with a stated tes
 
 ## Status
 
+Current expanded-release assessment: [V01_PROGRESS.md](V01_PROGRESS.md),
+2026-10-09 at implementation6c0cfc8:49% overall,56% functional,45% live coverage,
+36% release readiness. These are evidence-based planning estimates, not a release
+approval. General keybinds are absent; menu startup is still about169-175seconds.
+The assessment and latest topic-journal entries supersede older status below.
+
 The original bootstrap release below is historical. The expanded user goal is
 INCOMPLETE: actual BL4 Harness parity, unified native management and keybinds,
 and updated package/lifecycle validation remain active. Live object enumeration,
