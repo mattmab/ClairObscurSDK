@@ -456,3 +456,46 @@ the successful parent verifier. This proves the single-user viewport-baseline
 controller-exit cleanup path on the current process/build. It does not prove
 game-exit/relaunch, unrelated focus preservation, general UMG focus restoration,
 or recovery from an interrupted engine mutation.
+
+## Scope-owned Python menu API
+
+The v14 lifecycle is now exposed as `scope.prepare_menu(widget, child, player,
+z_order=1000)`, returning NativeMenu with `attach()`, `focus()` and `close()`.
+The inputs must be already-retained objects belonging to that mod scope; the
+helper builds the ten reflected plans from current catalog/schema evidence.
+No caller supplies native addresses, offsets or serialized call packets.
+`scope.supports_menu_ownership` detects the capability.
+
+The handle is session-owned before native acquisition and remains tracked if
+preparation requires deferred cleanup. Mod-scope close closes its menu first,
+then releases leases. Deferred menu cleanup and leases remain session-owned for
+subsequent poll/close; unknown outcomes abort the controller ownership path and
+are never replayed. Explicit release of a protected Python lease is rejected
+before sending and preserves its handle for eventual normal release.
+
+Example after creating the supported retained widget tree in the same scope:
+
+```python
+menu = scope.prepare_menu(widget, button, player)
+if menu.attach():
+    menu.focus()
+# Explicit close restores/detaches; scope.close() also owns this responsibility.
+closed = menu.close()  # False means deferred cleanup; session.poll() continues it.
+```
+
+Attach/focus also return False if native context defers them; callers may attempt
+that explicitly deferred operation later. Exceptions with unknown outcomes must
+not be retried. This remains one menu per session, one Slate user, a captured
+viewport baseline and exact base CommonActivatableWidget/Button classes. It does
+not create controls, register actions, select input modes, or dispatch keybinds.
+SDK lifecycle/transport tests cover cleanup ordering, deferred ownership, foreign
+capability rejection, lease-handle preservation and no replay after uncertainty.
+
+Live validation: `verify_live_scoped_menu.py` passes through this API on v14,
+including protected Python release rejection with handles still active, native
+attach/focus/close, exact viewport restoration and full root/child/holder cleanup.
+Evidence: `scoped-menu-progress.json`, `scoped-menu-live.json`,
+`scoped-menu-run.log`. All201 Python tests pass in
+`menu-ownership-python-tests.log`. Native binaries were not changed or rebuilt.
+Live scope-close deferral, unrelated-focus changes and game relaunch still need
+their own evidence; the offline scope-ordering tests do not prove those paths.

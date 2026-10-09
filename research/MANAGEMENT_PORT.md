@@ -624,3 +624,10 @@ This establishes the narrow native lifecycle prerequisite for reusable menu
 ownership. Next validate unrelated-focus and game-relaunch behavior, integrate
 ownership into mod scopes, then add actionable controls and real key dispatch.
 General per-user/UMG focus restoration is still unsupported.
+
+Scope-owned Python menu lifecycle is implemented and live-tested through
+`prepare_menu`/`attach`/`focus`/`close`; mod scopes own cleanup before leases and
+session polling retains deferred cleanup. Protected release rejection preserves
+Python handles. All201 tests pass and the public scoped specimen restores exact
+focus/root/child/holder state live. Next gates remain unrelated-focus/relaunch,
+actionable controls, shared registry rendering and actual key-event dispatch.

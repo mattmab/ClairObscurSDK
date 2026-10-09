@@ -75,6 +75,7 @@ class SessionScope:
         self._closed = False
         self._hooks = []
         self._leases = []
+        self._menus = []
         self.console = ScopedConsole(self)
 
     def _check(self):
@@ -185,6 +186,22 @@ class SessionScope:
         self._check()
         return self._session.failures
 
+    def prepare_menu(self, widget, child, player, *, z_order=1000):
+        """Prepare native lifecycle ownership for this scope's retained widgets."""
+        self._check()
+        from .menu import prepare
+        self._menus = [menu for menu in self._menus if menu.active]
+        before = set(self._session._menus)
+        try:
+            return prepare(self._session, widget, child, player, self._leases, z_order=z_order)
+        finally:
+            self._menus.extend(self._session._menus - before)
+
+    @property
+    def supports_menu_ownership(self):
+        self._check()
+        return self._session.supports_menu_ownership
+
     def close(self):
         if threading.get_ident() != self._owner:
             raise RuntimeError('Mod cleanup requires the owning Python thread')
@@ -193,7 +210,18 @@ class SessionScope:
         # Revoke callback access before any transport operation can fail.
         self._closed = True
         errors = []
+        menus_closed = True
+        for menu in reversed(self._menus):
+            try:
+                if not menu.close(): menus_closed = False
+            except BaseException as error:
+                menus_closed = False
+                errors.append(type(error).__name__)
+        self._menus.clear()
         for lease in reversed(self._leases):
+            if not menus_closed:
+                if lease._state == 'active': lease._state = 'pending_release'
+                continue
             try:
                 lease.release()
             except BaseException as error:

@@ -95,6 +95,7 @@ class Session:
         self._dispatcher = CallbackDispatcher()
         self._hooks = []
         self._leases = set()
+        self._menus = set()
         self._enabled = False
         self._closed = False
         self._polling = False
@@ -192,6 +193,10 @@ class Session:
     @property
     def supports_enum_values(self):
         return self.supports_text_values and getattr(self._transport, 'enum_value_protocol', 0) == 1
+
+    @property
+    def supports_menu_ownership(self):
+        return self.supports_enum_values and getattr(self._transport, 'menu_protocol', 0) == 1
 
     def invoke_retained(self, obj, function, **arguments):
         """Invoke and own object outputs before the game-thread request returns.
@@ -314,6 +319,8 @@ class Session:
     def _release_lease(self, lease):
         self._check()
         from .ownership import LeaseError
+        if any(menu.protects(lease) for menu in getattr(self, '_menus', ())):
+            raise LeaseError('Close native menu ownership before releasing its lease', outcome='not_dispatched', native_error=403)
         if lease not in self._leases:
             raise LeaseError('Lease does not belong to this session', outcome='not_dispatched')
         reply = self._lease_command('lease-release', token=lease._token)
@@ -328,8 +335,11 @@ class Session:
         return True
 
     def _release_pending_leases(self):
+        for menu in tuple(getattr(self, '_menus', ())):
+            if menu.close_pending:
+                menu.close()
         for lease in tuple(getattr(self, '_leases', ())):
-            if lease.release_pending:
+            if lease.release_pending and not any(menu.protects(lease) for menu in getattr(self, '_menus', ())):
                 self._release_lease(lease)
 
     def invoke(self, obj, function, **arguments):
@@ -424,6 +434,10 @@ class Session:
             self._transport.close()
             leases_closed = not transport_was_closed
         finally:
+            for menu in getattr(self, '_menus', ()):
+                menu._state = 'closed' if leases_closed else 'unknown'
+            if hasattr(self, '_menus'):
+                self._menus.clear()
             for lease in getattr(self, '_leases', ()):
                 if getattr(self._transport, 'target_exit_code', None) is not None:
                     lease._state = 'target_exited'
