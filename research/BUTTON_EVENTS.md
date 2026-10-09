@@ -415,3 +415,36 @@ compile with /W4 /WX (`button-action-controller-build.log`); Python results are 
 `button-action-wire-tests.log`. These are offline checks. Session selection,
 Python transport/callback ownership, isolated v16 binary builds and live validation
 remain pending; no new runtime DLL was loaded.
+
+## v16 session opt-in and first live transport proof
+
+`Session(button_actions=True)` now selects research-probe-v16 and implies the
+full retained-button/menu capability chain. A missing/non-integer action protocol
+or invalid64-bit session nonce closes the candidate session and fails startup.
+SessionTransport captures those handshake fields, requires every action capability
+and validates the complete clean request before sending `button-action` bytes.
+`supports_button_actions` reports the capability; it is not a click-validation
+claim. Scoped callbacks are still pending.
+
+All213 Python tests pass, including ten dedicated wire/transport tests covering
+v16 selection, unchanged v15 selection, handshake rejection, malformed payloads,
+acknowledgement correlation and native v16 layout. Evidence:
+`button-action-session-tests.log`. The suite runs with the project's D: temporary
+directory configuration; an initial run without it hit sandbox temp permissions.
+
+The isolated v16 DLL/controller built successfully and
+`verify_live_button_action_transport.py` passed against game PID21804. The session
+advertised action protocol1 and a valid nonce, reported empty menu/reference state,
+rejected status for an absent menu owner with911/Returned, remained responsive to
+ping and closed normally. It created no widget, changed no focus and installed no
+button hook. Evidence: `button-action-v16-build.log`,
+`button-action-transport-live.json`, `button-action-transport-live.log`.
+
+The DLL is now pinned in PID21804: do not rebuild/overwrite while that process
+remains alive. DLL SHA256:
+9334f2b99fe47a9defa9f17117f93a4b1d7fd341a87f36635b0273e682372cd8.
+Controller SHA256:
+1ee764faee0c45df4a2334aa5916431807f873d0bae3d6054a06e109034846e0.
+Prior v13/v14/v15 artifacts were preserved. Next implement scope-owned action
+handles and poll dispatch, then exercise binding, actual input, unbinding,
+controller loss and relaunch. Transport proof does not satisfy those gates.

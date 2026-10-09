@@ -44,6 +44,8 @@ class SessionTransport:
             self.enum_value_protocol = ready.get('enum_value_protocol', 0)
             self.menu_protocol = ready.get('menu_protocol', 0)
             self.button_reference_protocol = ready.get('button_reference_protocol', 0)
+            self.button_action_protocol = ready.get('button_action_protocol', 0)
+            self.button_action_session = ready.get('button_action_session', 0)
             if (self.start.get('event') != 'snapshot_start' or
                 any(row.get('event') != 'object' for row in self.objects) or
                 ready.get('event') != 'session_ready' or ready['pid'] != self.start['pid'] or
@@ -96,6 +98,17 @@ class SessionTransport:
         assignment = command == 'object-assign'
         text = command == 'text-invoke'
         menu = command == 'menu'
+        button_action = command == 'button-action'
+        if button_action:
+            capabilities = ('button_action_protocol', 'button_reference_protocol', 'menu_protocol',
+                            'enum_value_protocol', 'text_value_protocol', 'pod_value_protocol',
+                            'object_assignment_protocol', 'stable_identity_protocol', 'retained_protocol',
+                            'lease_protocol', 'reflected_protocol')
+            if any(type(getattr(self, name, 0)) is not int or getattr(self, name, 0) != 1 for name in capabilities):
+                raise ValueError('Native session does not support button actions')
+            nonce = getattr(self, 'button_action_session', 0)
+            if type(nonce) is not int or not 0 < nonce < 2**64:
+                raise ValueError('Native button action session identity is missing')
         if menu and any(getattr(self, name, 0) != 1 for name in
                         ('menu_protocol', 'enum_value_protocol', 'text_value_protocol', 'pod_value_protocol',
                          'object_assignment_protocol', 'stable_identity_protocol', 'retained_protocol',
@@ -114,10 +127,14 @@ class SessionTransport:
             raise ValueError('Native session does not support object leases')
         if reflected and getattr(self, 'reflected_protocol', 0) != 1:
             raise ValueError('Native session does not support reflected invocation')
-        if not reflected and not leased and not retained and not assignment and not text and not menu and command not in ('enable', 'disable', 'invoke', 'drain', 'ping', 'close', 'console-attach', 'console-detach', 'console-status', 'console-poll', 'console-execute', 'console-print', 'console-names', 'console-key'):
+        if not reflected and not leased and not retained and not assignment and not text and not menu and not button_action and command not in ('enable', 'disable', 'invoke', 'drain', 'ping', 'close', 'console-attach', 'console-detach', 'console-status', 'console-poll', 'console-execute', 'console-print', 'console-names', 'console-key'):
             raise ValueError('Unsupported native session command')
         suffix = ''
-        if menu:
+        if button_action:
+            from ._button_action_wire import validate_request
+            validate_request(payload)
+            suffix = ' ' + payload.hex()
+        elif menu:
             from ._menu_wire import SIZE
             if type(payload) is not bytes or len(payload) != SIZE or int.from_bytes(payload[:4], 'little') != 1:
                 raise ValueError('Invalid menu ownership payload')

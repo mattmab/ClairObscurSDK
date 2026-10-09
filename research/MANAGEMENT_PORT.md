@@ -735,3 +735,10 @@ capability negotiation into Session, then scoped callback registration and poll
 dispatch with saved registration/action and cross-drain sequence checks. Live
 clicks, unregister/disconnect/relaunch and multi-control menu rendering remain
 unvalidated.
+
+v16 Session selection and transport gates now pass213 Python tests. The isolated
+DLL/controller also pass a live handshake/empty-menu/absent-owner-rejection/normal
+close smoke test on PID21804. No callback was bound. The v16 DLL is now pinned and
+must not be rebuilt until that game exits. Next add scoped Python action handles
+and poll dispatch, then validate owned-button input and cleanup live. Packaging
+and release acceptance for v16 remain separate from this transport-only proof.

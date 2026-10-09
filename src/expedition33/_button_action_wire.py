@@ -43,14 +43,21 @@ class ActionReply:
     events: tuple[ActionEvent, ...]
 
 
-def decode(sent, encoded, *, session):
-    if not _token(session) or type(sent) is not bytes or len(sent) != SIZE:
-        raise ValueError('Invalid action request/session')
+def validate_request(sent):
+    if type(sent) is not bytes or len(sent) != SIZE:
+        raise ValueError('Invalid action request')
     version, operation, *_ = HEADER.unpack_from(sent)
     owner, lease, action = struct.unpack_from('<3Q', sent, 32)
     name = next((name for name, code in OPERATIONS.items() if code == operation), None)
     if version != 1 or name is None or request(name, owner, lease, action=action) != sent:
         raise ValueError('Action request was not a clean v1 packet')
+    return name, owner
+
+
+def decode(sent, encoded, *, session):
+    if not _token(session):
+        raise ValueError('Invalid action session')
+    name, owner = validate_request(sent)
     if type(encoded) is not str or len(encoded) != SIZE*2:
         raise ValueError('Invalid action acknowledgement size')
     received = bytes.fromhex(encoded)
