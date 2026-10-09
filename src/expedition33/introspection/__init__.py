@@ -8,7 +8,7 @@ from types import SimpleNamespace
 
 from ..catalog import capture
 from ..reflection import describe
-from ..enums import describe_enums
+from ..enums import describe_enums, EnumValue
 from ..values import read_values, StoredArray, StoredStruct
 from .. import ObjectSnapshot, RuntimeQueryError
 from .. import _pod_values
@@ -244,10 +244,35 @@ class _Explorer(Explorer):
             self._sweep_owners()
 
     def encode(self, value, depth=2, budget=None):
+        if isinstance(value, EnumValue):
+            budget = [500] if budget is None else budget
+            budget[0] -= 1
+            if budget[0] < 0:
+                return {'$truncated': 'node budget'}
+            if depth <= 0:
+                return {'$type': 'EnumValue', '$truncated': 'depth'}
+            obj = self.sdk.catalog.resolve(value.enum)
+            return {'$enum': {'type': self.sdk.catalog.path_name(obj),
+                              'name': value.name, 'value': value.value}}
         result = super().encode(value, depth, budget)
         if isinstance(value, _StructValue) and '$struct' in result and value._observation.truncated:
             result['truncated'] = True
         return result
+
+    def decode(self, value):
+        if isinstance(value, dict) and '$enum' in value:
+            spec = value['$enum']
+            if (set(value) != {'$enum'} or not isinstance(spec, dict) or
+                    set(spec) not in ({'type', 'name'}, {'type', 'name', 'value'}) or
+                    any(type(spec[key]) is not str or not spec[key] or
+                        len(spec[key]) > 1024 or '\0' in spec[key] for key in ('type', 'name')) or
+                    not spec['type'].startswith('/')):
+                raise ValueError('$enum requires a full type path and bounded member name')
+            result = self.sdk.make_enum(spec['type'], spec['name'])
+            if 'value' in spec and (type(spec['value']) is not int or spec['value'] != result.value):
+                raise ValueError('$enum numeric annotation does not match the current member')
+            return result
+        return super().decode(value)
 
     def prop_schema(self, prop):
         result = super().prop_schema(prop)
@@ -278,6 +303,7 @@ class _Backend:
         self.retained = bool(session is not None and getattr(session, 'supports_retained_invocation', False))
         self.assignment = bool(session is not None and getattr(session, 'supports_object_assignment', False))
         self.pod_values = bool(session is not None and getattr(session, 'supports_pod_values', False))
+        self.enum_values = bool(session is not None and getattr(session, 'supports_enum_values', False))
         self.mutation_authorized = self.mutation_completed = False
         self.pending_owner = None
         self.pending_value = object()
@@ -342,6 +368,12 @@ class _Backend:
         if name.startswith('/'):
             return self.find_object('Class', name)
         return self.wrap(self.catalog.by_index[self.catalog.find_class(name).index])
+
+    def make_enum(self, path, name):
+        if not self.retained or not self.enum_values:
+            raise UnsupportedCapability('Typed enum arguments require retained v13 enum invocation')
+        obj = self.find_object('/Script/CoreUObject.Enum', path)._observed
+        return describe_enums(self.catalog, [obj])[obj.index].value(name)
 
     def make_struct(self, name, **fields):
         if not self.pod_values:
@@ -436,6 +468,8 @@ class Harness:
                     result['argument_types'].append('$value')
                 if self._backend.pod_values:
                     result['argument_types'].append('$struct')
+                if self._backend.retained and self._backend.enum_values:
+                    result['argument_types'].append('$enum')
                 result['struct_types'] = list(_pod_values.PROFILES) if self._backend.pod_values else []
                 result['parity_complete'] = False
                 result['write_types'] = ['ObjectProperty'] if self._backend.assignment else []

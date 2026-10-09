@@ -729,3 +729,26 @@ continue rejecting retain. Supported copied primitives/object outputs are
 covered; opaque native struct/container ownership is not. See OBJECT_LEASES.md
 and evidence/retained-results-live.json. Traces, writes, agent/log/loader parity,
 UMG and native key dispatch remain active work.
+
+## Typed enum adapter — 2026-10-09
+
+The independent adapter now accepts `$enum` arguments with a full reflected type
+path and exact member name, for example:
+
+```json
+{"$enum":{"type":"/Script/UMG.ESlateVisibility","name":"ESlateVisibility::Hidden"}}
+```
+
+Use the exact names returned by the current enum schema. Encoded results include
+the numeric `value` annotation; decoding checks that annotation against freshly
+read membership rather than accepting it as authority. v13 retained invocation
+is required. Invocation retains its existing identity, width, membership and
+game-thread gates. Original `$value` storage, expiry and cleanup remain intact;
+the preserved Explorer core is unchanged.
+
+Validation: all 186 Python tests pass, including typed round trips, nested
+arguments, numeric mismatches, malformed input, sentinels, capability gating,
+encoding budgets and original retained-value lookup/close. The underlying v13
+Widget visibility calls have separate live proof; this new Harness JSON adapter
+has not yet been exercised in the live persistent host. No focus/input-mode or
+key-dispatch validation is implied.

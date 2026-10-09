@@ -10,6 +10,49 @@ from expedition33.introspection import Harness, UnsupportedCapability, core
 
 
 class IntrospectionTests(unittest.TestCase):
+    def test_enum_typed_roundtrip_budget_and_retained_value(self):
+        from expedition33.introspection import _Backend, _Explorer
+        from expedition33.enums import EnumDescriptor, EnumMember
+        from expedition33.catalog import Catalog
+        from test_catalog import fixture
+        backend = _Backend(SimpleNamespace(supports_retained_invocation=True, supports_enum_values=True))
+        backend.catalog = Catalog(123, *fixture())
+        obj = backend.catalog.by_index[2]
+        descriptor = EnumDescriptor(obj, (EnumMember('E::Visible', 0), EnumMember('E::MAX', 1)))
+        explorer = _Explorer(backend)
+        with patch.object(backend, 'find_object', return_value=SimpleNamespace(_observed=obj)) as lookup, \
+                patch('expedition33.introspection.describe_enums', return_value={obj.index: descriptor}), \
+                patch.object(backend.catalog, 'path_name', return_value='/Script/Test.E'):
+            value = explorer.decode({'$enum': {'type': '/Script/Test.E', 'name': 'E::Visible'}})
+            lookup.assert_called_with('/Script/CoreUObject.Enum', '/Script/Test.E')
+            encoded = explorer.encode(value)
+            self.assertEqual(explorer.decode(encoded), value)
+            self.assertEqual(explorer.decode([encoded]), [value])
+            self.assertEqual(explorer.encode(value, budget=[0]), {'$truncated': 'node budget'})
+            self.assertEqual(explorer.encode(value, depth=0)['$truncated'], 'depth')
+            explorer.values['enum'] = value
+            self.assertIs(explorer.decode({'$value': {'name': 'enum'}}), value)
+            for number in (1, False, '0'):
+                with self.assertRaises(ValueError):
+                    explorer.decode({'$enum': dict(encoded['$enum'], value=number)})
+            with self.assertRaises(ValueError):
+                explorer.decode({'$enum': {'type': '/Script/Test.E', 'name': 'E::MAX'}})
+        explorer.close()
+        self.assertFalse(explorer.values)
+
+    def test_enum_invalid_specs_and_capability_gate(self):
+        from expedition33.introspection import _Backend, _Explorer
+        backend = _Backend()
+        explorer = _Explorer(backend)
+        for spec in (None, {}, {'type': 'E', 'name': 'N'},
+                     {'type': '/E', 'name': ''}, {'type': '/E', 'name': 'N\0'},
+                     {'type': '/E', 'name': 'N', 'other': 1}):
+            with self.assertRaises(ValueError): explorer.decode({'$enum': spec})
+        with self.assertRaises(ValueError):
+            explorer.decode({'$enum': {'type': '/E', 'name': 'N'}, '$value': {'name': 'other'}})
+        with self.assertRaises(UnsupportedCapability):
+            explorer.decode({'$enum': {'type': '/E', 'name': 'N'}})
+
     def test_enum_schema_bounded_copies_and_request_cache(self):
         from expedition33.introspection import _Backend
         from expedition33.enums import EnumDescriptor, EnumMember
