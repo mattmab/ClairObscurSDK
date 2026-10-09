@@ -65,6 +65,33 @@ class OwnedWidgetCleanupTests(unittest.TestCase):
         self.assertEqual(calls, [('button', 'collapsed'), ('label', 'collapsed'),
                                  ('button', 'visible'), ('label', 'no-hit')])
 
+    def test_cached_repaint_uses_scope_planner_and_never_falls_back(self):
+        panel, _ = self.panel()
+        panel.state = 'built'
+        panel.buttons, panel.labels = ['button'], ['label']
+        panel.visible, panel.invisible, panel.collapsed = 'visible', 'no-hit', 'collapsed'
+        panel._function = lambda *args: args
+        prepared = SimpleNamespace(invoke=Mock(side_effect=[nullcontext(), RuntimeError('lost reply')]))
+        planner = SimpleNamespace(prepare=Mock(return_value=prepared), close=Mock())
+        panel.scope.invocation_planner = Mock(return_value=planner)
+        panel.scope.invoke_retained = Mock(side_effect=AssertionError('fallback forbidden'))
+        panel.enable_cached_planning()
+        panel.enable_cached_planning()
+        panel.scope.invocation_planner.assert_called_once_with()
+        with self.assertRaisesRegex(RuntimeError, 'lost reply'): panel.set_visible(0, False)
+        self.assertTrue(panel.uncertain)
+        self.assertNotIn(0, panel._visible)
+        with self.assertRaisesRegex(RuntimeError, 'no retry'): panel.set_visible(0, False)
+        self.assertEqual(prepared.invoke.call_count, 2)
+        panel.scope.invoke_retained.assert_not_called()
+
+    def test_planner_cleanup_follows_native_cleanup(self):
+        panel, operations = self.panel()
+        panel._planner = SimpleNamespace(close=lambda: operations.append('planner-close'))
+        self.assertTrue(panel.close())
+        self.assertEqual(operations[-2:], ['planner-close', 'release'])
+        self.assertIsNone(panel._planner)
+
     def test_partial_visibility_failure_preserves_unknown_outcome(self):
         panel, _ = self.panel()
         panel.buttons, panel.labels = ['button'], ['label']

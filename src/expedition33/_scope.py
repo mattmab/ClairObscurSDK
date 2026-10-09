@@ -145,12 +145,21 @@ class SessionScope:
     def invoke_retained(self, obj, function, **arguments):
         self._check()
         result = self._session.invoke_retained(obj, function, **arguments)
+        return self._adopt_retained(result)
+
+    def _adopt_retained(self, result):
         result._scope = weakref.ref(self)
         self._leases = [value for value in self._leases if value.active or value.release_pending]
         for lease in result._leases:
             lease._scope = weakref.ref(self)
             self._leases.append(lease)
         return result
+
+    def invocation_planner(self):
+        """Prepared calls retain the same mod-scope lifetime and result ownership."""
+        self._check()
+        from .prepared_invocation import InvocationPlanner
+        return InvocationPlanner(self._session, scope=self)
 
     @property
     def supports_object_leases(self):

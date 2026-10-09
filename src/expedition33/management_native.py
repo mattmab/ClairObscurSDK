@@ -33,7 +33,8 @@ def display_detail(text, *, width=42, height=18):
 
 
 class NativeManagementMenu:
-    def __init__(self, session, registry):
+    def __init__(self, session, registry, *, cached_planning=False):
+        self._cached_planning = cached_planning
         self.view = ManagementView(registry)
         self.panel = OwnedMenuPanel(session)
         self.frame = None
@@ -44,6 +45,8 @@ class NativeManagementMenu:
 
     def open(self):
         self.panel.build()
+        if self._cached_planning:
+            self.panel.enable_cached_planning()
         self.frame = self.view.render()
         self._paint()
         self.panel.open()

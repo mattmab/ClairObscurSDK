@@ -914,3 +914,52 @@ updates cache only complete success and preserve unknown outcomes on partial
 failure. These visual changes have NOT been applied to or verified in the live
 instance. Native scrolling/responsive metrics, editors, keybinds and fast planning
 remain open work; text truncation is explicitly indicated rather than hidden.
+
+### Shared invocation planning candidate — 2026-10-09
+
+`Session.invocation_planner()` and `SessionScope.invocation_planner()` now capture
+one shared catalog for explicitly prepared retained calls. `prepare()` reads the
+function metadata against that observation; `bind()` prepares a new argument
+snapshot without changing the original. Each invocation still uses the existing
+native identity/schema/context gates and retained-result acknowledgement path.
+Object results still require fresh catalog capture and same-call native leases.
+The planner owns no UObject and does not retry rejected or uncertain operations.
+Refresh (including failed refresh) and close revoke older prepared calls. Session,
+scope and Python owner-thread checks remain enforced.
+
+Example with previously resolved, target-build-verified identities:
+
+```python
+with sdk.invocation_planner() as planner:
+    call = planner.prepare(label, set_text_function, InText="First")
+    with call.invoke():
+        pass
+    with call.bind(InText="Second").invoke():
+        pass
+```
+
+Keep the planner alive while using its calls. Refresh explicitly when newly
+created objects must be resolved, then prepare replacements for revoked calls.
+Use a mod's SessionScope factory so returned leases follow that mod's cleanup.
+
+`NativeManagementMenu(sdk, registry, cached_planning=True)` enables a single
+scope-owned planner after successful tree construction and before first paint.
+Only text, enabled-state and visibility rendering use this candidate path;
+construction and teardown keep their existing invocation paths. The default is
+still uncached pending live comparison. Close revokes the planner after native
+menu/tree cleanup and before releasing the scope. A partial visibility update
+still latches uncertainty; there is no fallback that could replay a mutation.
+
+Validation: 266 offline tests pass, including prepared text argument rebinding
+without another catalog scan, independent object-result leases, decode failure
+cleanup, native rejection, malformed acknowledgement abort, successful/failed
+refresh revocation, foreign-process rejection, wrong-thread rejection, scope
+cleanup and cached-render dispatch failure. An initial suite run without the
+project environment failed on sandbox temporary-directory permissions; rerunning
+with `scripts/project-environment.ps1` uses the required D: temporary directory.
+No new DLL was built or loaded and the current live host was not modified.
+
+Live prepared calls, repaint speedup and this renderer's full close/reopen remain
+UNVERIFIED. This candidate does not solve the approximately 14-minute initial
+construction time. Next performance work must measure this repaint path and
+reduce construction scans without weakening identity or ownership validation.

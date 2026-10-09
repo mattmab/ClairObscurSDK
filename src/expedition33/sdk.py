@@ -246,9 +246,7 @@ class Session:
         snapshots remain observations and are not ownership handles themselves.
         """
         self._check()
-        from .invocation import prepare_call, decode_result, UnsupportedInvocation, InvocationError
-        from .ownership import ObjectLease, RetainedInvocation
-        from . import _retained_wire as wire
+        from .invocation import prepare_call, UnsupportedInvocation
         from .catalog import capture
         if not self.supports_retained_invocation:
             raise UnsupportedInvocation('This session has no retained invocation backend')
@@ -257,6 +255,28 @@ class Session:
         catalog = capture()
         plan = prepare_call(catalog, obj, function, arguments, pod_values=self.supports_pod_values,
                             text_values=self.supports_text_values, enum_values=self.supports_enum_values)
+        return self._invoke_retained_plan(plan, catalog)
+
+    def invocation_planner(self):
+        """Explicit reusable observations; native gates still validate each call.
+
+        A planner shares one catalog across prepared retained calls. Refresh it
+        when new object identities are needed; refresh/close revoke older plans.
+        It does not pin any observed UObject or retry a failed engine operation.
+        """
+        from .prepared_invocation import InvocationPlanner
+        return InvocationPlanner(self)
+
+    def _invoke_retained_plan(self, plan, catalog):
+        self._check()
+        from .invocation import decode_result, UnsupportedInvocation, InvocationError
+        from .ownership import ObjectLease, RetainedInvocation
+        from . import _retained_wire as wire
+        from .catalog import capture
+        if not self.supports_retained_invocation:
+            raise UnsupportedInvocation('This session has no retained invocation backend')
+        if plan.target.pid != self.pid or catalog.pid != self.pid:
+            raise ValueError('Prepared invocation belongs to another process')
         text_call = plan.wire_version == 3
         if text_call:
             from . import _text_wire as wire

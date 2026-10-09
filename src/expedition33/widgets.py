@@ -30,6 +30,7 @@ class OwnedMenuPanel:
         self._text = {}
         self._enabled = {}
         self._visible = {}
+        self._planner = None
 
     @staticmethod
     def _one(rows):
@@ -142,6 +143,29 @@ class OwnedMenuPanel:
         log.info('Owned native menu tree built; awaiting paint and attachment')
         return self
 
+    def enable_cached_planning(self):
+        """Opt in after construction; all rendered widget identities now exist.
+
+        This changes repaint planning only. Native validation and the scope's
+        retained-result ownership remain unchanged. No failed-call fallback.
+        """
+        if self.state != 'built' or self.uncertain:
+            raise RuntimeError('Enable cached planning after a successful build, before opening')
+        if self._planner is None:
+            self._planner = self.scope.invocation_planner()
+
+    def _render_call(self, obj, owner, name, **arguments):
+        function = self._function(owner, name)
+        if self._planner is None:
+            result = self._mutate(self.scope.invoke_retained, obj, function, **arguments)
+        else:
+            # Planning failure has not dispatched anything. Dispatch uncertainty
+            # still latches exactly as on the ordinary path.
+            prepared = self._planner.prepare(obj, function, **arguments)
+            result = self._mutate(prepared.invoke)
+        with result:
+            pass
+
     def set_text(self, label, text):
         if self.state not in ('built', 'open'):
             raise RuntimeError('Panel is not available for rendering')
@@ -149,9 +173,7 @@ class OwnedMenuPanel:
             raise ValueError('Text label does not belong to this panel')
         if self._text.get(label.index) == text:
             return
-        with self._mutate(self.scope.invoke_retained, label,
-                self._function('TextBlock', 'SetText'), InText=text):
-            pass
+        self._render_call(label, 'TextBlock', 'SetText', InText=text)
         self._text[label.index] = text
 
     def set_enabled(self, index, enabled):
@@ -160,7 +182,7 @@ class OwnedMenuPanel:
         if type(index) is not int or not 0 <= index < self.count or type(enabled) is not bool:
             raise ValueError('Invalid control state')
         if self._enabled.get(index) != enabled:
-            self._call(self.buttons[index], 'Widget', 'SetIsEnabled', bInIsEnabled=enabled)
+            self._render_call(self.buttons[index], 'Widget', 'SetIsEnabled', bInIsEnabled=enabled)
             self._enabled[index] = enabled
 
     def open(self):
@@ -180,9 +202,7 @@ class OwnedMenuPanel:
             return
         for obj, value in ((self.buttons[index], self.visible if visible else self.collapsed),
                            (self.labels[index], self.invisible if visible else self.collapsed)):
-            with self._mutate(self.scope.invoke_retained, obj,
-                    self._function('Widget', 'SetVisibility'), InVisibility=value):
-                pass
+            self._render_call(obj, 'Widget', 'SetVisibility', InVisibility=value)
         self._visible[index] = visible
 
     def close(self):
@@ -203,6 +223,9 @@ class OwnedMenuPanel:
             child = self.children[-1]
             self._call(child, 'Widget', 'RemoveFromParent')
             self.children.pop()
+        if self._planner is not None:
+            self._planner.close()
+            self._planner = None
         self.scope.close()
         self._text.clear()
         self._enabled.clear()
