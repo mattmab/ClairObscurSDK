@@ -16,6 +16,11 @@ and general key dispatch remain unfinished. Next establish a reusable verified
 game-thread property assignment path for WidgetTree.RootWidget and Harness set;
 the lifecycle specimens are not a native Mods Menu.
 
+The RootWidget ObjectProperty setter now has target assembly evidence and a
+compile/fixture-tested native assignment candidate (WIDGET_OWNERSHIP.md). Session
+transport, public mutation API and live root assignment remain pending; the
+current v9 persistent management host is unchanged.
+
 ## Preserved implementation references
 
 Primary source is the installed BL4 sdk_mods directory. Nineteen original files

@@ -43,6 +43,42 @@ Local evidence: widget-tree-schema.json, widget-child-plans.json,
 widget-addchild.json, widget-panel-add.json, console-spawn-body.json and
 widget-children-live.json. Raw evidence remains outside release packages.
 
+## Object-property assignment candidate — static/fixture proof only
+
+Live RootWidget metadata identifies ObjectProperty vtable146e11d38. Its
+container setter slot+1d0 points to14138aad0. Assembly confirms RCX=property,
+RDX=container, R8=new object pointer and R9D=array index. For the observed vtable,
+HasSetter(+78) and HasGetter(+80) are constant-false1410044f0. The container setter
+computes offset+element_size*index, then calls+1c0 (14138a7e0). That target setter
+preserves the flag1000 null refusal and conditional reference barrier1412b0e80.
+No function names or ABI were imported from stock headers.
+
+`native/object_assignment.h` and `native/target_object_assignment.h` implement a
+candidate checked assignment. It re-walks the declaring class's fields, verifies
+exact owner/name/type/vtable/constraint/flags/extent/dimension, validates target
+and reference identities plus class ancestry, and compares the current pointer
+against an explicit expected identity before dispatch. GT/GC/shutdown/exit guards
+apply. The outcome becomes unknown before the native call; post-call validation
+and readback are required for success. An acknowledged or ambiguous request
+cannot be reused. Callers must own the referenced objects and provide an outer
+SEH boundary; this candidate does not itself register leases or catch SEH.
+
+`scripts/verify-object-assignment.cmd` passes /W4 /WX compilation of fixture and
+target adapter. The fixture checks stale preconditions, invalid null/array input,
+context loss and fault-after-write/no-retry semantics. It does not validate the
+game engine setter or native memory validator by simulation.
+
+Not yet wired into a transport, Python API or Harness `set`; no live property
+write has occurred. Next integrate an isolated session capability with explicit
+mutation authorization and owned-object lifetimes, then assign/restore the new
+test tree's root and verify viewport/cleanup behavior. Strings, structs,
+containers, custom accessors and non-ObjectProperty types remain separate codec
+work needed for full Harness parity.
+
+Evidence: object-property-vtable.json, object-property-accessors.json and
+object-property-setter-abi.json. One queried adjacent vtable target1413715e0 had
+no defined Ghidra function and was not used or assigned a guessed meaning.
+
 ## Base UserWidget specimen and lazy serial assignment — 2026-10-09
 
 The live read-only probe `scripts/inspect_widget_initialization.py` confirmed
