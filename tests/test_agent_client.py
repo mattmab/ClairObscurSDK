@@ -23,6 +23,8 @@ class AgentClientTests(unittest.TestCase):
             (['action', 'sample.add', '--args', '{"n":3}'], {'op': 'action', 'name': 'sample.add', 'args': {'n':3}}),
             (['enable', 'Sample'], {'op': 'mod_enable', 'mod': 'Sample'}),
             (['disable', 'Sample'], {'op': 'mod_disable', 'mod': 'Sample'}),
+            (['install-staged', 'Sample', '--expected-sha256', 'd' * 64],
+             {'op': 'mod_install_staged', 'mod': 'Sample', 'expected_sha256': 'd' * 64}),
             (['reload', 'Sample', '--expected-sha256', 'a' * 64],
              {'op': 'mod_reload', 'mod': 'Sample', 'expected_sha256': 'a' * 64}),
             (['reload-changed', 'Sample', '--expected-sha256', 'b' * 64],

@@ -55,6 +55,7 @@ class ModLoader:
         self._source_digests = {}
         self._imports = {}
         self._reloading = False
+        self._installing = None
         self.stop_requested = False
         self.registry = Registry(self, settings)
         from .introspection.agent import AgentBridge
@@ -77,6 +78,7 @@ class ModLoader:
     def load(self, name):
         self._check_thread()
         self._check_cleanup(name)
+        self._check_install(name)
         if name in self._loaded:
             return
         self._load_source(name, self._read_source(name))
@@ -135,6 +137,7 @@ class ModLoader:
         """
         record = self._record(name)
         self._check_cleanup(name)
+        self._check_install(name)
         if type(changed_only) is not bool:
             raise ModError('changed_only must be bool')
         if (self._reloading or name in self._enabling or name in self._disabling or
@@ -178,9 +181,69 @@ class ModLoader:
         return dict(changed=True, mod=name, version=view['version'],
                     enabled=view['enabled'], sha256=snapshot[2], package_sha256=package.sha256)
 
+    def _check_install(self, name):
+        if self._installing == name:
+            return
+        from .mod_install import inspect_transaction
+        transactions = self.root / '.transactions'
+        if not transactions.exists():
+            return
+        if transactions.is_symlink() or transactions.is_junction():
+            raise ModError('Transaction directory is redirected')
+        for index, directory in enumerate(transactions.iterdir()):
+            if index >= 1024:
+                raise ModError('Transaction history exceeds inspection limit')
+            state = inspect_transaction(self.root, directory.name)
+            if state['mod'] == name and (state['phase'] not in ('preparing', 'prepared', 'committed') or
+                                         state['phase'] == 'committed' and state.get('error')):
+                raise ModError('Unresolved installation requires inspection: ' + state['journal'])
+
+    def install_staged(self, name, *, expected_sha256):
+        """Activate fixed staging/<folder>.zip after cleanup; retain backup/journal."""
+        record = self._record(name)
+        self._check_cleanup(name)
+        self._check_install(name)
+        row = next(v for v in self.registry.views() if v['folder'] == name)
+        if (self._reloading or name in self._enabling or name in self._disabling or
+                name in ('SDKManagement', 'IntrospectionHarness') or row['protected'] or
+                row['id'] in self.registry._dispatching):
+            raise ModError('Cannot install over a protected/core mod or active lifecycle transition')
+        from .mod_install import PreparedInstall
+        transaction = PreparedInstall(self.root, name, self.root.parent / 'staging' / (name + '.zip'),
+                                      expected_sha256)
+        enabled = record[2] is not None
+        self._reloading, self._installing = True, name
+        def cleanup():
+            self.disable(name)
+            self.unload(name)
+            return True
+        try:
+            transaction.activate(cleanup)
+            snapshot = self._read_source(name)
+            expected = transaction.candidate.summary()
+            entry_digest = next(f['sha256'] for f in expected['files'] if f['path'] == 'mod.py')
+            if snapshot[2] != entry_digest or snapshot[3].sha256 != expected['python_package_sha256']:
+                raise ModError('Installed source changed before activation')
+            transaction._record('activating')
+            self._load_source(name, snapshot)
+            if enabled:
+                self.enable(name)
+            transaction._record('committed')
+            return transaction.inspect()
+        except BaseException as error:
+            transaction._failed(error)
+            raise
+        finally:
+            self._reloading, self._installing = False, None
+            if (not self._borrowed and self._session is not None and
+                    not any(value[2] is not None for value in self._loaded.values())):
+                shared, self._session = self._session, None
+                shared.close()
+
     def enable(self, name, *, console=False, console_key=None):
         record = self._record(name)
         self._check_cleanup(name)
+        self._check_install(name)
         if name in self._enabling or name in self._disabling:
             raise ModError('Recursive mod lifecycle transition is not supported')
         if record[2] is not None:

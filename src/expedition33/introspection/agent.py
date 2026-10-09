@@ -58,6 +58,7 @@ class BoundedText(io.TextIOBase):
 class AgentBridge:
     OPERATIONS = frozenset(('dev_status', 'mod_list', 'mod_enable', 'mod_disable',
                            'mod_reload', 'reload_changed_mod',
+                           'mod_install_staged',
                            'action', 'call_debug_action', 'run_test_action', 'logs'))
 
     def __init__(self, registry, log_path):
@@ -157,9 +158,10 @@ class AgentBridge:
             return dict(transport='local files; no network listener', allow_dev_exec=False,
                 raw_exec_supported=False, execution='external Python owner thread',
                 adapters={'registry': ['mod_list', 'mod_enable', 'mod_disable',
-                                      'mod_reload', 'reload_changed_mod']},
+                                      'mod_reload', 'reload_changed_mod', 'mod_install_staged']},
                 reload_scope='captured package-local Python; entry and dependency-tree digests required; no global dependency/core reload',
-                unsupported=['staged_archive_install', 'core_reload', 'kart_*'],
+                staged_install='fixed staging/<mod>.zip; archive digest required; backups retained; explicit recovery pending',
+                unsupported=['core_reload', 'kart_*'],
                 actions=[dict(name=n, **{k: v for k, v in a.items()
                     if k not in ('callback', 'token')}) for n, a in self.actions.items()], last=self.last)
         if op == 'mod_list':
@@ -167,7 +169,7 @@ class AgentBridge:
                          cleanup_error=v.get('cleanup_error'), source_sha256=v.get('source_sha256'),
                          package_sha256=v.get('package_sha256'))
                     for v in self.registry.views()][:128]
-        if op in ('mod_enable', 'mod_disable', 'mod_reload', 'reload_changed_mod'):
+        if op in ('mod_enable', 'mod_disable', 'mod_reload', 'reload_changed_mod', 'mod_install_staged'):
             if request.get('allow_mutation') is not True:
                 raise ValueError('This action requires allow_mutation: true')
             name = request.get('mod')
@@ -176,6 +178,9 @@ class AgentBridge:
             rows = [v for v in self.registry.views() if v['folder'] == name]
             if len(rows) != 1:
                 raise ValueError('Mod must already be loaded')
+            if op == 'mod_install_staged':
+                return self.registry.install_staged(self.registry.select(rows[0]['id']),
+                    expected_sha256=request.get('expected_sha256'))
             if op in ('mod_reload', 'reload_changed_mod'):
                 return self.registry.reload(self.registry.select(rows[0]['id']),
                     expected_sha256=request.get('expected_sha256'),

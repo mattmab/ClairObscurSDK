@@ -237,6 +237,10 @@ class Registry:
         return self._loader.reload(entry.name, expected_sha256=expected_sha256,
                                    changed_only=changed_only, expected_package_sha256=expected_package_sha256)
 
+    def install_staged(self, selection, *, expected_sha256):
+        entry = self._entry(selection)
+        return self._loader.install_staged(entry.name, expected_sha256=expected_sha256)
+
     def option(self, selection, option_id):
         entry = self._entry(selection)
         for option in entry.definition.options:

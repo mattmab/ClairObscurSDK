@@ -1087,3 +1087,44 @@ integration must use fixed staging paths, serialize lifecycle ownership, connect
 cleanup/load/enable to the journal, refuse unresolved transactions on startup,
 provide explicit recovery policy, and validate archive replacement live. The
 running source controller remains on the earlier package-import milestone.
+
+## Staged loader and Harness integration — 2026-10-09 (source-tested)
+
+ModLoader.install_staged now connects the prepared transaction to scope cleanup,
+namespace eviction, captured-source loading and preservation of enabled state.
+Only already-loaded, unprotected, non-core mods outside active lifecycle/action
+transitions qualify. The archive path is fixed to staging/<folder>.zip beside
+the configured mods root. The caller supplies its complete archive SHA256.
+Entry/tree digests are checked again after installation and before source runs.
+The transaction records activating before import and committed after successful
+load/enable. Old backups remain available; no automatic rollback/replay occurs.
+The shared Session remains alive through replacement.
+
+Load, enable, entry reload and staged install inspect prior transaction journals.
+Incomplete cleanup/swap/activation blocks the affected folder even in a fresh
+loader. Prepared-only transactions have not changed installed code and do not
+block it. Invalid or redirected journal state stops inspection rather than being
+silently ignored. Committed transactions with recorded errors also block loading.
+History inspection is bounded to1024 transactions. Explicit recovery/maintenance
+policy is still pending; manually treating a failed activation as committed is
+not supported.
+
+Registry and Harness expose mod_install_staged with literal allow_mutation:true.
+The CLI command is install-staged MOD --expected-sha256 ARCHIVE_HASH, with global
+--allow-mutation. It uses the same one-send transport and success/error envelope
+as other lifecycle actions. A timeout is not authorization to retry.
+
+All338 tests pass. Integration tests verify action replacement and old-scope
+revocation, backup preservation, successful fresh-loader startup, failed-import
+startup blocking, cleanup-failure blocking while old files remain intact,
+bad-archive rejection before disable, bridge consent, and CLI request shape.
+Evidence: evidence/staged-loader-tests.log. Existing archive/transaction fault
+injection tests also pass. These are source and temporary-filesystem tests;
+live staged installation has not yet been validated and no new bundle was made.
+The current live controller still runs the previous package-import source.
+
+Remaining gates before treating this as a finished staged-reload feature:
+explicit recovery and concurrent-process policy, live archive replacement with
+resources and helpers, controller/game relaunch checks, and packaged validation.
+Full Introspection Harness parity, general tracing, menu performance and the
+keybind/editor work remain incomplete.

@@ -1,7 +1,7 @@
 """Port of Mattmab's BL4 named-action CLI (MIT, src/expedition33/introspection/LICENSE).
 
-Uses the original local JSON protocol through e33_introspect.py. Staged reload
-and BL4 game-specific aliases are not yet supported by the Expedition 33 backend.
+Uses the original local JSON protocol through e33_introspect.py. BL4 game-specific
+aliases and core reload are not supported by the Expedition 33 backend.
 """
 import argparse
 import json
@@ -33,6 +33,9 @@ def main(argv=None):
         lifecycle.add_argument('--expected-sha256', required=True, help='SHA256 of installed mod.py bytes')
         lifecycle.add_argument('--expected-package-sha256', help='Required when package-local Python helpers exist or were removed')
     logs = sub.add_parser('logs', help='Read a bounded SDK log tail')
+    staged = sub.add_parser('install-staged', help='Install fixed staging/<mod>.zip; retain backup and journal')
+    staged.add_argument('mod')
+    staged.add_argument('--expected-sha256', required=True, help='SHA256 of the complete staged archive')
     logs.add_argument('--contains', default='')
     logs.add_argument('--limit', type=int, default=30)
     args = parser.parse_args(argv)
@@ -48,12 +51,13 @@ def main(argv=None):
             request = {'op': 'action', 'name': args.name, 'args': values}
         elif args.op in ('enable', 'disable'):
             request = {'op': 'mod_' + args.op, 'mod': args.mod}
-        elif args.op in ('reload', 'reload-changed'):
+        elif args.op in ('reload', 'reload-changed', 'install-staged'):
             if len(args.expected_sha256) != 64 or any(c not in '0123456789abcdef' for c in args.expected_sha256):
                 raise ValueError('--expected-sha256 must be 64 lowercase hex characters')
-            request = {'op': 'mod_reload' if args.op == 'reload' else 'reload_changed_mod',
+            request = {'op': {'reload':'mod_reload', 'reload-changed':'reload_changed_mod',
+                              'install-staged':'mod_install_staged'}[args.op],
                        'mod': args.mod, 'expected_sha256': args.expected_sha256}
-            if args.expected_package_sha256 is not None:
+            if getattr(args, 'expected_package_sha256', None) is not None:
                 if len(args.expected_package_sha256) != 64 or any(c not in '0123456789abcdef' for c in args.expected_package_sha256):
                     raise ValueError('--expected-package-sha256 must be 64 lowercase hex characters')
                 request['expected_package_sha256'] = args.expected_package_sha256
