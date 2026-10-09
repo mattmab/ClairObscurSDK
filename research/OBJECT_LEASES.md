@@ -207,3 +207,20 @@ The launcher adds `management --retained`; packaging includes the v8 binary pair
 Newly created widgets, forced-GC survival, v8 game relaunch, opaque native values
 and full Harness parity remain pending. Next is a bounded verified widget
 create/add/remove/release specimen, then focus and key dispatch integration.
+
+Packaging checkpoint: source0aaa437 produced
+`dist/expedition33-0.1.0-candidate-20261009T055047Z.zip`, SHA256
+2034b2017f5b97218226f3b17eeead15553d35b7c5432ce132f44daa240a6057.
+All182 manifest entries match disk and ZIP bytes; the ZIP has no extra files.
+Logs/settings/evidence are excluded. An isolated `-I -S -B` packaged v8 management
+host returned live roots, invoked/retained the controller through the original
+Harness, released it, then completed its bounded50-second run with clean detach
+and disabled heartbeat. Evidence: retained-results-package-check.json and
+retained-package-host.log. This tests the current game process; a fresh game
+relaunch loading v8 solely from the package is still pending.
+
+Persistent checkout host39652/sessionbb387428440b4f12b6527e7cf600e070 now runs
+`management --retained`. SDKManagement and IntrospectionHarness are enabled.
+At01:53:48, in-game Python printed retained calls=True and argument types including
+`$value`; the console closed normally after submission. Log:
+`logs/management-host-v8.stderr.log`. The GitHub remote was verified private.
