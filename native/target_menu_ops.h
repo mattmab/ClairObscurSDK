@@ -6,6 +6,7 @@
 #include "menu_session.h"
 #ifdef E33_MULTI_BUTTON_SESSION
 #include "target_multi_button_actions.h"
+#include "menu_focus_controls.h"
 #endif
 #ifdef E33_BUTTON_REFERENCE_SESSION
 #include "target_button_reference.h"
@@ -35,6 +36,7 @@ struct TargetMenuStorage {
     MenuSession menu;
 #ifdef E33_MULTI_BUTTON_SESSION
     TargetMultiButtonActions multi_actions;
+    MenuFocusControls<> control_focus;
 #endif
 };
 template<class Pool>
@@ -162,6 +164,13 @@ struct TargetMenuOps {
         if(!data.focus.observe(data.base,current)) return MenuFocusOwner::Invalid;
         if(current.focused==current.viewport && current.focused_controller==current.viewport_controller)
             return MenuFocusOwner::Prior;
+#ifdef E33_MULTI_BUTTON_SESSION
+        TargetButtonReferenceOps refs{data.base};
+        bool owned_control=false;
+        if(!data.control_focus.observe(refs,current.focused,current.focused_controller,owned_control))
+            return MenuFocusOwner::Invalid;
+        if(owned_control) return MenuFocusOwner::Owned;
+#endif
         bool keyboard=false, user=false;
         if(!invoke(MenuCall::KeyboardFocus,&keyboard) || !invoke(MenuCall::UserFocus,&user) ||
            keyboard!=user) return MenuFocusOwner::Invalid;
@@ -176,6 +185,10 @@ struct TargetMenuOps {
     bool deactivate() { return invoke(MenuCall::Deactivate) && check(MenuCall::Active,false); }
     bool detach() { return invoke(MenuCall::Remove) && check(MenuCall::InViewport,false); }
     bool release_baseline() {
+#ifdef E33_MULTI_BUTTON_SESSION
+        TargetButtonReferenceOps refs{data.base};
+        if(data.control_focus.release(refs)!=SlateReferenceResult::Ok) return false;
+#endif
 #ifdef E33_BUTTON_REFERENCE_SESSION
         if(data.child_slate.release(data.base)!=SlateReferenceResult::Ok) return false;
 #endif

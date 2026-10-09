@@ -776,3 +776,29 @@ evidence/. The runner exited1. The probe now records focus snapshots and delays
 its focus assertion until acknowledged menu/tree cleanup finishes; that revised
 probe has not yet been rerun. The validated v16 management/Harness controller was
 restored. The loaded v17 DLL remains pinned and must not be overwritten.
+
+### Menu-wide focus ownership correction (offline validated)
+
+The v17 source now keeps a separate bounded MenuFocusControls owner. Before
+installing a callback, target validation verifies the child belongs to this
+menu's WidgetTree and captures its SButton widget/controller pair with an
+independent strong Slate reference. Callback removal and close_menu_actions do
+not release this reference. TargetMenuOps recognizes the retained pair as owned
+focus and releases these references only after restoration, deactivation and
+detachment. Unrelated focus still follows the existing non-stealing close path.
+No stock layout or new unverified engine call was introduced.
+
+The bound is16 distinct Slate controls over a menu lifetime, including controls
+whose callbacks were removed. Rebinding a removed callback on the same Slate
+pair reuses its focus owner; exceeding this cumulative limit returns Busy until
+menu closure. A failed callback installation may also leave its verified focus
+owner retained until closure. This conservative retention is independent of the
+callback's UObject lease and does not dereference that UObject during restoration.
+
+Native fixtures cover both controls, duplicate/capacity handling, persistence
+after another owner releases, exact pair matching, unrelated focus, deferred
+release, idempotent close and interrupted-acquisition quarantine. The v17 object
+compiles under /W4 /WX. This is a source correction, NOT a successful live rerun;
+PID16344 still has the earlier v17 binary pinned. Rebuild only after that process
+exits, then rerun the two-control probe, removed-control focus closure and
+controller-disconnect cleanup before promoting this backend.

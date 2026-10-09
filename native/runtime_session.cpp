@@ -216,6 +216,16 @@ static ButtonDelegateResult multi_button_command(MultiButtonPacket& packet) {
         auto tree=local_read<uint64_t>(child.address+0x20);
         if(!ops.exact_class(tree,"WidgetTree","/Script/UMG") ||
            local_read<uint64_t>(tree+0x20)!=s.widget.address) return ButtonDelegateResult::Invalid;
+        uint64_t widget=0, controller=0, instance=0;
+        if(!TargetButtonReference::observe(runtime_base,child,widget,controller,instance))
+            return ButtonDelegateResult::Invalid;
+        TargetButtonReferenceOps refs{runtime_base};
+        auto captured=s.control_focus.retain(refs,widget,controller);
+        if(captured==SlateReferenceResult::Busy) return ButtonDelegateResult::Busy;
+        if(captured!=SlateReferenceResult::Ok) {
+            s.menu.quarantine(); s.multi_actions.quarantine();
+            return ButtonDelegateResult::Quarantined;
+        }
         return s.multi_actions.bind(runtime_base,lease_session,wire.owner,wire.action,wire.child_lease,child);
     }
     case ButtonActionOperation::Drain: {
