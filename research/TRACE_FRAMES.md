@@ -76,3 +76,29 @@ Copied object identities must never be presented as GC-pinned handles. Expiry,
 event caps, overflow, removal conflicts and reconnect/relaunch need tests before
 enabling the original trace operations. No general tracing capability is claimed
 by this investigation, and the original core remains unchanged.
+
+## Bounded native copy primitive — 2026-10-09
+
+native/trace_copy.h now provides allocation-free copying from separately acquired
+local, result and out-storage views into an owned4096-byte record, with at most
+128 fields and130 sources. It validates every field before reading source bytes,
+rejects source/destination overflow and overlapping destination ranges, zeroes
+padding and clears prior output on failure. It retains no source pointers.
+Callers must supply valid readable views that do not alias the output; it does
+not dereference FFrame offsets or catch invalid native memory access.
+
+The C++ fixture deliberately places different values in locals, out storage and
+result storage and verifies the copied event uses the specified sources. Mutating
+all source buffers after capture leaves the event unchanged. Boundary checks cover
+null sources, source-count/field-count/extent limits, integer overflow, zero-size
+fields, overlaps and failure after an earlier valid field. Compiled with MSVC
+/W4 /WX and executed successfully via scripts/test-trace-copy.cmd; raw build/run
+output is evidence/trace-copy-fixture.log.
+
+This is byte-copy plumbing, not a reflected value codec. Bit-packed bool fields
+sharing bytes must be normalized before this API (overlaps are deliberately
+rejected). Engine-owned strings, containers and pointers must not be sent as raw
+values; schema-specific copying and object identity conversion are still needed.
+No live frame was read, no trace hook was installed, no resident DLL was replaced,
+and Harness trace operations remain unavailable. Next work is immutable observer
+slots and game-thread schema/frame validation followed by live capture proof.
