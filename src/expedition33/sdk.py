@@ -30,7 +30,8 @@ class Hook:
                 return
             session._check()
             self._subscription.remove()
-            session._reconcile()
+            if getattr(session._transport, 'target_exit_code', None) is None:
+                session._reconcile()
 
     def __enter__(self):
         return self
@@ -372,7 +373,10 @@ class Session:
             leases_closed = not transport_was_closed
         finally:
             for lease in getattr(self, '_leases', ()):
-                lease._state = 'released' if leases_closed and lease._state != 'unknown' else 'unknown'
+                if getattr(self._transport, 'target_exit_code', None) is not None:
+                    lease._state = 'target_exited'
+                else:
+                    lease._state = 'released' if leases_closed and lease._state != 'unknown' else 'unknown'
             if hasattr(self, '_leases'):
                 self._leases.clear()
             self.console._close()

@@ -53,6 +53,20 @@ class Transport:
 
 
 class OwnershipTests(unittest.TestCase):
+    def test_confirmed_game_exit_revokes_scope_without_retrying_release(self):
+        scope = SessionScope(self.session)
+        lease = scope.retain(self.obj)
+        calls = list(self.transport.calls)
+        self.transport.target_exit_code = 0
+        self.transport._closed = True
+        scope.close()
+        self.assertEqual(self.transport.calls, calls)
+        self.assertFalse(lease.active)
+        self.assertFalse(lease.release())
+        self.assertEqual(lease._state, 'target_exited')
+        with self.assertRaises(LeaseError):
+            _ = lease.object
+
     def setUp(self):
         self.transport=Transport()
         self.patch=patch('expedition33.sdk.SessionTransport',return_value=self.transport)

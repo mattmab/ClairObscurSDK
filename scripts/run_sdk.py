@@ -77,7 +77,11 @@ def main():
                         time.sleep(.05)
                 except KeyboardInterrupt:
                     log.info('Closing console session')
-            log.info('%s unloaded and console detached', mod_name)
+                except expedition33.TargetExitedError as error:
+                    if error.exit_code != 0:
+                        raise
+                    log.info('Game exited normally; revoking Python resources and ending this controller')
+            log.info('%s unloaded; SDK controller closed', mod_name)
         if args.command in ('objects', 'smoke'):
             observed = expedition33.objects()
             if not observed:

@@ -5,13 +5,14 @@ import queue
 import subprocess
 import threading
 
-from . import RuntimeQueryError
+from . import RuntimeQueryError, TargetExitedError
 
 
 class SessionTransport:
     def __init__(self, *, _executable=None):
         self._owner = threading.get_ident()
         self._closed = False
+        self.target_exit_code = None
         self._lines = queue.Queue(maxsize=256)
         executable = _executable or Path(__file__).resolve().parents[2] / 'build/research-probe/research_probe.exe'
         self._process = subprocess.Popen([str(executable), '--session'], stdin=subprocess.PIPE,
@@ -71,6 +72,12 @@ class SessionTransport:
                 raise ValueError('Expected a JSON object')
         except (ValueError, TypeError) as error:
             raise RuntimeQueryError(f'Invalid native session response: {error}') from error
+        if value.get('event') == 'target_exited':
+            code = value.get('exit_code')
+            if type(code) is not int or not 0 <= code <= 0xffffffff:
+                raise RuntimeQueryError('Invalid target exit report')
+            self.target_exit_code = code
+            raise TargetExitedError(code)
         if value.get('event') == 'error':
             raise RuntimeQueryError(value.get('message', 'Native session failed'))
         return value
@@ -142,7 +149,13 @@ class SessionTransport:
         # watcher; never terminate or force-unload anything from the game here.
         self._closed = True
         if self._process.poll() is None:
-            self._process.kill()
+            if self.target_exit_code is not None:
+                try:
+                    self._process.wait(timeout=2)
+                except subprocess.TimeoutExpired:
+                    self._process.kill()
+            else:
+                self._process.kill()
         self._process.wait(timeout=10)
         try:
             self._process.stdin.close()

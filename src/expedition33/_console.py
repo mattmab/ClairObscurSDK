@@ -20,6 +20,11 @@ class Console:
 
     def _sync_commands(self, names):
         if self._enabled:
+            if (getattr(self._session._transport, '_closed', False) and
+                    set(names).issubset(self.dispatcher.command_names)):
+                # Revoke Python callbacks after disconnect without sending to a
+                # dead controller. New registrations still fail closed.
+                return
             self._session._transport.command('console-names', ','.join(names))
 
     def register(self, name, callback, *, owner):

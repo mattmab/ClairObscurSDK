@@ -978,6 +978,9 @@ int main(int argc, char** argv) {
         std::cout << "{\"event\":\"snapshot_end\",\"emitted\":" << emitted
                   << ",\"null_slots\":" << null_slots << ",\"changing_slots\":" << changing_slots << "}\n";
         return 0;
+    } catch (const TargetProcessExited& error) {
+        std::cerr << "{\"event\":\"target_exited\",\"exit_code\":" << error.exit_code << "}\n";
+        return error.exit_code == 0 ? 0 : 1;
     } catch (const std::exception& error) {
         std::cerr << "{\"event\":\"error\",\"message\":" << quote(error.what()) << "}\n";
         return 1;

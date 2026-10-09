@@ -1,5 +1,6 @@
 #pragma once
 #include "session_protocol.h"
+#include "target_process_exit.h"
 
 inline void decode_console_payload(const std::string& encoded,wchar_t (&out)[32769]) {
     require(encoded.size()%4==0 && encoded.size()/4<=32768,"CONSOLE_PAYLOAD_SIZE");
@@ -42,14 +43,21 @@ struct RuntimeSessionController {
         if (target_process) CloseHandle(target_process);
     }
     void command(DWORD action) {
-        require(target_process && WaitForSingleObject(target_process, 0) == WAIT_TIMEOUT, "SESSION_TARGET_EXITED");
+        require_live_target(target_process);
         require(!InterlockedCompareExchange(&packet->closed, 0, 0), "SESSION_ALREADY_CLOSED");
         packet->request.action = action; packet->request.error = 0;
         InterlockedExchange(&packet->request.state, kRequested);
         UINT message = RegisterWindowMessageW(kSessionMessage);
-        require(message && PostThreadMessageW(tid, message, nonce, controller), "SESSION_POST_FAILED");
+        if (!message || !PostThreadMessageW(tid, message, nonce, controller)) {
+            require_live_target(target_process);
+            throw std::runtime_error("SESSION_POST_FAILED");
+        }
         ULONGLONG start = GetTickCount64();
-        while (InterlockedCompareExchange(&packet->request.state, 0, 0) != kComplete && GetTickCount64() - start < 5000) Sleep(2);
+        while (InterlockedCompareExchange(&packet->request.state, 0, 0) != kComplete && GetTickCount64() - start < 5000) {
+            require_live_target(target_process);
+            Sleep(2);
+        }
+        require_live_target(target_process);
         require(InterlockedCompareExchange(&packet->request.state, 0, 0) == kComplete, "SESSION_COMMAND_TIMEOUT");
         require(packet->request.error == 0, "SESSION_BACKEND_ERROR=" + std::to_string(packet->request.error));
         require(!packet->closed || (action == SessionClose && packet->close_reason == ClosedNormally),
@@ -59,7 +67,7 @@ struct RuntimeSessionController {
 inline void run_runtime_session(DWORD pid, DWORD thread, int32_t object_index, int32_t object_serial,
                                 int32_t function_index, int32_t function_serial) {
     RuntimeSessionController connection; connection.tid = thread;
-    connection.target_process = OpenProcess(SYNCHRONIZE, FALSE, pid);
+    connection.target_process = OpenProcess(SYNCHRONIZE | PROCESS_QUERY_LIMITED_INFORMATION, FALSE, pid);
     require(connection.target_process != nullptr, "SESSION_TARGET_HANDLE_FAILED");
     require(BCryptGenRandom(nullptr, reinterpret_cast<PUCHAR>(&connection.nonce), sizeof(connection.nonce), BCRYPT_USE_SYSTEM_PREFERRED_RNG) >= 0,
             "SESSION_RANDOM_FAILED");

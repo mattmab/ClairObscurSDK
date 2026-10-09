@@ -145,3 +145,19 @@ thread; ordinary input/target observations still require an exact identity match
 Native serial allocation is not an identity wildcard or a license to reuse stale
 observations. The base UserWidget viewport lifecycle passed live; visible menu
 contents, focus handling and full Harness parity are not established by that test.
+
+### Confirmed target exit
+
+The rebuilt v10 controller reports `TargetExitedError.exit_code` only after its
+original game-process handle signals termination and Windows supplies the exit
+code. A timeout, failed wait, or closed transport alone is not an exit report.
+Pending engine operations still have unknown outcomes and are never replayed.
+The management launcher treats exit code zero during polling as normal shutdown;
+nonzero codes remain failures. No automatic attach to another game PID occurs.
+
+After confirmed target exit, leases become inaccessible with state
+`target_exited`. `release()` returns False: OS process teardown removed resources,
+but no engine release acknowledgement was received. Scoped cleanup revokes local
+callbacks without sending commands to the dead transport. Existing older native
+binaries do not provide this typed report until rebuilt. Native fixture and
+142 Python tests pass; the v10 live shutdown retest is pending.

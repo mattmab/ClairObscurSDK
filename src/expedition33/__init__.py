@@ -19,6 +19,13 @@ class RuntimeQueryError(RuntimeError):
     """The native runtime query failed or returned an incomplete snapshot."""
 
 
+class TargetExitedError(RuntimeQueryError):
+    """The original native process handle signaled exit; no request is retried."""
+    def __init__(self, exit_code):
+        self.exit_code = exit_code
+        super().__init__(f'Target game exited with code {exit_code}; any pending operation has unknown outcome')
+
+
 @dataclass(frozen=True)
 class ObjectSnapshot:
     pid: int

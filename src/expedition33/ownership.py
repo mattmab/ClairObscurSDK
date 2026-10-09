@@ -55,6 +55,10 @@ class ObjectLease:
         session = self._session()
         if session is not None:
             session._transport._check_thread()
+        if self._state == 'target_exited' or (session is not None and
+                getattr(session._transport, 'target_exit_code', None) is not None):
+            self._state = 'target_exited'
+            return False  # Process resources are gone; no engine release acknowledgement.
         if self._state == 'released':
             return True
         if self._state in ('unknown', 'invalid'):

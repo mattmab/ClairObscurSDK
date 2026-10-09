@@ -358,3 +358,14 @@ This proves isolated package execution and same-game controller handover, not
 fresh-game startup: Windows may reuse the identical v10 DLL already pinned in
 that game. Fresh-game/relaunch validation, visible Mods Menu, focus handling and
 general key dispatch remain pending. The earlier private release is unchanged.
+
+The fresh-game validation attempt exposed an exit-reporting defect: game 34604
+exited normally (code 0), but the packaged controller reported
+SESSION_COMMAND_TIMEOUT followed by cleanup errors; host/controller exited 1.
+The file service correctly marked itself disabled. Preserve
+`evidence/package-v10-game-exit.json` and `logs/package-v10.stderr.log` as failure
+evidence. The native controller now checks its retained process handle during
+command waits and reports the confirmed exit code; Python revokes registrations
+and lease access without retrying engine operations. `verify-target-exit.cmd`
+checks live/invalid handles and real child exits 0, 7 and 259. All 142 Python tests
+pass, and the rebuilt v10 pair compiles with /W4 /WX. Live retest remains pending.

@@ -21,6 +21,22 @@ class Session:
 
 
 class ConsoleTests(unittest.TestCase):
+    def test_disconnected_cleanup_revokes_callbacks_without_native_sync(self):
+        session = Session()
+        console = Console(session)
+        console.enable()
+        owner = object()
+        handle = console.register('sdk.cleanup', lambda _: 'alive', owner=owner)
+        session._transport._closed = True
+        session._transport.fail_names = True
+        console.remove_owner(owner)
+        handle.remove()
+        self.assertEqual(console.dispatcher.command_names, ())
+        self.assertTrue(console.dispatcher.execute('sdk.cleanup', native_fallback=False).failed)
+        with self.assertRaisesRegex(RuntimeError, 'disconnected'):
+            console.register('sdk.new', lambda _: None, owner=owner)
+        console._close()
+
     def test_output_preserves_unicode_and_escapes_untransportable_text(self):
         session = Session()
         console = Console(session)
