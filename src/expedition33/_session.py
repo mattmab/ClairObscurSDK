@@ -29,6 +29,12 @@ def supports_traces(transport):
             type(protocol) is int and protocol == 1 and type(capacity) is int and capacity == 16)
 
 
+def supports_keys(transport):
+    return (supports_traces(transport) and
+            type(getattr(transport, 'keybind_protocol', None)) is int and transport.keybind_protocol == 1 and
+            type(getattr(transport, 'keybind_capacity', None)) is int and transport.keybind_capacity == 64)
+
+
 class SessionTransport:
     def __init__(self, *, _executable=None):
         self._owner = threading.get_ident()
@@ -71,6 +77,8 @@ class SessionTransport:
             self.multi_button_capacity = ready.get('multi_button_capacity', 0)
             self.trace_protocol = ready.get('trace_protocol', 0)
             self.trace_capacity = ready.get('trace_capacity', 0)
+            self.keybind_protocol = ready.get('keybind_protocol', 0)
+            self.keybind_capacity = ready.get('keybind_capacity', 0)
             if (self.start.get('event') != 'snapshot_start' or
                 any(row.get('event') != 'object' for row in self.objects) or
                 ready.get('event') != 'session_ready' or ready['pid'] != self.start['pid'] or
@@ -126,6 +134,9 @@ class SessionTransport:
         button_action = command == 'button-action'
         multi_button = command == 'multi-button'
         trace = command == 'trace'
+        keys = command == 'keys'
+        if keys and not supports_keys(self):
+            raise ValueError('Native session does not support keybinds')
         if trace and not supports_traces(self):
             raise ValueError('Native session does not support traces')
         if multi_button:
@@ -156,10 +167,14 @@ class SessionTransport:
             raise ValueError('Native session does not support object leases')
         if reflected and getattr(self, 'reflected_protocol', 0) != 1:
             raise ValueError('Native session does not support reflected invocation')
-        if not trace and not reflected and not leased and not retained and not assignment and not text and not menu and not button_action and not multi_button and command not in ('enable', 'disable', 'invoke', 'drain', 'ping', 'close', 'console-attach', 'console-detach', 'console-status', 'console-poll', 'console-execute', 'console-print', 'console-names', 'console-key'):
+        if not keys and not trace and not reflected and not leased and not retained and not assignment and not text and not menu and not button_action and not multi_button and command not in ('enable', 'disable', 'invoke', 'drain', 'ping', 'close', 'console-attach', 'console-detach', 'console-status', 'console-poll', 'console-execute', 'console-print', 'console-names', 'console-key'):
             raise ValueError('Unsupported native session command')
         suffix = ''
-        if trace:
+        if keys:
+            from ._key_wire import validate_request
+            validate_request(payload)
+            suffix = ' ' + payload.hex()
+        elif trace:
             from ._trace_wire import SIZE, HEADER
             if type(payload) is not bytes or len(payload) != SIZE or HEADER.unpack_from(payload)[0] != 1:
                 raise ValueError('Invalid trace payload')

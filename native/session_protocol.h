@@ -1,4 +1,11 @@
 #pragma once
+#ifdef E33_KEYBIND_SESSION
+#ifndef E33_TRACE_SESSION
+#error Keybind runtime requires the complete v18 capability chain
+#endif
+#include "keybind_protocol.h"
+constexpr uint32_t SessionKeybind = 111;
+#endif
 #ifdef E33_TRACE_SESSION
 #ifndef E33_MULTI_BUTTON_SESSION
 #error Trace runtime requires the complete v17 capability chain
@@ -59,7 +66,11 @@ constexpr uint32_t SessionMenu=107;
 #ifdef E33_BUTTON_ACTION_SESSION
 #ifdef E33_MULTI_BUTTON_SESSION
 #ifdef E33_TRACE_SESSION
+#ifdef E33_KEYBIND_SESSION
+constexpr wchar_t kSessionMessage[] = L"E33SDK.Session.v19";
+#else
 constexpr wchar_t kSessionMessage[] = L"E33SDK.Session.v18";
+#endif
 #else
 constexpr wchar_t kSessionMessage[] = L"E33SDK.Session.v17";
 #endif
@@ -127,6 +138,9 @@ struct SessionPacket {
     LONG close_reason;
     wchar_t console_text[32769];
     uint32_t console_dropped;
+#ifdef E33_KEYBIND_SESSION
+    e33_keys::Packet keys;
+#endif
 #ifdef E33_TRACE_SESSION
     e33_trace::Packet trace;
 #endif
@@ -156,7 +170,9 @@ struct SessionPacket {
 #endif
 };
 inline void session_mapping_name(wchar_t (&name)[96], DWORD controller, uint64_t nonce) {
-#ifdef E33_TRACE_SESSION
+#ifdef E33_KEYBIND_SESSION
+    swprintf_s(name, L"Local\\E33Session19_%lu_%016llx", controller, nonce);
+#elif defined(E33_TRACE_SESSION)
     swprintf_s(name, L"Local\\E33Session18_%lu_%016llx", controller, nonce);
 #elif defined(E33_BUTTON_ACTION_SESSION)
 #ifdef E33_MULTI_BUTTON_SESSION

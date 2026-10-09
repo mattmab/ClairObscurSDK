@@ -288,3 +288,28 @@ already verified game-thread message hook. Preserve console ownership, reject
 stale map generations, suppress repeats and console typing, and clean up on
 disconnect. Do not overwrite the mapped v18 DLL. Then validate actual physical
 press/remap/unbind/unload and integrate packaged fresh-game acceptance.
+
+## v19 bounded native key transport candidate
+
+A separate v19 DLL/controller builds with warnings treated as errors. It retains
+the v18 capability chain and adds a fixed 64-binding / 64-event protocol. Its
+game-thread message hook only queues copied token/key pairs; it never calls
+Python or consumes ordinary game input. Delivery is suppressed for repeats,
+modifier chords, other foreground applications, native console typing and an
+active SDK UMG menu. Eligibility reuses this build's verified console attachment
+and state checks. No stock Unreal FKey layout or new engine hook is assumed.
+
+Maps require a session nonce and strictly increasing generation. Replacement
+clears earlier queued input; drain requires the exact current generation.
+Duplicate keys/tokens and console-toggle collisions are rejected. Teardown clears
+the map before any unrelated cleanup can defer. The fixed queue reports overflow.
+The Python wire decoder checks identity, bounds, unused fields and rejection
+consistency; older runtime handshakes reject this capability before transport.
+
+The native fixture passed ABI/filter/generation/overflow/cleanup checks; all 410
+Python tests passed. Evidence: evidence/keybind-native-fixture.log,
+evidence/key-wire-regression.log, evidence/keybind-candidate-hashes.txt.
+The v19 build was confirmed absent before creation; PID39900 still uses its
+existing v17/v18 modules. No mapped DLL was overwritten and no v19 live attachment
+has occurred. Registry polling/dispatch integration and live physical-key
+acceptance remain required. Frozen completion is still 57%.

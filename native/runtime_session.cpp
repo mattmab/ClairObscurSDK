@@ -52,6 +52,9 @@ static uint64_t lease_session=0;
 static SchedulePacket target{};
 static ObserverBuffer session_events{};
 static uint64_t runtime_base = 0, target_object = 0, target_function = 0;
+#ifdef E33_KEYBIND_SESSION
+static e33_keys::State session_keys;
+#endif
 #ifdef E33_MENU_SESSION
 #include "target_menu_ops.h"
 static TargetMenuStorage session_menu;
@@ -358,11 +361,19 @@ uint32_t backend_open(SessionPacket* packet) {
     }
     lease_session=packet->request.nonce;
 #endif
+#ifdef E33_KEYBIND_SESSION
+    session_keys.begin(packet->request.nonce);
+#endif
     return 0;
 }
 uint32_t backend_command(SessionPacket* packet) {
     if (!lifetime_valid()) return 61;
     switch (packet->request.action) {
+#ifdef E33_KEYBIND_SESSION
+    case SessionKeybind:
+        session_keys.command(packet->keys, console_toggle_key);
+        return 0;
+#endif
 #ifdef E33_TRACE_SESSION
     case SessionTrace:
         session_traces.command(packet->trace);
@@ -484,6 +495,9 @@ uint32_t backend_command(SessionPacket* packet) {
         wchar_t* end=nullptr;
         unsigned long key=wcstoul(packet->console_text,&end,10);
         if (!end || end==packet->console_text || *end || (key && (key<VK_F1 || key>VK_F12))) return 135;
+#ifdef E33_KEYBIND_SESSION
+        if(key && session_keys.contains(static_cast<uint32_t>(key))) return 135;
+#endif
         if (!exact_name(runtime_base,runtime_base+0x94dfb50,"Typing") ||
             !exact_name(runtime_base,runtime_base+0x94dfb58,"Open")) return 136;
         console_toggle_key=static_cast<unsigned>(key); packet->request.result=key; return 0;
@@ -546,6 +560,9 @@ static StrongLeaseResult guarded_lease_close() {
 }
 #endif
 uint32_t backend_close() {
+#ifdef E33_KEYBIND_SESSION
+    session_keys.close(); // Revoke input even when other cleanup must defer.
+#endif
     uint32_t lease_cleanup_error=0;
 #ifdef E33_TRACE_SESSION
     const auto trace_result = session_traces.close(backend_shutting_down());
@@ -599,6 +616,20 @@ uint32_t backend_close() {
 void backend_message(MSG* message) {
 #ifdef E33_TRACE_SESSION
     session_traces.maintain();
+#endif
+#ifdef E33_KEYBIND_SESSION
+    if(message->message==WM_KEYDOWN && session_keys.contains(static_cast<uint32_t>(message->wParam))) {
+        DWORD foreground_pid=0;
+        GetWindowThreadProcessId(GetForegroundWindow(), &foreground_pid);
+        const bool eligible=foreground_pid==GetCurrentProcessId() && lifetime_valid() &&
+            attachment_valid(runtime_base) && local_read<uint64_t>(attached_console+0xd8)==0 &&
+            !session_menu.menu.active() &&
+            !(GetKeyState(VK_CONTROL)&0x8000) && !(GetKeyState(VK_MENU)&0x8000) &&
+            !(GetKeyState(VK_SHIFT)&0x8000) && !(GetKeyState(VK_LWIN)&0x8000) && !(GetKeyState(VK_RWIN)&0x8000);
+        session_keys.press(static_cast<uint32_t>(message->wParam),
+            (message->lParam & (LPARAM(1)<<30))!=0, eligible);
+        // Observe ordinary game input without consuming or rewriting it.
+    }
 #endif
     if (!console_toggle_key || message->wParam!=console_toggle_key ||
         (message->message!=WM_KEYDOWN && message->message!=WM_SYSKEYDOWN &&
