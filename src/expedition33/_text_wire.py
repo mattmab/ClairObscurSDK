@@ -27,8 +27,8 @@ def encode_units(value):
 def encode_plan(plan, values):
     """Encode exact TextProperty inputs; zero native values are never pointers.
 
-The public planner does not yet produce version3. This private codec is a
-prerequisite for the next explicitly gated native capability.
+The public planner produces version3 only when text values are explicitly
+enabled. The session sends it only through the v12 retained text path.
 """
     if type(plan.wire_version) is not int or plan.wire_version != VERSION or type(values) is not dict:
         raise ValueError('Expected a candidate version3 plan and exact text inputs')

@@ -78,6 +78,13 @@ Python transport gating and compiled layout checks pass (167 Python tests total)
 Public text planning/result decoding and live handover are still pending. No v12
 code has been loaded into the running game and no live text/menu claim is made.
 
+Public v12 text invocation now passed live (08:52:18 local): SDK-owned TextBlock
+ASCII/Unicode/empty SetText/GetText round trips, invalid input rejection, and
+the original Harness's copied-text retain/reuse/release behavior. Exact scoped
+holder cleanup passed; v12 is the current persistent source host after a clean
+v11 handover. See WIDGET_LAYOUT_VALUES.md. Visible labels, actions and focus/key
+handling remain unfinished; no native Mods Menu is claimed by this text probe.
+
 ## Preserved implementation references
 
 Primary source is the installed BL4 sdk_mods directory. Nineteen original files

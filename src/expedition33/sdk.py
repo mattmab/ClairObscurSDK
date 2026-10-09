@@ -48,13 +48,14 @@ class Session:
     thread, build, layout and lifetime checks remain authoritative for each call.
     Close explicitly or use a context manager to remove hooks deterministically.
     """
-    def __init__(self, *, reflected=False, leases=False, retained=False, stable_returns=False, object_assignment=False, pod_values=False):
-        if any(type(flag) is not bool for flag in (reflected, leases, retained, stable_returns, object_assignment, pod_values)):
+    def __init__(self, *, reflected=False, leases=False, retained=False, stable_returns=False, object_assignment=False, pod_values=False, text_values=False):
+        if any(type(flag) is not bool for flag in (reflected, leases, retained, stable_returns, object_assignment, pod_values, text_values)):
             raise ValueError('Session capability flags must be bools')
+        pod_values = pod_values or text_values
         object_assignment = object_assignment or pod_values
         stable_returns = stable_returns or object_assignment
         retained = retained or stable_returns
-        backend = ('research-probe-v11' if pod_values else 'research-probe-v10' if object_assignment else 'research-probe-v9' if stable_returns else 'research-probe-v8' if retained
+        backend = ('research-probe-v12' if text_values else 'research-probe-v11' if pod_values else 'research-probe-v10' if object_assignment else 'research-probe-v9' if stable_returns else 'research-probe-v8' if retained
                    else 'research-probe-v7' if leases else 'research-probe-v6')
         self._transport = (SessionTransport(_executable=Path(__file__).resolve().parents[2] /
                            f'build/{backend}/research_probe.exe') if reflected or leases or retained else SessionTransport())
@@ -74,6 +75,11 @@ class Session:
                 self._transport.close()
             finally:
                 raise RuntimeQueryError('POD value backend handshake missing')
+        if text_values and getattr(self._transport, 'text_value_protocol', 0) != 1:
+            try:
+                self._transport.close()
+            finally:
+                raise RuntimeQueryError('Text value backend handshake missing')
         self._dispatcher = CallbackDispatcher()
         self._hooks = []
         self._leases = set()
@@ -107,6 +113,12 @@ class Session:
     def supports_pod_values(self):
         self._check()
         return getattr(self._transport, 'pod_value_protocol', 0) == 1
+
+    @property
+    def supports_text_values(self):
+        self._check()
+        return (self.supports_retained_invocation and self.supports_pod_values and
+                getattr(self._transport, 'text_value_protocol', 0) == 1)
 
     def assign_object(self, obj, owner, name, value, *, expected, element=0, allow_mutation=False):
         """Assign an ObjectProperty with an explicit old value and temporary leases.
@@ -168,7 +180,8 @@ class Session:
     def invoke_retained(self, obj, function, **arguments):
         """Invoke and own object outputs before the game-thread request returns.
 
-        Requires Session(retained=True). Release the returned owner explicitly,
+        Requires Session(retained=True) or a later capability. Scalar text needs
+        Session(text_values=True) and returns copied strings. Release the returned owner explicitly,
         use its context manager, or rely on mod-scope/session cleanup. Copied
         snapshots remain observations and are not ownership handles themselves.
         """
@@ -182,11 +195,20 @@ class Session:
         if not isinstance(obj, ObjectSnapshot) or obj.pid != self.pid:
             raise ValueError('Invocation target must belong to this session')
         catalog = capture()
-        plan = prepare_call(catalog, obj, function, arguments, pod_values=self.supports_pod_values)
-        request = wire.encode_plan(plan)
+        plan = prepare_call(catalog, obj, function, arguments, pod_values=self.supports_pod_values,
+                            text_values=self.supports_text_values)
+        text_call = plan.wire_version == 3
+        if text_call:
+            from . import _text_wire as wire
+        request = wire.encode_plan(plan, dict(plan.texts)) if text_call else wire.encode_plan(plan)
+        texts = ()
         try:
-            response = self._transport.command('retained-invoke', request)
-            reply, tokens = wire.decode_reply(request, response['retained_packet'])
+            response = self._transport.command('text-invoke' if text_call else 'retained-invoke', request)
+            if text_call:
+                decoded = wire.decode_reply(request, response['text_packet'])
+                reply, tokens, texts = decoded.call, decoded.leases, decoded.texts
+            else:
+                reply, tokens = wire.decode_reply(request, response['retained_packet'])
         except BaseException as error:
             self._abort_ownership()
             if not isinstance(error, Exception):
@@ -207,7 +229,7 @@ class Session:
                 self._leases.add(lease)
                 acquired.append((offset, lease))
             current = capture() if reply.objects else catalog
-            result = decode_result(plan, reply, current)
+            result = decode_result(plan, reply, current, texts=texts)
             identities = {offset: index for offset, index, *_ in reply.objects}
             for offset, lease in acquired:
                 lease._object = current.by_index[identities[offset]]

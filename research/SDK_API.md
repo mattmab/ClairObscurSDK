@@ -192,3 +192,29 @@ game, Python host and controller all exited zero without cleanup tracebacks.
 Already-acknowledged releases remain acknowledged after subsequent game exit.
 This does not prove cleanup before an abnormal crash or completion of a request
 that was pending at exit.
+
+### Opt-in copied text invocation (v12 candidate)
+
+`Session(text_values=True)` selects v12 and includes the v11 capability chain.
+Use `session.invoke_retained` or the mod-scoped equivalent for scalar
+TextProperty arguments and results. Inputs are Python `str`; outputs are copied
+Python strings, not localized native handles. At most eight text fields and4095
+UTF-16 content units per field are accepted. Embedded NUL, unpaired surrogates,
+arrays and arbitrary text-data implementations are rejected.
+
+```python
+# label, set_text and get_text are identities from the current live catalog.
+# Invoke through the existing persistent session or its mod scope.
+with sdk.invoke_retained(label, set_text, InText="Hello from Python!"):
+    pass
+with sdk.invoke_retained(label, get_text) as result:
+    copied = result.return_value
+```
+
+The native path constructs and releases owned text on the game thread, copies
+bounded display strings, and preserves uncertain frames after a fault rather
+than retrying. The result context also releases any accompanying object outputs.
+Plain `invoke` retains its earlier scalar/object/numeric boundary; use the
+retained path for text. A transport handshake proves availability of this path,
+not safety of an arbitrary game function or support for all localized text types.
+See WIDGET_LAYOUT_VALUES.md for live evidence and remaining validation gates.

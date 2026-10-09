@@ -35,12 +35,20 @@ class InvocationResult:
     outcome: str = 'dispatch_returned'
 
 
-def decode_result(plan, reply, catalog):
+def decode_result(plan, reply, catalog, *, texts=()):
     """Decode copied results using a fresh catalog; references are not retained."""
     if reply.outcome != 'dispatch_returned' or reply.error:
         raise InvocationError(f'Native invocation rejected or incomplete ({reply.error})',
                               outcome=reply.outcome, native_error=reply.error)
     try:
+        text_values = dict(texts)
+        expected_texts = {i for i, p in enumerate(plan.parameters) if p.kind == 'TextProperty'}
+        if len(text_values) != len(texts) or set(text_values) != expected_texts:
+            raise ValueError('Copied text results do not match parameter identities')
+        if expected_texts:
+            from ._text_wire import encode_units
+            for copied in text_values.values():
+                encode_units(copied)
         if catalog.pid != plan.target.pid or len(reply.data) != plan.parameter_size:
             raise ValueError('Result process or parameter extent changed')
         references = {}
@@ -53,7 +61,7 @@ def decode_result(plan, reply, catalog):
             references[offset] = observed
         value, outputs = None, {}
         valid_slots = set()
-        for parameter in plan.parameters:
+        for field_index, parameter in enumerate(plan.parameters):
             values = []
             for element in range(parameter.dimension):
                 at = parameter.offset + element * parameter.width
@@ -75,6 +83,10 @@ def decode_result(plan, reply, catalog):
                     if bits not in (0, (encoding >> 16) & 255):
                         raise ValueError('Invalid result bool encoding')
                     item = bool(bits)
+                elif parameter.kind == 'TextProperty':
+                    if parameter.width != 16 or parameter.dimension != 1 or any(reply.data[at:at+16]):
+                        raise ValueError('Invalid native text result storage')
+                    item = text_values[field_index]
                 elif parameter.kind == 'StructProperty':
                     item = _pod_values.decode(parameter.pod_profile, reply.data[at:at + parameter.width])
                 else:
@@ -129,6 +141,7 @@ class CallPlan:
     data: bytes
     objects: tuple
     wire_version: int = 1
+    texts: tuple = ()  # Immutable (parameter name, copied str) input pairs.
 
 
 _FORMATS = {'ByteProperty': ('B', 1, 0, 255), 'UInt16Property': ('H', 2, 0, 65535),
@@ -136,22 +149,23 @@ _FORMATS = {'ByteProperty': ('B', 1, 0, 255), 'UInt16Property': ('H', 2, 0, 6553
             'FloatProperty': ('f', 4, None, None), 'DoubleProperty': ('d', 8, None, None)}
 
 
-def prepare_call(catalog, target, function, arguments, *, pod_values=False):
+def prepare_call(catalog, target, function, arguments, *, pod_values=False, text_values=False):
     """Describe a current UFunction and prepare named arguments without executing it.
 
 Zeroed object slots have separate identity patches; caller-supplied integer
 addresses are never accepted. All inputs are explicit, with no guessed defaults.
 Output/return types must also be supported before a plan can be built.
 """
-    if type(pod_values) is not bool:
-        raise ValueError('POD capability flag must be bool')
+    if type(pod_values) is not bool or type(text_values) is not bool:
+        raise ValueError('Value capability flags must be bool')
+    pod_values = pod_values or text_values
     target, function = catalog.resolve(target), catalog.resolve(function)
     if catalog.find_class('Function').index not in catalog.ancestors(function.class_index):
         raise ValueError('Expected a reflected Function identity')
     if function.outer_index not in catalog.ancestors(target.class_index):
         raise ValueError('Function owner is not in the target class hierarchy')
     descriptor = describe(catalog, (function,))[function.index]
-    return _prepare(catalog, target, function, descriptor, arguments, pod_values=pod_values)
+    return _prepare(catalog, target, function, descriptor, arguments, pod_values=pod_values, text_values=text_values)
 
 
 def _struct_reference(catalog, row):
@@ -181,7 +195,7 @@ def _observed_pod_profile(catalog, row, descriptors):
     return obj, profile
 
 
-def _prepare(catalog, target, function, descriptor, arguments, *, pod_values=False):
+def _prepare(catalog, target, function, descriptor, arguments, *, pod_values=False, text_values=False):
     if type(arguments) is not dict or any(type(key) is not str for key in arguments):
         raise ValueError('Arguments must be a dictionary of parameter names')
     info = descriptor.function
@@ -220,6 +234,10 @@ def _prepare(catalog, target, function, descriptor, arguments, *, pod_values=Fal
             if kind == 'StructProperty' and pod_values:
                 constraint, profile = _observed_pod_profile(catalog, row, pod_descriptors)
                 pod_profile, expected = profile.path, profile.width
+            if kind == 'TextProperty' and text_values:
+                if dimension != 1:
+                    raise UnsupportedInvocation('TextProperty arrays require a separate ownership contract')
+                expected = 16
             if expected is None:
                 raise UnsupportedInvocation(f'{name}: {kind} needs an additional verified codec/lifetime contract')
             if width != expected:
@@ -242,7 +260,10 @@ def _prepare(catalog, target, function, descriptor, arguments, *, pod_values=Fal
     expected_inputs = {parameter.name for parameter in parameters if parameter.input}
     if set(arguments) != expected_inputs:
         raise ValueError(f'Argument names mismatch; missing={sorted(expected_inputs - arguments.keys())}, extra={sorted(arguments.keys() - expected_inputs)}')
-    data, patches = bytearray(size), []
+    text_fields = [p for p in parameters if p.kind == 'TextProperty']
+    if len(text_fields) > 8:
+        raise UnsupportedInvocation('Text calls support at most eight text fields')
+    data, patches, texts = bytearray(size), [], []
     for parameter in parameters:
         if not parameter.input:
             continue
@@ -256,6 +277,10 @@ def _prepare(catalog, target, function, descriptor, arguments, *, pod_values=Fal
                 if type(item) is not bool: raise ValueError(f'{parameter.name}: expected bool')
                 if item:
                     data[at + ((parameter.boolean_encoding >> 8) & 255)] |= (parameter.boolean_encoding >> 16) & 255
+            elif parameter.kind == 'TextProperty':
+                from ._text_wire import encode_units
+                encode_units(item)
+                texts.append((parameter.name, item))
             elif parameter.kind == 'StructProperty':
                 data[at:at + parameter.width] = _pod_values.encode(parameter.pod_profile, item)
             elif parameter.kind in ('ObjectProperty', 'ClassProperty'):
@@ -280,4 +305,5 @@ def _prepare(catalog, target, function, descriptor, arguments, *, pod_values=Fal
                 try: struct.pack_into('<' + fmt, data, at, item)
                 except (OverflowError, struct.error) as error: raise ValueError(f'{parameter.name}: value cannot fit storage') from error
     return CallPlan(target, function, info['flags'], int(info['entry_rva'], 16), size, extent, returned,
-                    tuple(parameters), bytes(data), tuple(patches), 2 if pod_values else 1)
+                    tuple(parameters), bytes(data), tuple(patches), 3 if text_fields else 2 if pod_values else 1,
+                    tuple(texts))

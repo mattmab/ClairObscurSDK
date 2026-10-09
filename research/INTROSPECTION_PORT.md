@@ -7,6 +7,22 @@ retained-value semantics; see the current ownership checkpoint below and
 OBJECT_LEASES.md for validation. Full Expedition 33 Harness parity remains
 incomplete. Updated 2026-10-09. Earlier dated sections describe prior boundaries.
 
+## v12 copied text invocation — 2026-10-09
+
+The existing primitive argument/result adaptation now carries Python strings
+through scalar TextProperty invocation when the shared session enables
+text_values. The preserved original core required no edits. Live validation on
+an SDK-created TextBlock passed ASCII, Unicode and empty text, plus original
+named retained-value reuse/release and rejection after release. Values retained
+by the Harness are copied Python strings, not native localized FText handles.
+Object outputs retain their existing native lease behavior.
+
+Public use requires `Session(text_values=True)` and `invoke_retained`, or the
+management launcher with `--text-values`. Plain invoke and direct TextProperty
+writes remain unsupported. Arrays and arbitrary text-data/history types are not
+enabled. All173 source tests pass, including the unchanged core's provenance.
+See WIDGET_LAYOUT_VALUES.md for live identities, raw evidence and exact cleanup.
+
 ## v11 original typed struct integration — 2026-10-09
 
 The adapter now supplies `make_struct` and WrappedStruct-compatible copied

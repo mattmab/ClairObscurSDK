@@ -377,3 +377,39 @@ mismatch handling. Evidence: `evidence/text-session-build.log`,
 These checks do not constitute live session/cleanup validation. Next connect
 public planning/result decoding and the persistent management host, then perform
 a cooperative handover and bounded live text round trips before native labels.
+
+## Public text API and live original Harness validation
+
+2026-10-09 08:52:18 local: `Session(text_values=True)` and the scoped
+`invoke_retained` path passed against game12912, Python37296 and native
+controller36608. The launcher accepts `management --text-values`; plain
+`invoke` keeps its earlier boundary. Plans store immutable copied string inputs
+separately from zeroed native slots, and result decoding requires exact text-field
+correlation. Native text arrays remain unsupported. All173 Python tests pass,
+including public planning, result correlation, capability handshake, scope usage,
+unknown-outcome abort and original-core provenance.
+
+The previous packaged v11 controller shut down through `mods action shutdown`
+at08:48:58; its processes exited before v12 started at08:49:20. The bounded probe
+ran through the existing native console and persistent Python session. It created
+an SDK-owned TextBlock and round-tripped `SDK text`, `Expedition 33 — café 🚀`
+and the empty string via TextBlock.SetText/GetText. Embedded NUL, an unpaired
+surrogate and overlength input were rejected in Python before dispatch.
+
+The original Harness then set/read text, retained the copied result by name,
+changed the widget value, restored it through `$value`, and released the retained
+name. Reuse after release raised KeyError. Its original core is unchanged.
+The shared widget probe removed its child and released the scope; the exact
+holder baseline was restored. No viewport attachment, focus/input change or
+forced GC occurred. The game and persistent v12 host remained running afterward.
+
+Raw evidence: `evidence/widget-text-progress.json`, `evidence/widget-text-live.json`,
+`logs/text-v12-source.stderr.log`, and `evidence/text-public-python-tests.log`.
+The initial nested layout record's passed=false was copied before outer cleanup;
+the outer passed=true and holder_baseline_restored=true are the completion
+results. The probe now omits that ambiguous nested completion field.
+
+This proves the verified base-text ownership path on SDK-created objects, not
+arbitrary localized/history implementations, TextProperty assignment, native
+text-handle retention or a visible menu. Next render a TextBlock label, validate
+v12 packaging/relaunch/cleanup, and continue input/focus and menu actions.
