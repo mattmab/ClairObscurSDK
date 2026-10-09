@@ -585,3 +585,10 @@ the inspected journal, not the integrity of externally edited mod files.
 Source tests cover real filesystem renames, interrupted journal writes, the CLI,
 and loading restored code through a fresh loader. Recovery has not yet been
 validated with a live failed installation or included in a new release archive.
+
+Live validation update: the packaged SDK subsequently recovered a deliberately
+failed import in an isolated research mod after confirmed hook cleanup. A fresh
+loader called the restored mod's real Unreal getter successfully; final active
+hooks were zero. See research/INTROSPECTION_PORT.md for candidate and evidence
+identifiers. This does not establish recovery from uncertain native cleanup or
+full game/controller relaunch of a recovered installation.

@@ -1204,3 +1204,37 @@ missing-backup/committed rejection, real isolated CLI inspection/restoration,
 and a fresh loader enabling the old version after a failed replacement import.
 No new live failure injection, controller/game relaunch or release archive was
 performed for this revision. Those gates and full Harness/menu/keybind work remain.
+
+### Packaged staged-install and live recovery validation — 2026-10-09
+
+Built candidate expedition33-0.1.0-candidate-20261009T211610Z from ee5913d.
+ZIP SHA256: c22fa2cd1f11d930d2eee1a894b8534ed1fbbe46e7eeaa4a26742619fb4870a7.
+Packaged suite ran348 tests:341 passed,7 native-fixture checks skipped. Evidence:
+evidence/recovery-package-tests.log. Source controller exited cooperatively with
+code0; the candidate attached to the same existing game session. Console output
+confirmed expedition33 imports resolved inside the candidate directory.
+
+The packaged verify_live_staged_install.py passed against real Unreal objects.
+Raw candidate-local evidence: evidence/staged-live-657f4f86b1b340d1bc16eb8ce20c5f15/.
+The live controller uses the OS mod-root ownership lock introduced in bb441d1.
+The main research checkout then supplied verify_live_install_recovery.py as a
+verification driver; all SDK modules remained those loaded from the candidate.
+
+The recovery driver created a separate research fixture root, enabled a valid
+mod, and attempted a replacement that deliberately raises on import. The expected
+ModError was contained. Old scope closed, actions were revoked and active hooks
+returned to zero before the fixture loader closed. Explicit file recovery then
+acquired that unowned fixture root, preserved the rejected replacement, restored
+the previous installed folder and recorded rolled_back. A fresh loader enabled
+the restored mod and successfully called Actor.IsActorBeingDestroyed, returning
+false. Its cleanup again returned active hooks to zero. The main management
+controller and persistent Python session survived throughout.
+
+Raw recovery evidence (requests, archives, sources, journals, preserved versions,
+recovery-before.json and recovery-result.json):
+evidence/staged-live-01c992a4f1aa4d059488e61f9af4e367/.
+Host log: logs/recovery-package-host.log. This was a controlled import failure
+with confirmed native cleanup, not recovery from uncertain native hooks. It
+validates a fresh loader inside one controller/game session. Full game relaunch,
+controller restart with the recovered fixture, broader Harness parity and menu/
+keybind requirements remain open. This candidate is not a finished release.
