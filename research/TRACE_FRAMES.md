@@ -285,3 +285,32 @@ schema, and a valid reflected schema exceeding the flattened field limit. Eviden
 evidence/trace-plan-fixture.log. Compilation is not live validation. The adapter
 is not yet connected to SessionPacket or hook registration; per-registration
 lifetime ownership, transport and live/relaunch checks remain required.
+
+## Registration ownership candidate — 2026-10-09
+
+trace_registration.h composes immutable slots and bounded events under a
+nonmovable, one-registration owner. Foreign-thread calls forward without capture.
+Game-thread stop restores the entry only when its caller establishes storage
+lifetime, and retains queued events for a later drain. Scheduler maintenance
+removes expired/capped observers outside the POST callback's slot lock. The
+callback never recursively removes its own hook. Collector C++ exceptions are
+counted as rejected observations; production target readers still require SEH
+guards. Capture failures are separate from queued/overflow counts.
+
+TraceSlots now supports individual callback detachment without reading an engine
+entry. A lifetime-loss close uses that path, and destructor fallback also detaches
+before releasing the queue/context. This prevents freed callback storage but is
+not a successful entry restoration: cleanup explicitly distinguishes restored,
+conflict, storage_lost and wrong_thread. A third-party replacement is preserved.
+An inert late thunk permanently forwards to its original function, following the
+pool's existing no-reuse policy. Explicit close remains the normal lifecycle.
+
+scripts/test-trace-registration.cmd passes /W4 /WX with actual fixture thunks.
+It checks foreign-thread rejection, cap/expiry maintenance, stop/drain retention,
+conflicts, destructor late calls, collector exceptions, and lifetime-loss cleanup
+after the entry page is changed to PAGE_NOACCESS and freed. Existing slot and
+event fixtures also pass after the new detach operation. Logs are
+evidence/trace-registration-fixture.log, trace-slots-fixture.log and
+trace-events-fixture.log. These are native executable fixtures, not live-game
+proof. The scheduler, target collector, registration transport and Harness still
+need to be wired to this owner; no runtime DLL was changed or rebuilt.

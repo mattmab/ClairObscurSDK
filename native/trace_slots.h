@@ -88,6 +88,14 @@ public:
         auto previous = InterlockedCompareExchangePointer(slot.address, original, thunk);
         return previous == thunk || previous == original;
     }
+    static bool detach(size_t handle) {
+        Guard guard;
+        if (!handle || handle > used_) return false;
+        auto& slot = slots_[handle - 1];
+        slot.post = nullptr; slot.context = nullptr;
+        // The function or entry storage may already be gone. Never touch it.
+        return true;
+    }
     static void detach_storage() {
         Guard guard;
         terminal_ = true;
