@@ -327,3 +327,34 @@ were involved. Native UMG frontend, general key dispatch, game relaunch with v9
 and isolated v9 package execution remain pending. Build using
 `scripts/build-stable-call-candidate.cmd` only after the game exits: the v9 DLL
 is pinned for the process lifetime. See research/WIDGET_OWNERSHIP.md for evidence.
+
+## Owned object assignment and isolated v10 package (2026-10-09)
+
+`launch.cmd management --object-assignment` selects v10, including stable retained
+returns and scoped ownership. The reusable `assign_object` API and unchanged
+original Harness `set` operation support the documented ObjectProperty subset;
+they require explicit mutation consent. See research/SDK_API.md.
+
+Candidate `expedition33-0.1.0-candidate-20261009T065116Z` was built from clean
+revision `2f5e0d76cce3e7f960489eec1524555ca46ebdd7`. Its ZIP SHA256 is
+`42fc5ad44b96d0a474716080f94ae5a328e3341596bbf311431f4d95c3a00c1f`.
+All 207 manifest files matched both the extracted files and ZIP members. The
+archive contains no live logs, settings or research evidence. Under isolated
+CPython 3.13.15 (`-I -S -B`), 137 tests passed and one native-fixture test was
+skipped because its test executable is not bundled; all 138 passed in the source
+workspace with that fixture. The isolated launcher checksum/help check passed.
+Use the project environment for tests so temporary files remain on D:.
+
+After cooperative shutdown of the previous host, the package's management host
+started against the existing game PID 34604. Native-console Python confirmed the
+package import path and normal Harness `set` capability. The packaged widget-root
+specimen passed assignment/readback, stale-value rejection, viewport add/remove,
+root restoration and exact holder cleanup. Evidence is preserved locally in
+`evidence/assignment-package-check.json`, `evidence/assignment-package-tests.log`
+and `evidence/assignment-package-root-live.json`; startup/console output is in
+`logs/package-v10.stderr.log`.
+
+This proves isolated package execution and same-game controller handover, not
+fresh-game startup: Windows may reuse the identical v10 DLL already pinned in
+that game. Fresh-game/relaunch validation, visible Mods Menu, focus handling and
+general key dispatch remain pending. The earlier private release is unchanged.

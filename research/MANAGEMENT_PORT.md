@@ -19,10 +19,13 @@ unfinished; the lifecycle specimens are not a native Mods Menu.
 The RootWidget setter uses the reusable session/mod-scope assign_object API
 and target-verified engine assignment path (WIDGET_OWNERSHIP.md). The persistent
 management host now runs v10. Original Harness scalar ObjectProperty set also
-passed live through a fresh adapter instance sharing that host; its long-lived
-Harness needs a controlled restart to import the updated adapter. Next implement
-visible control layout and validated focus/key handling, while completing the
-v10 package/startup checks. See INTROSPECTION_PORT.md for the exact set boundary.
+passed live through a fresh adapter instance sharing that host. The controlled
+handover to the isolated v10 package now passed: the normal persistent Harness
+imports the updated adapter and advertises scalar ObjectProperty set. The
+packaged widget-root assignment/viewport/restoration specimen also passed with
+exact holder cleanup. Fresh-game package startup remains untested. Next implement
+visible control layout and validated focus/key handling. See DEVELOPMENT.md for
+package evidence and INTROSPECTION_PORT.md for the exact set boundary.
 
 ## Preserved implementation references
 
