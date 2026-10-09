@@ -345,3 +345,30 @@ uses the schema established at registration; it does not repeat the complete
 property-schema validation on every POST. Session transport, game-thread scheduler
 maintenance, live frame observations, Harness routing and relaunch validation
 remain outstanding. No deployed DLL or running controller was changed.
+
+## Candidate trace wire contract — 2026-10-09
+
+native/trace_protocol.h and Python _trace_wire.py define a packed57792-byte
+request/reply contract with start, stop, drain, status and forget. Start carries
+an observation-only reflected schema, optional exact target identity, duration
+up to300seconds and budget up to1000 events. Control operations require the owner
+and existing registration, with no schema or start-only parameters. Responses
+carry bounded counters and at most8 copied scalar events; event records contain
+registry identities, sequence/time/thread and owned bytes, with no frame address.
+Native request validation rejects response data on input and unsupported codecs.
+
+Python checks request/reply correlation, assigned or retained registration IDs,
+event process identity, sequence/counter bounds and zero unused payload/event
+tails. Event gaps remain allowed for queue overflow. Cross-drain sequence tracking
+and matching payloads to retained registration plans remain session-layer duties.
+The contract uses current State values0..5 and Cleanup values0..4. It does not
+itself authorize registration or establish that the session supports traces.
+
+The native protocol fixture passes /W4 /WX. scripts/verify_trace_wire.py writes
+actual Python packets for unfiltered/filtered start and each control operation;
+the compiled native validator accepts all six. All358 Python tests pass, including
+ownership/schema corruption, wrong process, event bounds, start registration and
+copied-value checks. Evidence: trace-protocol-fixture.log, trace-wire-tests.log and
+trace-wire-cross-language.log under evidence/, with raw packets in its
+trace-wire-cross-language/ directory. SessionPacket/controller/runtime wiring is
+still pending. The deployed v17 ABI and loaded DLL remain unchanged.
