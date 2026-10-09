@@ -329,12 +329,14 @@ class _Backend:
         self.descriptors, self.properties, self.function_children = {}, {}, {}
         self.observations = {}
         self.enum_descriptors = {}
+        self.retained_trace_schemas = set()
 
     def refresh(self):
         self.catalog = capture()
         self.descriptors, self.properties, self.function_children = {}, {}, {}
         self.observations = {}
         self.enum_descriptors = {}
+        self.retained_trace_schemas.clear()
         self._struct_class = self.catalog.find_class('Struct').index
         self._function_class = self.catalog.find_class('Function').index
         for obj in self.catalog.objects:
@@ -346,6 +348,7 @@ class _Backend:
         self.descriptors.clear(); self.properties.clear(); self.function_children.clear()
         self.observations.clear()
         self.enum_descriptors.clear()
+        self.retained_trace_schemas.clear()
 
     def enum_schema(self, enum):
         obj = self.catalog.resolve(enum._observed)
@@ -374,7 +377,22 @@ class _Backend:
         missing = tuple(obj for obj in objects if obj.index not in self.descriptors)
         if not missing:
             return
-        descriptors = describe(self.catalog, missing)
+        descriptors, live = {}, []
+        lookup = getattr(self.session, '_trace_plan_for', None)
+        for obj in missing:
+            current = self.catalog.resolve(obj)
+            plan = lookup(current) if lookup is not None else None
+            if plan is None:
+                live.append(current)
+                continue
+            # This is the pre-install observation, not fresh native metadata.
+            # Require the same complete identity in this request's catalog.
+            if self.catalog.resolve(plan.descriptor.object) != current:
+                raise RuntimeQueryError('Retained trace descriptor identity mismatch')
+            descriptors[current.index] = plan.descriptor
+            self.retained_trace_schemas.add(current.index)
+        if live:
+            descriptors.update(describe(self.catalog, tuple(live)))
         self.descriptors.update(descriptors)
         for descriptor in descriptors.values():
             grouped = {row['index']: [] for row in descriptor.owners}
@@ -485,6 +503,11 @@ class Harness:
                 functions = list(islice(self._explorer.functions(cls), offset, offset + limit))
                 self._backend.ensure_described(tuple(fn._observed for fn in functions))
             result = self._explorer.dispatch(request)
+            if request['op'] == 'schema' and self._backend.retained_trace_schemas:
+                result['retained_trace_schemas'] = {
+                    'observation': 'before_trace_installation',
+                    'function_indices': sorted(self._backend.retained_trace_schemas),
+                    'live_schema_revalidated': False}
             if request['op'] == 'status':
                 result['original_operations'] = result['operations']
                 result['operations'] = sorted(self.SUPPORTED)

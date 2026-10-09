@@ -151,6 +151,10 @@ class SessionScope:
         self._traces.append(native)
         return ScopedTrace(self, native)
 
+    def _trace_plan_for(self, function):
+        self._check()
+        return self._session._trace_plan_for(function)
+
     @property
     def supports_multi_controls(self):
         self._check()

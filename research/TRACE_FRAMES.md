@@ -553,3 +553,19 @@ This proves only these return/out specimens and the Harness request contract.
 Live input locals, controller-loss and game-relaunch cleanup, Blueprint frames,
 wider codecs and hooked-function schema browsing remain pending. The v18 DLL
 is now mapped and must not be rebuilt or overwritten until this game exits.
+
+## Hooked-function schema browsing — implementation, live gate pending
+
+Harness metadata batches now use the session's retained pre-install descriptor
+for owned traced functions, after resolving its complete object identity against
+the request's catalog. Other batch members still use the native metadata reader;
+foreign hooks and stale identities retain their errors. Scoped sessions expose
+the same lookup only while the scope is valid. Schema results identify retained
+function indices and explicitly report before_trace_installation observation
+with live_schema_revalidated=false. This does not relax invocation validation.
+
+All375 tests pass, including mixed metadata batches, stale identity rejection,
+foreign-hook failure preservation and revoked scope access. Evidence:
+evidence/harness-trace-schema-tests.log. The live Harness verifier now includes
+schema inspection during an installed trace, but that added assertion has not
+yet run against a refreshed controller. Earlier live results do not prove it.

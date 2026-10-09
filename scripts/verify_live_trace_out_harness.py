@@ -38,6 +38,12 @@ def main():
                 target_ref = {'$object': catalog.path_name(specimen)}
                 started = harness.request(dict(op='trace_start', name='live-getter',
                     function=catalog.path_name(getter), target=target_ref, seconds=120, limit=5))
+                schema = harness.request(dict(op='schema', struct=catalog.path_name(getter)))
+                provenance = schema['retained_trace_schemas']
+                assert provenance['function_indices'] == [getter.index]
+                assert provenance['observation'] == 'before_trace_installation'
+                assert provenance['live_schema_revalidated'] is False
+                record('hooked_schema', schema=schema)
                 returned = harness.request(dict(op='invoke', target=target_ref,
                     member='IsActorBeingDestroyed', allow_mutation=True))
                 traced = harness.request(dict(op='trace_read', name='live-getter'))

@@ -22,6 +22,15 @@ class NativeTrace:
 
 
 class TraceScopeTests(unittest.TestCase):
+    def test_schema_plan_access_checks_scope_lifetime(self):
+        session, scope = self.fixture()
+        plan = object()
+        session._trace_plan_for = lambda function: plan
+        self.assertIs(scope._trace_plan_for('function'), plan)
+        scope.close()
+        with self.assertRaisesRegex(RuntimeError, 'scope is closed'):
+            scope._trace_plan_for('function')
+
     def fixture(self):
         session = SimpleNamespace(_check=lambda: None, supports_traces=True, _traces=[], aborted=False,
             console=SimpleNamespace(dispatcher=SimpleNamespace(namespace={})))
