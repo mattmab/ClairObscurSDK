@@ -258,3 +258,30 @@ are not yet wired into the live runtime or original Harness. The next integratio
 must introduce a versioned registration/drain path plus close/expiry ownership,
 and independently revalidate schemas before publishing any thunk. No live trace
 capture, general trace API parity or relaunch proof is claimed by these fixtures.
+
+## Native schema revalidation adapter — 2026-10-09
+
+target_trace_schema.h now reuses reflected_call's validate-only branch. That
+branch checks the live function/object identities, owner relationship, dispatcher,
+native entry, flags, parameter extent, and ordered property names/types/layouts;
+it returns before ProcessEvent or ownership callbacks. Trace preflight rejects
+non-scalar kinds, object patches, nonzero argument bytes and the observed GC-state
+flag. The guarded wrapper clears the plan on an access exception. This adapter
+requires a compatible exemplar object for validation; that exemplar is not
+implicitly the optional trace target filter. Registration must retain that choice
+separately and verify observed object identity before publishing an event.
+
+After preflight, the target walks the bounded live property list and passes those
+property addresses to trace_plan.h. No controller-supplied capture address is
+accepted. The pure normalizer derives local/out/result extents and flattened
+fields, including separate destinations for shared packed-bool bytes. Duplicate
+properties, non-native/invalid entries, non-observation payloads, unsupported
+pointer codecs and more than128 normalized fields are rejected.
+
+scripts/test-trace-plan.cmd compiles the actual target adapter with the production
+validator and runs the pure normalization fixture under /W4 /WX. It covers scalar
+routes, array offsets, packed bools, a structurally valid but unsupported object
+schema, and a valid reflected schema exceeding the flattened field limit. Evidence:
+evidence/trace-plan-fixture.log. Compilation is not live validation. The adapter
+is not yet connected to SessionPacket or hook registration; per-registration
+lifetime ownership, transport and live/relaunch checks remain required.
