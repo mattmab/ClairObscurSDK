@@ -1,0 +1,13 @@
+{
+  "directory": "D:\\HobbyDevelopment\\ClairObscurSDK\\dist\\expedition33-0.1.0-private-20261010T003240Z",
+  "archive": "D:\\HobbyDevelopment\\ClairObscurSDK\\dist\\expedition33-0.1.0-private-20261010T003240Z.zip",
+  "files": 511,
+  "archive_sha256": "48eb38b8f6a1fb58179d7bbcd207bd5d2188d2654ae3cc3a79f6890467577cd2",
+  "manifest_verified": true,
+  "zip_bytes_verified": true,
+  "exclusions_verified": true,
+  "bundled_interpreter": true,
+  "isolated_launcher_help": true,
+  "isolated_agent_help": true,
+  "live_bundle_validation": false
+}

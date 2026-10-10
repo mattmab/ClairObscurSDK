@@ -490,3 +490,42 @@ input/chords/controllers, native Python Up/Tab and map-transition validation are
 not newly claimed. Menu first-open has only a narrow margin below5seconds.
 Source UI status strings were corrected after acceptance; the immutable candidate
 was not modified. Those wording-only changes do not alter tested behavior.
+
+## Private integrated prerelease delivered
+
+README.md now provides the authoritative current startup path and feature limits;
+DEVELOPMENT.md labels its older checklist historical. Older runtime modes remain
+available for reproducible research, but management --keybinds is the single
+recommended integrated path. No new engine capabilities were added.
+
+Clean source20c8e0ed402c8bcba9fb9e6ee1f84331272876b5 produced final candidate
+20261010T003054Z. All511 archive entries (510 payload files plus manifest) passed
+hash, ZIP-byte, exclusion, bundled-interpreter launcher and agent-help checks.
+The fresh S: extraction SDKReleaseCheck-20261010 attached to the existing test
+game and shut down cooperatively with exit0 after3seconds. This was startup
+validation; it does not reclassify an existing process as fresh-game testing.
+
+Release expedition33-0.1.0-private-20261010T003240Z.zip has SHA256
+48eb38b8f6a1fb58179d7bbcd207bd5d2188d2654ae3cc3a79f6890467577cd2.
+All510 payload hashes match that candidate exactly. Manifest designation differs.
+The release is extracted locally at
+S:/SteamLibrary/steamapps/common/Expedition 33/Expedition33SDK-v0.1-integrated.
+
+GitHub repository privacy was checked before creation/upload and after publishing.
+Private prerelease: https://github.com/mattmab/ClairObscurSDK/releases/tag/v0.1.0-integrated.1
+GitHub's uploaded asset digest matches the local archive SHA256. The repository
+was never made public. No game data, user settings or local logs were uploaded in
+the archive. Evidence: integrated-release-{package,verification,equivalence}.json,
+final-candidate-{package,verification}.json, final-candidate-startup.log,
+integrated-github-final.json. Current main-menu validation limits are in the
+release notes; no unrestricted production-readiness claim is made.
+
+Frozen-scope scores after current documentation/distribution: foundation15@90,
+console10@95, supported Harness15@90, menu20@90, keybinds15@90, fallback5@90,
+lifecycle10@95, portable5@100, fresh acceptance5@95. Weighted91.75%, displayed92%.
+These are conservative deliverable estimates, not test-count percentages.
+The remaining task is the final requirement-by-requirement completion audit:
+confirm earlier supported-operation evidence, verify every frozen requirement
+against current source/artifacts, and resolve any concrete gap it finds. The goal
+remains active. Deferred full parity/gameplay coverage does not silently become
+certified through this private prerelease.

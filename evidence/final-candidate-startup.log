@@ -1,0 +1,3 @@
+2026-10-09 20:31:24,597 INFO expedition33.launcher: Console management ready: mods. Experimental native menu: mods ui (requires --multi-controls or newer). Key delivery requires --keybinds.
+2026-10-09 20:31:24,645 INFO expedition33.launcher: Introspection stage 1 ready: e33i.status, e33i.roots, e33i.request JSON, or py introspection.request(...). Ctrl+C stops the controller.
+2026-10-09 20:31:27,843 INFO expedition33.launcher: IntrospectionHarness unloaded; SDK controller closed
