@@ -12,6 +12,9 @@ root = Path(__file__).resolve().parents[1]
 parser = argparse.ArgumentParser(description=__doc__)
 parser.add_argument('--release', action='store_true', help='Package a validated private v0.1 development release')
 args = parser.parse_args()
+runtime = root / 'runtime'
+if not (runtime / 'python.exe').is_file() or not (runtime / 'LICENSE.txt').is_file():
+    raise SystemExit('Prepare the pinned embeddable runtime with scripts/prepare_runtime.py first')
 dirty = subprocess.check_output(['git', 'status', '--porcelain'], cwd=root, text=True).strip()
 if args.release and dirty:
     raise SystemExit('Commit the reviewed source and documentation before packaging a release')
@@ -21,6 +24,7 @@ destination = root / 'dist' / name
 destination.mkdir(parents=True, exist_ok=False)
 files = [root / 'README.md', root / 'DEVELOPMENT.md', root / 'launch.cmd', root / 'pyproject.toml']
 files.append(root / 'src/expedition33/introspection/LICENSE')
+files.extend(path for path in runtime.rglob('*') if path.is_file())
 for directory, pattern in [('src', '*.py'), ('mods', '*.py'), ('scripts', '*.py'), ('scripts', '*.cmd'),
                             ('scripts', '*.ps1'), ('native', '*.h'), ('native', '*.cpp'), ('tests', '*.py'), ('research', '*.md')]:
     files.extend((root / directory).rglob(pattern))
@@ -38,6 +42,8 @@ for relative in ['build/research-probe/research_probe.exe', 'build/runtime-sessi
                  'build/research-probe-v15/research_probe.exe', 'build/runtime-session-v15/runtime_session_v15.dll',
                  'build/research-probe-v16/research_probe.exe', 'build/runtime-session-v16/runtime_session_v16.dll',
                  'build/research-probe-v17/research_probe.exe', 'build/runtime-session-v17/runtime_session_v17.dll',
+                 'build/research-probe-v18/research_probe.exe', 'build/runtime-session-v18/runtime_session_v18.dll',
+                 'build/research-probe-v19/research_probe.exe', 'build/runtime-session-v19/runtime_session_v19.dll',
                  'build/scheduling-fixture/scheduling_hook.dll', 'build/fixed-observer/fixed_observer_v1.dll']:
     files.append(root / relative)
 hashes = {}

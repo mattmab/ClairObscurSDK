@@ -17,7 +17,7 @@ def main():
         selected.append(kwargs)
         raise Selected
 
-    for flag in ('menu-ownership', 'button-references', 'button-actions', 'multi-controls', 'traces'):
+    for flag in ('menu-ownership', 'button-references', 'button-actions', 'multi-controls', 'traces', 'keybinds'):
         with patch.dict(launch.__globals__, Session=capture), \
                 patch.object(sys, 'argv', ['run_sdk.py', 'console', '--'+flag]), \
                 patch('logging.basicConfig'), \
@@ -29,7 +29,7 @@ def main():
             else:
                 raise AssertionError('Launcher did not select an explicit session')
         assert selected[-1][flag.replace('-', '_')] is True
-    print('All five menu/trace flags select an explicit session; no game attachment performed.')
+    print('All six menu/trace/key flags select an explicit session; no game attachment performed.')
 
 
 if __name__ == '__main__':

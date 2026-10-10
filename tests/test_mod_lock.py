@@ -1,4 +1,3 @@
-import os
 from pathlib import Path
 import subprocess
 import sys
@@ -16,10 +15,10 @@ class ModLockTests(unittest.TestCase):
         self.root = Path(self.temp.name)
 
     def child(self, source):
-        environment = dict(os.environ)
-        environment['PYTHONPATH'] = str(Path(__file__).resolve().parents[1] / 'src')
-        return subprocess.run([sys.executable, '-B', '-c', source, str(self.root)],
-                              env=environment, capture_output=True, text=True, timeout=10)
+        sdk_source = str(Path(__file__).resolve().parents[1] / 'src')
+        source = f'import sys; sys.path.insert(0, {sdk_source!r}); ' + source
+        return subprocess.run([sys.executable, '-I', '-S', '-B', '-c', source, str(self.root)],
+                              capture_output=True, text=True, timeout=10)
 
     def test_same_and_other_processes_are_excluded_until_close(self):
         loader = ModLoader(self.root)

@@ -12,8 +12,6 @@ from contextlib import nullcontext
 ROOT = Path(__file__).resolve().parents[1]
 if sys.version_info[:3] != (3, 13, 15):
     raise SystemExit(f'CPython 3.13.15 is required; got {sys.version.split()[0]}')
-if ROOT.drive.upper() != 'D:':
-    raise SystemExit('Extract this development bundle under D:\\HobbyDevelopment')
 if not (sys.flags.isolated and sys.flags.no_site and sys.dont_write_bytecode):
     raise SystemExit('Use launch.cmd (isolated interpreter, no site startup or bytecode writes)')
 manifest = ROOT / 'MANIFEST.json'

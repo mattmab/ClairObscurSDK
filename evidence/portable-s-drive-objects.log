@@ -1,0 +1,21 @@
+2026-10-09 20:10:10,621 INFO expedition33.launcher: Enumerated 96059 live objects in PID 39900 using S:\SteamLibrary\steamapps\common\Expedition 33\SDKPortableAcceptance-20261010\src\expedition33\__init__.py
+/Script/CoreUObject  Package
+Object  Class
+/Script/Engine  Package
+Actor  Class
+HUD  Class
+/Script/GameplayAbilities  Package
+AbilitySystemDebugHUD  Class
+Interface  Class
+EditorPathObjectInterface  Class
+GCObjectReferencer  Class
+TextBuffer  Class
+Field  Class
+Struct  Class
+ScriptStruct  Class
+Package  Class
+Class  Class
+Function  Class
+DelegateFunction  Class
+SparseDelegateFunction  Class
+Enum  Class

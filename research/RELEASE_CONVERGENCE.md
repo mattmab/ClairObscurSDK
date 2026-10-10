@@ -387,3 +387,35 @@ Frozen score: keybinds30 ->60; other weights/scores unchanged.
 61.25 +15*(60-30)/100 =65.75, displayed **66%**. The remaining critical path is
 controller reconnect and integrated lifecycle checks, portable packaging, then
 the mandatory fresh-process acceptance matrix. No release-ready claim is made.
+
+## Portable runtime integration
+
+The launcher now prefers bundled runtime/python.exe, with explicit SDK_PYTHON
+fallback for source development; no hardcoded interpreter path remains. The
+run_sdk.py D-drive restriction was removed without relaxing isolated/no-site/
+no-bytecode flags or bundle checksums. Packaging now includes the runtime license
+and all runtime files, plus the previously omitted v18/v19 controller/DLL pairs.
+scripts/prepare_runtime.py downloads the official CPython3.13.15 x64 embeddable
+archive and checks Python.org's published SHA256 before extraction:
+d1f04d990aee1253d8569e8e5104e30fa9f5fa830899f14843448872d936a2cf.
+Source: https://www.python.org/downloads/release/python-31315/.
+
+All417 tests passed under the bundled interpreter with D: temporary files.
+Two subprocess lock tests initially relied on PYTHONPATH, ignored by embedded
+Python; their launchers now explicitly add the source path under -I -S -B.
+No runtime isolation was weakened. Six launcher flags including keybinds select
+the explicit requested session offline. Evidence: embedded-runtime-regression.log.
+
+Candidate expedition33-0.1.0-candidate-20261010T000929Z (uncommitted-worktree
+candidate based on4a51095) archive SHA256:
+16e5d943f4aec996e71cda6fe6d3f41f0264af28bc6d0ae1fd6fc10718d92594.
+Extracted to S:/SteamLibrary/steamapps/common/Expedition 33/SDKPortableAcceptance-20261010.
+Its launch.cmd --help succeeded; launch.cmd objects enumerated96059 live objects
+in PID39900 using the S: SDK source and bundled interpreter. Evidence:
+portable-s-drive-launch.log and portable-s-drive-objects.log. No second persistent
+controller was attached and no mapped DLL was rebuilt or overwritten.
+
+Portable installation score25 ->60 for self-contained startup and live read-only
+operation outside checkout. Other scores unchanged:65.75 +5*(60-25)/100 =67.5,
+displayed **68%**. Persistent packaged v19, reconnect and the fresh-game acceptance
+matrix remain release blockers. This candidate is not the final release.

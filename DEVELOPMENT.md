@@ -6,7 +6,30 @@ physical dispatch, API/native-menu remapping, persisted preference reload,
 console recovery, conflicts, unbind/unload cleanup and callback error containment.
 Controller reconnect and fresh-game/package acceptance are still outstanding.
 Historical limitations below describe their recorded candidates, not every later
-source milestone. The development launcher still requires portability work.
+source milestone. Portable startup and read-only objects were verified from S:;
+persistent packaged v19 and fresh-game acceptance remain outstanding.
+
+## Portable candidate usage
+
+Extract the complete candidate into a writable folder, then run
+`launch.cmd management --keybinds` with the supported game already running.
+The bundled `runtime/python.exe` is CPython 3.13.15 x64; no installed Python,
+developer drive, compiler or pip is needed for SDK startup. Backtick opens the
+native console. Use `py print("Hello")`, `mods`, and `mods ui`. Only run one
+persistent controller for a given game process. Logs and settings stay beside
+the launcher in `logs/sdk.log` and `settings/management.json`.
+
+The runtime is Python.org's checksum-pinned embeddable distribution, including
+its LICENSE.txt. It omits pip/Tk; arbitrary third-party mod dependencies are not
+bundled. Runtime isolation and bundle checksum validation remain enabled.
+Do not modify immutable candidate files; use a new candidate for SDK changes.
+
+For a source checkout, run `scripts/prepare_runtime.py` once using an existing
+Python interpreter. It downloads only the pinned official archive into the
+checkout and refuses to overwrite an existing runtime. Alternatively set
+SDK_PYTHON to a CPython 3.13.15 executable when no bundled runtime is present.
+`scripts/package_dev.py` requires the prepared runtime and includes v18/v19
+native components. Native compilation remains a separate developer task.
 
 ## v0.1 feature checklist
 
