@@ -30,7 +30,7 @@ class NativeMenuService:
                 'state': self.menu.panel.state if self.menu is not None else 'not_created',
                 'error': self._failure,
                 'experimental': True,
-                'limitations': 'Slow construction/cleanup; numeric, text and JSON editors and keybinds pending'}
+                'limitations': 'Native numeric, text and JSON editors are unavailable; use console management. Key delivery requires --keybinds.'}
 
     def open(self):
         self._check()
@@ -46,7 +46,7 @@ class NativeMenuService:
         # Assign before construction: failures must not discard the cleanup owner.
         self.menu = NativeManagementMenu(self.scope, self.registry,
             cached_construction=True, selected_results=True, read_batches=True)
-        logging.getLogger(__name__).info('Opening experimental native menu; construction may take several minutes')
+        logging.getLogger(__name__).info('Opening native menu; building verified controls')
         try:
             self.menu.open()
             self._observed = self._snapshot()

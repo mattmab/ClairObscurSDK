@@ -435,3 +435,58 @@ regression covers exit during key polling, no cleanup query, idempotence, and
 borrowed-session preservation. All418 tests pass under bundled Python; evidence:
 target-exit-regression.log. Live confirmation of this fix remains pending.
 Frozen completion stays68%; no release-ready claim.
+
+## Fresh portable v19 acceptance, first pass
+
+Candidate 20261010T001800Z is a clean source snapshot of7624261; archive SHA256
+4705b08721d643b8be163f143ea34975c8bff389b5cf62d3aa823c347d258f32.
+It runs from S:/SteamLibrary/steamapps/common/Expedition 33/SDKPortableAcceptance-20261010-exitfix.
+PID6980 was launched through Expedition33_Steam.exe. Direct shipping-executable
+launch had exited before attachment; use the installed launcher for this build.
+
+Confirmed in this fresh process: packaged embedded Python path, backtick console,
+visible native stat fps, persistent variables/imports, discovery/load/enable,
+default F6 physical delivery, native menu first-open4.9394seconds, physical menu
+navigation, Harness Live roots action, file-transport inspection of the actual
+PlayerController bShowMouseCursor=True, native Close, zero child scopes, remap
+F7, digest-checked reload into a new instance, deliberate ZeroDivisionError
+traceback, and subsequent physical F7 callback exactly once. Normal Quit/Confirm
+then closed the controller with exit0 and marked the Harness session disabled.
+This live-validates the keybind target-exit fix. No gameplay/save was entered.
+
+Evidence: portable-fresh-sdk.log, portable-fresh-inspect.json,
+portable-fresh-exit-status.json. The deliberate Python exception is expected.
+The menu open barely passes the5second gate; fresh navigation was visibly
+functional but has no numeric timing yet. Relaunch preference check follows.
+Remaining gates: measured fresh navigation, final supported-mode packaging and
+current user documentation, completed relaunch acceptance. No broad new parity
+work is required. Frozen score remains68% pending completion of this milestone.
+
+## Fresh acceptance milestone complete
+
+Relaunched game PID23204 and packaged controller PID30448 used a new Harness
+session265f4ac98fda45d795d6db7e286a86e8. Python assertions proved no previous
+acceptance variable survived; explicitly loading/enabling KeybindExample restored
+F7 and a zero counter. One physical F7 produced exactly one callback. The same
+native menu submit path used by buttons took0.4926seconds for root-to-details
+navigation, measured inside the persistent Python session (excludes input/poll
+latency). Physical navigation itself was separately verified in PID6980.
+Native menu close and mod unload removed the console alias; cooperative SDK
+shutdown subsequently returned exit0 while leaving the game at its main menu.
+Evidence: portable-relaunch-sdk.log and portable-relaunch-settings.json.
+
+Frozen weights unchanged. Updated scores: foundation15@85, console10@90,
+supported Harness15@85, menu20@85, keybinds15@85, console fallback5@80,
+lifecycle10@90, portable5@85, fresh acceptance5@90. Weighted sum86.0%.
+This is **86% of the reduced v0.1 scope**, not exhaustive BL4 parity or a claim
+of arbitrary gameplay stability. Main-menu-only validation remains explicit.
+
+The critical path is shorter: the representative packaged matrix and normal-exit
+fix now pass. Remaining release work is consolidate supported launcher/package
+modes, replace conflicting historical user guidance with current instructions,
+verify the final archive and its startup, and publish the private release with
+an exact tested-capability checklist. Numeric/text/JSON native editors, general
+input/chords/controllers, native Python Up/Tab and map-transition validation are
+not newly claimed. Menu first-open has only a narrow margin below5seconds.
+Source UI status strings were corrected after acceptance; the immutable candidate
+was not modified. Those wording-only changes do not alter tested behavior.

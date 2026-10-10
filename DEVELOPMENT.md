@@ -4,10 +4,11 @@ Current convergence status: see research/RELEASE_CONVERGENCE.md. The v19
 `launch.cmd management --keybinds` mode has live existing-process proof of
 physical dispatch, API/native-menu remapping, persisted preference reload,
 console recovery, conflicts, unbind/unload cleanup and callback error containment.
-Controller reconnect and fresh-game/package acceptance are still outstanding.
+Controller reconnect and packaged v19 startup, native commands, Python, physical
+keys, mod reload, Harness inspection, menu cleanup and normal exit now have
+fresh-game evidence from S:. See the convergence journal for remaining gates.
 Historical limitations below describe their recorded candidates, not every later
-source milestone. Portable startup and read-only objects were verified from S:;
-persistent packaged v19 and fresh-game acceptance remain outstanding.
+source milestone. This is still a candidate, not a newly certified release.
 
 ## Portable candidate usage
 

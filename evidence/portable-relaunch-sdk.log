@@ -1,0 +1,66 @@
+2026-10-09 20:19:34,884 INFO expedition33.launcher: Console management ready: mods. Experimental native menu: mods ui (requires --multi-controls or newer). Key delivery requires --keybinds.
+2026-10-09 20:19:34,932 INFO expedition33.launcher: Introspection stage 1 ready: e33i.status, e33i.roots, e33i.request JSON, or py introspection.request(...). Ctrl+C stops the controller.
+2026-10-09 20:20:12,017 INFO expedition33.console: python: S:\SteamLibrary\steamapps\common\Expedition 33\SDKPortableAcceptance-20261010-exitfix\runtime\python.exe
+PASS fresh portable session
+2026-10-09 20:20:20,351 INFO expedition33.keybind_example: Physical key callback count=1
+2026-10-09 20:20:56,740 INFO expedition33.management_service: Opening experimental native menu; construction may take several minutes
+2026-10-09 20:20:57,140 INFO expedition33.widgets: Building owned native menu panel with 12 reusable controls
+2026-10-09 20:20:58,197 INFO expedition33.widgets: Native menu construction: control 1/12 retained
+2026-10-09 20:20:58,413 INFO expedition33.widgets: Native menu construction: control 2/12 retained
+2026-10-09 20:20:58,630 INFO expedition33.widgets: Native menu construction: control 3/12 retained
+2026-10-09 20:20:58,846 INFO expedition33.widgets: Native menu construction: control 4/12 retained
+2026-10-09 20:20:59,094 INFO expedition33.widgets: Native menu construction: control 5/12 retained
+2026-10-09 20:20:59,359 INFO expedition33.widgets: Native menu construction: control 6/12 retained
+2026-10-09 20:20:59,590 INFO expedition33.widgets: Native menu construction: control 7/12 retained
+2026-10-09 20:20:59,806 INFO expedition33.widgets: Native menu construction: control 8/12 retained
+2026-10-09 20:21:00,085 INFO expedition33.widgets: Native menu construction: control 9/12 retained
+2026-10-09 20:21:00,332 INFO expedition33.widgets: Native menu construction: control 10/12 retained
+2026-10-09 20:21:00,565 INFO expedition33.widgets: Native menu construction: control 11/12 retained
+2026-10-09 20:21:00,810 INFO expedition33.widgets: Native menu construction: control 12/12 retained
+2026-10-09 20:21:00,904 INFO expedition33.widgets: Owned native menu tree built; awaiting paint and attachment
+2026-10-09 20:21:00,937 INFO expedition33.management_native: Native menu SDK Mods: Select a mod to inspect settings and actions.
+2026-10-09 20:21:01,680 INFO expedition33.console: python: Native menu opened
+FRESH_MENU_SECONDS 4.939433099993039
+2026-10-09 20:21:15,060 INFO expedition33.management_native: Native menu Introspection Harness — details: Original Explorer core with verified Expedition 33 adapters; parity is incomplete.
+e33-port-1.3-stage1
+2026-10-09 20:21:54,476 INFO expedition33.management_native: Native menu Introspection Harness — actions: Result: {'World': [{'$object': '/Game/Levels/UI/MainMenu/Level_MainMenu.Level_MainMenu', 'class': '/Script/Engine.World'}], 'GameInstance': [{'$object': '/Engine/Transient.GameEngine_2147482617:BP_jRPG_GI_Custom_C_2147482545', 'class': '/Game/jRPGTemplate/Blueprints/Basics/BP_jRPG_GI_Custom.BP_jRPG_GI_Custom_C'}], 'LocalPlayer': [{'$object': '/Engine/Transient.GameEngine_2147482617:LocalPlayer_2147482418', 'class': '/Script/Engine.LocalPlayer'}], 'PlayerController': [{'$object': '/Game/Levels/UI/MainMenu/Level_MainMenu.Level_MainMenu:PersistentLevel.BP_jRPG_Controller_MainMenu_C_2147482086', 'class': '/Game/jRPGTemplate/Blueprints/Basics/BP_jRPG_Controller_MainMenu.BP_jRPG_Controller_MainMenu_C'}], 'Pawn': []}
+
+Original Explorer core with verified Expedition 33 adapters; parity is incomplete.
+e33-port-1.3-stage1
+2026-10-09 20:23:11,974 ERROR expedition33.console: python: {'changed': True, 'mod': 'KeybindExample', 'version': '', 'enabled': True, 'sha256': 'fe7a039eb78c5cb12e95b51ca6a30f1d093c60f11dd3b017175b0b02279a9faf', 'package_sha256': 'cadfffa54776655f88d3206e4e57806d33f247911999eab3d6614ff82a3aba99'}
+PASS cleanup reload remap
+Traceback (most recent call last):
+  File "S:\SteamLibrary\steamapps\common\Expedition 33\SDKPortableAcceptance-20261010-exitfix\src\expedition33\_console_dispatch.py", line 158, in execute
+    value = eval(compile(ast.Expression(expression.value), '<game console>', 'eval'), self.namespace)
+  File "<game console>", line 1, in <module>
+ZeroDivisionError: division by zero
+2026-10-09 20:23:21,039 INFO expedition33.keybind_example: Physical key callback count=1
+2026-10-09 20:23:59,766 INFO expedition33.launcher: Game exited normally; revoking Python resources and ending this controller
+2026-10-09 20:23:59,768 INFO expedition33.launcher: IntrospectionHarness unloaded; SDK controller closed
+2026-10-09 20:25:21,298 INFO expedition33.launcher: Console management ready: mods. Experimental native menu: mods ui (requires --multi-controls or newer). Key delivery requires --keybinds.
+2026-10-09 20:25:21,344 INFO expedition33.launcher: Introspection stage 1 ready: e33i.status, e33i.roots, e33i.request JSON, or py introspection.request(...). Ctrl+C stops the controller.
+2026-10-09 20:26:27,330 INFO expedition33.console: python: PASS fresh relaunch saved F7, clean namespace
+2026-10-09 20:26:38,374 INFO expedition33.keybind_example: Physical key callback count=1
+2026-10-09 20:27:08,485 INFO expedition33.management_service: Opening experimental native menu; construction may take several minutes
+2026-10-09 20:27:08,826 INFO expedition33.widgets: Building owned native menu panel with 12 reusable controls
+2026-10-09 20:27:09,859 INFO expedition33.widgets: Native menu construction: control 1/12 retained
+2026-10-09 20:27:10,105 INFO expedition33.widgets: Native menu construction: control 2/12 retained
+2026-10-09 20:27:10,323 INFO expedition33.widgets: Native menu construction: control 3/12 retained
+2026-10-09 20:27:10,555 INFO expedition33.widgets: Native menu construction: control 4/12 retained
+2026-10-09 20:27:10,771 INFO expedition33.widgets: Native menu construction: control 5/12 retained
+2026-10-09 20:27:10,987 INFO expedition33.widgets: Native menu construction: control 6/12 retained
+2026-10-09 20:27:11,202 INFO expedition33.widgets: Native menu construction: control 7/12 retained
+2026-10-09 20:27:11,418 INFO expedition33.widgets: Native menu construction: control 8/12 retained
+2026-10-09 20:27:11,636 INFO expedition33.widgets: Native menu construction: control 9/12 retained
+2026-10-09 20:27:11,852 INFO expedition33.widgets: Native menu construction: control 10/12 retained
+2026-10-09 20:27:12,068 INFO expedition33.widgets: Native menu construction: control 11/12 retained
+2026-10-09 20:27:12,300 INFO expedition33.widgets: Native menu construction: control 12/12 retained
+2026-10-09 20:27:12,418 INFO expedition33.widgets: Owned native menu tree built; awaiting paint and attachment
+2026-10-09 20:27:12,461 INFO expedition33.management_native: Native menu SDK Mods: Select a mod to inspect settings and actions.
+2026-10-09 20:27:13,294 INFO expedition33.management_native: Native menu Keybind Example — details: F6 counts presses through the external persistent controller. Remap in Keybinds or mods bind.
+2026-10-09 20:27:17,667 INFO expedition33.console: python: FRESH_NAV_SECONDS 0.49260230001527816
+Keybind Example — details
+Native menu closed
+PASS relaunch cleanup
+2026-10-09 20:28:10,852 INFO expedition33.console: python: Acceptance complete; cooperative shutdown
+2026-10-09 20:28:11,087 INFO expedition33.launcher: IntrospectionHarness unloaded; SDK controller closed

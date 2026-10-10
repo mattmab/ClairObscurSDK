@@ -1,4 +1,4 @@
-"""Unified console and experimental native management; key dispatch pending."""
+"""Unified console and native management with optional v19 key delivery."""
 from expedition33.management import ModDefinition, Action
 from expedition33.management_console import ConsoleMenu
 from expedition33.management_service import NativeMenuService
@@ -12,7 +12,7 @@ class Mod:
 
     def management(self):
         return ModDefinition('sdk.management', 'SDK Management', protected=True,
-            description='Shared registry, console menu and experimental native UMG menu. Key dispatch pending.',
+            description='Shared registry, console fallback, native UMG menu and configurable keys. Key delivery requires --keybinds.',
             actions=(Action('shutdown', 'Stop the SDK controller cleanly', self.shutdown),))
 
     def enable(self, session):
