@@ -1,5 +1,11 @@
 # Frozen v0.1 release scope — 2026-10-09
 
+**Current outcome:** the final [completion audit](V01_COMPLETION_AUDIT.md) closes
+all nine frozen mandatory deliverables. The private integrated prerelease is
+delivered. Frozen deliverable completion is 100%; this is not unrestricted
+production certification or exhaustive BL4 parity. The chronological entries
+below retain their original pending statuses as history.
+
 User-directed scope change from exhaustive BL4 parity to a usable independent
 SDK release. This supersedes the expanded-scope completion target in
 V01_PROGRESS.md; its49%/160-320hour assessment remains historical, not the ETA
