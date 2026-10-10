@@ -1,6 +1,6 @@
 from types import SimpleNamespace
 import unittest
-from expedition33 import RuntimeQueryError, _key_wire as wire
+from expedition33 import RuntimeQueryError, TargetExitedError, _key_wire as wire
 from expedition33._session import BUTTON_CAPABILITIES
 from expedition33.keybind_service import KeybindService
 import test_management_keys as key_fixture
@@ -110,6 +110,22 @@ class KeyServiceTests(unittest.TestCase):
         self.assertEqual(len(self.transport.sent), count)
         self.assertFalse(self.session._closed)
         with self.assertRaises(ValueError): KeybindService(self.session, self.registry)
+
+    def test_reported_target_exit_revokes_without_retry_or_closing_borrowed_session(self):
+        def exited(*_):
+            self.transport.target_exit_code = 0
+            raise TargetExitedError(0)
+        self.transport.command = exited
+        with self.assertRaises(TargetExitedError): self.service.poll()
+        def unexpected(*_):
+            self.fail('Cleanup must not query an exited target')
+        self.transport.command = unexpected
+        self.session._check = unexpected
+        self.service.close()
+        self.service.close()
+        self.assertIsNone(self.session._key_binding_owner)
+        self.assertEqual(self.service._routes, ())
+        self.assertFalse(self.session._closed)
 
 
 if __name__ == '__main__': unittest.main()

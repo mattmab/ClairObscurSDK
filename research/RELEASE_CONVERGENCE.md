@@ -419,3 +419,19 @@ Portable installation score25 ->60 for self-contained startup and live read-only
 operation outside checkout. Other scores unchanged:65.75 +5*(60-25)/100 =67.5,
 displayed **68%**. Persistent packaged v19, reconnect and the fresh-game acceptance
 matrix remain release blockers. This candidate is not the final release.
+
+## Reconnect and normal-exit cleanup correction
+
+Bundled source controller reconnect passed in PID39900: a fresh Python namespace,
+persisted F7 mapping, a new mod instance, and exactly one physical callback.
+Normal Quit/Confirm then produced a validated target exit code0 but exposed a
+Python cleanup error: KeybindService treated that known exit as an uncertain
+transport outcome. Evidence: keybind-reconnect-exit-failure.log.
+
+Cleanup now releases local key ownership without another native request when
+and only when the transport has recorded the authoritative target exit report.
+Unknown transport failures retain the borrowed-session claim as before. The new
+regression covers exit during key polling, no cleanup query, idempotence, and
+borrowed-session preservation. All418 tests pass under bundled Python; evidence:
+target-exit-regression.log. Live confirmation of this fix remains pending.
+Frozen completion stays68%; no release-ready claim.

@@ -73,8 +73,11 @@ class KeybindService:
     def close(self):
         if self._closed:
             return
+        # Only the validated native exit report proves the target is gone.
+        # A broken transport alone must retain borrowed-session ownership.
+        target_exited = getattr(self.session._transport, 'target_exit_code', None) is not None
         try:
-            if not getattr(self.session, '_closed', False):
+            if not target_exited and not getattr(self.session, '_closed', False):
                 self.session._check()
                 if self._failed:
                     # Preserve borrowed-session ownership. Its host must close
@@ -85,5 +88,5 @@ class KeybindService:
         finally:
             self._closed = True
             self._routes = ()
-            if (not self._failed or getattr(self.session, '_closed', False)) and getattr(self.session, '_key_binding_owner', None) is self:
+            if (target_exited or not self._failed or getattr(self.session, '_closed', False)) and getattr(self.session, '_key_binding_owner', None) is self:
                 self.session._key_binding_owner = None
