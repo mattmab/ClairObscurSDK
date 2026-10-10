@@ -32,8 +32,12 @@ SDK_PYTHON to a CPython 3.13.15 executable when no bundled runtime is present.
 `scripts/package_dev.py` requires the prepared runtime and includes v18/v19
 native components. Native compilation remains a separate developer task.
 
-## v0.1 feature checklist
+## Historical feature checklist (earlier archives and runtime stages)
 
+For the current integrated feature checklist and startup path, use README.md.
+The table below preserves earlier archive/stage records and their then-open
+questions. Current v19 evidence supersedes its pending keybind, performance and
+representative relaunch notes; it does not certify every older mode.
 All live results below apply only to the recorded executable fingerprint.
 The original private v0.1 archive and newer checkout candidates have separate
 validation scopes; original release acceptance does not certify newer runtimes.
