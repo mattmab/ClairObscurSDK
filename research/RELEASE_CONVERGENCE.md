@@ -347,3 +347,43 @@ mapping in subsequent checks; its counter is currently2.
 Frozen score: keybinds increase from0 to30 for this verified partial deliverable.
 Weights and other scores are unchanged:56.75 + 15*30/100 =61.25, displayed **61%**.
 Next finish the keybind acceptance checks, then portable packaging/fresh acceptance.
+
+## Existing-process keybind integration acceptance
+
+On October 9, the same v19 controller and game PID39900 passed physical-key
+checks for console typing suppression, callback error containment followed by
+successful delivery, unbind, unload revocation, saved mapping restoration on mod
+reload, and actual callback execution after that reload. The unloaded example's
+console alias was removed; a temporary retained Python reference proved that a
+subsequent physical press did not increment the old instance. That reference was
+then deleted.
+
+Physical clicks navigated the native menu through Keybind Example / Keybinds /
+Count press and selected B. The UI and settings file both showed B. A B press
+while the menu was open was suppressed; after clicking Close, B incremented the
+counter from1 to2. The closed panel had zero child scopes and no reported error.
+An initial assertion incorrectly expected not_created (the explicit service-close
+state); it failed harmlessly and was corrected to the button-close state, closed.
+No implementation change was required for that assertion failure.
+
+The console management command handler then assigned the example's second binding
+to B. It reported both conflicting owners; a physical B press produced neither
+the count callback nor the error callback. Console unbind/bind commands cleared
+the conflict and restored count to F7; physical F7 then incremented count to3.
+Evidence: evidence/keybind-existing-process-acceptance.log and
+evidence/keybind-existing-process-settings.json. The preserved raw log includes
+the expected callback exception and the incorrect test assertion. Some redirected
+log lines are interleaved/truncated; assertions and observed UI transitions
+provide the supporting context recorded here.
+
+This validates the connected native menu, console recovery and key service in an
+existing process. It does NOT prove controller reconnect, fresh-game persistence,
+all key-selector pages/reset/unbind buttons, cross-mod conflicts, or packaged
+operation. Native UMG text/numeric/JSON editors remain deferred. v19 is still
+mapped and must not be overwritten. Current example count3, mapping F7, error
+binding unbound; native panel closed, controller still running.
+
+Frozen score: keybinds30 ->60; other weights/scores unchanged.
+61.25 +15*(60-30)/100 =65.75, displayed **66%**. The remaining critical path is
+controller reconnect and integrated lifecycle checks, portable packaging, then
+the mandatory fresh-process acceptance matrix. No release-ready claim is made.

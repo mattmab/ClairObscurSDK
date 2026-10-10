@@ -1,5 +1,13 @@
 # Private development SDK
 
+Current convergence status: see research/RELEASE_CONVERGENCE.md. The v19
+`launch.cmd management --keybinds` mode has live existing-process proof of
+physical dispatch, API/native-menu remapping, persisted preference reload,
+console recovery, conflicts, unbind/unload cleanup and callback error containment.
+Controller reconnect and fresh-game/package acceptance are still outstanding.
+Historical limitations below describe their recorded candidates, not every later
+source milestone. The development launcher still requires portability work.
+
 ## v0.1 feature checklist
 
 All live results below apply only to the recorded executable fingerprint.

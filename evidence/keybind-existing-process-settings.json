@@ -1,0 +1,12 @@
+{
+  "version": 1,
+  "revision": 9,
+  "mods": {
+    "keybind-example": {
+      "keybinds": {
+        "count": "F7",
+        "error": null
+      }
+    }
+  }
+}
