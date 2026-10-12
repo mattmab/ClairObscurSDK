@@ -305,3 +305,9 @@ editing inventory, shared default objects, definition tables, unlocks, or saves.
 4. Lead integrates only reviewed Picto files and loads the optional mod through the
    existing controller. Validate native appearance and lifecycle without restart.
 5. Coordinate real character/zone/disconnect coverage and record its actual scope.
+
+### RC3 publication and resumed menu check (2026-10-12)
+
+Published private prerelease `v0.1.0-rc3` from commit `da5de7248124558adaf7217221cb3b30266eb648`. GitHub confirmed the uploaded ZIP SHA-256 matches `d1ac0f27ea988a2e0d545ab39475c17fd3bf8efa4c44d9784950003737dcb74d`. All 826 Python tests passed using the bundled interpreter.
+
+After renewed computer-use permission, visually confirmed the installed native Mods pause entry and successfully opened SDK Mods page 1/2. Cinematics, Continent Flight, Introspection Harness and Live Object Viewer displayed enabled; example mods displayed not loaded. Further navigation encountered concurrent user input twice, so automation yielded the controls. Picto-specific cold-start visual restoration remains pending; no new game values were edited during this check.
