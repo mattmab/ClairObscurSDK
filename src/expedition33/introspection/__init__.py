@@ -262,6 +262,11 @@ class _Explorer(Explorer):
             self._sweep_owners()
 
     def encode(self, value, depth=2, budget=None):
+        from ..tracing import ObservedObject
+        if isinstance(value, ObservedObject):
+            return {'$observed_object': dict(session=value.session, pid=value.pid,
+                index=value.index, serial=value.serial, address=hex(value.address)),
+                'retained': False, 'identity_time': 'entry'}
         if isinstance(value, EnumValue):
             budget = [500] if budget is None else budget
             budget[0] -= 1
@@ -416,7 +421,7 @@ class _Backend:
             raise UnsupportedCapability('Typed numeric structs require the v11 POD capability')
         matches = [path for path in _pod_values.PROFILES if name in (path, path.rsplit('.',1)[1])]
         if len(matches) != 1:
-            raise UnsupportedCapability('Only Vector2D, LinearColor, Margin and Anchors have verified value codecs')
+            raise UnsupportedCapability('Only Vector, Vector2D, LinearColor, Margin and Anchors have verified value codecs; Vector needs the flight runtime')
         fields = {key: value._value if isinstance(value, _CopiedNumericStruct) else value
                   for key, value in fields.items()}
         # This is a copied Python value, not native construction. Invocation

@@ -1,6 +1,7 @@
 #pragma once
 #include "target_trace_schema.h"
 #include "trace_events.h"
+#include "blueprint_trace_frame.h"
 
 struct TargetTraceContext {
     uint64_t base{};
@@ -15,6 +16,10 @@ inline bool target_trace_read(uint64_t address, void* output, uint32_t size) {
     __try { std::memcpy(output, reinterpret_cast<const void*>(address), size); return true; }
     __except(EXCEPTION_EXECUTE_HANDLER) { return false; }
 }
+
+#ifdef E33_BLUEPRINT_DIRECT_SESSION
+#include "blueprint_direct_trace.h"
+#endif
 
 inline bool target_trace_gate(const TargetTraceContext& context) {
     const auto base = context.base;
@@ -60,6 +65,39 @@ inline bool target_trace_collect_body(const TargetTraceContext& context, void* o
     if (context.filtered && (observed.index != context.filter.index ||
         observed.serial != context.filter.serial || observed.address != context.filter.address)) return false;
     e33_trace::FrameStorage storage{};
+    if (context.plan.blueprint) {
+        const auto script = local_read<uint64_t>(context.function.address + 0x60);
+        if (e33_trace::resolve_blueprint_entry(target_trace_read, reinterpret_cast<uint64_t>(frame),
+            context.function.address, address, script, storage
+#ifdef E33_BLUEPRINT_DIRECT_SESSION
+            ,blueprint_direct_frame
+#endif
+            ) != e33_trace::FrameError::none) return false;
+        e33_trace::Copy candidate{};
+        for (uint32_t i = 0; i < context.plan.count; ++i) {
+            const auto& field = context.plan.fields[i];
+            if (field.source != e33_trace::StorageKind::locals || field.size != 8 ||
+                uint64_t(field.source_offset) + 8 > field.source_extent ||
+                storage.locals > UINT64_MAX - field.source_offset - 7) return false;
+            const auto& constraint = context.plan.constraints[i];
+            if (constraint.address) {
+                uint64_t pointer{};
+                if (!target_trace_read(storage.locals + field.source_offset, &pointer, 8) ||
+                    uint64_t(field.destination_offset) + sizeof(CallIdentity) > context.plan.extent) return false;
+                const auto value = call_capture(context.base, pointer);
+                if (pointer && (!value.address || value.serial < 0 || !call_identity(context.base, value) ||
+                    !call_identity(context.base, constraint) || (local_read<uint32_t>(pointer + 8) & 0x40000000) ||
+                    !call_derives(context.base, local_read<uint64_t>(pointer + 0x10), constraint.address))) return false;
+                std::memcpy(candidate.bytes + field.destination_offset, &value, sizeof(value));
+            } else {
+                if (uint64_t(field.destination_offset) + 8 > context.plan.extent ||
+                    !target_trace_read(storage.locals + field.source_offset, candidate.bytes + field.destination_offset, 8)) return false;
+            }
+        }
+        candidate.size = context.plan.extent; copied = candidate;
+        identity = {context.pid, observed.index, observed.serial};
+        return true;
+    }
     if (e33_trace::resolve_frame(target_trace_read, reinterpret_cast<uint64_t>(frame),
         context.function.address, reinterpret_cast<uint64_t>(result), storage) != e33_trace::FrameError::none)
         return false;

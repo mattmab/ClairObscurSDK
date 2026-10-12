@@ -10,3 +10,6 @@ requires-python = ">=3.13"
 
 [tool.setuptools.packages.find]
 where = ["src"]
+
+[tool.setuptools.package-data]
+"expedition33.cinematics" = ["title_profiles.json", "media_profiles.json", "aliciabirth_audio.json", "original_action_maps.json"]

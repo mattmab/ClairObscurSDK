@@ -7,9 +7,23 @@
 constexpr uint32_t kCallVersion = 1, kCallBytes = 4096, kCallFields = 128, kCallObjects = 128;
 constexpr uint32_t kPodCallVersion = 2;
 enum CallKind : uint32_t { CallBool=1, CallByte, CallUInt16, CallInt32, CallFloat, CallDouble, CallObject, CallClass,
-                          CallVector2D, CallLinearColor, CallMargin, CallAnchors };
-inline bool call_pod_kind(uint32_t kind) { return kind>=CallVector2D && kind<=CallAnchors; }
-inline PodValueKind call_pod_profile(uint32_t kind) { return static_cast<PodValueKind>(kind-CallVector2D+1); }
+                          CallVector2D, CallLinearColor, CallMargin, CallAnchors, CallVector=15, CallQualifiedFrameTime=19, CallTimespan=20 };
+inline bool frame_time_call_enabled(uint32_t kind) {
+#ifdef E33_FRAME_TIME_SESSION
+    return kind==CallQualifiedFrameTime;
+#else
+    (void)kind; return false;
+#endif
+}
+inline bool timespan_call_enabled(uint32_t kind) {
+#ifdef E33_TIMESPAN_SESSION
+    return kind==CallTimespan;
+#else
+    (void)kind; return false;
+#endif
+}
+inline bool call_pod_kind(uint32_t kind) { return (kind>=CallVector2D && kind<=CallAnchors) || kind==CallVector || kind==CallQualifiedFrameTime || kind==CallTimespan; }
+inline PodValueKind call_pod_profile(uint32_t kind) { return kind==CallTimespan ? PodValueKind::Timespan : kind==CallQualifiedFrameTime ? PodValueKind::QualifiedFrameTime : kind==CallVector ? PodValueKind::Vector : static_cast<PodValueKind>(kind-CallVector2D+1); }
 enum CallOutcome : uint32_t { CallNotDispatched=0, CallDispatchReturned=1, CallOutcomeUnknown=2 };
 #pragma pack(push, 1)
 struct CallIdentity { int32_t index, serial; uint64_t address; };
@@ -33,6 +47,14 @@ struct CallPacket {
 static_assert(sizeof(CallIdentity)==16 && sizeof(CallField)==140 && sizeof(CallObjectSlot)==20);
 static_assert(sizeof(CallPacket)==24648);
 
+inline bool timespan_media_packet(const CallPacket& p) {
+    return p.version==kPodCallVersion && p.parameter_size==8 && p.allocation_extent==8 &&
+        p.return_offset==0 && p.field_count==1 && p.object_count==0 && p.function_flags==1417806851 &&
+        (p.entry_rva==0x3208990 || p.entry_rva==0x3207a70) &&
+        p.fields[0].kind==CallTimespan && !std::strcmp(p.fields[0].name,"ReturnValue") &&
+        p.fields[0].offset==0 && p.fields[0].width==8 && p.fields[0].dimension==1 &&
+        p.fields[0].flags==6755468160534400ULL;
+}
 // Pure wire validation: usable in fixtures before reading any game memory.
 inline uint32_t validate_call_packet(const CallPacket& p,bool allow_pod=false) {
     const bool pod_packet=allow_pod && p.version==kPodCallVersion;
@@ -43,7 +65,7 @@ inline uint32_t validate_call_packet(const CallPacket& p,bool allow_pod=false) {
     unsigned returns=0;
     for(unsigned f=0;f<p.field_count;++f) {
         const auto& field=p.fields[f];
-        if(field.kind<CallBool || field.kind>(pod_packet ? CallAnchors : CallClass) || !field.name[0] || field.name[95] || !(field.flags&0x80) ||
+        if(field.kind<CallBool || (field.kind>(pod_packet ? CallAnchors : CallClass) && !(pod_packet && (field.kind==CallVector || frame_time_call_enabled(field.kind) || timespan_call_enabled(field.kind)))) || !field.name[0] || field.name[95] || !(field.flags&0x80) ||
            !field.dimension || field.dimension>64 || !field.width ||
            uint64_t(field.offset)+uint64_t(field.dimension)*field.width>p.parameter_size) return 301;
         for(unsigned i=0;i<96 && field.name[i];++i) if(static_cast<unsigned char>(field.name[i])>=128) return 301;
@@ -55,6 +77,8 @@ inline uint32_t validate_call_packet(const CallPacket& p,bool allow_pod=false) {
             width=pod_value_width(call_pod_profile(field.kind));
             if(field.bool_encoding || field.constraint.index<0 || field.constraint.serial<0 || !field.constraint.address) return 314;
         }
+        if(field.kind==CallTimespan && (!timespan_call_enabled(field.kind) || !timespan_media_packet(p))) return 314;
+        if(field.kind==CallQualifiedFrameTime && (!(field.flags&0x400) || field.dimension!=1)) return 314;
         uint8_t mask=255, offset=0, byte_mask=0;
         if(field.kind==CallBool) {
             mask=uint8_t(field.bool_encoding>>24); offset=uint8_t(field.bool_encoding>>8);

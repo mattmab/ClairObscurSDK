@@ -6,6 +6,15 @@ from expedition33._pod_values import VECTOR, COLOR, MARGIN, ANCHORS, PROFILES, e
 
 
 class PodValueTests(unittest.TestCase):
+    def test_vector3_uses_three_doubles_and_rejects_bad_shape(self):
+        from expedition33._pod_values import VECTOR3
+        value = {'X': 10.25, 'Y': -100.5, 'Z': 4096.125}
+        self.assertEqual(encode(VECTOR3, value), struct.pack('<ddd', *value.values()))
+        self.assertEqual(dict(decode(VECTOR3, encode(VECTOR3, value))), value)
+        for bad in ({'X': 1, 'Y': 2}, dict(value, Z=math.inf), dict(value, Z=True)):
+            with self.assertRaises(ValueError): encode(VECTOR3, bad)
+        with self.assertRaises(ValueError): decode(VECTOR3, bytes(16))
+
     def test_actual_double_vector_and_nested_anchor_encoding(self):
         vector = {'X': 160.25, 'Y': -32.5}
         self.assertEqual(encode(VECTOR, vector), struct.pack('<dd', 160.25, -32.5))

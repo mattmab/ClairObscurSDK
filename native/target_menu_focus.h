@@ -1,5 +1,6 @@
 #pragma once
 #include "target_slate_reference.h"
+#include "menu_user_slots.h"
 
 struct TargetMenuFocusSnapshot {
     uint64_t application=0, user=0, user_controller=0;
@@ -28,7 +29,8 @@ inline bool target_menu_focus_snapshot(uint64_t base,const CallIdentity& engine,
        local_read<uint64_t>(base+0x6e5f0a0)!=base+0x10044d0) return false;
     auto users=local_read<uint64_t>(app+0x2f8);
     auto count=local_read<int32_t>(app+0x300), capacity=local_read<int32_t>(app+0x304);
-    if(!users || count!=1 || capacity<1 || capacity>16) return false;
+    if(!menu_primary_user_slots(users,count,capacity,
+        [](uint64_t address) { return local_read<uint64_t>(address); })) return false;
     snapshot.user=local_read<uint64_t>(users);
     snapshot.user_controller=local_read<uint64_t>(users+8);
     if(!snapshot.user || !snapshot.user_controller ||

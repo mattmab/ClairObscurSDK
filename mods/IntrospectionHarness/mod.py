@@ -1,5 +1,6 @@
 """Incremental port of the original BL4 harness, exposed in the SDK console."""
 import json
+from expedition33.paths import sdk_root
 from pathlib import Path
 from expedition33.introspection import Harness
 from expedition33.introspection.service import FileService
@@ -29,7 +30,7 @@ class Mod:
             'e33i.roots', lambda _args: self.request({'op': 'roots'}), owner=self))
         self._commands.append(session.console.register(
             'e33i.request', lambda args: self.request(json.loads(args)), owner=self))
-        data = Path(__file__).resolve().parents[2] / 'settings/E33Introspection'
+        data = sdk_root() / 'settings/E33Introspection'
         self.service = FileService(data, self.harness, session.pid)
 
     def poll(self):

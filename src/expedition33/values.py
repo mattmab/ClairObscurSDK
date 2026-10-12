@@ -46,6 +46,94 @@ class StoredStruct:
     truncated: bool
 
 
+@dataclass(frozen=True)
+class StoredMap:
+    """Complete copied supported map; never a native allocation owner."""
+    items: object
+
+
+@dataclass(frozen=True)
+class StoredMapEntries:
+    """Copied pairs for reflected struct keys, which are not Python hash keys."""
+    entries: tuple
+
+
+def _map_value(metadata, value, catalog=None):
+    kinds = metadata.get('map_key_type'), metadata.get('map_value_type')
+    if kinds not in (('NameProperty', 'BoolProperty'), ('ByteProperty', 'StructProperty'),
+                     ('NameProperty', 'StructProperty'), ('ByteProperty', 'DoubleProperty'),
+                     ('StructProperty', 'ObjectProperty'), ('StructProperty', 'StructProperty')):
+        raise ValueError('Unsupported map element types')
+    struct_key, struct_value = kinds[0] == 'StructProperty', kinds[1] == 'StructProperty'
+    if (struct_key or struct_value) and catalog is None:
+        raise ValueError('Struct maps require an identity catalog')
+    expected = _struct_type(catalog, metadata, 'map_value_struct') if struct_value else None
+    expected_key = _struct_type(catalog, metadata, 'map_key_struct') if struct_key else None
+    if type(value) is not dict or set(value) != {'$map'}:
+        raise ValueError('Missing map tag')
+    payload = value['$map']
+    if type(payload) is not dict or set(payload) != {'length', 'items'}:
+        raise ValueError('Unexpected map fields')
+    length, items = payload['length'], payload['items']
+    if type(length) is not int or not 0 <= length <= 4096 or type(items) is not list or len(items) != length:
+        raise ValueError('Invalid map extent')
+    result, pairs, seen = {}, [], set()
+    budget = [4096]
+    for pair in items:
+        if type(pair) is not list or len(pair) != 2:
+            raise ValueError('Invalid or duplicate map entry')
+        key, entry = pair
+        if kinds[0] == 'ByteProperty':
+            if type(key) is not int or not 0 <= key <= 255:
+                raise ValueError('Invalid byte map key')
+            key_token = key
+        elif struct_key:
+            key = _struct_value(catalog, key, budget=budget)
+            if key.type_object != expected_key or key.errors or key.truncated:
+                raise ValueError('Invalid or incomplete map struct key')
+            if any(type(v) not in (str, int, bool) for v in key.fields.values()):
+                raise ValueError('Unsupported map struct key member')
+            key_token = tuple(sorted((name, type(v).__name__, v) for name, v in key.fields.items()))
+        else:
+            if type(key) is not str or not key or len(key) > 1024:
+                raise ValueError('Invalid name map key')
+            key_token = key
+        if struct_value:
+            entry = _struct_value(catalog, entry, budget=budget)
+            if entry.type_object != expected:
+                raise ValueError('Map struct type mismatch')
+        elif kinds[1] == 'BoolProperty':
+            if type(entry) is not bool:
+                raise ValueError('Invalid map entry')
+        elif kinds[1] == 'DoubleProperty':
+            if type(entry) in (int, float):
+                entry = float(entry)
+            elif isinstance(entry, dict) and set(entry) == {'$float'} and entry['$float'] in ('nan', 'inf', '-inf'):
+                entry = float(entry['$float'])
+            else:
+                raise ValueError('Invalid map double value')
+        elif entry is not None:
+            if type(entry) is not dict or set(entry) != {'$reference'}:
+                raise ValueError('Invalid map object reference')
+            raw = entry['$reference']
+            if type(raw) is not dict or set(raw) != {'index', 'serial', 'address', 'name'}:
+                raise ValueError('Invalid map object reference')
+            entry = catalog.by_index.get(raw['index'])
+            if (entry is None or entry.serial != raw['serial'] or entry.address != int(raw['address'], 16)
+                    or entry.name != raw['name']):
+                raise _StaleStruct('Map object reference changed since catalog; refresh required')
+        if key_token in seen:
+            raise ValueError('Duplicate map entry')
+        seen.add(key_token)
+        if struct_key:
+            pairs.append((key, entry))
+        else:
+            result[key] = entry
+    if struct_key:
+        return StoredMapEntries(tuple(pairs))
+    return StoredMap(MappingProxyType(result))
+
+
 class _StaleStruct(ValueError):
     pass
 
@@ -97,11 +185,13 @@ def _struct_value(catalog, value, depth=0, budget=None):
         item = row['value']
         if kind == 'StructProperty':
             item = _struct_value(catalog, item, depth + 1, budget)
-        elif kind == 'ObjectProperty':
+        elif kind in ('ObjectProperty', 'ClassProperty'):
             if item is not None:
                 if type(item) is not dict or set(item) != {'$reference'}:
                     raise ValueError('Invalid struct object reference')
                 item = reference(item['$reference'])
+                if kind == 'ClassProperty' and item.index not in catalog.classes:
+                    raise ValueError('Struct class reference is not a reflected class')
         elif kind in ('FloatProperty', 'DoubleProperty'):
             if type(item) not in (int, float) and not (type(item) is dict and set(item) == {'$float'} and item['$float'] in ('nan', 'inf', '-inf')):
                 raise ValueError('Invalid struct float')
@@ -126,6 +216,48 @@ def read_values(catalog, observed):
     return _decode_values(catalog, obj, start, rows)
 
 
+def read_values_with_references(catalog, observed):
+    """Read stored values and capture missing structured reference closures.
+
+    The initial decoder validates the response before its reference identities
+    are used. The selected reader validates every newly observed identity; the
+    same response is then decoded against that extended catalog. No retries or
+    fabricated identities, and no global object enumeration.
+    """
+    from .catalog import capture_selected
+    obj = catalog.resolve(observed)
+    start, rows = _query(['--read-values', str(catalog.pid), f'{obj.index}:{obj.serial}:{obj.address:x}'])
+    result = _decode_values(catalog, obj, start, rows)
+    missing = set()
+    def reference(raw):
+        if type(raw) is not dict or set(raw) != {'index', 'serial', 'address', 'name'}:
+            raise RuntimeQueryError('Invalid nested stored reference')
+        identity = (raw['index'], raw['serial'], int(raw['address'], 16))
+        current = catalog.by_index.get(raw['index'])
+        if current is None or (current.index, current.serial, current.address) != identity:
+            missing.add(identity)
+        if len(missing) > 1023:
+            raise RuntimeQueryError('Nested stored reference limit')
+    def walk(value, depth=0):
+        if depth > 16:
+            raise RuntimeQueryError('Nested stored reference depth')
+        if isinstance(value, dict):
+            if '$reference' in value:
+                reference(value['$reference'])
+            if '$struct' in value:
+                reference(value['$struct']['type'])
+            for child in value.values(): walk(child, depth + 1)
+        elif isinstance(value, list):
+            for child in value: walk(child, depth + 1)
+    for row in rows:
+        if row.get('event') == 'stored_value': walk(row.get('value'))
+    if missing:
+        fresh = capture_selected(catalog.pid, ((obj.index, obj.serial, obj.address), *sorted(missing)))
+        catalog = catalog.with_observations(fresh)
+        result = _decode_values(catalog, catalog.resolve(obj), start, rows)
+    return result, catalog
+
+
 def read_object_reference(catalog, observed, owner, name):
     """Observe one direct object property and its fresh dependency closure.
 
@@ -143,7 +275,7 @@ def read_object_reference(catalog, observed, owner, name):
               (r['owner_index'], r['name']) == key]
     entries = [r for r in rows if r['event'] in ('stored_value', 'stored_value_error') and
                (r['owner_index'], r['name']) == key]
-    if (len(fields) != 1 or fields[0]['type'] != 'ObjectProperty' or fields[0]['dimension'] != 1 or
+    if (len(fields) != 1 or fields[0]['type'] not in ('ObjectProperty', 'ClassProperty') or fields[0]['dimension'] != 1 or
             len(entries) != 1 or entries[0]['event'] != 'stored_value' or entries[0]['element'] != 0):
         raise RuntimeQueryError('Expected one readable scalar object property')
     value = entries[0]['value']
@@ -203,6 +335,15 @@ def _decode_values(catalog, obj, start, rows):
             value = row['value']
             if row.get('truncated') is True:
                 truncated.add(key)
+            if metadata[key]['type'] == 'MapProperty':
+                try:
+                    if row.get('truncated', False):
+                        raise ValueError('Partial maps are unsupported')
+                    value = _map_value(metadata[key], value, catalog)
+                except _StaleStruct as error:
+                    errors[key] = str(error)
+                except (KeyError, ValueError, TypeError) as error:
+                    raise RuntimeQueryError(f'Invalid map observation: {error}') from error
             if metadata[key]['type'] == 'ArrayProperty':
                 try:
                     if not isinstance(value, dict) or set(value) != {'$array'}:
@@ -215,7 +356,7 @@ def _decode_values(catalog, obj, start, rows):
                             or len(items) != min(length, 64) or row.get('truncated') is not (length > 64)):
                         raise ValueError('Invalid array extent or truncation')
                     element_type = metadata[key]['inner_type']
-                    if element_type not in ('ObjectProperty', 'FloatProperty', 'DoubleProperty',
+                    if element_type not in ('ObjectProperty', 'ClassProperty', 'FloatProperty', 'DoubleProperty',
                                             'NameProperty', 'IntProperty', 'UInt16Property', 'ByteProperty', 'StructProperty'):
                         raise ValueError('Unsupported array element type')
                     struct_type = _struct_type(catalog, metadata[key], 'inner_struct') if element_type == 'StructProperty' else None
@@ -226,7 +367,7 @@ def _decode_values(catalog, obj, start, rows):
                             item = _struct_value(catalog, item, budget=struct_budget)
                             if item.type_object != struct_type:
                                 raise ValueError('Array struct type mismatch')
-                        elif element_type == 'ObjectProperty':
+                        elif element_type in ('ObjectProperty', 'ClassProperty'):
                             if item is not None:
                                 reference = item['$reference']
                                 observed_ref = catalog.by_index.get(reference['index'])
@@ -235,6 +376,8 @@ def _decode_values(catalog, obj, start, rows):
                                         observed_ref.name != reference['name']):
                                     errors[key] = 'Array reference changed since catalog; refresh required'
                                 item = observed_ref
+                                if item is not None and element_type == 'ClassProperty' and item.index not in catalog.classes:
+                                    raise ValueError('Class array item is not a class descriptor')
                         elif element_type in ('FloatProperty', 'DoubleProperty'):
                             if type(item) not in (int, float) and not (isinstance(item, dict) and
                                     set(item) == {'$float'} and item['$float'] in ('nan', 'inf', '-inf')):

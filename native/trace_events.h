@@ -46,6 +46,16 @@ public:
         ticket_ = ticket; thread_ = thread; start_ = now; deadline_ = now + duration_ms;
         limit_ = limit; state_ = State::active; return true;
     }
+    bool renew(Ticket ticket, uint64_t now, uint32_t duration_ms, uint32_t limit) {
+        std::lock_guard<std::mutex> guard(lock_);
+        expire(now);
+        if (!matches(ticket) || state_ != State::active || !duration_ms || duration_ms > 300000 ||
+            !limit || limit > 1000 || now < start_ ||
+            now > std::numeric_limits<uint64_t>::max() - duration_ms ||
+            observed_ > std::numeric_limits<uint32_t>::max() - limit) return false;
+        deadline_ = now + duration_ms; limit_ = observed_ + limit;
+        return true; // Preserve queued events, registration, sequence and hook.
+    }
     bool offer(Ticket ticket, uint32_t thread, uint64_t now, Identity object, const Copy& value) {
         std::lock_guard<std::mutex> guard(lock_);
         if (!matches(ticket) || thread != thread_ || now < start_ || value.size > max_bytes ||

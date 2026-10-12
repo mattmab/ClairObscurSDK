@@ -46,6 +46,27 @@ class StructValueTests(unittest.TestCase):
         self.assertNotIn((2, 'Data'), result.values)
         self.assertIn('reference changed', result.errors[2, 'Data'])
 
+    def test_class_members_accept_null_and_verified_class_identity(self):
+        cls = self.base.catalog.by_index[next(iter(self.base.catalog.classes))]
+        ref = dict(index=cls.index, serial=cls.serial, address=hex(cls.address), name=cls.name)
+        fields = [{'name':'CameraShake','type':'ClassProperty','value':{'$reference':ref}},
+                  {'name':'CameraModifier','type':'ClassProperty','value':None}]
+        stored = self.observe(self.struct(fields)).values[2, 'Data']
+        self.assertEqual(stored.fields['CameraShake'], cls)
+        self.assertIsNone(stored.fields['CameraModifier'])
+
+    def test_class_member_rejects_recycled_and_nonclass_references(self):
+        from expedition33.values import _struct_value
+        cls = self.base.catalog.by_index[next(iter(self.base.catalog.classes))]
+        ref = dict(index=cls.index, serial=cls.serial+1, address=hex(cls.address), name=cls.name)
+        field = {'name':'CameraShake','type':'ClassProperty','value':{'$reference':ref}}
+        with self.assertRaisesRegex(ValueError, 'reference changed'):
+            _struct_value(self.base.catalog, self.struct([field]))
+        obj = next(o for o in self.base.catalog.objects if o.index not in self.base.catalog.classes)
+        field['value']['$reference'] = dict(index=obj.index, serial=obj.serial, address=hex(obj.address), name=obj.name)
+        with self.assertRaisesRegex(ValueError, 'not a reflected class'):
+            _struct_value(self.base.catalog, self.struct([field]))
+
     def test_duplicate_fields_invalid_scalar_and_depth_rejected(self):
         from expedition33.values import _struct_value
         row = {'name':'Number', 'type':'ByteProperty', 'value':4}

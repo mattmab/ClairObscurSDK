@@ -1,4 +1,4 @@
-"""Operation-scoped read-only worker; no cached runtime observations or retries."""
+"""Explicitly owned read-only worker; no cached runtime observations or retries."""
 from contextvars import ContextVar
 import json
 from pathlib import Path
@@ -18,17 +18,24 @@ def active_reader():
 
 
 class ReadBatch:
-    """Reuse startup validation only during one explicitly owned operation.
+    """Reuse startup validation during an explicitly owned context.
+
+    The default context owns one operation. An opt-in ``share=True`` owner
+    permits same-thread, same-process operation contexts to borrow its worker.
+    Only that outer owner closes it; query failures remain terminal until exit.
 
     The native worker pins the original process and deny-write/delete image
     handle. Every request reads current runtime data and checks live anchors.
     Failure terminates this read-only child and forbids subsequent requests;
     it never retries and owns no hooks, widgets, leases, or engine mutations.
     """
-    def __init__(self, pid):
+    def __init__(self, pid, *, share=False, _executable=None):
         if type(pid) is not int or not 0 < pid <= 0xffffffff:
             raise ValueError('Expected a process ID')
         self.pid = pid
+        self._executable = _executable
+        self._share = bool(share)
+        self._borrowed = None
         self._owner = threading.get_ident()
         self._process = self._thread = self._token = None
         self._lines = queue.Queue(maxsize=256)
@@ -76,9 +83,16 @@ class ReadBatch:
 
     def __enter__(self):
         self._check()
-        if self._process is not None or _active.get() is not None:
+        parent = _active.get()
+        if self._process is not None or self._borrowed is not None:
             raise RuntimeQueryError('Read batches cannot be nested or reentered')
-        executable = Path(__file__).resolve().parents[2] / 'build/readonly-worker/research_probe.exe'
+        if parent is not None:
+            parent._check()
+            if not parent._share or parent.pid != self.pid or self._share:
+                raise RuntimeQueryError('Read batches cannot be nested across owners or processes')
+            self._borrowed = parent
+            return self
+        executable = self._executable or Path(__file__).resolve().parents[2] / 'build/readonly-worker/research_probe.exe'
         try:
             self._process = subprocess.Popen([str(executable), '--reader-session', str(self.pid)],
                 stdin=subprocess.PIPE, stdout=subprocess.PIPE, stderr=subprocess.STDOUT,
@@ -96,6 +110,8 @@ class ReadBatch:
 
     def query(self, arguments):
         self._check()
+        if self._borrowed is not None:
+            return self._borrowed.query(arguments)
         if self._token is None:
             raise RuntimeQueryError('Enter the read batch before querying')
         allowed = (arguments == ['--catalog'] or
@@ -134,6 +150,11 @@ class ReadBatch:
         if self._closed:
             return
         self._closed = True
+        if self._borrowed is not None:
+            # Only the outer owner may close the shared worker. A failed query
+            # closes that owner directly and remains terminal for all borrowers.
+            self._borrowed = None
+            return
         # Keep a failed instance in context until __exit__: no implicit return
         # to one-shot queries during the same failed operation.
         self._stop.set()

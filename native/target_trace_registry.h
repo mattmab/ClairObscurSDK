@@ -5,8 +5,16 @@
 struct TargetTraceOps {
     using Context = TargetTraceContext;
     static uint32_t prepare(uint64_t base, CallPacket& schema, const CallIdentity* filter, Context& context) {
-        return prepare_target_trace_context(base, schema, filter, context);
+        auto error=prepare_target_trace_context(base, schema, filter, context);
+#ifdef E33_BLUEPRINT_DIRECT_SESSION
+        if (!error && context.plan.blueprint && !BlueprintDirectTrace::install(base,context.function.address)) return 940;
+#endif
+        return error;
     }
+#ifdef E33_BLUEPRINT_DIRECT_SESSION
+    static void close_blueprint() { BlueprintDirectTrace::close(); }
+    static bool is_blueprint(const Context& context) { return context.plan.blueprint; }
+#endif
     static e33_trace::Storage storage(const Context& context) {
         __try {
             if (context.thread != GetCurrentThreadId()) return e33_trace::Storage::deferred;

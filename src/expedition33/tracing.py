@@ -35,6 +35,20 @@ class TracePlan:
     fields: tuple
     capture_size: int
     descriptor: object
+    phase: str = 'post'
+
+
+@dataclass(frozen=True)
+class ObservedObject:
+    """Copied identity at event time; not a retained or dereferenceable UObject.
+
+    Serial zero is allowed as an observation, never a lifetime guarantee.
+    """
+    session: int
+    pid: int
+    index: int
+    serial: int
+    address: int
 
 
 @dataclass(frozen=True)
@@ -43,7 +57,7 @@ class TraceValues:
     return_value: object
 
 
-def decode_trace(plan, data):
+def decode_trace(plan, data, *, session=0):
     """Decode an owned scalar POST payload using its registration's trace plan.
 
     This does not validate a transport session or event identity. The transport
@@ -61,6 +75,14 @@ def decode_trace(plan, data):
             if bits not in (0, field.boolean_true):
                 raise ValueError('Invalid trace bool encoding')
             value = bool(bits)
+        elif parameter.kind == 'ObjectProperty' and plan.phase == 'entry':
+            index, serial, address = struct.unpack_from('<iiQ', data, at)
+            if index == -1 and serial == 0 and address == 0:
+                value = None
+            elif index < 0 or serial < 0 or address < 0x10000 or address & 7 or not 0 < session < 2**64:
+                raise ValueError('Invalid observed object identity or session')
+            else:
+                value = ObservedObject(session, plan.function.pid, index, serial, address)
         else:
             value = struct.unpack_from('<' + _FORMATS[parameter.kind][0], data, at)[0]
         values[field.parameter][field.element] = value
@@ -74,7 +96,7 @@ def decode_trace(plan, data):
     return TraceValues(MappingProxyType(arguments), returned)
 
 
-def prepare_trace(catalog, function):
+def prepare_trace(catalog, function, *, blueprint=False):
     """Plan copied scalar POST fields for any described native function.
 
 Object identities and owned-value codecs are not implemented for traces yet.
@@ -86,14 +108,24 @@ Their layouts must not silently fall back to copying pointer-bearing bytes.
     descriptor = describe(catalog, (function,))[function.index]
     size, extent, returned, parameters = _parameter_schema(catalog, function, descriptor)
     info = descriptor.function
-    if not info['flags'] & 0x400:
-        raise ValueError('Bytecode-originated trace schemas require separate frame validation')
     entry = int(info['entry_rva'], 16)
+    is_blueprint = not info['flags'] & 0x400
+    if is_blueprint:
+        expected = (('TargetCharacter', 'ObjectProperty'), ('SourceCharacter', 'ObjectProperty'),
+                    ('ReceivedDamages', 'DoubleProperty'), ('BattleDamages', 'ObjectProperty'))
+        owner = catalog.by_index[function.outer_index]
+        if not (blueprint and function.name == 'OnCharacterReceivedDamages' and
+                owner.name == 'BP_BattleSummaryStatsManager_C' and info['flags'] == 0x0c020000 and
+                entry == 0x13937a0 and size == 32 and returned == 65535 and
+                tuple((p.name, p.kind) for p in parameters) == expected and
+                all(p.offset == i*8 and p.width == 8 and p.dimension == 1 and not p.flags & (OUT | RETURN)
+                    for i, p in enumerate(parameters))):
+            raise ValueError('Bytecode-originated trace schemas require separate frame validation')
     if not 0 < entry < 166776832 or size > 4096:
         raise ValueError('Trace entry or parameter size exceeds this build profile')
     fields, destination = [], 0
     for index, parameter in enumerate(parameters):
-        if parameter.kind not in _FORMATS and parameter.kind != 'BoolProperty':
+        if parameter.kind not in _FORMATS and parameter.kind != 'BoolProperty' and not (is_blueprint and parameter.kind == 'ObjectProperty'):
             raise ValueError(parameter.kind + ' requires a trace-specific identity/value codec')
         source = 'return' if parameter.flags & RETURN else 'out' if parameter.flags & OUT else 'locals'
         base = parameter.offset if source == 'locals' else 0
@@ -104,9 +136,11 @@ Their layouts must not silently fall back to copying pointer-bearing bytes.
                 encoding = parameter.boolean_encoding
                 offset += (encoding >> 8) & 255
                 width, mask, true = 1, (encoding >> 24) & 255, (encoding >> 16) & 255
+            elif parameter.kind == 'ObjectProperty':
+                width = 16
             fields.append(TraceField(index, element, source, offset, destination, width, mask, true))
             destination += width
     if len(fields) > 128 or destination > 4096:
         raise ValueError('Trace normalized capture exceeds bounded capacity')
     return TracePlan(function, info['flags'], entry, size, extent, returned, parameters,
-                     tuple(fields), destination, descriptor)
+                     tuple(fields), destination, descriptor, 'entry' if is_blueprint else 'post')

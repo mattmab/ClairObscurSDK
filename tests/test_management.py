@@ -46,6 +46,29 @@ class ManagementTests(unittest.TestCase):
         self.patch.stop()
         self.temp.cleanup()
 
+    def test_enabled_choice_survives_cleanup_and_new_loader(self):
+        self.registry.set_enabled(self.registry.select('specimen'), True)
+        self.loader.close()
+        self.store = SettingsStore(self.store.path)
+        self.loader = ModLoader(self.root, settings=self.store)
+        self.registry = self.loader.registry
+        self.assertEqual(self.registry.restore_enabled(), {})
+        self.assertTrue(self.registry.view(self.registry.select('specimen'))['enabled'])
+        self.registry.set_enabled(self.registry.select('specimen'), False)
+        self.loader.close()
+        self.loader = ModLoader(self.root, settings=SettingsStore(self.store.path))
+        self.registry = self.loader.registry
+        self.assertEqual(self.registry.restore_enabled(), {})
+        self.assertEqual(self.loader.status(), ())
+
+    def test_failed_restore_keeps_choice_and_rejects_identity_change(self):
+        self.store.save('different', {'enabled': True, 'folder': 'Specimen'})
+        self.store.save('missing', {'enabled': True, 'folder': 'Missing'})
+        failures = self.registry.restore_enabled()
+        self.assertEqual(set(failures), {'different', 'missing'})
+        self.assertFalse(self.registry.view(self.registry.select('specimen'))['enabled'])
+        self.assertTrue(self.store.get('missing')['enabled'])
+
     def test_saved_options_apply_on_enable_and_views_are_copies(self):
         selection = self.registry.select('specimen')
         self.registry.set_option(selection, 'count', 7)

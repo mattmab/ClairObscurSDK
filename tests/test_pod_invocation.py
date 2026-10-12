@@ -32,11 +32,11 @@ class PodInvocationTests(unittest.TestCase):
             return CatalogObject(123,index,1,0x10000+index*0x1000,name,cname,'Class',cls,outer,1 if outer>=0 else 0,0,0)
         objects += [obj(8,'Package',1),obj(9,'ScriptStruct',1),obj(10,'/Script/CoreUObject',8),
                     obj(11,'/Script/SlateCore',8),obj(12,'/Script/Slate',8),
-                    obj(13,'Vector2D',9,10),obj(14,'LinearColor',9,10),obj(15,'Margin',9,11),obj(16,'Anchors',9,12)]
+                    obj(13,'Vector2D',9,10),obj(14,'LinearColor',9,10),obj(15,'Margin',9,11),obj(16,'Anchors',9,12),obj(17,'Vector',9,10)]
         self.catalog = Catalog(123,objects,classes)
         self.target,self.function=self.catalog.by_index[5],self.catalog.by_index[7]
         self.descriptors={}
-        for index,path in enumerate((pod.VECTOR,pod.COLOR,pod.MARGIN,pod.ANCHORS),13):
+        for index,path in enumerate((pod.VECTOR,pod.COLOR,pod.MARGIN,pod.ANCHORS,pod.VECTOR3),13):
             profile=pod.PROFILES[path]
             rows=[]
             for name,offset,kind in profile.fields:
@@ -67,6 +67,14 @@ class PodInvocationTests(unittest.TestCase):
         self.assertEqual(plan.data,struct.pack('<dddd',0,0,1,1))
         self.assertEqual(plan.objects,())
         with self.assertRaises(UnsupportedInvocation): wire.encode_plan(replace(plan,wire_version=1))
+
+    def test_vector3_wire_kind_does_not_collide_with_text_or_enum(self):
+        plan=self.plan(17,{'X':0,'Y':0,'Z':1})
+        sent=wire.encode_plan(plan)
+        self.assertEqual(wire.FIELD.unpack_from(sent,wire.FIELDS_AT)[0],15)
+        self.assertEqual(plan.data,struct.pack('<ddd',0,0,1))
+        self.assertEqual(plan.parameter_size,24)
+        with self.assertRaises(UnsupportedInvocation): self.plan(17,{'X':0,'Y':0,'Z':1},enabled=False)
 
     def test_return_is_copied_and_invalid_values_report_dispatch_returned(self):
         plan=self.plan(returned=True)

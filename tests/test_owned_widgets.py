@@ -7,6 +7,34 @@ from expedition33.widgets import OwnedMenuPanel
 
 
 class OwnedWidgetCleanupTests(unittest.TestCase):
+    def test_rejected_prepare_allows_cleanup_but_unknown_remains_latched(self):
+        from expedition33.menu import MenuError
+        for outcome, code, uncertain in [('returned', 811, False), ('unknown', 814, True)]:
+            panel, _ = self.panel()
+            panel.state = 'built'
+            panel.widget, panel.buttons, panel.player = object(), [object()], object()
+            panel.scope.prepare_menu = Mock(side_effect=MenuError('rejected', outcome=outcome, native_error=code))
+            with self.assertRaises(MenuError):
+                panel.open()
+            self.assertEqual(panel.uncertain, uncertain)
+
+    def test_layout_queue_prepares_after_creation_and_stops_after_failed_group(self):
+        panel, _ = self.panel()
+        panel.state = 'building'
+        panel._layout_queue = []
+        panel._planner = SimpleNamespace(prepare=Mock(side_effect=lambda *a, **kw: (a, kw)))
+        panel._function = lambda owner, name: (owner, name)
+        for index in range(55):
+            OwnedMenuPanel._call(panel, index, 'CanvasPanelSlot', 'SetSize', InSize={'X': 3., 'Y': 4.})
+        panel._planner.prepare.assert_not_called()
+        with patch('expedition33._ui_batch.invoke_setters', side_effect=RuntimeError('batch failed')) as invoke:
+            with self.assertRaisesRegex(RuntimeError, 'batch failed'):
+                panel._flush_layout()
+        self.assertEqual(panel._planner.prepare.call_count, 48)
+        self.assertEqual(len(invoke.call_args.args[1]), 48)
+        self.assertTrue(panel.uncertain)
+        self.assertIsNone(panel._layout_queue)
+
     def test_selected_root_read_has_no_full_scan_or_stale_fallback(self):
         panel, _ = self.panel()
         panel._selected_results = True
@@ -48,6 +76,28 @@ class OwnedWidgetCleanupTests(unittest.TestCase):
         self.assertEqual(operations, ['native-close', 'restore-root', 'remove-label', 'remove-button', 'release'])
         self.assertTrue(panel.close())
         self.assertEqual(len(operations), 5)
+
+    def test_hide_revokes_native_ownership_but_keeps_tree_until_disposal(self):
+        panel, operations = self.panel()
+        self.assertTrue(panel.hide())
+        self.assertEqual(operations, ['native-close'])
+        self.assertEqual(panel.state, 'built')
+        self.assertTrue(panel.assigned)
+        self.assertIsNone(panel.menu)
+        self.assertTrue(panel.close())
+        self.assertEqual(operations[-1], 'release')
+
+    def test_selected_teardown_does_not_enumerate_the_world(self):
+        panel, operations = self.panel()
+        panel._selected_results = True
+        panel._planner = SimpleNamespace(_catalog=None, refresh=Mock(side_effect=AssertionError('full scan')),
+            close=lambda: operations.append('planner-close'))
+        panel._render_call = lambda child, *a: operations.append('remove-' + child)
+        self.assertTrue(panel.close())
+        panel.scope.close = Mock(side_effect=AssertionError('second release'))
+        self.assertTrue(panel.close())
+        self.assertEqual(operations, ['native-close', 'restore-root', 'remove-label',
+                                     'remove-button', 'planner-close', 'release'])
 
     def test_deferred_native_close_preserves_tree_and_scope(self):
         panel, operations = self.panel()

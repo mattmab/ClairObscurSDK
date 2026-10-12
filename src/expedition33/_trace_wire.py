@@ -9,7 +9,7 @@ OUTPUT = struct.Struct('<6IQ')
 EVENT = struct.Struct('<QQIIiiI')
 SCHEMA_AT, OUTPUT_AT, EVENTS_AT = 56, 24704, 24736
 EVENT_SIZE, SIZE, CAPACITY = 4132, 57792, 8
-OPERATIONS = {'start': 1, 'stop': 2, 'drain': 3, 'status': 4, 'forget': 5}
+OPERATIONS = {'start': 1, 'stop': 2, 'drain': 3, 'status': 4, 'forget': 5, 'renew': 6}
 
 
 def encode_request(operation, owner, registration=0, *, plan=None, exemplar=None,
@@ -32,7 +32,8 @@ def encode_request(operation, owner, registration=0, *, plan=None, exemplar=None
             filter_id = call._identity(target)
             if target.serial < 0 or target.address < 0x10000 or target.address & 7:
                 raise ValueError('Invalid trace target identity')
-        if any(p.kind not in call.KINDS[:6] for p in plan.parameters):
+        allowed = call.KINDS[:7] if getattr(plan, 'phase', 'post') == 'entry' else call.KINDS[:6]
+        if any(p.kind not in allowed for p in plan.parameters):
             raise ValueError('Unsupported trace codec')
         schema = call.encode_plan(SimpleNamespace(
             **{name: getattr(plan, name) for name in ('function', 'parameter_size',
@@ -42,7 +43,12 @@ def encode_request(operation, owner, registration=0, *, plan=None, exemplar=None
     else:
         if not registration or plan is not None or exemplar is not None or target is not None:
             raise ValueError('Trace control requires only an existing registration')
-        duration_ms = limit = 0
+        if op == 6:
+            if (type(duration_ms) is not int or not 1 <= duration_ms <= 300000 or
+                    type(limit) is not int or not 1 <= limit <= 1000):
+                raise ValueError('Invalid trace renewal bounds')
+        else:
+            duration_ms = limit = 0
     HEADER.pack_into(packet, 0, 1, op, owner, registration, duration_ms, limit,
                      int(target is not None), 0, *filter_id)
     return bytes(packet)
@@ -71,7 +77,7 @@ class TraceReply:
     events: tuple
 
 
-def decode_reply(request, encoded, *, expected_pid):
+def decode_reply(request, encoded, *, expected_pid, renewable=False):
     if type(request) is not bytes or len(request) != SIZE:
         raise ValueError('Invalid trace request size')
     if type(encoded) is not str or len(encoded) != SIZE * 2:
@@ -83,7 +89,7 @@ def decode_reply(request, encoded, *, expected_pid):
     if got[:3] != sent[:3] or got[4:] != sent[4:] or reply[SCHEMA_AT:OUTPUT_AT] != request[SCHEMA_AT:OUTPUT_AT]:
         raise ValueError('Trace reply does not match its request')
     error, state, cleanup, count, observed, dropped, rejected = OUTPUT.unpack_from(reply, OUTPUT_AT)
-    if (state > 5 or cleanup > 4 or count > CAPACITY or observed > 1000 or dropped > observed or
+    if (state > 5 or cleanup > 4 or count > CAPACITY or (observed > 1000 and not renewable) or dropped > observed or
             (count and sent[1] != 3) or (error and count)):
         raise ValueError('Invalid trace reply counters or state')
     if sent[1] == 1:

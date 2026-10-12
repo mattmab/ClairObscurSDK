@@ -18,6 +18,7 @@ mods bind BINDING_ID KEY      save a single-key mapping
 mods unbind BINDING_ID        remove the mapping
 mods resetkey BINDING_ID      restore the binding default
 mods unload                  unload selected mod and revoke its resources
+mods shutdown                stop the SDK controller cleanly (leave game running)
 mods back | quit             leave selection or close this menu
 mods ui [open|close|refresh|status]  experimental native menu
 mods help                    show this help
@@ -61,12 +62,15 @@ class ConsoleMenu:
             raise ManagementError('Mods menu is closed')
         parts = arguments.strip().split(None, 1)
         verb, tail = (parts[0].lower(), parts[1] if len(parts) > 1 else '') if parts else ('list', '')
-        if verb in ('list', 'help', 'back', 'quit', 'enable', 'disable', 'unload', 'options', 'actions', 'keys') and tail:
+        if verb in ('list', 'help', 'back', 'quit', 'enable', 'disable', 'unload', 'options', 'actions', 'keys', 'shutdown') and tail:
             raise ManagementError(f'mods {verb} takes no arguments')
         if verb == 'ui':
             if self.native is None:
                 raise ManagementError('Native menu is unavailable; console management remains available')
             print(self.native.command(tail))
+        elif verb == 'shutdown':
+            self.registry.request_shutdown()
+            print('Controller shutdown requested; cleanup follows this command.')
         elif verb == 'help':
             print(HELP)
         elif verb in ('list', 'back'):

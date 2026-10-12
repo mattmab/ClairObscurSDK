@@ -42,6 +42,12 @@ public:
             if (storage != Storage::deferred)
                 item->cleanup = item->registration.maintain(storage == Storage::ready, now);
         }
+#ifdef E33_BLUEPRINT_DIRECT_SESSION
+        bool observed=false;
+        for (auto& item : items_) if (item && Ops::is_blueprint(item->context) &&
+            item->registration.status(now).state==State::active) observed=true;
+        if (!observed) Ops::close_blueprint();
+#endif
     }
     bool allows_entry(uint64_t address, uint64_t expected, uint64_t current) const {
         if (!session_ || thread_ != GetCurrentThreadId()) return false;
@@ -72,12 +78,17 @@ public:
             item->owner = packet.owner; item->id = next_++;
             if (!item->registration.open(Ops::entry(item->context), Ops::expected(base_, schema),
                 {session_, item->id}, thread_, packet.duration_ms, packet.limit,
-                Ops::collect, &item->context)) { packet.error = 936; return; }
+                Ops::collect, &item->context, blueprint_damage_schema(schema))) { packet.error = 936; return; }
             packet.registration = item->id;
             report(*item, packet); items_[slot] = std::move(item); return;
         }
         for (auto& item : items_) if (item && item->owner == packet.owner && item->id == packet.registration) {
             const auto op = static_cast<Operation>(packet.operation);
+            if (op == Operation::renew &&
+                (Ops::storage(item->context) != Storage::ready ||
+                 !item->registration.renew(packet.duration_ms, packet.limit))) {
+                packet.error = 939; report(*item, packet); return;
+            }
             if (op == Operation::stop || op == Operation::forget) {
                 const auto storage = Ops::storage(item->context);
                 if (storage == Storage::deferred) { packet.error = 934; report(*item, packet); return; }
@@ -113,6 +124,9 @@ public:
             item.reset();
         }
         if (deferred) return 934;
+#ifdef E33_BLUEPRINT_DIRECT_SESSION
+        Ops::close_blueprint();
+#endif
         session_ = base_ = 0; thread_ = 0;
         return close_error_;
     }

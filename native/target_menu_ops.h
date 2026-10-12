@@ -22,6 +22,7 @@
 // never retain a pointer into IPC. The containing runtime owns this storage and
 // contains SEH around every operation. No v14 transport is installed yet.
 struct TargetMenuStorage {
+    uint32_t preparation_diagnostic=0;
     uint64_t base=0, session=0, owner=0, widget_lease=0, child_lease=0;
     CallIdentity widget{-1,0,0}, child{-1,0,0}, player{-1,0,0}, library{-1,0,0};
     CallPacket plans[kMenuCalls]{};
@@ -105,18 +106,24 @@ struct TargetMenuOps {
         return prior_target_valid() && validate_preparation(session,owner,widget,child);
     }
     bool validate_preparation(uint64_t session,uint64_t owner,uint64_t widget,uint64_t child) const {
+        data.preparation_diagnostic=901;
         if(session!=data.session || owner!=data.owner || widget!=data.widget_lease ||
            child!=data.child_lease || context()!=MenuContext::Ready) return false;
         for(uint32_t i=0;i<kMenuCalls;++i) {
+            data.preparation_diagnostic=910+i;
             if(!plan_valid(static_cast<MenuCall>(i))) return false;
             auto packet=data.plans[i];
-            if(reflected_call(data.base,packet,nullptr,nullptr,nullptr,nullptr,true) ||
+            auto error=reflected_call(data.base,packet,nullptr,nullptr,nullptr,nullptr,true);
+            data.preparation_diagnostic=10000+i*1000+error;
+            if(error ||
                packet.outcome!=CallNotDispatched) return false;
         }
+        data.preparation_diagnostic=0;
         return true;
     }
     MenuResult capture_baseline() {
         auto result=data.focus.capture(data.base,data.engine);
+        if(result!=SlateReferenceResult::Ok) data.preparation_diagnostic=902;
         return result==SlateReferenceResult::Ok ? MenuResult::Ok : MenuResult::Invalid;
     }
     MenuResult release_prepared_baseline() {

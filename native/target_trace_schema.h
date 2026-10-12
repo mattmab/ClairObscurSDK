@@ -13,9 +13,9 @@ inline uint32_t prepare_target_trace(uint64_t base, CallPacket& schema,
     if (validate_call_packet(schema) || schema.object_count) return 920;
     for (auto byte : schema.data) if (byte) return 920;
     for (uint32_t i = 0; i < schema.field_count; ++i)
-        if (schema.fields[i].kind > CallDouble) return 921;
+        if (schema.fields[i].kind > CallDouble && !blueprint_damage_schema(schema)) return 921;
     if (local_read<uint8_t>(base + 0x9272cea)) return 925;
-    if (auto error = reflected_call(base, schema, nullptr, nullptr, nullptr, nullptr, true))
+    if (auto error = reflected_call(base, schema, nullptr, nullptr, nullptr, nullptr, true, nullptr, blueprint_damage_schema(schema)))
         return error;
     uint64_t properties[kCallFields]{};
     auto property = local_read<uint64_t>(schema.function.address + 0x50);

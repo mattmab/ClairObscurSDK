@@ -35,24 +35,31 @@ def display_detail(text, *, width=42, height=18):
 
 
 class NativeManagementMenu:
-    def __init__(self, session, registry, *, cached_planning=False, cached_construction=False, selected_results=False, read_batches=False):
+    def __init__(self, session, registry, *, cached_planning=False, cached_construction=False, selected_results=False, read_batches=False, reusable=False, view_factory=ManagementView):
         if type(cached_planning) is not bool or type(cached_construction) is not bool:
             raise ValueError('Planning options must be bool')
         self._cached_planning = cached_planning
         if type(read_batches) is not bool:
             raise ValueError('read_batches must be bool')
         self._read_batches = read_batches
-        self.view = ManagementView(registry)
+        self._reusable = reusable
+        self._view_factory = view_factory
+        self.view = view_factory(registry)
         self.panel = OwnedMenuPanel(session, cached_construction=cached_construction,
                                     selected_results=selected_results)
         self.frame = None
         self.actions = []
         self.error = None
+        self.failure = None
         self._accept_input = False
+        self._presentation_suspended = False
+        self._presentation_dirty = False
         self._logged_detail = None
 
     def open(self):
-        with self._read_operation():
+        # A prepared tree already has metadata and menu call plans. Starting a
+        # read-worker process on this hot path would add a new startup delay.
+        with self._read_operation() if self.panel.state == 'new' else nullcontext():
             return self._open()
 
     def _read_operation(self):
@@ -61,24 +68,45 @@ class NativeManagementMenu:
         return nullcontext()
 
     def _open(self):
-        self.panel.build()
-        if self._cached_planning:
-            self.panel.enable_cached_planning()
+        if self.panel.state == 'new':
+            self.prepare()
+        if self.panel.state != 'built':
+            raise ManagementError('Menu is not prepared for opening')
+        if self.view.closed:
+            self.view = self._view_factory(self.view.registry)
         self.frame = self.view.render()
         self._paint()
         self.panel.open()
         self._bind()
         return self.frame
 
+    def prepare(self):
+        """Build and paint while detached, before reporting UI readiness."""
+        self.panel.build()
+        if self._cached_planning:
+            self.panel.enable_cached_planning()
+        self.frame = self.view.render()
+        self._paint()
+        if self._reusable:
+            self.panel.prime_menu_plan()
+        return self.frame
+
     def _revoke(self):
         # Stop dispatch first; do not rebind while any removal is deferred.
         self._accept_input = False
-        for action in self.actions:
-            if not action.remove():
+        if self.actions:
+            if not self.panel.menu.remove_controls(self.actions):
                 raise RuntimeError('Control removal deferred; close this native menu')
         self.actions.clear()
 
-    def _paint(self):
+    def _paint(self, *, presentation_restore=False):
+        if self._presentation_suspended and not presentation_restore:
+            self._presentation_dirty = True
+            return
+        with self.panel.paint_batch():
+            self._paint_frame()
+
+    def _paint_frame(self):
         frame = self.frame
         self.panel.set_text(self.panel.title,
             f'{display_line(frame.title, 64)}   ({frame.page + 1}/{frame.pages})')
@@ -95,10 +123,15 @@ class NativeManagementMenu:
 
     def _bind(self):
         frame = self.frame
+        bindings = []
         for index, control in enumerate(frame.controls):
             if not control.enabled:
                 continue
             def click(_event, control=control, frame=frame):
+                # Render-opacity suspension retains native focus/input lifetime.
+                # Invisible controls must consume clicks without invoking mods.
+                if self._presentation_suspended:
+                    return
                 if not self._accept_input or self.frame is not frame:
                     raise ManagementError('Native menu input is revoked or stale')
                 editor = control.editor
@@ -114,25 +147,70 @@ class NativeManagementMenu:
                 else:
                     self.error = 'Native text/numeric editor pending. Use mods set in the console.'
                     self._paint()
-            self.actions.append(self.panel.menu.bind_control(self.panel.buttons[index], click))
+            bindings.append((self.panel.buttons[index], click))
+        self.actions.extend(self.panel.menu.bind_controls(bindings))
         self._accept_input = True
 
     def submit(self, revision, token, **value):
+        if self.failure:
+            raise ManagementError('Native menu failed; dispose it before reopening: ' + self.failure)
         frame = self.view.activate(revision, token, **value)
-        self._revoke()
-        self.frame, self.error = frame, None
-        if frame.closed:
-            return self.close()
-        self._paint()
-        self._bind()
-        return frame
+        try:
+            if frame.closed:
+                self.frame, self.error = frame, None
+                return self.hide() if self._reusable else self.close()
+            if self._presentation_suspended:
+                # The action may have just started playback. Keep native action
+                # ownership untouched until presentation cleanup completes.
+                self.frame, self.error = frame, None
+                self._presentation_dirty = True
+                return frame
+            self._revoke()
+            self.frame, self.error = frame, None
+            self._paint()
+            self._bind()
+            return frame
+        except BaseException as error:
+            self._accept_input = False
+            self.failure = f'{type(error).__name__}: {error}'
+            raise
 
     def refresh(self):
+        if self._presentation_suspended:
+            self.frame = self.view.render()
+            self._presentation_dirty = True
+            return self.frame
         self._revoke()
         self.frame = self.view.render()
         self._paint()
         self._bind()
         return self.frame
+
+    def _restore_presentation_frame(self):
+        """Flush the latest deferred frame while visuals/callbacks remain gated."""
+        if not self._presentation_suspended:
+            raise ManagementError('Presentation frame restore requires suspended input')
+        if self.failure:
+            raise ManagementError('Menu refresh failed; preserve owner for cleanup: ' + self.failure)
+        if not self._presentation_dirty:
+            return
+        try:
+            self._revoke()
+            self._paint(presentation_restore=True)
+            self._bind()
+            self._presentation_dirty = False
+        except BaseException as error:
+            self._accept_input = False
+            self.failure = f'{type(error).__name__}: {error}'
+            raise
+
+    def hide(self):
+        self._accept_input = False
+        self.view.close()
+        if not self.panel.hide():
+            return False
+        self.actions.clear()
+        return True
 
     def close(self):
         with self._read_operation():

@@ -32,6 +32,32 @@ struct Engine {
 };
 int main() {
     using R=StrongLeaseResult;
+    {
+        // Audio cleanup must retain its full bounded batch even when all
+        // public/menu slots are occupied. Private tokens are never exported.
+        Engine isolated_engine;
+        StrongLeasePool<> public_pool;
+        StrongLeasePool<64> cleanup_pool;
+        check(public_pool.begin(1)==R::Ok && cleanup_pool.begin(1)==R::Ok,"independent pools begin");
+        uint64_t token{};
+#ifdef E33_WIDGET_CAPACITY_SESSION
+        constexpr unsigned public_capacity=256;
+#else
+        constexpr unsigned public_capacity=128;
+#endif
+        for(unsigned i=0;i<public_capacity;++i)
+            check(public_pool.acquire(isolated_engine,1,100,token)==R::Ok,"fill public pool");
+        check(public_pool.preflight(1,1)==R::Capacity,"public pool exhausted");
+        check(cleanup_pool.preflight(1,64)==R::Ok,"full cleanup capacity remains");
+        for(unsigned i=0;i<64;++i)
+            check(cleanup_pool.acquire(isolated_engine,1,100,token)==R::Ok,"retain cleanup batch");
+        isolated_engine.releasable=false;
+        check(cleanup_pool.close(isolated_engine,1)==R::Deferred,"private cleanup defers safely");
+        isolated_engine.releasable=true;
+        check(cleanup_pool.close(isolated_engine,1)==R::Ok && public_pool.active()==public_capacity,"cleanup leaves public owners intact");
+        check(cleanup_pool.begin(2)==R::Ok && cleanup_pool.close(isolated_engine,2)==R::Ok,"cleanup pool reusable");
+        check(public_pool.close(isolated_engine,1)==R::Ok && isolated_engine.allocations.empty(),"all holders released");
+    }
     Engine engine; StrongLeasePool<2> pool;
     uint64_t a=99,b=99,c=99;
     check(pool.begin(0)==R::SessionMismatch,"reject empty session");

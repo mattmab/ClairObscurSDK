@@ -84,6 +84,14 @@ struct Fixture {
 int main() {
     try {
         Fixture f;
+        auto vector3=f.make("Vector",f.core,24,{"X","Y","Z"},"DoubleProperty",0x6e11788,8,6755469251052037ULL);
+        if(!f.check(vector3,PodValueKind::Vector)) return 6;
+        f.memory.words[vector3+0x58]=16;
+        if(f.check(vector3,PodValueKind::Vector)) return 7;
+        f.memory.words[vector3+0x58]=24;
+        auto x=f.memory.words.at(vector3+0x50);
+        f.memory.words[x+0x34]=4;
+        if(f.check(vector3,PodValueKind::Vector)) return 8;
         if(!f.check(f.vector,PodValueKind::Vector2D) || !f.check(f.color,PodValueKind::LinearColor) ||
            !f.check(f.margin,PodValueKind::Margin) || !f.check(f.anchors,PodValueKind::Anchors) ||
            !validate_pod_parameter(f.memory,f.parameter,PodValueKind::Vector2D,f.memory.capture(f.vector))) return 1;

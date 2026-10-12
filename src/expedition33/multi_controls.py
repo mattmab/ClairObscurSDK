@@ -113,6 +113,72 @@ class MenuControls:
             raise
         return control
 
+    def bind_many(self, bindings):
+        from . import _ui_batch
+        session = self.session()
+        session._check()
+        if not _ui_batch.available(session):
+            return [self.bind(child, callback) for child, callback in bindings]
+        if not session.supports_multi_controls or self.menu._state not in ('attached', 'focused'):
+            raise MenuError('Controls require an attached menu', outcome='not_started')
+        if len(self.controls) + len(bindings) > 16:
+            raise ValueError('Menu control capacity exceeded')
+        controls, requests = [], []
+        for child, callback in bindings:
+            if not callable(callback): raise TypeError('Button callback must be callable')
+            leases = [lease for lease in session._leases if lease.active and
+                      (lease.object.pid, lease.object.index, lease.object.serial, lease.object.address) ==
+                      (child.pid, child.index, child.serial, child.address)]
+            if len(leases) != 1 or self.protects(leases[0]) or any(c._lease is leases[0] for c in controls):
+                raise ValueError('Control requires one unbound owned lease')
+            control = ControlAction(self, leases[0], callback)
+            controls.append(control)
+            requests.append(('multi-button', wire.request('bind', self.menu._owner,
+                control._lease._token, action=control._action, child=child)))
+        if not controls: return []
+        _ui_batch.encode(requests)
+        self.controls.extend(controls)
+        try:
+            responses = _ui_batch.execute(session, requests)
+            for control, (_, sent), response in zip(controls, requests, responses):
+                reply = wire.decode(sent, response['multi_button_packet'],
+                                    session=session._transport.button_action_session)
+                if reply.error or any(c is not control and c._registration == reply.registration for c in self.controls):
+                    raise MenuError('UI control batch rejected', outcome='unknown')
+                control._registration, control._state = reply.registration, 'active'
+        except BaseException:
+            self.abort()
+            raise
+        return controls
+
+    def remove_many(self, controls):
+        from . import _ui_batch
+        session = self.session()
+        session._check()
+        if not _ui_batch.available(session):
+            for control in controls:
+                if not control.remove(): return False
+            return True
+        active = [control for control in controls if control._state != 'closed']
+        if any(c not in self.controls or c._state != 'active' for c in active):
+            raise MenuError('UI control cleanup state is uncertain', outcome='unknown')
+        if not active: return True
+        requests = [('multi-button', wire.request('unbind', self.menu._owner, c._lease._token)) for c in active]
+        _ui_batch.encode(requests)
+        for control in active: control._revoke('close_pending')
+        try:
+            responses = _ui_batch.execute(session, requests)
+            for control, (_, sent), response in zip(active, requests, responses):
+                reply = wire.decode(sent, response['multi_button_packet'],
+                                    session=session._transport.button_action_session)
+                if reply.error: raise MenuError('UI control removal failed', outcome='unknown')
+                control._state = 'closed'
+                self.controls.remove(control)
+        except BaseException:
+            self.abort()
+            raise
+        return True
+
     def poll(self):
         for control in tuple(self.controls):
             if control._state == 'close_pending': control.remove()

@@ -60,3 +60,28 @@ class ReadBatchTests(unittest.TestCase):
         self.batch([])
         with patch('expedition33._reader.subprocess.Popen', side_effect=AssertionError('must not spawn')):
             with self.assertRaisesRegex(RuntimeQueryError, 'nested'): ReadBatch(17).__enter__()
+
+    def test_shared_owner_serves_fresh_queries_and_survives_borrower_exit(self):
+        owner = self.batch(['first\n', '{"event":"reader_result","sequence":1,"code":0}\n',
+                            'second\n', '{"event":"reader_result","sequence":2,"code":0}\n'])
+        owner._share = True
+        with patch('expedition33._reader.subprocess.Popen', side_effect=AssertionError('must not spawn')):
+            with ReadBatch(17) as borrowed:
+                self.assertIs(_active.get(), owner)
+                self.assertEqual(borrowed.query(['--catalog']), 'first\n')
+            self.assertFalse(owner._closed)
+            with ReadBatch(17) as borrowed:
+                self.assertEqual(borrowed.query(['--catalog']), 'second\n')
+            with self.assertRaises(RuntimeQueryError): ReadBatch(18).__enter__()
+            with self.assertRaises(RuntimeQueryError): ReadBatch(17, share=True).__enter__()
+        owner._process.wait.assert_not_called()
+
+    def test_shared_failure_is_terminal_after_borrower_exit(self):
+        owner = self.batch(['{"event":"reader_result","sequence":99,"code":0}\n'])
+        owner._share = True
+        with ReadBatch(17) as borrowed:
+            with self.assertRaises(RuntimeQueryError): borrowed.query(['--catalog'])
+        self.assertTrue(owner._closed)
+        self.assertIs(_active.get(), owner)
+        with patch('expedition33._reader.subprocess.Popen', side_effect=AssertionError('no restart')):
+            with self.assertRaisesRegex(RuntimeQueryError, 'closed'): ReadBatch(17).__enter__()

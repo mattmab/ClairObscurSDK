@@ -22,6 +22,7 @@ class TraceSlots {
         void* volatile* address = nullptr;
         Post post = nullptr;
         void* context = nullptr;
+        bool before = false;
     };
     inline static std::array<Slot, Capacity> slots_{};
     inline static SRWLOCK lock_ = SRWLOCK_INIT;
@@ -35,7 +36,10 @@ class TraceSlots {
     static void __fastcall invoke(void* object, void* frame, void* result) {
         auto& slot = slots_[Index];
         bool has_post;
-        { Guard guard; has_post = slot.post != nullptr; }
+        { Guard guard;
+          has_post = slot.post != nullptr && !slot.before;
+          if (slot.post && slot.before) slot.post(slot.context, object, frame, result);
+        }
         // Immutable, release-published before the thunk becomes reachable.
         slot.original.load(std::memory_order_acquire)(object, frame, result);
         if (has_post) {
@@ -49,7 +53,22 @@ class TraceSlots {
     }
     inline static constexpr auto entries_ = entries(std::make_index_sequence<Capacity>{});
 public:
-    static size_t install(void* volatile* address, Entry expected, Post post, void* context) {
+    static bool observes_entry(void* volatile* address) {
+        Guard guard;
+        for (size_t i=0;i<used_;++i)
+            if (slots_[i].address == address && slots_[i].post && slots_[i].before) return true;
+        return false;
+    }
+    static void observe_entry(void* volatile* address, void* object, void* frame, void* result) {
+        Guard guard;
+        for (size_t i=0;i<used_;++i) {
+            auto& slot=slots_[i];
+            if (slot.address == address && slot.post && slot.before) {
+                slot.post(slot.context, object, frame, result); return;
+            }
+        }
+    }
+    static size_t install(void* volatile* address, Entry expected, Post post, void* context, bool before = false) {
         if (!address || !expected || !post || (reinterpret_cast<uintptr_t>(address) & 7)) return 0;
         Guard guard;
         if (terminal_) return 0;
@@ -68,7 +87,7 @@ public:
         if (!GetModuleHandleExW(GET_MODULE_HANDLE_EX_FLAG_FROM_ADDRESS | GET_MODULE_HANDLE_EX_FLAG_PIN,
                                reinterpret_cast<LPCWSTR>(entries_[index]), &pinned)) return 0;
         slot.original.store(expected, std::memory_order_release);
-        slot.address = address; slot.post = post; slot.context = context;
+        slot.address = address; slot.post = post; slot.context = context; slot.before = before;
         if (InterlockedCompareExchangePointer(address, reinterpret_cast<void*>(entries_[index]),
                 reinterpret_cast<void*>(expected)) != reinterpret_cast<void*>(expected)) {
             slot.post = nullptr; slot.context = nullptr;

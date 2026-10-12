@@ -59,6 +59,27 @@ class Action:
 
 
 @dataclass(frozen=True)
+class Report:
+    """Bounded, read-only action result rendered inside the shared native menu."""
+    title: str
+    description: str
+    entries: tuple = ()  # (row label, detail text), no callbacks or object handles
+
+    def __post_init__(self):
+        if type(self.entries) is not tuple or len(self.entries) > 1000:
+            raise ValueError('Report requires at most 1000 entries')
+        for text, limit in ((self.title, 120), (self.description, 4096)):
+            if type(text) is not str or len(text) > limit or '\0' in text:
+                raise ValueError('Invalid report text')
+        for row in self.entries:
+            if type(row) is not tuple or len(row) != 2:
+                raise ValueError('Report entry requires label and detail')
+            for text, limit in zip(row, (160, 4096)):
+                if type(text) is not str or len(text) > limit or '\0' in text:
+                    raise ValueError('Invalid report entry')
+
+
+@dataclass(frozen=True)
 class Keybind:
     id: str
     title: str
@@ -231,6 +252,8 @@ class Registry:
     def load(self, folder):
         self._check()
         self._loader.load(folder)
+        return next(self.select(mod_id) for mod_id, entry in self._entries.items()
+                    if entry.name == folder)
 
     def set_enabled(self, selection, enabled):
         entry = self._entry(selection)
@@ -238,11 +261,40 @@ class Registry:
             raise ManagementError('Enabled must be a boolean')
         if not enabled and entry.definition.protected:
             raise ManagementError('This core mod is protected; stop the controller to unload it')
+        preferences = copy.deepcopy(entry.preferences)
+        preferences.update(enabled=enabled, folder=entry.name)
+        if self._settings is not None:
+            self._settings.save(selection.mod_id, preferences)
+        entry.preferences = preferences
         operation = self._loader.enable if enabled else self._loader.disable
         operation(entry.name)
-        # Enabled state belongs only to the loader. Preference restoration is not
-        # automatic startup execution of arbitrary mods.
         return self.select(selection.mod_id)
+
+    def restore_enabled(self):
+        """Restore explicit saved choices once at host startup; isolate failures."""
+        self._check()
+        failures = {}
+        if self._settings is None:
+            return failures
+        installed = set(self.installed())
+        for mod_id, preference in self._settings.records().items():
+            if preference.get('enabled') is not True:
+                continue
+            folder = preference.get('folder')
+            try:
+                if folder not in installed:
+                    raise ManagementError('Saved mod folder is missing')
+                selection = self.load(folder)
+                if selection.mod_id != mod_id:
+                    raise ManagementError('Saved mod identity does not match installed mod')
+                entry = self._entry(selection)
+                if not self._enabled(entry):
+                    self._loader.enable(folder)
+            except Exception as error:
+                failures[mod_id] = f'{type(error).__name__}: {error}'
+                if mod_id in self._entries:
+                    self._entries[mod_id].error = failures[mod_id]
+        return failures
 
     def unload(self, selection):
         entry = self._entry(selection)

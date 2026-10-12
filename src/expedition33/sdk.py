@@ -48,9 +48,15 @@ class Session:
     thread, build, layout and lifetime checks remain authoritative for each call.
     Close explicitly or use a context manager to remove hooks deterministically.
     """
-    def __init__(self, *, reflected=False, leases=False, retained=False, stable_returns=False, object_assignment=False, pod_values=False, text_values=False, enum_values=False, menu_ownership=False, button_references=False, button_actions=False, multi_controls=False, traces=False, keybinds=False):
-        if any(type(flag) is not bool for flag in (reflected, leases, retained, stable_returns, object_assignment, pod_values, text_values, enum_values, menu_ownership, button_references, button_actions, multi_controls, traces, keybinds)):
+    def __init__(self, *, reflected=False, leases=False, retained=False, stable_returns=False, object_assignment=False, pod_values=False, text_values=False, enum_values=False, menu_ownership=False, button_references=False, button_actions=False, multi_controls=False, traces=False, ui_batch=False, pause_menu=False, multiple_pause_entries=False, keybinds=False, vector_values=False):
+        if any(type(flag) is not bool for flag in (reflected, leases, retained, stable_returns, object_assignment, pod_values, text_values, enum_values, menu_ownership, button_references, button_actions, multi_controls, traces, ui_batch, pause_menu, multiple_pause_entries, keybinds, vector_values)):
             raise ValueError('Session capability flags must be bools')
+        pause_menu = pause_menu or multiple_pause_entries
+        vector_values = vector_values or pause_menu
+        ui_batch = ui_batch or pause_menu
+        self._vector_values = vector_values
+        keybinds = keybinds or vector_values
+        keybinds = keybinds or ui_batch
         traces = traces or keybinds
         multi_controls = multi_controls or traces
         button_actions = button_actions or multi_controls
@@ -62,10 +68,26 @@ class Session:
         object_assignment = object_assignment or pod_values
         stable_returns = stable_returns or object_assignment
         retained = retained or stable_returns
-        backend = ('research-probe-v19' if keybinds else 'research-probe-v18' if traces else 'research-probe-v17' if multi_controls else 'research-probe-v16' if button_actions else 'research-probe-v15' if button_references else 'research-probe-v14' if menu_ownership else 'research-probe-v13' if enum_values else 'research-probe-v12' if text_values else 'research-probe-v11' if pod_values else 'research-probe-v10' if object_assignment else 'research-probe-v9' if stable_returns else 'research-probe-v8' if retained
+        backend = ('research-probe-v19-flight' if vector_values else 'research-probe-v19' if keybinds else 'research-probe-v18' if traces else 'research-probe-v17' if multi_controls else 'research-probe-v16' if button_actions else 'research-probe-v15' if button_references else 'research-probe-v14' if menu_ownership else 'research-probe-v13' if enum_values else 'research-probe-v12' if text_values else 'research-probe-v11' if pod_values else 'research-probe-v10' if object_assignment else 'research-probe-v9' if stable_returns else 'research-probe-v8' if retained
                    else 'research-probe-v7' if leases else 'research-probe-v6')
+        if ui_batch:
+            backend = 'research-probe-v20-ui-flight' if getattr(self, '_vector_values', False) else 'research-probe-v20-ui'
+        if pause_menu:
+            backend = 'research-probe-v23-pause-vector'
+        if multiple_pause_entries:
+            backend = 'research-probe-v24-multi-pause'
         self._transport = (SessionTransport(_executable=Path(__file__).resolve().parents[2] /
                            f'build/{backend}/research_probe.exe') if reflected or leases or retained else SessionTransport())
+        if pause_menu and getattr(self._transport, 'pause_attachment_protocol', 0) != 2:
+            self._transport.close()
+            raise RuntimeQueryError('Pause-menu backend handshake missing')
+        vector_protocol = getattr(self._transport, 'vector_value_protocol', 0)
+        if pause_menu and (type(vector_protocol) is not int or vector_protocol != 1):
+            self._transport.close()
+            raise RuntimeQueryError('Pause-menu Vector backend handshake missing')
+        if ui_batch and getattr(self._transport, 'ui_batch_protocol', 0) != 1:
+            self._transport.close()
+            raise RuntimeQueryError('UI batch backend handshake missing')
         if stable_returns and any(getattr(self._transport, name, 0) != 1 for name in
                                   ('reflected_protocol', 'lease_protocol', 'retained_protocol', 'stable_identity_protocol')):
             try:
@@ -190,9 +212,20 @@ class Session:
         return getattr(self._transport, 'object_assignment_protocol', 0) == 1
 
     @property
+    def supports_vector_values(self):
+        """Whether this session selected the experimental Vector runtime."""
+        return self._vector_values and self.supports_pod_values
+
+    @property
     def supports_pod_values(self):
         self._check()
         return getattr(self._transport, 'pod_value_protocol', 0) == 1
+
+    @property
+    def supports_string_values(self):
+        self._check()
+        version = getattr(self._transport, 'string_value_protocol', 0)
+        return self.supports_text_values and type(version) is int and version == 1
 
     @property
     def supports_text_values(self):
@@ -291,11 +324,11 @@ class Session:
             raise ValueError('Invocation target must belong to this session')
         catalog = capture()
         plan = prepare_call(catalog, obj, function, arguments, pod_values=self.supports_pod_values,
-                            text_values=self.supports_text_values, enum_values=self.supports_enum_values,
+                            text_values=self.supports_text_values, string_values=self.supports_string_values, enum_values=self.supports_enum_values,
                             _trace_plan=self._trace_plan_for(function))
         return self._invoke_retained_plan(plan, catalog)
 
-    def invocation_planner(self, *, selected_results=False, catalog=None):
+    def invocation_planner(self, *, selected_results=False, catalog=None, observations=None):
         """Explicit reusable observations; native gates still validate each call.
 
         A planner shares one catalog across prepared retained calls. Refresh it
@@ -308,7 +341,25 @@ class Session:
         its type and process are checked, and native dispatch checks still apply.
         """
         from .prepared_invocation import InvocationPlanner
-        return InvocationPlanner(self, selected_results=selected_results, catalog=catalog)
+        return InvocationPlanner(self, selected_results=selected_results, catalog=catalog, observations=observations)
+
+    @property
+    def supports_frame_time_values(self):
+        version = getattr(self._transport, 'frame_time_values_protocol', 0)
+        return self.supports_pod_values and type(version) is int and version == 1
+
+    @property
+    def supports_timespan_values(self):
+        version = getattr(self._transport, 'timespan_values_protocol', 0)
+        return self.supports_pod_values and type(version) is int and version == 1
+
+    def _check_frame_time_plan(self, plan):
+        from ._pod_values import FRAME_PROFILES, TIMESPAN
+        from .invocation import UnsupportedInvocation
+        if any(p.pod_profile in FRAME_PROFILES for p in plan.parameters) and not self.supports_frame_time_values:
+            raise UnsupportedInvocation('Frame timing transport capability is unavailable')
+        if any(p.pod_profile == TIMESPAN for p in plan.parameters) and not self.supports_timespan_values:
+            raise UnsupportedInvocation('Media Timespan transport capability is unavailable')
 
     def _invoke_retained_plan(self, plan, catalog, *, _return_catalog=False, _selected_results=False):
         self._check()
@@ -318,13 +369,26 @@ class Session:
         from .catalog import capture
         if not self.supports_retained_invocation:
             raise UnsupportedInvocation('This session has no retained invocation backend')
+        self._check_frame_time_plan(plan)
         if plan.target.pid != self.pid or catalog.pid != self.pid:
             raise ValueError('Prepared invocation belongs to another process')
-        text_call = plan.wire_version == 3
-        if text_call:
+        text_call = plan.wire_version in (3, 5)
+        if plan.wire_version == 5 and not self.supports_string_values:
+            raise UnsupportedInvocation("FString transport capability is unavailable")
+        if plan.wire_version == 5:
+            from . import _string_wire as wire
+        elif text_call:
             from . import _text_wire as wire
         elif plan.wire_version == 4:
             from . import _enum_wire as wire
+        elif plan.wire_version == 6:
+            if getattr(self._transport,'asset_load_protocol',0)!=1:
+                raise UnsupportedInvocation('Verified asset loading is unavailable')
+            from . import _asset_wire as wire
+        elif plan.wire_version == 7:
+            if getattr(self._transport,'sequence_player_protocol',0)!=1:
+                raise UnsupportedInvocation('Verified sequence creation is unavailable')
+            from . import _sequence_wire as wire
         request = wire.encode_plan(plan, dict(plan.texts)) if text_call else wire.encode_plan(plan)
         texts = ()
         try:
@@ -390,7 +454,7 @@ class Session:
         packet = wire.request(command, **kwargs)
         try:
             response = self._transport.command(command, packet)
-            reply = wire.decode(command, packet, response['lease_packet'])
+            reply = wire.decode(command, packet, response['lease_packet'],capacity=getattr(self._transport,'lease_limit',128))
         except (RuntimeQueryError, ValueError, KeyError) as error:
             # A bad acknowledgement may follow successful native mutation.
             # End this controller so target-owned cleanup runs; never retry it.
@@ -470,6 +534,7 @@ class Session:
         catalog = capture()
         plan = prepare_call(catalog, obj, function, arguments, pod_values=self.supports_pod_values,
                             _trace_plan=self._trace_plan_for(function))
+        self._check_frame_time_plan(plan)
         request = encode_plan(plan)
         try:
             response = self._transport.command('reflected-invoke', request)
@@ -581,3 +646,4 @@ class Session:
 
     def __exit__(self, *_exc):
         self.close()
+

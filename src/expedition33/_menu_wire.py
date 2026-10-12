@@ -52,6 +52,8 @@ def decode(sent, encoded):
     if (active not in (0, 1) or
             not ((error == 810 and outcome == 0 and active == 0) or
                  (error == 816 and outcome == 1) or
-                 (error in (0, 811, 812, 813, 814) and outcome == 2))):
+                 (error in (0, 811, 812, 813, 814) and outcome == 2) or
+                 (sent[4:8] == b'\x01\0\0\0' and outcome == 2 and active == 0 and
+                  (error in (901, 902) or 910 <= error <= 919 or 10000 <= error < 20000)))):
         raise ValueError('Inconsistent menu acknowledgement')
     return MenuReply(error, ('not_started', 'unknown', 'returned')[outcome], bool(active))

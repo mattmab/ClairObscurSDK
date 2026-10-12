@@ -1,4 +1,5 @@
 import unittest
+from contextlib import nullcontext
 from unittest.mock import patch
 from types import SimpleNamespace
 
@@ -18,10 +19,14 @@ class FakePanel:
         self.labels = [f'label{i}' for i in range(12)]
         self.text, self.enabled, self.handles, self.operations = {}, {}, [], []
         self.visible = {}
-        self.menu = SimpleNamespace(bind_control=self.bind)
+        self.menu = SimpleNamespace(bind_control=self.bind,
+            bind_controls=lambda bindings: [self.bind(*b) for b in bindings],
+            remove_controls=lambda controls: all(c.remove() for c in controls))
         self.defer = False
     def build(self): self.operations.append('build'); self.state = 'built'
     def enable_cached_planning(self): self.operations.append('planner')
+    def prime_menu_plan(self): self.operations.append('prime')
+    def paint_batch(self): return nullcontext()
     def open(self): self.operations.append('open'); self.state = 'open'
     def set_text(self, label, text): self.text[label] = text
     def set_enabled(self, index, enabled): self.enabled[index] = enabled
@@ -41,6 +46,12 @@ class FakePanel:
         if self.defer: return False
         for handle in self.handles: handle.active = False
         self.state = "closed"
+        return True
+    def hide(self):
+        if self.defer: return False
+        for handle in self.handles: handle.active = False
+        self.operations.append('hide')
+        self.state = 'built'
         return True
 
 

@@ -27,6 +27,7 @@ import expedition33
 from expedition33.mods import ModLoader
 from expedition33.settings import SettingsStore
 from expedition33.sdk import Session
+from expedition33._reader import ReadBatch
 
 if not Path(expedition33.__file__).resolve().is_relative_to(ROOT):
     raise SystemExit('SDK import resolved outside this bundle')
@@ -50,7 +51,14 @@ def main():
     parser.add_argument('--multi-controls', action='store_true', help='Use experimental v17 menu-owned multiple controls; no finished Mods Menu')
     parser.add_argument('--traces', action='store_true', help='Use experimental v18 scalar native POST traces; broader coverage pending')
     parser.add_argument('--keybinds', action='store_true', help='Use experimental v19 mod key delivery')
+    parser.add_argument('--ui-batch', action='store_true', help='Use v20 bounded native menu updates (included with management --keybinds)')
+    parser.add_argument('--pause-menu', action='store_true', help='Enable the native pause-menu Mods entry (v21 candidate)')
+    parser.add_argument('--shared-reader', action='store_true', help='Keep one read-only worker for this pause-menu controller; each query reads fresh observations')
     args = parser.parse_args()
+    if args.shared_reader and not args.pause_menu:
+        parser.error('--shared-reader requires --pause-menu')
+    args.ui_batch = args.ui_batch or args.pause_menu or (args.command == 'management' and args.keybinds)
+    args.keybinds = args.keybinds or args.ui_batch
     if (args.reflected or args.leases or args.retained or args.stable_returns or args.object_assignment or args.pod_values or args.text_values or args.enum_values or args.menu_ownership or args.button_references or args.button_actions or args.multi_controls or args.traces or args.keybinds) and args.command not in ('console', 'introspection', 'management'):
         parser.error('Experimental session flags require console, introspection or management')
     log_dir = ROOT / 'logs'
@@ -64,15 +72,20 @@ def main():
             store = SettingsStore(ROOT / 'settings/management.json') if args.command == 'management' else None
             if store is not None and store.recovery:
                 log.warning('Management settings recovery: %s', store.recovery)
-            with (Session(reflected=args.reflected, leases=args.leases, retained=args.retained, stable_returns=args.stable_returns, object_assignment=args.object_assignment, pod_values=args.pod_values, text_values=args.text_values, enum_values=args.enum_values, menu_ownership=args.menu_ownership, button_references=args.button_references, button_actions=args.button_actions, multi_controls=args.multi_controls, traces=args.traces, keybinds=args.keybinds)
+            with (Session(reflected=args.reflected, leases=args.leases, retained=args.retained, stable_returns=args.stable_returns, object_assignment=args.object_assignment, pod_values=args.pod_values, text_values=args.text_values, enum_values=args.enum_values, menu_ownership=args.menu_ownership, button_references=args.button_references, button_actions=args.button_actions, multi_controls=args.multi_controls, traces=args.traces, keybinds=args.keybinds, ui_batch=args.ui_batch, pause_menu=args.pause_menu)
                   if args.reflected or args.leases or args.retained or args.stable_returns or args.object_assignment or args.pod_values or args.text_values or args.enum_values or args.menu_ownership or args.button_references or args.button_actions or args.multi_controls or args.traces or args.keybinds else nullcontext(None)) as runtime, \
+                    (ReadBatch(runtime.pid, share=True) if args.shared_reader else nullcontext()) as reader, \
                     ModLoader(ROOT / 'mods', settings=store, session=runtime) as loader:
                 if args.command == 'management':
                     loader.load('SDKManagement')
                     loader.enable('SDKManagement', console=True, console_key=args.console_key)
-                    log.info('Console management ready: mods. Experimental native menu: mods ui (requires --multi-controls or newer). Key delivery requires --keybinds.')
                 loader.load(mod_name)
                 loader.enable(mod_name, console=True, console_key=args.console_key)
+                if args.command == 'management':
+                    for mod_id, failure in loader.registry.restore_enabled().items():
+                        log.error('Saved mod %s could not start: %s', mod_id, failure)
+                    loader._loaded['SDKManagement'][1].prepare()
+                    log.info('Console management ready: mods. Native menu: mods ui. Before map travel, stop the pause-menu controller with: py my_mod.registry.request_shutdown()' if args.pause_menu else 'Console management ready: mods. Native menu: mods ui. Release cached widgets before map travel: mods ui dispose.')
                 if args.command in ('introspection', 'management'):
                     log.info('Introspection stage 1 ready: e33i.status, e33i.roots, e33i.request JSON, or py introspection.request(...). Ctrl+C stops the controller.')
                 else:
@@ -81,7 +94,7 @@ def main():
                 try:
                     while not loader.stop_requested and time.monotonic() < deadline:
                         loader.poll()
-                        time.sleep(.05)
+                        time.sleep(.005 if args.ui_batch else .05)
                 except KeyboardInterrupt:
                     log.info('Closing console session')
                 except expedition33.TargetExitedError as error:
@@ -115,3 +128,4 @@ def main():
 
 if __name__ == '__main__':
     raise SystemExit(main())
+

@@ -48,6 +48,7 @@ class TraceAdapter:
                         target = {'$stale_object': dict(pid=event.pid, index=event.index, serial=event.serial)}
                     trace['events'].append(dict(sequence=event.sequence, time=time.time(),
                         time_basis='delivery', native_monotonic_ms=event.monotonic_ms,
+                        session=getattr(event, 'session', 0), phase=getattr(event, 'phase', 'post'),
                         target_resolution='drain_time', target=target,
                         args=explorer.encode(dict(event.arguments)), return_value=explorer.encode(event.return_value)))
                     trace['events'][-1]['return'] = trace['events'][-1].pop('return_value')

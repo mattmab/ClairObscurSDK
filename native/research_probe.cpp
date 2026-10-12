@@ -189,7 +189,7 @@ int run_query(int argc, char** argv) {
         std::string bool_object;
         std::string function_owner, function_name;
         DWORD descriptor_pid = 0;
-        bool read_values = false, read_enums = false;
+        bool read_values = false, read_enums = false, read_script = false;
         std::unordered_map<int32_t, std::pair<int32_t, uint64_t>> descriptors;
         bool thread_ping = argc == 2 && std::string(argv[1]) == "--thread-ping";
         bool invoke_proof = argc == 2 && std::string(argv[1]) == "--invoke-proof";
@@ -198,6 +198,8 @@ int run_query(int argc, char** argv) {
         bool runtime_session = argc == 2 && std::string(argv[1]) == "--session";
         bool catalog = argc == 2 && std::string(argv[1]) == "--catalog";
         const bool matching_catalog = argc == 4 && std::string(argv[1]) == "--catalog-match";
+        const bool resolve_asset_names = argc == 4 && std::string(argv[1]) == "--resolve-asset-names";
+        std::string asset_package,asset_name;
         const bool selected_catalog = matching_catalog || (argc == 4 && std::string(argv[1]) == "--catalog-select");
         std::unordered_set<std::string> match_names, match_classes;
         if (selected_catalog) catalog = true;
@@ -217,6 +219,17 @@ int run_query(int argc, char** argv) {
                     "FUNCTION_NAME_REQUIRES_OWNER_DOT_NAME");
             function_owner = qualified.substr(0, dot); function_name = qualified.substr(dot + 1); limit = 0;
         }
+        else if (resolve_asset_names) {
+            descriptor_pid=std::stoul(argv[2]);
+            const std::string path=argv[3]; const auto dot=path.find('.');
+            require(dot!=std::string::npos && path.find('.',dot+1)==std::string::npos && path.size()<1024,
+                    "ASSET_PATH_INVALID");
+            asset_package=path.substr(0,dot); asset_name=path.substr(dot+1);
+            require(asset_package.rfind("/Game/",0)==0 && !asset_name.empty() &&
+                    (asset_package.substr(asset_package.rfind('/')+1)==asset_name || asset_package.substr(asset_package.rfind('/')+1)+"_C"==asset_name),"ASSET_PATH_INVALID");
+            for(char ch:asset_package) require((ch>='a'&&ch<='z') || (ch>='A'&&ch<='Z') ||
+                (ch>='0'&&ch<='9') || ch=='_' || ch=='/',"ASSET_PATH_INVALID");
+        }
         else if (matching_catalog) {
             descriptor_pid = std::stoul(argv[2]);
             std::istringstream tokens(argv[3]); std::string token;
@@ -229,7 +242,8 @@ int run_query(int argc, char** argv) {
             }
             require(!match_names.empty() || !match_classes.empty(), "MATCH_SELECTORS_EMPTY");
         }
-        else if (argc == 4 && (selected_catalog || std::string(argv[1]) == "--describe" || std::string(argv[1]) == "--read-values" || std::string(argv[1]) == "--describe-enums")) {
+        else if (argc == 4 && (selected_catalog || std::string(argv[1]) == "--describe" || std::string(argv[1]) == "--describe-script" || std::string(argv[1]) == "--read-values" || std::string(argv[1]) == "--describe-enums")) {
+            read_script = std::string(argv[1]) == "--describe-script";
             read_values = std::string(argv[1]) == "--read-values";
             read_enums = std::string(argv[1]) == "--describe-enums";
             descriptor_pid = std::stoul(argv[2]);
@@ -249,7 +263,15 @@ int run_query(int argc, char** argv) {
         else require(argc == 1 || catalog || thread_ping || invoke_proof || observe_proof || runtime_session || console_construction, "USAGE: research_probe.exe [--catalog | --limit N | --reflect-class NAME | --read-bools OBJECT | --reflect-function OWNER.NAME | --thread-ping | --invoke-proof | --observe-proof | --session]");
         const bool reflection = !reflect_class.empty() || !bool_object.empty() || !function_name.empty() || (!descriptors.empty() && !selected_catalog);
         DWORD pid = discover_process();
-        require((descriptors.empty() && !matching_catalog) || pid == descriptor_pid, "DESCRIPTOR_PROCESS_CHANGED");
+        if (runtime_session) {
+            wchar_t expected_pid[16]{};
+            DWORD length = GetEnvironmentVariableW(L"E33_EXPECTED_GAME_PID", expected_pid, 16);
+            if (length) {
+                require(length < 16 && std::wstring(expected_pid) == std::to_wstring(pid),
+                        "SESSION_EXPECTED_PROCESS_CHANGED");
+            }
+        }
+        require((descriptors.empty() && !matching_catalog && !resolve_asset_names) || pid == descriptor_pid, "DESCRIPTOR_PROCESS_CHANGED");
         Handle process(OpenProcess(PROCESS_VM_READ | PROCESS_QUERY_LIMITED_INFORMATION, FALSE, pid));
         require(process.value != nullptr, "OPEN_PROCESS_FAILED win32=" + std::to_string(GetLastError()));
         Handle snapshot(CreateToolhelp32Snapshot(TH32CS_SNAPMODULE | TH32CS_SNAPMODULE32, pid));
@@ -303,6 +325,37 @@ int run_query(int argc, char** argv) {
         if (thread_ping) {
             run_thread_ping(pid, game_thread);
             std::cout << "{\"event\":\"snapshot_end\",\"emitted\":0}\n";
+            return 0;
+        }
+        if(resolve_asset_names) {
+            // Verified allocator walk 1411a5a70; append-only snapshot, bounded
+            // reads outside the game thread. Native invocation rechecks entries.
+            const auto current=reader.get<uint32_t>(pool+8), cursor=reader.get<uint32_t>(pool+12);
+            require(current<8192 && cursor<=0x20000,"ASSET_NAME_POOL_BOUNDS");
+            uint32_t package_id=0,asset_id=0;
+            for(uint32_t b=0;b<=current && (!package_id || !asset_id);++b) {
+                const auto pointer=reader.get<uint64_t>(pool+16+uint64_t(b)*8);
+                const auto extent=b==current ? cursor : 0x20000U;
+                std::vector<uint8_t> bytes(extent); reader.read(pointer,bytes.data(),bytes.size());
+                for(uint32_t at=0;at+2<=extent;) {
+                    uint16_t h; std::memcpy(&h,bytes.data()+at,2);
+                    const uint32_t length=h>>6,width=(h&1)+1;
+                    if(!length) break;
+                    require(at+2+length*width<=extent,"ASSET_NAME_ENTRY_BOUNDS");
+                    if(width==1) {
+                        const std::string value(reinterpret_cast<char*>(bytes.data()+at+2),length);
+                        if(value==asset_package) package_id=(b<<16)|(at/2);
+                        if(value==asset_name) asset_id=(b<<16)|(at/2);
+                    }
+                    at+=(length*width+3)&~1U;
+                }
+            }
+            require(package_id && asset_id,"ASSET_NAMES_NOT_LOADED");
+            require(read_name(reader,pool,package_id)==asset_package && read_name(reader,pool,asset_id)==asset_name,
+                    "ASSET_NAMES_CHANGED");
+            std::cout << "{\"event\":\"asset_names\",\"package\":" << quote(asset_package)
+                      << ",\"asset\":" << quote(asset_name) << ",\"package_id\":" << package_id
+                      << ",\"asset_id\":" << asset_id << "}\n{\"event\":\"snapshot_end\",\"emitted\":1}\n";
             return 0;
         }
         uint32_t emitted = 0, null_slots = 0, changing_slots = 0;
@@ -595,6 +648,56 @@ int run_query(int argc, char** argv) {
                           << ",\"flags\":" << quote(hex(flags)) << ",\"params_size\":" << params_size
                           << ",\"return_offset\":" << return_offset
                           << ",\"entry_rva\":" << quote(hex(entry - base)) << "}\n";
+                if(read_script) {
+                    require(!(flags&0x400),"SCRIPT_REQUIRES_BLUEPRINT_FUNCTION");
+                    struct ScriptHeader { uint64_t data; int32_t count,capacity; };
+                    const auto script=reader.get<ScriptHeader>(item.object+0x60);
+                    require(script.data && script.count>0 && script.count<=script.capacity && script.capacity<=65536,
+                            "SCRIPT_BOUNDS_UNVERIFIED");
+                    std::vector<uint8_t> bytes(script.count),script_again(script.count);
+                    reader.read(script.data,bytes.data(),bytes.size());
+                    reader.read(script.data,script_again.data(),script_again.size());
+                    const auto after=reader.get<ScriptHeader>(item.object+0x60);
+                    const auto slot=item_at(i);
+                    require(bytes==script_again && !std::memcmp(&script,&after,sizeof(script)) &&
+                            slot.object==item.object && slot.serial==item.serial,"SCRIPT_OBSERVATION_CHANGED");
+                    std::ostringstream encoded;
+                    for(auto byte:bytes) encoded<<std::hex<<std::setw(2)<<std::setfill('0')<<unsigned(byte);
+                    std::cout<<"{\"event\":\"blueprint_script\",\"index\":"<<i<<",\"serial\":"<<item.serial
+                             <<",\"size\":"<<bytes.size()<<",\"hex\":"<<quote(encoded.str())<<"}\n";
+                    // Read-only VM handler evidence. The dispatch-table address
+                    // is corroborated by shipping 1413938a0; no caller address.
+                    std::cout<<"{\"event\":\"script_handlers\",\"handlers\":[";
+                    bool first_handler=true;
+                    for(uint32_t opcode:{0x00U,0x07U,0x19U,0x1bU,0x1cU,0x20U,0x45U,0x46U,0x5fU,0x61U,0x68U,0x69U}) {
+                        const auto handler=reader.get<uint64_t>(base+0x9360600+opcode*8);
+                        require(handler>=base && handler<base+module.modBaseSize,"SCRIPT_HANDLER_OUTSIDE_MODULE");
+                        if(!first_handler) std::cout<<',';
+                        first_handler=false;
+                        std::cout<<"{\"opcode\":"<<opcode<<",\"rva\":"<<quote(hex(handler-base))<<'}';
+                    }
+                    std::cout<<"]}\n";
+                    // Candidate locations only, not a linear disassembly. The
+                    // 1b handler consumes a 12-byte script name (14139b2c0).
+                    // This reader never follows a script-provided memory pointer.
+                    std::cout<<"{\"event\":\"script_name_candidates\",\"items\":[";
+                    bool first_name=true;
+                    unsigned names_seen=0;
+                    for(size_t at=0;at+13<=bytes.size() && names_seen<256;++at) {
+                        if(bytes[at]!=0x1b && bytes[at]!=0x45) continue;
+                        uint32_t id=0,number=0;
+                        std::memcpy(&id,bytes.data()+at+1,4); std::memcpy(&number,bytes.data()+at+9,4);
+                        if(number>65535 || (id>>16)>reader.get<uint32_t>(pool+8)) continue;
+                        try {
+                            const auto candidate_name=read_name(reader,pool,id,number);
+                            if(candidate_name.empty() || candidate_name.size()>256) continue;
+                            if(!first_name) std::cout<<',';
+                            first_name=false; ++names_seen;
+                            std::cout<<"{\"offset\":"<<at<<",\"opcode\":"<<unsigned(bytes[at])<<",\"name\":"<<quote(candidate_name)<<'}';
+                        } catch(const std::exception&) { /* non-boundary lead */ }
+                    }
+                    std::cout<<"]}\n";
+                }
             }
             if (reflection) {
                 // Derived from target routines 1412792f0, 1412813d0, 14134c3b0,
@@ -639,6 +742,9 @@ int run_query(int argc, char** argv) {
                         require(std::memcmp(&p, &p_again, sizeof(p)) == 0, "PROPERTY_CHANGED");
                         std::cout << "{\"event\":\"property_metadata\",\"owner\":" << quote(owner_name)
                                   << ",\"owner_index\":" << header.index
+                                  << ",\"field_address\":" << quote(hex(field))
+                                  << ",\"name_id\":" << p.name_id << ",\"name_number\":" << p.number
+                                  << ",\"name_base\":" << quote(read_name(reader, pool, p.name_id))
                                   << ",\"name\":" << quote(field_name) << ",\"type\":" << quote(type)
                                   << ",\"offset\":" << p.offset << ",\"element_size\":" << p.element_size
                                   << ",\"dimension\":" << p.dimension << ",\"flags\":" << quote(hex(p.flags));
@@ -706,6 +812,45 @@ int run_query(int argc, char** argv) {
                                           << "," << quote(prefix + "_index") << ":" << target.index
                                           << "," << quote(prefix + "_serial") << ":" << target_item.serial
                                           << "," << quote(prefix + "_address") << ":" << quote(hex(reference));
+                            }
+                        }
+                        if (type == "MapProperty") {
+                            // FMapProperty export 14136a7f0 uses Key/Value +70/+78,
+                            // value offset +80, pair stride +8c, allocator flag +98.
+                            for (unsigned part = 0; part < 2; ++part) {
+                                const auto child_address = reader.get<uint64_t>(field + 0x70 + part * 8);
+                                require(child_address && child_address != field, "MAP_CHILD_INVALID");
+                                const auto child = reader.get<PropertyPrefix>(child_address);
+                                require(child.owner == field && child.dimension == 1 &&
+                                        child.element_size > 0 && child.element_size <= 65536 &&
+                                        (reader.get<uint64_t>(child.type + 0x10) & 0x8000), "MAP_CHILD_LAYOUT");
+                                const auto id = reader.get<uint64_t>(child.type);
+                                const auto map_child_name = read_name(reader, pool, uint32_t(id), uint32_t(id >> 32));
+                                const std::string prefix = part ? "map_value" : "map_key";
+                                std::cout << ',' << quote(prefix + "_type") << ':' << quote(map_child_name)
+                                          << ',' << quote(prefix + "_size") << ':' << child.element_size
+                                          << ',' << quote(prefix + "_offset") << ':' << child.offset;
+                                if(map_child_name=="StructProperty") {
+                                    const auto reference=reader.get<uint64_t>(child_address+0x70);
+                                    const auto structure=reader.get<ObjectHeader>(reference);
+                                    const auto slot=item_at(structure.index);
+                                    require(slot.object==reference && derives_from_core_type(structure.cls,"ScriptStruct"),
+                                            "MAP_STRUCT_TYPE_INVALID");
+                                    const auto structure_again=reader.get<ObjectHeader>(reference);
+                                    const auto slot_again=item_at(structure.index);
+                                    require(!std::memcmp(&structure,&structure_again,sizeof(structure)) &&
+                                            slot_again.object==reference && slot_again.serial==slot.serial &&
+                                            reader.get<uint64_t>(child_address+0x70)==reference,"MAP_STRUCT_TYPE_CHANGED");
+                                    std::cout << ',' << quote(prefix+"_struct_index") << ':' << structure.index
+                                              << ',' << quote(prefix+"_struct_serial") << ':' << slot.serial
+                                              << ',' << quote(prefix+"_struct_address") << ':' << quote(hex(reference))
+                                              << ',' << quote(prefix+"_struct_name") << ':'
+                                              << quote(read_name(reader,pool,structure.name_id,structure.name_number));
+                                }
+                                const auto map_child_again = reader.get<PropertyPrefix>(child_address);
+                                require(std::memcmp(&child, &map_child_again, sizeof(child)) == 0 &&
+                                        reader.get<uint64_t>(field + 0x70 + part * 8) == child_address,
+                                        "MAP_CHILD_CHANGED");
                             }
                         }
                         if (type == "ArrayProperty" || type == "EnumProperty") {
@@ -776,12 +921,14 @@ int run_query(int argc, char** argv) {
                             else if (value_type == "ByteProperty") value << static_cast<unsigned>(static_cast<uint8_t>(raw));
                             else if (value_type == "NameProperty") value << quote(read_name(reader, pool, uint32_t(raw), uint32_t(raw >> 32)));
                             else {
-                                require(value_type == "ObjectProperty", "SCALAR_TYPE_UNSUPPORTED");
+                                require(value_type == "ObjectProperty" || value_type == "ClassProperty", "SCALAR_TYPE_UNSUPPORTED");
                                 if (!raw) value << "null";
                                 else {
                                     const auto target = reader.get<ObjectHeader>(raw);
                                     const auto slot = item_at(target.index);
                                     require(slot.object == raw, "VALUE_REFERENCE_NOT_REGISTERED");
+                                    if(value_type == "ClassProperty")
+                                        require(derives_from_core_type(target.cls,"Class"),"VALUE_CLASS_REFERENCE_INVALID");
                                     const auto target_name = read_name(reader, pool, target.name_id, target.name_number);
                                     const auto target_again = reader.get<ObjectHeader>(raw);
                                     const auto slot_again = item_at(target.index);
@@ -796,7 +943,7 @@ int run_query(int argc, char** argv) {
                         const auto scalar_width = [](const std::string& value_type) {
                             return value_type == "FloatProperty" || value_type == "IntProperty" ? 4 :
                                 value_type == "UInt16Property" ? 2 : value_type == "ByteProperty" ? 1 :
-                                value_type == "NameProperty" || value_type == "ObjectProperty" || value_type == "DoubleProperty" ? 8 : 0;
+                                value_type == "NameProperty" || value_type == "ObjectProperty" || value_type == "ClassProperty" || value_type == "DoubleProperty" ? 8 : 0;
                         };
                         // Copied reflected fields only: never reconstruct or own
                         // non-reflected state (for example FKey's shared pointer).
@@ -814,7 +961,14 @@ int run_query(int argc, char** argv) {
                             require(slot.object == ref && derives_from_core_type(structure.cls, "ScriptStruct"),
                                     "STRUCT_VALUE_TYPE_INVALID");
                             const auto struct_name = read_name(reader, pool, structure.name_id, structure.name_number);
-                            require(reader.get<int32_t>(ref + 0x58) == layout.element_size, "STRUCT_VALUE_EXTENT_MISMATCH");
+                            // User-defined S_InteractiveMusicParameters has 17
+                            // reflected bytes in a 24-byte property slot. Read
+                            // fields only inside the descriptor extent; trailing
+                            // storage padding is never interpreted or exposed.
+                            // This is observation-only, not a by-value call ABI.
+                            const auto reflected_extent=reader.get<int32_t>(ref + 0x58);
+                            require(reflected_extent>=0 && reflected_extent<=layout.element_size,
+                                    "STRUCT_VALUE_EXTENT_MISMATCH");
                             std::ostringstream members;
                             std::unordered_set<uint64_t> struct_owners, struct_fields;
                             std::unordered_set<std::string> names;
@@ -908,6 +1062,124 @@ int run_query(int argc, char** argv) {
                                               << ",\"name\":" << quote(field_name) << ",\"element\":" << element
                                               << ",\"value\":" << value << "}\n";
                                 }
+                            } catch (const std::exception& error) {
+                                std::cout << "{\"event\":\"stored_value_error\",\"owner_index\":" << header.index
+                                          << ",\"name\":" << quote(field_name) << ",\"error\":" << quote(error.what()) << "}\n";
+                            }
+                        }
+                        if (read_values && type == "MapProperty") {
+                            try {
+                                // Read-only, bounded Name->native-bool or Byte->Struct.
+                                // Storage layout follows target export 14136a7f0;
+                                // frozen/relative allocators and other types fail closed.
+                                require(p.dimension == 1 && p.element_size == 80, "MAP_LAYOUT_UNSUPPORTED");
+                                uint8_t descriptor[0x30], descriptor_again[0x30];
+                                reader.read(field + 0x70, descriptor, sizeof(descriptor));
+                                auto d32 = [&](size_t off) { int32_t v; std::memcpy(&v, descriptor + off, 4); return v; };
+                                auto d64 = [&](size_t off) { uint64_t v; std::memcpy(&v, descriptor + off, 8); return v; };
+                                require(!(descriptor[0x28] & 1), "MAP_ALLOCATOR_UNSUPPORTED");
+                                const auto key_address = d64(0), value_address = d64(8);
+                                const auto key_layout = reader.get<PropertyPrefix>(key_address);
+                                const auto value_layout = reader.get<PropertyPrefix>(value_address);
+                                auto map_type = [&](const PropertyPrefix& child) {
+                                    const auto id = reader.get<uint64_t>(child.type);
+                                    return read_name(reader, pool, uint32_t(id), uint32_t(id >> 32));
+                                };
+                                const auto key_kind = map_type(key_layout), value_kind = map_type(value_layout);
+                                const bool name_bool = key_kind == "NameProperty" && value_kind == "BoolProperty";
+                                const bool byte_struct = key_kind == "ByteProperty" && value_kind == "StructProperty";
+                                const bool name_struct = key_kind == "NameProperty" && value_kind == "StructProperty";
+                                const bool byte_double = key_kind == "ByteProperty" && value_kind == "DoubleProperty";
+                                const bool struct_object = key_kind == "StructProperty" && value_kind == "ObjectProperty";
+                                const bool struct_struct = key_kind == "StructProperty" && value_kind == "StructProperty";
+                                require(name_bool || byte_struct || name_struct || byte_double || struct_object || struct_struct,
+                                        "MAP_ELEMENT_TYPE_UNSUPPORTED");
+                                const bool struct_key = struct_object || struct_struct;
+                                const bool struct_value = byte_struct || name_struct || struct_struct;
+                                const auto value_offset = d32(0x10), stride = d32(0x1c);
+                                require(key_layout.owner == field && value_layout.owner == field &&
+                                        key_layout.dimension == 1 && value_layout.dimension == 1 &&
+                                        key_layout.offset == 0 && (struct_key ?
+                                            (key_layout.element_size > 0 && key_layout.element_size <= 128) :
+                                            key_layout.element_size == ((name_bool || name_struct) ? 8 : 1)) &&
+                                        value_layout.offset == value_offset && value_layout.element_size > 0 &&
+                                        (name_bool ? value_layout.element_size == 1 :
+                                         struct_value ? value_layout.element_size <= 512 : value_layout.element_size == 8) &&
+                                        value_offset >= key_layout.element_size && value_offset < stride && stride <= 1024 &&
+                                        value_layout.element_size <= stride - value_offset,
+                                        "MAP_PAIR_LAYOUT_INVALID");
+                                const auto key_constraint = struct_key ? reader.get<uint64_t>(key_address + 0x70) : 0;
+                                const auto value_constraint = !byte_double ? reader.get<uint64_t>(value_address + 0x70) : 0;
+                                require(!name_bool || uint32_t(value_constraint) == 0xff010001, "MAP_BOOL_ENCODING_UNSUPPORTED");
+                                const auto at = item.object + p.offset;
+                                uint8_t storage[80], storage_again[80];
+                                reader.read(at, storage, sizeof(storage));
+                                auto s32 = [&](size_t off) { int32_t v; std::memcpy(&v, storage + off, 4); return v; };
+                                auto s64 = [&](size_t off) { uint64_t v; std::memcpy(&v, storage + off, 8); return v; };
+                                const auto count = s32(8), capacity = s32(12), bit_count = s32(40), bit_capacity = s32(44), free_count = s32(52);
+                                require(count >= 0 && count <= capacity && capacity <= 4096 && bit_count == count &&
+                                        bit_capacity >= bit_count && bit_capacity <= 4096 && free_count >= 0 && free_count <= count,
+                                        "MAP_STORAGE_BOUNDS");
+                                const auto data = s64(0), heap_bits = s64(32);
+                                require(!count || (data && !(data & 7)), "MAP_DATA_INVALID");
+                                require(heap_bits || bit_capacity <= 128, "MAP_INLINE_BITS_OVERFLOW");
+                                const auto bits_at = heap_bits ? heap_bits : at + 16;
+                                std::vector<uint8_t> bytes(size_t(count) * stride), repeated(bytes.size());
+                                std::vector<uint32_t> bits((count + 31) / 32), bits_again(bits.size());
+                                if (count) {
+                                    reader.read(data, bytes.data(), bytes.size());
+                                    reader.read(bits_at, bits.data(), bits.size() * 4);
+                                }
+                                std::ostringstream pairs;
+                                int32_t live = 0;
+                                for (int32_t index = 0; index < count; ++index) {
+                                    if (!(bits[index / 32] & (uint32_t(1) << (index % 32)))) continue;
+                                    const auto source = bytes.data() + size_t(index) * stride;
+                                    if (live++) pairs << ',';
+                                    pairs << '[';
+                                    if (struct_key) {
+                                        pairs << struct_json(key_address, key_layout,
+                                            data + uint64_t(index) * stride, source, 0);
+                                    } else if (key_kind == "NameProperty") {
+                                        uint64_t raw; std::memcpy(&raw, source, 8);
+                                        pairs << scalar_json(key_kind, raw);
+                                    } else {
+                                        pairs << unsigned(source[0]);
+                                    }
+                                    pairs << ',';
+                                    if (name_bool) {
+                                        require(source[value_offset] <= 1, "MAP_BOOL_VALUE_INVALID");
+                                        pairs << (source[value_offset] ? "true" : "false");
+                                    } else if (struct_value) {
+                                        pairs << struct_json(value_address, value_layout,
+                                            data + uint64_t(index) * stride + value_offset, source + value_offset, 0);
+                                    } else {
+                                        uint64_t raw; std::memcpy(&raw, source + value_offset, 8);
+                                        pairs << scalar_json(value_kind, raw);
+                                    }
+                                    pairs << ']';
+                                }
+                                require(live == count - free_count, "MAP_OCCUPANCY_MISMATCH");
+                                if (count) {
+                                    reader.read(data, repeated.data(), repeated.size());
+                                    reader.read(bits_at, bits_again.data(), bits_again.size() * 4);
+                                }
+                                reader.read(at, storage_again, sizeof(storage_again));
+                                reader.read(field + 0x70, descriptor_again, sizeof(descriptor_again));
+                                const auto key_again = reader.get<PropertyPrefix>(key_address);
+                                const auto value_again = reader.get<PropertyPrefix>(value_address);
+                                const auto map_again = reader.get<PropertyPrefix>(field);
+                                require(bytes == repeated && bits == bits_again &&
+                                        !std::memcmp(storage, storage_again, sizeof(storage)) &&
+                                        !std::memcmp(descriptor, descriptor_again, sizeof(descriptor)) &&
+                                        !std::memcmp(&key_layout, &key_again, sizeof(key_layout)) &&
+                                        !std::memcmp(&value_layout, &value_again, sizeof(value_layout)) &&
+                                        !std::memcmp(&p, &map_again, sizeof(p)) &&
+                                        (!struct_key || reader.get<uint64_t>(key_address + 0x70) == key_constraint) &&
+                                        (byte_double || reader.get<uint64_t>(value_address + 0x70) == value_constraint), "MAP_OBSERVATION_CHANGED");
+                                std::cout << "{\"event\":\"stored_value\",\"owner_index\":" << header.index
+                                          << ",\"name\":" << quote(field_name) << ",\"element\":0,\"value\":{\"$map\":{\"length\":"
+                                          << live << ",\"items\":[" << pairs.str() << "]}}}\n";
                             } catch (const std::exception& error) {
                                 std::cout << "{\"event\":\"stored_value_error\",\"owner_index\":" << header.index
                                           << ",\"name\":" << quote(field_name) << ",\"error\":" << quote(error.what()) << "}\n";

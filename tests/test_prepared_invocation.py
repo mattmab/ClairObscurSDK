@@ -31,6 +31,31 @@ class PreparedRetainedTests(unittest.TestCase):
         prepared = planner.prepare(self.p.target, self.p.function)
         return planner, prepared
 
+    def test_copied_observations_survive_close_without_reusing_old_scope(self):
+        planner, prepared = self.planner()
+        observations = planner.observations()
+        planner.close()
+        with self.assertRaisesRegex(RuntimeError, 'closed'):
+            prepared.invoke()
+        with patch('expedition33.catalog.capture', side_effect=AssertionError('scan')), patch('expedition33.invocation.describe', side_effect=AssertionError('describe')):
+            restored = self.session.invocation_planner(observations=observations)
+            restored.prepare(self.p.target, self.p.function)
+            restored.close()
+        observations._session = lambda: object()
+        with self.assertRaisesRegex(ValueError, 'same session'):
+            self.session.invocation_planner(observations=observations)
+
+    def test_restored_observations_do_not_bypass_native_rejection(self):
+        planner, _ = self.planner()
+        observations = planner.observations()
+        planner.close()
+        with self.session.invocation_planner(observations=observations) as restored:
+            prepared = restored.prepare(self.p.target, self.p.function)
+            self.transport.error, self.transport.outcome = 401, 0
+            with self.assertRaises(InvocationError):
+                prepared.invoke()
+        self.assertEqual(self.transport.calls.count('retained-invoke'), 1)
+
     def test_object_results_still_capture_fresh_and_own_each_return(self):
         planner, prepared = self.planner()
         with patch('expedition33.catalog.capture', return_value=self.p.catalog) as capture:

@@ -13,6 +13,10 @@ cl /nologo /W4 /WX /EHsc /std:c++17 /O2 /Fe:strong_lease_fixture.exe "%PROJECT_R
 if errorlevel 1 (popd & exit /b 1)
 strong_lease_fixture.exe
 if errorlevel 1 (popd & exit /b 1)
+cl /nologo /W4 /WX /EHsc /std:c++17 /O2 /DE33_WIDGET_CAPACITY_SESSION /Fe:strong_lease_widget_fixture.exe "%PROJECT_ROOT%\native\strong_lease_fixture.cpp"
+if errorlevel 1 (popd & exit /b 1)
+strong_lease_widget_fixture.exe
+if errorlevel 1 (popd & exit /b 1)
 cl /nologo /W4 /WX /EHsc /std:c++17 /O2 /c /Fo:target_adapter.obj "%PROJECT_ROOT%\native\strong_reference_compile.cpp"
 set "RESULT=%errorlevel%"
 popd

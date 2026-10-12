@@ -52,11 +52,11 @@ public:
         queue_.close();
     }
     bool open(void* volatile* address, Entry expected, Ticket ticket, uint32_t thread,
-              uint32_t duration_ms, uint32_t limit, Collector collector, void* context) {
+              uint32_t duration_ms, uint32_t limit, Collector collector, void* context, bool before = false) {
         if (!collector || thread != GetCurrentThreadId() ||
             !queue_.open(ticket, thread, GetTickCount64(), duration_ms, limit)) return false;
         ticket_ = ticket; thread_ = thread; collector_ = collector; context_ = context;
-        handle_ = Slots::install(address, expected, post, this);
+        handle_ = before ? Slots::install(address, expected, post, this, true) : Slots::install(address, expected, post, this);
         if (!handle_) { queue_.close(); return false; }
         cleanup_ = Cleanup::attached;
         return true;
@@ -80,6 +80,10 @@ public:
         return result;
     }
     bool pop(Ticket ticket, Event& event) { return queue_.pop(ticket, event); }
+    bool renew(uint32_t duration_ms, uint32_t limit) {
+        return GetCurrentThreadId() == thread_ && handle_ && cleanup_ == Cleanup::attached &&
+            queue_.renew(ticket_, GetTickCount64(), duration_ms, limit);
+    }
     QueueStatus status(uint64_t now) { return queue_.status(now); }
     uint64_t rejected() const { return rejected_.load(); }
     bool allows_entry(void* volatile* address, Entry expected, Entry current) const {

@@ -1,9 +1,10 @@
 #pragma once
 #include <cstddef>
 #include "invocation_protocol.h"
+#include "blueprint_trace_profile.h"
 
 namespace e33_trace {
-enum class Operation : uint32_t { start = 1, stop, drain, status, forget };
+enum class Operation : uint32_t { start = 1, stop, drain, status, forget, renew };
 constexpr uint32_t wire_version = 1, drain_capacity = 8;
 #pragma pack(push, 1)
 struct WireEvent {
@@ -34,23 +35,30 @@ inline bool wire_zero(const void* memory, size_t size) {
     return true;
 }
 inline bool valid_request(const Packet& p) {
-    if (p.version != wire_version || p.operation < 1 || p.operation > 5 || !p.owner ||
+#ifdef E33_PAUSE_MENU_SESSION
+    constexpr uint32_t max_operation = 6;
+#else
+    constexpr uint32_t max_operation = 5;
+#endif
+    if (p.version != wire_version || p.operation < 1 || p.operation > max_operation || !p.owner ||
         p.filtered > 1 || p.reserved || p.error || p.state || p.cleanup || p.count ||
         p.observed || p.dropped || p.rejected || !wire_zero(p.events, sizeof(p.events))) return false;
     if (p.operation != static_cast<uint32_t>(Operation::start)) {
-        return p.registration && !p.duration_ms && !p.limit && !p.filtered &&
+        const bool renewal = p.operation == static_cast<uint32_t>(Operation::renew);
+        return p.registration && (renewal ? (p.duration_ms && p.duration_ms <= 300000 && p.limit && p.limit <= 1000) :
+            (!p.duration_ms && !p.limit)) && !p.filtered &&
             p.filter.index == -1 && !p.filter.serial && !p.filter.address &&
             wire_zero(&p.schema, sizeof(p.schema));
     }
     if (p.registration || !p.duration_ms || p.duration_ms > 300000 || !p.limit || p.limit > 1000 ||
         validate_call_packet(p.schema) || p.schema.object_count ||
-        !(p.schema.function_flags & 0x400) || !p.schema.entry_rva || p.schema.entry_rva >= 166776832 ||
+        (!(p.schema.function_flags & 0x400) && !blueprint_damage_schema(p.schema)) || !p.schema.entry_rva || p.schema.entry_rva >= 166776832 ||
         !wire_zero(p.schema.data, sizeof(p.schema.data))) return false;
     if (p.filtered) {
         if (p.filter.index < 0 || p.filter.serial < 0 || p.filter.address < 0x10000 || (p.filter.address & 7)) return false;
     } else if (p.filter.index != -1 || p.filter.serial || p.filter.address) return false;
     for (uint32_t i = 0; i < p.schema.field_count; ++i)
-        if (p.schema.fields[i].kind > CallDouble) return false;
+        if (p.schema.fields[i].kind > CallDouble && !blueprint_damage_schema(p.schema)) return false;
     return true;
 }
 }

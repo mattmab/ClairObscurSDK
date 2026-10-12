@@ -13,12 +13,21 @@ Only the native dispatcher establishes current schema validity.
 """
 import weakref
 import threading
+from contextlib import nullcontext
 
 from .invocation import UnsupportedInvocation
 
 
+class PlanningObservations:
+    """Copied planning data, bound to one session; never dispatch authority."""
+    def __init__(self, planner):
+        self._session = planner._session
+        self.catalog = planner._catalog
+        self._entries = dict(planner._metadata._entries)
+
+
 class InvocationPlanner:
-    def __init__(self, session, *, scope=None, selected_results=False, catalog=None):
+    def __init__(self, session, *, scope=None, selected_results=False, catalog=None, observations=None):
         session._check()
         if type(selected_results) is not bool:
             raise ValueError('selected_results must be bool')
@@ -33,7 +42,12 @@ class InvocationPlanner:
         self._catalog = None
         from ._planning_metadata import MetadataObservations
         self._metadata = MetadataObservations()
-        if catalog is None:
+        if observations is not None:
+            if catalog is not None or not isinstance(observations, PlanningObservations) or observations._session() is not session:
+                raise ValueError('Planning observations require the same session and no catalog override')
+            self.refresh_from(observations.catalog)
+            self._metadata._entries = dict(observations._entries)
+        elif catalog is None:
             self.refresh()
         else:
             self.refresh_from(catalog)
@@ -87,10 +101,18 @@ class InvocationPlanner:
         from .invocation import prepare_call
         plan = prepare_call(self._catalog, obj, function, arguments,
             pod_values=session.supports_pod_values, text_values=session.supports_text_values,
+            string_values=getattr(session, "supports_string_values", False),
             enum_values=session.supports_enum_values,
             _trace_plan=getattr(session, '_trace_plan_for', lambda _: None)(function),
             _metadata=self._metadata)
         return PreparedInvocation(self, plan)
+
+    def observations(self):
+        """Copy metadata for a new scope. Native dispatch still validates it all."""
+        self._check()
+        if self._catalog is None:
+            raise RuntimeError('Planner has no catalog observations')
+        return PlanningObservations(self)
 
     def close(self):
         # Idempotent local revocation; no engine state or object ownership.
@@ -154,9 +176,10 @@ class PreparedInvocation:
         if refresh_from_result:
             planner._generation += 1
             planner._catalog = None
-        result, observed = session._invoke_retained_plan(
-            self._plan, catalog, _return_catalog=True,
-            _selected_results=planner._selected_results)
+        with scope._lease_context() if scope is not None else nullcontext():
+            result, observed = session._invoke_retained_plan(
+                self._plan, catalog, _return_catalog=True,
+                _selected_results=planner._selected_results)
         if scope is not None:
             # Hold scope alive through dispatch and use the existing adoption path.
             scope._adopt_retained(result)

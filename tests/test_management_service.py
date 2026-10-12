@@ -89,9 +89,12 @@ class NativeServiceTests(unittest.TestCase):
         self.assertEqual(dispatch.execute('stat fps').route, 'native')
         self.assertEqual(dispatch.execute('py 2 + 3').output.strip(), '5')
         self.assertIn('closed', dispatch.execute('mods ui close').output)
-        self.assertIsNone(service.menu)
+        self.assertIs(service.menu, original)
+        self.assertEqual(original.panel.state, 'built')
+        self.assertFalse(any(action.active for action in original.panel.handles))
         self.assertIn('opened', dispatch.execute('mods ui').output)
-        self.assertIsNot(original, service.menu)
+        self.assertIs(original, service.menu)
+        self.assertEqual(original.panel.operations.count('build'), 1)
 
     def test_unsupported_controller_keeps_console_fallback(self):
         service = self.service()
@@ -99,6 +102,53 @@ class NativeServiceTests(unittest.TestCase):
         with self.assertRaisesRegex(ManagementError, '--multi-controls'): service.open()
         self.assertIsNone(service.menu)
         self.assertFalse(service.status()['available'])
+
+    def test_routes_share_widgets_and_restore_default_presenter(self):
+        from expedition33.management_view import ManagementView
+        service = self.service()
+        service.prepare()
+        original = service.menu
+        factory = lambda registry: ManagementView(registry)
+        route = service.for_view(factory)
+        route.open()
+        self.assertIs(route.menu, original)
+        self.assertIs(original._view_factory, factory)
+        with self.assertRaisesRegex(ManagementError, 'Another native view'):
+            route.open()
+        route.close()
+        self.assertIsNone(route.menu)
+        self.assertEqual(original.panel.state, 'built')
+        self.assertIs(original._view_factory, ManagementView)
+        service.open()
+        self.assertIs(service.menu, original)
+        self.assertEqual(original.panel.operations.count('build'), 1)
+        route.close()  # An inactive route cannot close the default view.
+        self.assertEqual(original.panel.state, 'open')
+
+    def test_dispose_releases_hidden_cache_without_automatic_recreation(self):
+        service = self.service(); service.prepare()
+        owner = service.menu
+        self.assertTrue(service.status()['cached_widgets'])
+        self.assertEqual(owner.panel.state, 'built')
+        service.command('dispose')
+        self.assertEqual(owner.panel.state, 'closed')
+        service.poll()
+        self.assertIsNone(service.menu)
+        service.open()
+        self.assertIsNot(service.menu, owner)
+
+    def test_click_render_failure_latches_and_is_not_replayed(self):
+        service = self.service(); service.open()
+        menu = service.menu
+        first = menu.frame.controls[0]
+        with patch.object(menu, '_paint', side_effect=RuntimeError('batch failed')) as paint:
+            with self.assertRaisesRegex(RuntimeError, 'batch failed'):
+                menu.submit(menu.frame.revision, first.token)
+            service.poll()
+            self.assertIn('batch failed', service.status()['error'])
+            with self.assertRaisesRegex(ManagementError, 'failed'): service.open()
+            paint.assert_called_once_with()
+            self.assertFalse(menu._accept_input)
 
     def test_construction_failure_preserves_owner_and_blocks_second_open(self):
         service = self.service()

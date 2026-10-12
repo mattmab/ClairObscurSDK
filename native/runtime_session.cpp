@@ -24,6 +24,7 @@ static const CallPodValidation pod_validation{validate_target_pod};
 static const CallPodValidation* session_pod_validation=&pod_validation;
 #elif defined(E33_REFLECTED_SESSION)
 #include "reflected_invocation.h"
+#include "picto_progression.h"
 static const CallPodValidation* session_pod_validation=nullptr;
 #endif
 #ifdef E33_ASSIGNMENT_SESSION
@@ -38,6 +39,10 @@ static bool validate_target_enum(uint64_t base,uint64_t property,const CallIdent
 #endif
 #ifdef E33_REFLECTED_SESSION
 #include "reflected_invocation.h"
+#include "picto_progression.h"
+#endif
+#ifdef E33_SEQUENCE_SESSION
+#include "target_asset_call.h"
 #endif
 #ifdef E33_LEASE_SESSION
 #include "target_strong_reference.h"
@@ -58,6 +63,72 @@ static e33_keys::State session_keys;
 #ifdef E33_MENU_SESSION
 #include "target_menu_ops.h"
 static TargetMenuStorage session_menu;
+#ifdef E33_AUDIO_ISOLATION_SESSION
+#include "target_scoped_assignment.h"
+static TargetScopedAssignment session_override;
+#endif
+#ifdef E33_MUSIC_AUDIO_SESSION
+#include "music_audio_owner.h"
+static MusicAudioOwner session_music_audio;
+#endif
+#ifdef E33_SEQUENCE_PLAYER_SESSION
+#include "sequence_owner.h"
+static SequenceOwner session_sequence;
+#ifdef E33_CINEMATIC_SOUND_EVENT_SESSION
+#include "cinematic_sound_event.h"
+#ifdef E33_CINEMATIC_WIDGET_SESSION
+#include "cinematic_widget_owner.h"
+#include "cinematic_getter_profile.h"
+#include "cinematic_track_profile.h"
+#include "cinematic_callback_profile.h"
+#include "cinematic_widget_hook.h"
+static CinematicWidgetHook session_widget_hook;
+#endif
+static CinematicSoundEvent session_sound_event;
+#endif
+static uint32_t guarded_sequence_close() {
+    __try {
+        auto result=session_sequence.close(runtime_base);
+        if(result) return result;
+#ifdef E33_CINEMATIC_WIDGET_SESSION
+        __try { result=session_widget_hook.close(runtime_base); }
+        __except(EXCEPTION_EXECUTE_HANDLER) { result=1513; }
+#endif
+#ifdef E33_CINEMATIC_SOUND_EVENT_SESSION
+        uint32_t sound_result=0;
+        __try { sound_result=session_sound_event.close(runtime_base); }
+        __except(EXCEPTION_EXECUTE_HANDLER) { sound_result=1503; }
+        if(!result) result=sound_result;
+#endif
+#ifdef E33_MUSIC_AUDIO_SESSION
+        {
+            uint32_t audio_result=0;
+            __try { audio_result=session_music_audio.close(runtime_base,lease_session,session_leases); }
+            __except(EXCEPTION_EXECUTE_HANDLER) { audio_result=1493; }
+            if(!result) result=audio_result;
+            // Sequence evaluation has stopped. Even if private audio cleanup
+            // fails, restore the global reference; keep private leases pinned
+            // and report the audio failure rather than leaving GI redirected.
+            const auto restored=session_override.close(runtime_base);
+            if(!result) result=restored;
+        }
+#endif
+#ifdef E33_AUDIO_ISOLATION_SESSION
+        if(!result) result=session_override.close(runtime_base);
+#endif
+        return result;
+    }
+    __except(EXCEPTION_EXECUTE_HANDLER) { return 1473; }
+}
+#endif
+#ifdef E33_MEDIA_SESSION
+#include "media_owner.h"
+static MediaOwner session_media;
+static uint32_t guarded_media_close() {
+    __try { return session_media.close(runtime_base); }
+    __except(EXCEPTION_EXECUTE_HANDLER) { return 1403; }
+}
+#endif
 static MenuResult close_menu_actions() {
 #ifdef E33_MULTI_BUTTON_SESSION
     auto multi=session_menu.multi_actions.close();
@@ -104,6 +175,14 @@ static MenuResult menu_command(MenuPacket& wire) {
     case MenuOperation::Attach: return s.menu.attach(ops,lease_session,wire.owner);
     case MenuOperation::Focus: return s.menu.focus(ops,lease_session,wire.owner);
     case MenuOperation::Close: {
+#ifdef E33_SEQUENCE_PLAYER_SESSION
+        auto sequence=guarded_sequence_close();
+        if(sequence) return sequence==407 ? MenuResult::Deferred : MenuResult::Quarantined;
+#endif
+#ifdef E33_MEDIA_SESSION
+        auto media=guarded_media_close();
+        if(media) return media==407 ? MenuResult::Deferred : MenuResult::Quarantined;
+#endif
         s.menu.stop_actions();
         auto result=close_menu_actions();
         return result==MenuResult::Ok ? s.menu.close(ops,lease_session,wire.owner) : result;
@@ -118,6 +197,10 @@ static void guarded_menu_command(MenuPacket& wire) {
     __try {
         auto result=menu_command(wire);
         wire.error=result==MenuResult::Ok ? 0 : 810+static_cast<uint32_t>(result);
+#ifdef E33_MENU_DIAGNOSTIC_SESSION
+        if(wire.error==811 && wire.operation==1 && !session_menu.menu.active() && session_menu.preparation_diagnostic)
+            wire.error=session_menu.preparation_diagnostic;
+#endif
         wire.outcome=static_cast<uint32_t>(MenuOutcome::Returned);
     } __except(EXCEPTION_EXECUTE_HANDLER) {
 #ifdef E33_MULTI_BUTTON_SESSION
@@ -133,6 +216,10 @@ static void guarded_menu_command(MenuPacket& wire) {
 }
 static MenuResult guarded_menu_close() {
     __try {
+#ifdef E33_SEQUENCE_PLAYER_SESSION
+        auto sequence=guarded_sequence_close();
+        if(sequence) return sequence==407 ? MenuResult::Deferred : MenuResult::Quarantined;
+#endif
         session_menu.menu.stop_actions();
         auto result=close_menu_actions();
         if(result!=MenuResult::Ok) return result;
@@ -280,6 +367,22 @@ static unsigned console_toggle_key=0;
 #include "target_text_call.h"
 // Never borrow the shared mapping for ownership or cleanup. These records live
 // in the pinned module even after a controller exits or an engine call faults.
+#ifdef E33_STRING_SESSION
+static TextCallPacket session_string_packet;
+static StringCallFrame session_string_frame;
+static bool string_available(void*) { return session_string_frame.available(); }
+static uint32_t string_prepare(void*) { return session_string_frame.prepare(session_string_packet) ? 0 : 765; }
+static uint32_t string_begin(void*) { return session_string_frame.begin() ? 0 : 765; }
+static uint32_t string_returned(void*) { return session_string_frame.returned(session_string_packet) ? 0 : 766; }
+static uint32_t string_finish(void*) { return session_string_frame.state==StringFrameState::Returned ? 0 : 766; }
+static uint32_t guarded_string_invoke(const CallRetention* retention) {
+    CallTextHandling handling{&session_string_packet,session_string_frame.arguments,&session_string_frame,
+        string_available,string_prepare,string_begin,string_returned,string_finish,true};
+    __try { return reflected_call(runtime_base,session_string_packet.retained.call,retention,
+                                  session_pod_validation,&handling); }
+    __except(EXCEPTION_EXECUTE_HANDLER) { return 767; }
+}
+#endif
 static TextCallPacket session_text_packet;
 static TargetTextCall session_text;
 static TextFrameResult guarded_text_cleanup() {
@@ -332,12 +435,21 @@ static bool lifetime_valid() {
         fixed_slot(runtime_base, target.function_index, target.function_serial) == target_function;
 }
 uint32_t backend_open(SessionPacket* packet) {
+#ifdef E33_SEQUENCE_PLAYER_SESSION
+    if(session_sequence.active()) return 1473;
+#endif
+#ifdef E33_MEDIA_SESSION
+    if(session_media.active()) return 1403;
+#endif
 #ifdef E33_MENU_SESSION
     if(session_menu.menu.active()) return 800;
 #endif
 #ifdef E33_TEXT_SESSION
     // Failed ownership from a previous session is never adopted by a new owner.
     if(!session_text.frame.available()) return 230;
+#ifdef E33_STRING_SESSION
+    if(!session_string_frame.available()) return 765;
+#endif
 #endif
     // Opening first verifies the fixed, already-proven getter and target thread.
     target = packet->request;
@@ -366,9 +478,124 @@ uint32_t backend_open(SessionPacket* packet) {
 #endif
     return 0;
 }
+#ifdef E33_UI_BATCH_SESSION
+#include "ui_batch_runtime.h"
+#endif
+#ifdef E33_PAUSE_MENU_SESSION
+#include "pause_attachment.h"
+static PauseAttachmentPool pause_attachment;
+static uint32_t guarded_pause_close(bool terminal) {
+    __try { return pause_attachment.close(runtime_base,terminal); }
+    __except(EXCEPTION_EXECUTE_HANDLER) { return 1303; }
+}
+#endif
 uint32_t backend_command(SessionPacket* packet) {
     if (!lifetime_valid()) return 61;
+#ifdef E33_GROWING_LEASE_SESSION
+    if(!session_leases.set_owner(lease_session,packet->lease_owner)) return 404;
+#endif
     switch (packet->request.action) {
+#ifdef E33_GROWING_LEASE_SESSION
+    case SessionLeasePolicy: {
+        auto& p=*reinterpret_cast<LeasePolicyPacket*>(packet->console_text);
+        if(p.version!=1 || (p.operation!=1 && p.operation!=2) || p.error || p.active || p.peak || p.capacity || p.count || p.storage_bytes) {
+            p.error=411;return 0;
+        }
+        for(const auto& owner:p.owners) if(owner.owner || owner.active || owner.peak) { p.error=411;return 0; }
+        if(p.operation==1) {
+            if(packet->lease_owner || !session_leases.configure(p.limit,p.quota,p.reserve)) { p.error=403;return 0; }
+        } else if(p.limit || p.quota || p.reserve) { p.error=411;return 0; }
+        p.limit=session_leases.limit();p.quota=session_leases.quota();p.reserve=session_leases.reserve();
+        p.active=session_leases.active();p.peak=session_leases.peak();p.capacity=session_leases.capacity();
+        p.storage_bytes=session_leases.storage_bytes();
+        session_leases.owner_statistics([&](uint64_t owner,uint32_t active,uint32_t peak) {
+            p.owners[p.count++]={owner,active,peak};});
+        return 0;
+    }
+#endif
+#ifdef E33_CINEMATIC_WIDGET_SESSION
+    case SessionCinematicWidget: {
+        auto& wire=*reinterpret_cast<CinematicWidgetPacket*>(packet->console_text);
+        if(wire.operation==2 && session_sequence.active()) { wire.error=1511;return 0; }
+        session_widget_hook.command(runtime_base,lease_session,session_leases,session_sequence,wire);
+        return 0;
+    }
+#endif
+#ifdef E33_CINEMATIC_SOUND_EVENT_SESSION
+    case SessionCinematicSoundEvent: {
+        auto& wire=*reinterpret_cast<CinematicSoundEventPacket*>(packet->console_text);
+        if(wire.operation==2 && session_sequence.active()) { wire.error=1501; return 0; }
+        session_sound_event.command(runtime_base,lease_session,session_leases,session_sequence,session_music_audio,wire);
+        return 0;
+    }
+#endif
+#ifdef E33_MUSIC_AUDIO_SESSION
+    case SessionMusicAudioOwner: {
+        auto& wire=*reinterpret_cast<MusicAudioOwnerPacket*>(packet->console_text);
+        if(wire.operation==2 && session_sequence.active()) { wire.error=1491; return 0; }
+        session_music_audio.command(runtime_base,lease_session,session_leases,session_menu.menu.active(),wire);
+        return 0;
+    }
+#endif
+#ifdef E33_AUDIO_ISOLATION_SESSION
+    case SessionPictoProgression: {
+        auto& wire=*reinterpret_cast<PictoProgressionPacket*>(packet->console_text);
+        if(session_sequence.active()) { wire.error=1712; return 0; }
+        picto_progression(runtime_base,wire);
+        return 0;
+    }
+    case SessionScopedAssignment: {
+        auto& wire=*reinterpret_cast<ScopedAssignmentPacket*>(packet->console_text);
+#ifdef E33_MUSIC_AUDIO_SESSION
+        if(wire.operation==2 && session_music_audio.active()) { wire.error=1481; return 0; }
+#endif
+        if(wire.operation==2 && session_sequence.active()) { wire.error=1481; return 0; }
+        session_override.command(runtime_base,lease_session,session_leases,session_menu.menu.active(),wire);
+        return 0;
+    }
+#endif
+#ifdef E33_SEQUENCE_PLAYER_SESSION
+    case SessionSequenceOwner: {
+        auto& wire=*reinterpret_cast<SequenceOwnerPacket*>(packet->console_text);
+        session_sequence.command(runtime_base,session_menu,wire);
+#ifdef E33_CINEMATIC_WIDGET_SESSION
+        if(wire.operation==2 && !wire.error && !wire.state) {
+            // Use the common sequence-stopped cleanup, including independent
+            // audio/reference restoration if widget detachment fails.
+            wire.error=guarded_sequence_close();
+        }
+#else
+#ifdef E33_CINEMATIC_SOUND_EVENT_SESSION
+        if(wire.operation==2 && !wire.error && !wire.state) wire.error=session_sound_event.close(runtime_base);
+#endif
+#endif
+#ifdef E33_AUDIO_CLEANUP_DIAGNOSTICS_SESSION
+        if(wire.operation==2 && wire.error!=1470 && wire.error!=1471) {
+            const auto diagnostic=session_music_audio.cleanup_diagnostics();
+            std::memset(&wire.stop,0,sizeof(wire.stop)+sizeof(wire.destroy));
+            std::memcpy(&wire.stop,&diagnostic,sizeof(diagnostic));
+        }
+#endif
+        return 0;
+    }
+#endif
+#ifdef E33_MEDIA_SESSION
+    case SessionMediaOwner:
+        session_media.command(runtime_base,lease_session,session_leases,session_menu,
+            *reinterpret_cast<MediaOwnerPacket*>(packet->console_text));
+        return 0;
+#endif
+#ifdef E33_PAUSE_MENU_SESSION
+    case SessionPauseAttachment:
+        pause_attachment.command(runtime_base,lease_session,session_leases,
+            *reinterpret_cast<PauseAttachmentPacket*>(packet->console_text));
+        return 0;
+#endif
+#ifdef E33_UI_BATCH_SESSION
+    case e33_ui::Action:
+        ui_batch_run(runtime_base,packet,backend_command);
+        return 0;
+#endif
 #ifdef E33_KEYBIND_SESSION
     case SessionKeybind:
         session_keys.command(packet->keys, console_toggle_key);
@@ -399,6 +626,19 @@ uint32_t backend_command(SessionPacket* packet) {
 #endif
 #ifdef E33_TEXT_SESSION
     case SessionTextInvoke: {
+#ifdef E33_STRING_SESSION
+        if(packet->text.retained.call.version==kStringCallVersion) {
+            if(!session_string_frame.available()) { packet->text.retained.call.error=765; return 0; }
+            session_string_packet=packet->text;
+            CallRetention retention{&session_string_packet.retained,retain_preflight,retain_output};
+            auto error=guarded_string_invoke(&retention);
+            session_string_packet.retained.call.error=error;
+            packet->text=session_string_packet;
+            // Unknown dispatch remains in pinned native storage; never retry or free it.
+            session_string_frame.reset();
+            return 0;
+        }
+#endif
         if(!session_text.frame.available()) { packet->text.retained.call.error=230; return 0; }
         session_text_packet=packet->text;
         session_text.base=runtime_base;
@@ -439,6 +679,29 @@ uint32_t backend_command(SessionPacket* packet) {
         auto& retained=packet->retained;
         if(!retained_call_empty(retained)) { retained.call.error=412; return 0; }
         CallRetention retention{&retained,retain_preflight,retain_output};
+#ifdef E33_SEQUENCE_PLAYER_SESSION
+        if(retained.call.version==kSequenceCallVersion) {
+            retained.call.error=session_sequence.create(runtime_base,lease_session,session_leases,session_menu,
+                retained,&retention,session_pod_validation,E33_TRACE_ENTRY_VALIDATION);
+            return 0;
+        }
+#endif
+#ifdef E33_OWNED_SOUND_SESSION
+        if(retained.call.entry_rva==0x3736020) {
+            retained.call.error=session_menu.menu.active() ? session_music_audio.create_sound(
+                runtime_base,lease_session,session_leases,session_menu.player,retained,
+                &retention,E33_TRACE_ENTRY_VALIDATION) : 1494;
+            return 0;
+        }
+#endif
+#ifdef E33_SEQUENCE_SESSION
+        if(retained.call.version==kAssetCallVersion) {
+            CallAssetValidation assets{&retained,validate_target_asset};
+            retained.call.error=reflected_call(runtime_base,retained.call,&retention,session_pod_validation,
+                nullptr,nullptr,false,E33_TRACE_ENTRY_VALIDATION,false,&assets);
+            return 0;
+        }
+#endif
 #ifdef E33_ENUM_SESSION
         if(retained.call.version==kEnumCallVersion) {
             CallEnumValidation enums{&retained,validate_target_enum};
@@ -469,12 +732,40 @@ uint32_t backend_command(SessionPacket* packet) {
         if(packet->request.action==SessionLeaseAcquire)
             result=session_leases.acquire(ops,lease_session,lease.object.address,lease.token);
         else if(packet->request.action==SessionLeaseRelease) {
+#ifdef E33_PAUSE_MENU_SESSION
+            if(pause_attachment.protects(lease.token)) result=StrongLeaseResult::Busy;
+            else
+#endif
 #ifdef E33_MENU_SESSION
             if(session_menu.menu.protects(lease_session,lease.token)
 #ifdef E33_MULTI_BUTTON_SESSION
                || session_menu.multi_actions.protects_lease(lease.token)
 #endif
             ) result=StrongLeaseResult::Busy;
+            else
+#endif
+#ifdef E33_MEDIA_SESSION
+            if(session_media.protects(lease.token)) result=StrongLeaseResult::Busy;
+            else
+#endif
+#ifdef E33_SEQUENCE_PLAYER_SESSION
+            if(session_sequence.protects(lease.token)) result=StrongLeaseResult::Busy;
+            else
+#endif
+#ifdef E33_AUDIO_ISOLATION_SESSION
+            if(session_override.protects(lease.token)) result=StrongLeaseResult::Busy;
+            else
+#endif
+#ifdef E33_MUSIC_AUDIO_SESSION
+            if(session_music_audio.protects(lease.token)) result=StrongLeaseResult::Busy;
+            else
+#endif
+#ifdef E33_CINEMATIC_SOUND_EVENT_SESSION
+            if(session_sound_event.protects(lease.token)) result=StrongLeaseResult::Busy;
+            else
+#endif
+#ifdef E33_CINEMATIC_WIDGET_SESSION
+            if(session_widget_hook.protects(lease.token)) result=StrongLeaseResult::Busy;
             else
 #endif
             result=session_leases.release(ops,lease_session,lease.token);
@@ -560,6 +851,16 @@ static StrongLeaseResult guarded_lease_close() {
 }
 #endif
 uint32_t backend_close() {
+#ifdef E33_SEQUENCE_PLAYER_SESSION
+    const auto sequence_cleanup=guarded_sequence_close();
+    if(sequence_cleanup==407 && !backend_shutting_down()) return kSessionCloseDeferred;
+    if(sequence_cleanup) return sequence_cleanup;
+#endif
+#ifdef E33_MEDIA_SESSION
+    const auto media_cleanup=guarded_media_close();
+    if(media_cleanup==407 && !backend_shutting_down()) return kSessionCloseDeferred;
+    if(media_cleanup) return media_cleanup;
+#endif
 #ifdef E33_KEYBIND_SESSION
     session_keys.close(); // Revoke input even when other cleanup must defer.
 #endif
@@ -569,6 +870,11 @@ uint32_t backend_close() {
     if (trace_result == 934) return kSessionCloseDeferred;
     if (trace_result) trace_cleanup_error = trace_result;
     lease_cleanup_error = trace_cleanup_error;
+#endif
+#ifdef E33_PAUSE_MENU_SESSION
+    const auto pause_cleanup=guarded_pause_close(backend_shutting_down());
+    if(pause_cleanup==kSessionCloseDeferred && !backend_shutting_down()) return kSessionCloseDeferred;
+    if(pause_cleanup) lease_cleanup_error=pause_cleanup;
 #endif
 #ifdef E33_TEXT_SESSION
     const auto text_cleanup=guarded_text_cleanup();
@@ -587,7 +893,11 @@ uint32_t backend_close() {
     if(!menu_released && !lease_cleanup_error) lease_cleanup_error=801;
     // An unresolved menu pins the pool. Continue detaching console/observer
     // hooks, but never release its widgets or adopt them in another session.
-    if(lease_session && menu_released) {
+    if(lease_session && menu_released
+#ifdef E33_PAUSE_MENU_SESSION
+       && !pause_cleanup
+#endif
+       ) {
 #else
     if(lease_session) {
 #endif
@@ -614,10 +924,53 @@ uint32_t backend_close() {
     return result;
 }
 void backend_message(MSG* message) {
+#ifdef E33_SEQUENCE_PLAYER_SESSION
+    if(session_sequence.active()
+#ifdef E33_AUDIO_ISOLATION_SESSION
+       || session_override.active()
+#endif
+#ifdef E33_MUSIC_AUDIO_SESSION
+       || session_music_audio.active()
+#endif
+#ifdef E33_CINEMATIC_SOUND_EVENT_SESSION
+       || session_sound_event.active()
+#endif
+#ifdef E33_CINEMATIC_WIDGET_SESSION
+       || session_widget_hook.active()
+#endif
+    ) {
+        TargetMenuOps<StrongLeasePool<>> sequence_context{session_menu,session_leases};
+        if(!session_menu.menu.active() || sequence_context.context()==MenuContext::Terminal)
+            guarded_sequence_close();
+    }
+#endif
+#ifdef E33_MEDIA_SESSION
+    if(session_media.active()) {
+        TargetMenuOps<StrongLeasePool<>> media_context{session_menu,session_leases};
+        if(!session_menu.menu.active() || media_context.context()==MenuContext::Terminal)
+            guarded_media_close();
+    }
+#endif
 #ifdef E33_TRACE_SESSION
     session_traces.maintain();
 #endif
 #ifdef E33_KEYBIND_SESSION
+#ifdef E33_MENU_ESCAPE_SESSION
+    // Escape belongs to the visible SDK menu; consume repeats and the paired
+    // release so the same press cannot dismiss the game's underlying Pause.
+    static bool menu_escape_down=false;
+    const bool escape=message->wParam==VK_ESCAPE;
+    const bool console_closed=lifetime_valid() && attachment_valid(runtime_base) &&
+        local_read<uint64_t>(attached_console+0xd8)==0;
+    if(escape && message->message==WM_KEYUP && menu_escape_down) {
+        menu_escape_down=false; message->message=WM_NULL; return;
+    }
+    if(escape && message->message==WM_KEYDOWN && console_closed &&
+       session_menu.menu.active() && session_keys.contains(VK_ESCAPE)) {
+        session_keys.press(VK_ESCAPE,(message->lParam & (LPARAM(1)<<30))!=0,true);
+        menu_escape_down=true; message->message=WM_NULL; return;
+    }
+#endif
     if(message->message==WM_KEYDOWN && session_keys.contains(static_cast<uint32_t>(message->wParam))) {
         DWORD foreground_pid=0;
         GetWindowThreadProcessId(GetForegroundWindow(), &foreground_pid);

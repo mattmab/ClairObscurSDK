@@ -1,5 +1,33 @@
 #pragma once
+#include "picto_progression_protocol.h"
+#ifdef E33_GROWING_LEASE_SESSION
+#include "lease_policy_protocol.h"
+#endif
+#ifdef E33_CINEMATIC_WIDGET_SESSION
+#include "cinematic_widget_protocol.h"
+#endif
+#ifdef E33_CINEMATIC_SOUND_EVENT_SESSION
+#include "cinematic_sound_event_protocol.h"
+#endif
+#ifdef E33_MUSIC_AUDIO_SESSION
+#include "music_audio_owner_protocol.h"
+#endif
+#ifdef E33_AUDIO_ISOLATION_SESSION
+#include "scoped_assignment_protocol.h"
+#endif
+#ifdef E33_SEQUENCE_PLAYER_SESSION
+#include "sequence_owner_protocol.h"
+#endif
+#ifdef E33_MEDIA_SESSION
+#include "media_owner_protocol.h"
+#endif
+#ifdef E33_PAUSE_MENU_SESSION
+#include "pause_attachment_protocol.h"
+#endif
 #ifdef E33_KEYBIND_SESSION
+#ifdef E33_UI_BATCH_SESSION
+#include "ui_batch_protocol.h"
+#endif
 #ifndef E33_TRACE_SESSION
 #error Keybind runtime requires the complete v18 capability chain
 #endif
@@ -67,7 +95,87 @@ constexpr uint32_t SessionMenu=107;
 #ifdef E33_MULTI_BUTTON_SESSION
 #ifdef E33_TRACE_SESSION
 #ifdef E33_KEYBIND_SESSION
+#ifdef E33_UI_BATCH_SESSION
+#ifdef E33_PAUSE_MENU_SESSION
+#ifdef E33_VECTOR_SESSION
+#ifdef E33_LAYOUT_BATCH_SESSION
+#ifdef E33_BLUEPRINT_TRACE_SESSION
+#ifdef E33_BLUEPRINT_DIRECT_SESSION
+#if defined(E33_AUDIO_CLEANUP_DIAGNOSTICS_SESSION)
+#if defined(E33_COVERAGE_SESSION)
+constexpr wchar_t kSessionMessage[] = L"E33SDK.Session.v58mediaaudio";
+#elif defined(E33_FRAME_TIME_SESSION)
+constexpr wchar_t kSessionMessage[] = L"E33SDK.Session.v54frametime";
+#elif defined(E33_TITLE_MENU_SESSION)
+constexpr wchar_t kSessionMessage[] = L"E33SDK.Session.v53titlemenu";
+#elif defined(E33_AUDIO_COMPLETION_SESSION)
+constexpr wchar_t kSessionMessage[] = L"E33SDK.Session.v52audiocompletion";
+#elif defined(E33_AUDIO_IDENTITY_SESSION)
+constexpr wchar_t kSessionMessage[] = L"E33SDK.Session.v51audioidentity";
+#else
+constexpr wchar_t kSessionMessage[] = L"E33SDK.Session.v50audiocleanupdiagnostics";
+#endif
+#elif defined(E33_WIDGET_ANIMATION_SESSION)
+constexpr wchar_t kSessionMessage[] = L"E33SDK.Session.v49animationdrain";
+#elif defined(E33_WIDGET_DIAGNOSTICS_SESSION)
+constexpr wchar_t kSessionMessage[] = L"E33SDK.Session.v48widgetdiagnostics";
+#elif defined(E33_NUMBERED_CALLBACK_SESSION)
+constexpr wchar_t kSessionMessage[] = L"E33SDK.Session.v47numberedcallback";
+#elif defined(E33_NUMBERED_WIDGET_SESSION)
+constexpr wchar_t kSessionMessage[] = L"E33SDK.Session.v46numberedwidget";
+#elif defined(E33_TRACK_DIAGNOSTIC_SESSION)
+constexpr wchar_t kSessionMessage[] = L"E33SDK.Session.v45trackdiagnostic";
+#elif defined(E33_GROWING_LEASE_SESSION)
+constexpr wchar_t kSessionMessage[] = L"E33SDK.Session.v44leasegrowth";
+#elif defined(E33_WIDGET_CAPACITY_SESSION)
+constexpr wchar_t kSessionMessage[] = L"E33SDK.Session.v43widgetcapacity";
+#elif defined(E33_CINEMATIC_WIDGET_SESSION)
+constexpr wchar_t kSessionMessage[] = L"E33SDK.Session.v42widgetownership";
+#elif defined(E33_ORIGINAL_AUDIO_PAUSE_SESSION)
+constexpr wchar_t kSessionMessage[] = L"E33SDK.Session.v41originalaudiopause";
+#elif defined(E33_CINEMATIC_SOUND_EVENT_SESSION)
+constexpr wchar_t kSessionMessage[] = L"E33SDK.Session.v40cinematicsoundevent";
+#elif defined(E33_OWNED_SOUND_SESSION)
+constexpr wchar_t kSessionMessage[] = L"E33SDK.Session.v39ownedsound";
+#elif defined(E33_MUSIC_AUDIO_GUARD_SESSION)
+constexpr wchar_t kSessionMessage[] = L"E33SDK.Session.v38musicaudioguard";
+#elif defined(E33_MUSIC_AUDIO_SESSION)
+constexpr wchar_t kSessionMessage[] = L"E33SDK.Session.v37musicaudio";
+#elif defined(E33_AUDIO_ISOLATION_SESSION)
+constexpr wchar_t kSessionMessage[] = L"E33SDK.Session.v36audioisolation";
+#elif defined(E33_SEQUENCE_PLAYER_SESSION)
+constexpr wchar_t kSessionMessage[] = L"E33SDK.Session.v35sequenceplayer";
+#elif defined(E33_SEQUENCE_SESSION)
+constexpr wchar_t kSessionMessage[] = L"E33SDK.Session.v34sequence";
+#elif defined(E33_MEDIA_SESSION)
+constexpr wchar_t kSessionMessage[] = L"E33SDK.Session.v33media";
+#elif defined(E33_STRING_SESSION)
+constexpr wchar_t kSessionMessage[] = L"E33SDK.Session.v31string";
+#elif defined(E33_MENU_ESCAPE_SESSION)
+constexpr wchar_t kSessionMessage[] = L"E33SDK.Session.v30menuescape";
+#elif defined(E33_MENU_DIAGNOSTIC_SESSION)
+constexpr wchar_t kSessionMessage[] = L"E33SDK.Session.v29menudiag";
+#else
+constexpr wchar_t kSessionMessage[] = L"E33SDK.Session.v26statistics";
+#endif
+#else
+constexpr wchar_t kSessionMessage[] = L"E33SDK.Session.v25statistics";
+#endif
+#else
+constexpr wchar_t kSessionMessage[] = L"E33SDK.Session.v24layout";
+#endif
+#else
+constexpr wchar_t kSessionMessage[] = L"E33SDK.Session.v23pausevector";
+#endif
+#else
+constexpr wchar_t kSessionMessage[] = L"E33SDK.Session.v22pause";
+#endif
+#else
+constexpr wchar_t kSessionMessage[] = L"E33SDK.Session.v20ui";
+#endif
+#else
 constexpr wchar_t kSessionMessage[] = L"E33SDK.Session.v19";
+#endif
 #else
 constexpr wchar_t kSessionMessage[] = L"E33SDK.Session.v18";
 #endif
@@ -132,6 +240,9 @@ constexpr DWORD SessionTextInvoke=106;
 enum : LONG { ClosedNormally=1, ControllerExited=2, BackendFailure=3, TargetShuttingDown=4 };
 struct SessionPacket {
     SchedulePacket request;
+#ifdef E33_GROWING_LEASE_SESSION
+    uint64_t lease_owner;
+#endif
     ObserverBuffer events;
     DWORD controller;
     volatile LONG closed;
@@ -170,7 +281,33 @@ struct SessionPacket {
 #endif
 };
 inline void session_mapping_name(wchar_t (&name)[96], DWORD controller, uint64_t nonce) {
-#ifdef E33_KEYBIND_SESSION
+#ifdef E33_UI_BATCH_SESSION
+#ifdef E33_PAUSE_MENU_SESSION
+#ifdef E33_VECTOR_SESSION
+#ifdef E33_LAYOUT_BATCH_SESSION
+#ifdef E33_BLUEPRINT_TRACE_SESSION
+#ifdef E33_BLUEPRINT_DIRECT_SESSION
+#ifdef E33_MENU_DIAGNOSTIC_SESSION
+    swprintf_s(name, L"Local\\E33Session29menudiag_%lu_%016llx", controller, nonce);
+#else
+    swprintf_s(name, L"Local\\E33Session26statistics_%lu_%016llx", controller, nonce);
+#endif
+#else
+    swprintf_s(name, L"Local\\E33Session25statistics_%lu_%016llx", controller, nonce);
+#endif
+#else
+    swprintf_s(name, L"Local\\E33Session24layout_%lu_%016llx", controller, nonce);
+#endif
+#else
+    swprintf_s(name, L"Local\\E33Session23pausevector_%lu_%016llx", controller, nonce);
+#endif
+#else
+    swprintf_s(name, L"Local\\E33Session22pause_%lu_%016llx", controller, nonce);
+#endif
+#else
+    swprintf_s(name, L"Local\\E33Session20ui_%lu_%016llx", controller, nonce);
+#endif
+#elif defined(E33_KEYBIND_SESSION)
     swprintf_s(name, L"Local\\E33Session19_%lu_%016llx", controller, nonce);
 #elif defined(E33_TRACE_SESSION)
     swprintf_s(name, L"Local\\E33Session18_%lu_%016llx", controller, nonce);
@@ -202,3 +339,4 @@ inline void session_mapping_name(wchar_t (&name)[96], DWORD controller, uint64_t
     swprintf_s(name, L"Local\\E33Session5_%lu_%016llx", controller, nonce);
 #endif
 }
+

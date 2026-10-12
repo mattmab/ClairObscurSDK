@@ -43,7 +43,7 @@ def decode_result(plan, reply, catalog, *, texts=()):
                               outcome=reply.outcome, native_error=reply.error)
     try:
         text_values = dict(texts)
-        expected_texts = {i for i, p in enumerate(plan.parameters) if p.kind == 'TextProperty'}
+        expected_texts = {i for i, p in enumerate(plan.parameters) if p.kind in ('TextProperty', 'StrProperty')}
         if len(text_values) != len(texts) or set(text_values) != expected_texts:
             raise ValueError('Copied text results do not match parameter identities')
         if expected_texts:
@@ -84,12 +84,20 @@ def decode_result(plan, reply, catalog, *, texts=()):
                     if bits not in (0, (encoding >> 16) & 255):
                         raise ValueError('Invalid result bool encoding')
                     item = bool(bits)
-                elif parameter.kind == 'TextProperty':
+                elif parameter.kind in ('TextProperty', 'StrProperty'):
                     if parameter.width != 16 or parameter.dimension != 1 or any(reply.data[at:at+16]):
                         raise ValueError('Invalid native text result storage')
                     item = text_values[field_index]
                 elif parameter.kind == 'StructProperty':
                     item = _pod_values.decode(parameter.pod_profile, reply.data[at:at + parameter.width])
+                elif parameter.kind == 'SequencePlaybackSettings':
+                    if plan.wire_version!=7 or not parameter.input or reply.data[at:at+40]!=plan.data[at:at+40]:
+                        raise ValueError('Unsupported or changed playback settings')
+                    item = None
+                elif parameter.kind == 'SoftObjectProperty':
+                    if plan.wire_version!=6 or not parameter.input or reply.data[at:at+40]!=plan.data[at:at+40]:
+                        raise ValueError('Unsupported or changed soft reference result')
+                    item = None  # Input only; never expose a native soft pointer.
                 elif parameter.kind == 'EnumProperty':
                     enum = catalog.resolve(parameter.constraint)
                     number = reply.data[at]
@@ -158,7 +166,7 @@ _FORMATS = {'ByteProperty': ('B', 1, 0, 255), 'UInt16Property': ('H', 2, 0, 6553
             'FloatProperty': ('f', 4, None, None), 'DoubleProperty': ('d', 8, None, None)}
 
 
-def prepare_call(catalog, target, function, arguments, *, pod_values=False, text_values=False, enum_values=False,
+def prepare_call(catalog, target, function, arguments, *, pod_values=False, text_values=False, string_values=False, enum_values=False,
                  _trace_plan=None, _metadata=None):
     """Describe a current UFunction and prepare named arguments without executing it.
 
@@ -166,9 +174,9 @@ Zeroed object slots have separate identity patches; caller-supplied integer
 addresses are never accepted. All inputs are explicit, with no guessed defaults.
 Output/return types must also be supported before a plan can be built.
 """
-    if any(type(flag) is not bool for flag in (pod_values, text_values, enum_values)):
+    if any(type(flag) is not bool for flag in (pod_values, text_values, string_values, enum_values)):
         raise ValueError('Value capability flags must be bool')
-    pod_values = pod_values or text_values or enum_values
+    pod_values = pod_values or text_values or string_values or enum_values
     target, function = catalog.resolve(target), catalog.resolve(function)
     if catalog.find_class('Function').index not in catalog.ancestors(function.class_index):
         raise ValueError('Expected a reflected Function identity')
@@ -183,7 +191,7 @@ Output/return types must also be supported before a plan can be built.
         if catalog.resolve(_trace_plan.function) != function:
             raise ValueError('Trace plan belongs to a different function')
         descriptor = _trace_plan.descriptor
-    return _prepare(catalog, target, function, descriptor, arguments, pod_values=pod_values, text_values=text_values, enum_values=enum_values, _metadata=_metadata)
+    return _prepare(catalog, target, function, descriptor, arguments, pod_values=pod_values, text_values=text_values, string_values=string_values, enum_values=enum_values, _metadata=_metadata)
 
 
 def _describe_observed(catalog, objects, metadata):
@@ -203,9 +211,10 @@ def _struct_reference(catalog, row):
 def _observed_pod_profile(catalog, row, descriptors, metadata=None):
     obj = _struct_reference(catalog, row)
     pending = {obj.index: obj}
-    # Only Anchors -> Vector2D nesting is allowed. Bound metadata acquisition;
+    # Three levels cover QualifiedFrameTime -> FrameTime -> FrameNumber.
+    # Keep metadata acquisition bounded;
     # validate_profile below enforces the actual shape, not just type names.
-    for _ in range(2):
+    for _ in range(3):
         pending = {index: value for index, value in pending.items() if index not in descriptors}
         if not pending:
             break
@@ -218,7 +227,7 @@ def _observed_pod_profile(catalog, row, descriptors, metadata=None):
     return obj, profile
 
 
-def _parameter_schema(catalog, function, descriptor, *, pod_values=False, text_values=False, enum_values=False, _metadata=None):
+def _parameter_schema(catalog, function, descriptor, *, pod_values=False, text_values=False, string_values=False, enum_values=False, _metadata=None):
     info = descriptor.function
     if info is None or not descriptor.owners or descriptor.owners[0]['index'] != function.index:
         raise ValueError('Function metadata is missing or inconsistent')
@@ -256,6 +265,22 @@ def _parameter_schema(catalog, function, descriptor, *, pod_values=False, text_v
             if kind == 'StructProperty' and pod_values:
                 constraint, profile = _observed_pod_profile(catalog, row, pod_descriptors, _metadata)
                 pod_profile, expected = profile.path, profile.width
+                if profile.path == _pod_values.TIMESPAN:
+                    expected_entries={'/Script/MediaAssets.MediaPlayer:GetTime':0x3208990,
+                                      '/Script/MediaAssets.MediaPlayer:GetDuration':0x3207a70}
+                    if (catalog.path_name(function) not in expected_entries or
+                            int(info['entry_rva'],16)!=expected_entries[catalog.path_name(function)] or
+                            info['flags']!=1417806851 or size!=8 or extent!=8 or returned!=0 or
+                            len(descriptor.properties)!=1 or name!='ReturnValue' or offset!=0 or
+                            dimension!=1 or row['flags']!=6755468160534400):
+                        raise UnsupportedInvocation('Timespan supports only verified MediaPlayer timing returns')
+                if profile.path in _pod_values.FRAME_PROFILES and (
+                        profile.path != _pod_values.QUALIFIED_FRAME_TIME or not row['flags'] & RETURN or dimension != 1):
+                    raise UnsupportedInvocation('Frame timing supports only scalar QualifiedFrameTime returns')
+            if kind == 'StrProperty' and string_values:
+                if dimension != 1 or row['flags'] != 0x18000000000280:
+                    raise UnsupportedInvocation('FString currently requires scalar by-value input')
+                expected = 16
             if kind == 'TextProperty' and text_values:
                 if dimension != 1:
                     raise UnsupportedInvocation('TextProperty arrays require a separate ownership contract')
@@ -292,16 +317,19 @@ def _parameter_schema(catalog, function, descriptor, *, pod_values=False, text_v
     return size, extent, returned, tuple(parameters)
 
 
-def _prepare(catalog, target, function, descriptor, arguments, *, pod_values=False, text_values=False, enum_values=False, _metadata=None):
+def _prepare(catalog, target, function, descriptor, arguments, *, pod_values=False, text_values=False, string_values=False, enum_values=False, _metadata=None):
     if type(arguments) is not dict or any(type(key) is not str for key in arguments):
         raise ValueError('Arguments must be a dictionary of parameter names')
     size, extent, returned, parameters = _parameter_schema(
-        catalog, function, descriptor, pod_values=pod_values, text_values=text_values, enum_values=enum_values, _metadata=_metadata)
+        catalog, function, descriptor, pod_values=pod_values, text_values=text_values, string_values=string_values, enum_values=enum_values, _metadata=_metadata)
     info = descriptor.function
     expected_inputs = {parameter.name for parameter in parameters if parameter.input}
     if set(arguments) != expected_inputs:
         raise ValueError(f'Argument names mismatch; missing={sorted(expected_inputs - arguments.keys())}, extra={sorted(arguments.keys() - expected_inputs)}')
-    text_fields = [p for p in parameters if p.kind == 'TextProperty']
+    text_fields = [p for p in parameters if p.kind in ('TextProperty', 'StrProperty')]
+    string_fields = [p for p in parameters if p.kind == 'StrProperty']
+    if string_fields and (len(parameters) != 1 or int(info['entry_rva'],16) != 0x320b2d0 or info['flags'] != 0x4020403):
+        raise UnsupportedInvocation('FString call signature has not been audited')
     enum_fields = [p for p in parameters if p.kind == 'EnumProperty']
     if text_fields and enum_fields:
         raise UnsupportedInvocation('Mixed text/enum transport is not connected yet')
@@ -321,7 +349,7 @@ def _prepare(catalog, target, function, descriptor, arguments, *, pod_values=Fal
                 if type(item) is not bool: raise ValueError(f'{parameter.name}: expected bool')
                 if item:
                     data[at + ((parameter.boolean_encoding >> 8) & 255)] |= (parameter.boolean_encoding >> 16) & 255
-            elif parameter.kind == 'TextProperty':
+            elif parameter.kind in ('TextProperty', 'StrProperty'):
                 from ._text_wire import encode_units
                 encode_units(item)
                 texts.append((parameter.name, item))
@@ -358,5 +386,5 @@ def _prepare(catalog, target, function, descriptor, arguments, *, pod_values=Fal
                 try: struct.pack_into('<' + fmt, data, at, item)
                 except (OverflowError, struct.error) as error: raise ValueError(f'{parameter.name}: value cannot fit storage') from error
     return CallPlan(target, function, info['flags'], int(info['entry_rva'], 16), size, extent, returned,
-                    tuple(parameters), bytes(data), tuple(patches), 4 if enum_fields else 3 if text_fields else 2 if pod_values else 1,
+                    tuple(parameters), bytes(data), tuple(patches), 5 if string_fields else 4 if enum_fields else 3 if text_fields else 2 if pod_values else 1,
                     tuple(texts))

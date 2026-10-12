@@ -23,6 +23,8 @@ name = 'expedition33-0.1.0-' + ('private-' if args.release else 'candidate-') + 
 destination = root / 'dist' / name
 destination.mkdir(parents=True, exist_ok=False)
 files = [root / 'README.md', root / 'DEVELOPMENT.md', root / 'launch.cmd', root / 'pyproject.toml']
+files.append(root / 'launch-native-mods.cmd')
+files.append(root / 'mods/Cinematics/catalog.json')
 files.append(root / 'src/expedition33/introspection/LICENSE')
 files.extend(path for path in runtime.rglob('*') if path.is_file())
 for directory, pattern in [('src', '*.py'), ('mods', '*.py'), ('scripts', '*.py'), ('scripts', '*.cmd'),
@@ -44,6 +46,9 @@ for relative in ['build/research-probe/research_probe.exe', 'build/runtime-sessi
                  'build/research-probe-v17/research_probe.exe', 'build/runtime-session-v17/runtime_session_v17.dll',
                  'build/research-probe-v18/research_probe.exe', 'build/runtime-session-v18/runtime_session_v18.dll',
                  'build/research-probe-v19/research_probe.exe', 'build/runtime-session-v19/runtime_session_v19.dll',
+                 'build/research-probe-v20-ui/research_probe.exe', 'build/runtime-session-v20-ui/runtime_session_v20_ui.dll',
+                 'build/research-probe-v22-pause/research_probe.exe', 'build/runtime-session-v22-pause/runtime_session_v22_pause.dll',
+                 'build/research-probe-v23-pause-vector/research_probe.exe', 'build/runtime-session-v23-pause-vector/runtime_session_v23_pause_vector.dll',
                  'build/scheduling-fixture/scheduling_hook.dll', 'build/fixed-observer/fixed_observer_v1.dll']:
     files.append(root / relative)
 hashes = {}

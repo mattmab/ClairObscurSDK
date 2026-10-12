@@ -24,12 +24,15 @@ class Observation:
     serial: int
     arguments: object
     return_value: object
+    session: int = 0
+    phase: str = 'post'
 
 
 def exchange(session, request):
     try:
         response = session._transport.command('trace', request)
-        return wire.decode_reply(request, response['trace_packet'], expected_pid=session.pid)
+        return wire.decode_reply(request, response['trace_packet'], expected_pid=session.pid,
+            renewable=getattr(session._transport, 'trace_renew_protocol', 0) == 1)
     except (RuntimeQueryError, ValueError, KeyError) as error:
         # A start may have installed a hook before acknowledgement failed.
         # Exiting our controller wakes native cleanup instead of abandoning it.
@@ -51,12 +54,12 @@ class Trace:
     def state(self):
         return self._state
 
-    def _command(self, operation):
+    def _command(self, operation, **kwargs):
         session = self._session
         session._check()
         if self._state in ('forgotten', 'unknown', 'session_closed'):
             raise RuntimeQueryError('Trace handle is no longer usable')
-        request = wire.encode_request(operation, self._owner, self.registration)
+        request = wire.encode_request(operation, self._owner, self.registration, **kwargs)
         reply = exchange(session, request)
         if reply.error:
             raise TraceError(reply.error)
@@ -78,6 +81,11 @@ class Trace:
     def stop(self):
         return self._command('stop')
 
+    def renew(self, *, duration_ms=300000, limit=1000):
+        if getattr(self._session._transport, 'trace_renew_protocol', 0) != 1:
+            raise RuntimeQueryError('This runtime cannot renew native observations')
+        return self._command('renew', duration_ms=duration_ms, limit=limit)
+
     def read(self):
         reply = self._command('drain')
         result = []
@@ -87,11 +95,12 @@ class Trace:
                     event.thread != self._session._transport.start['game_thread_id']):
                 self._reject('Stale trace event or unexpected game thread')
             try:
-                values = decode_trace(self.plan, event.data)
+                values = decode_trace(self.plan, event.data, session=getattr(self._session._transport, 'button_action_session', 0))
             except (ValueError, IndexError, KeyError) as error:
                 self._reject(f'Trace payload does not match its retained plan: {error}')
             result.append(Observation(event.sequence, event.monotonic_ms, event.thread,
-                event.pid, event.index, event.serial, values.arguments, values.return_value))
+                event.pid, event.index, event.serial, values.arguments, values.return_value,
+                getattr(self._session._transport, 'button_action_session', 0), getattr(self.plan, 'phase', 'post')))
             sequence, timestamp = event.sequence, event.monotonic_ms
         self._sequence, self._time = sequence, timestamp
         return tuple(result)
@@ -110,13 +119,19 @@ class Trace:
         self.close()
 
 
-def start(session, function, exemplar, *, target=None, duration_ms=10000, limit=100):
+def start(session, function, exemplar, *, target=None, duration_ms=10000, limit=100, catalog=None):
     session._check()
     if not session.supports_traces:
         raise RuntimeQueryError('This session has no trace backend')
     from .catalog import capture
-    catalog = capture()
-    plan = prepare_trace(catalog, function)
+    catalog = capture() if catalog is None else catalog
+    plan = session._trace_plan_for(function)
+    if plan is None:
+        plan = prepare_trace(catalog, function, blueprint=getattr(session._transport, 'blueprint_trace_protocol', 0) == 1)
+    else:
+        # The native thunk is already installed. Reuse its original observed
+        # descriptor; registration still validates identities/schema natively.
+        catalog.resolve(plan.function)
     exemplar = catalog.resolve(exemplar)
     target = catalog.resolve(target) if target is not None else None
     if plan.function.pid != session.pid:

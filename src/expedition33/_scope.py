@@ -1,6 +1,7 @@
 """Mod-owned resources on a shared controller Session; trusted code, not a sandbox."""
 import threading
 import weakref
+from contextlib import contextmanager
 
 
 class ScopedConsole:
@@ -90,6 +91,10 @@ class ScopedTrace:
         self._scope._check()
         return self._native.stop()
 
+    def renew(self, *, duration_ms=300000, limit=1000):
+        self._scope._check()
+        return self._native.renew(duration_ms=duration_ms, limit=limit)
+
     def close(self):
         self._scope._check()
         self._native.close()
@@ -110,23 +115,43 @@ class SessionScope:
     Console attachment and toggle configuration belong to the controller. Explicit
     supported methods avoid exposing a second independent transport lifecycle.
     """
-    def __init__(self, session):
+    def __init__(self, session, *, lease_owner=None):
         self._parent = None
         self._children = []
+        inherited_owner=None
         if isinstance(session, SessionScope):
             session._check()
             self._parent = weakref.ref(session)
             session._children.append(self)
+            inherited_owner=getattr(session,'_lease_owner_id',0)
             session = session._session
         self._session = session
+        self._lease_owner_id=0
+        if getattr(getattr(session,'_transport',None),'lease_policy_protocol',0)==1:
+            from .lease_policy import owner_id
+            self._lease_owner_id=inherited_owner if inherited_owner is not None else owner_id(session,lease_owner or 'sdk')
         self._owner = threading.get_ident()
         self._closed = False
         self._hooks = []
         self._traces = []
         self._leases = []
         self._menus = []
+        self._sequence_owners = []
+        self._reference_owners = []
+        self._audio_owners = []
         self.console = ScopedConsole(self)
         self.actions = None
+
+    @contextmanager
+    def _lease_context(self):
+        self._check()
+        transport=getattr(self._session,'_transport',None)
+        if getattr(transport,'lease_policy_protocol',0)!=1:
+            yield;return
+        previous=getattr(transport,'_lease_owner',0)
+        transport._lease_owner=self._lease_owner_id
+        try:yield
+        finally:transport._lease_owner=previous
 
     def _check(self):
         if threading.get_ident() != self._owner:
@@ -198,9 +223,29 @@ class SessionScope:
         return self._session.supports_object_assignment
 
     @property
+    def supports_vector_values(self):
+        self._check()
+        return self._session.supports_vector_values
+
+    @property
+    def supports_timespan_values(self):
+        self._check()
+        return self._session.supports_timespan_values
+
+    @property
+    def supports_frame_time_values(self):
+        self._check()
+        return self._session.supports_frame_time_values
+
+    @property
     def supports_pod_values(self):
         self._check()
         return self._session.supports_pod_values
+
+    @property
+    def supports_string_values(self):
+        self._check()
+        return self._session.supports_string_values
 
     @property
     def supports_text_values(self):
@@ -219,7 +264,8 @@ class SessionScope:
 
     def invoke_retained(self, obj, function, **arguments):
         self._check()
-        result = self._session.invoke_retained(obj, function, **arguments)
+        with self._lease_context():
+            result = self._session.invoke_retained(obj, function, **arguments)
         return self._adopt_retained(result)
 
     def _adopt_retained(self, result):
@@ -230,11 +276,11 @@ class SessionScope:
             self._leases.append(lease)
         return result
 
-    def invocation_planner(self, *, selected_results=False, catalog=None):
+    def invocation_planner(self, *, selected_results=False, catalog=None, observations=None):
         """Prepared calls retain the same mod-scope lifetime and result ownership."""
         self._check()
         from .prepared_invocation import InvocationPlanner
-        return InvocationPlanner(self._session, scope=self, selected_results=selected_results, catalog=catalog)
+        return InvocationPlanner(self._session, scope=self, selected_results=selected_results, catalog=catalog, observations=observations)
 
     @property
     def supports_object_leases(self):
@@ -243,7 +289,8 @@ class SessionScope:
 
     def retain(self, obj):
         self._check()
-        lease = self._session.retain(obj)
+        with self._lease_context():
+            lease = self._session.retain(obj)
         lease._scope = weakref.ref(self)
         self._leases = [value for value in self._leases if value.active or value.release_pending]
         self._leases.append(lease)
@@ -323,6 +370,37 @@ class SessionScope:
             except BaseException as error:
                 errors.append('trace controller cleanup: ' + type(error).__name__)
         menus_closed = True
+        for owner in reversed(self._sequence_owners):
+            try:
+                if not owner.close():
+                    menus_closed = False
+                    errors.append('native sequence cleanup deferred')
+            except BaseException as error:
+                menus_closed = False
+                errors.append('sequence cleanup: ' + type(error).__name__)
+        self._sequence_owners.clear()
+        for owner in reversed(self._audio_owners):
+            try:
+                if not owner.close():
+                    menus_closed = False
+                    errors.append('native audio cleanup deferred')
+            except BaseException as error:
+                menus_closed = False
+                errors.append('audio cleanup: ' + type(error).__name__)
+        self._audio_owners.clear()
+        for owner in reversed(self._reference_owners):
+            try:
+                if not owner.close():
+                    menus_closed = False
+                    errors.append('native reference restoration deferred')
+            except BaseException as error:
+                menus_closed = False
+                errors.append('reference restoration: ' + type(error).__name__)
+        self._reference_owners.clear()
+        if not menus_closed:
+            # Closed scopes cannot retry deferred ownership work. Native session
+            # teardown retains the owner and retries only pre-dispatch deferral.
+            self._session._abort_ownership()
         for menu in reversed(self._menus):
             try:
                 if not menu.close():

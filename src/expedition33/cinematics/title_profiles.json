@@ -1,0 +1,58 @@
+{
+  "version": 1,
+  "category": "owned_title",
+  "profiles": [
+    {
+      "profile_id": "prologue_lumiere",
+      "definition": "Sandfall/Content/Cinematics/Titles/SequenceTitles/DA_GA_CIN_Title_PrologueLumiere.uasset",
+      "saved_id": "PrologueTitle",
+      "sequence": "/Game/Cinematics/Titles/SequenceTitles/LS_Title_PrologueLumiere.LS_Title_PrologueLumiere",
+      "definition_sha256": "3f83d64770f56c4f3e11f8b5bbf216cba38af7409e6d8d282dcbeface16eeb88",
+      "director": "LS_Title_PrologueLumiere_DirectorBP_C",
+      "sound_wave": "Exp33_TitleCards_01_Prologue_Lumiere",
+      "required_protocols": [
+        "sequence_player_protocol",
+        "music_audio_protocol",
+        "owned_sound_protocol",
+        "original_audio_pause_protocol",
+        "cinematic_sound_event_protocol",
+        "cinematic_widget_protocol",
+        "cinematic_widget_animation_protocol",
+        "owned_audio_cleanup_protocol"
+      ],
+      "evidence": [
+        "research/CINEMATICS_WIDGET_OWNERSHIP.md",
+        "evidence/v54-depth-ended-status.json"
+      ],
+      "validation": "live_mechanism_verified",
+      "sound_mode": "single_owned_sound"
+    },
+    {
+      "profile_id": "back_at_camp",
+      "definition": "Sandfall/Content/Cinematics/Titles/SequenceTitles/DA_GA_CIN_Title_BackAtCamp.uasset",
+      "saved_id": "PrologueTitle",
+      "sequence": "/Game/Cinematics/Titles/SequenceTitles/LS_Title_BackAtCamp.LS_Title_BackAtCamp",
+      "definition_sha256": "701dae532fa6793315bafe668c33444d712bff8c40bf6d613c7056b92c69876c",
+      "director": "LS_Title_BackAtCamp_DirectorBP_C",
+      "sound_wave": "none_verified_empty",
+      "required_protocols": [
+        "sequence_player_protocol",
+        "music_audio_protocol",
+        "owned_sound_protocol",
+        "original_audio_pause_protocol",
+        "cinematic_widget_protocol",
+        "cinematic_widget_animation_protocol",
+        "owned_audio_cleanup_protocol",
+        "cinematic_empty_title_protocol"
+      ],
+      "evidence": [
+        "evidence/coverage-backatcamp-channel.json",
+        ".agent-work/reverse_engineering/coverage/backatcamp-callback-contract.json",
+        "research/BACKATCAMP_VISUAL_VALIDATION_2026-10-11.md",
+        "evidence/v58-backatcamp-menu-status.json"
+      ],
+      "validation": "live_mechanism_verified",
+      "sound_mode": "none_verified_empty"
+    }
+  ]
+}

@@ -40,12 +40,15 @@ def arm_navigation(management):
 
 def measure(management, operation, *, profile=True):
     service = management.native
-    if operation not in ('open', 'refresh', 'close'):
-        raise ValueError('Expected open, refresh or close')
-    method = {'open': service.open, 'refresh': service.refresh, 'close': service.close_menu}[operation]
+    if operation not in ('open', 'refresh', 'close', 'warmup'):
+        raise ValueError('Expected open, refresh, close or warmup')
+    method = {'open': service.open, 'refresh': service.refresh, 'close': service.close_menu,
+              'warmup': service.prepare}[operation]
     before = service.status()
     if operation == 'open' and before['state'] not in ('not_created', 'closed'):
         raise ValueError('Profile a fresh explicit open only')
+    if operation == 'warmup' and (service.menu is not None or service._warmup_attempted):
+        raise ValueError('Warmup measurement requires an explicitly disposed, unprepared menu')
     profiler = cProfile.Profile() if profile else None
     started = time.perf_counter()
     report = {'operation': operation, 'before': before, 'completed': False,
@@ -53,6 +56,8 @@ def measure(management, operation, *, profile=True):
     prefix = ROOT / 'evidence' / (('management-profile-' if profile else 'management-timing-') + operation)
     try:
         result = profiler.runcall(method) if profiler else method()
+        if operation == 'warmup' and service.status()['error']:
+            raise RuntimeError(service.status()['error'])
         report['completed'] = True
         return result
     except BaseException as error:

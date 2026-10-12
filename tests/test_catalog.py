@@ -20,6 +20,24 @@ def fixture():
 
 
 class CatalogTests(unittest.TestCase):
+    def test_subset_keeps_dependency_closure_and_excludes_recycled_unowned_slot(self):
+        objects, classes = fixture()
+        old = Catalog(123, objects, classes)
+        selected = old.subset([objects[4]])
+        self.assertEqual(set(selected.by_index), {0, 1, 2, 4})
+        recycled = replace(objects[5], serial=9, name='NewActor')
+        fresh = Catalog(123, objects[:5] + [recycled], classes)
+        with self.assertRaises(RuntimeQueryError):
+            old.with_observations(fresh)
+        merged = selected.with_observations(fresh)
+        self.assertEqual(merged.resolve(recycled), recycled)
+        with self.assertRaises(RuntimeQueryError):
+            merged.resolve(objects[5])
+        child = old.subset([objects[5]])
+        self.assertEqual(set(child.by_index), set(old.by_index))
+        with self.assertRaises(RuntimeQueryError):
+            old.subset([recycled])
+
     def test_combined_closure_matches_full_revalidation_without_mutating_inputs(self):
         objects, classes = fixture()
         old = Catalog(123, objects[:-1], classes)

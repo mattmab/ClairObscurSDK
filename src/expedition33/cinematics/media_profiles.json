@@ -1,0 +1,33 @@
+{
+  "version": 1,
+  "profiles": [
+    {
+      "definition": "Sandfall/Content/Cinematics/Lumiere/Act01/MyFlower/DA_GA_CIN_MyFlower_P1.uasset",
+      "saved_id": "MyFlowerP1",
+      "sequence": "/Game/Cinematics/Lumiere/Act01/MyFlower/MCS_MyFlower_P1.MCS_MyFlower_P1",
+      "definition_sha256": "3d79dadfba863198c162e8b86ed5e828f6da570b3dbe0862e61e15a56c0912b7",
+      "movie_path": "./Movies/CS_MyFlower_P1_Intro.mp4",
+      "label": "MyFlowerP1 \u2014 prerendered intro segment",
+      "limitation": "Intro segment only; the full in-engine scene is not replayed.",
+      "evidence": [
+        "evidence/myflower-mapping-verified.json"
+      ],
+      "validation": "live_partial",
+      "full_scene": false
+    },
+    {
+      "definition": "Sandfall/Content/Cinematics/Lumiere/Act03/AliciaBirth/DA_GA_CIN_AliciaBirth_P3_PreRender.uasset",
+      "saved_id": "CS_AliciaAtelier",
+      "sequence": "/Game/Cinematics/Lumiere/Act03/AliciaBirth/MCS_AliciaBirth_P3.MCS_AliciaBirth_P3",
+      "definition_sha256": "f4bf2bb217362d7c7794c14fa006490db2480ca5c3425375d4e926d287b289fe",
+      "movie_path": "./Movies/CS_Aliciabirth Prerender.mp4",
+      "label": "AliciaBirth P3 \u2014 prerendered segment",
+      "limitation": "Fullscreen video and the v58 candidate's authored dialogue, music and SFX played in sync. Natural end restored the menu and original music; Stop and Escape restored the menu. Repeat-playback reliability and full-definition acceptance remain under validation.",
+      "evidence": [
+        ".agent-work/reverse_engineering/coverage/aliciabirth-media-contract.json"
+      ],
+      "validation": "live_partial",
+      "full_scene": false
+    }
+  ]
+}

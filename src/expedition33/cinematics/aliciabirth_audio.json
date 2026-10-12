@@ -1,0 +1,413 @@
+{
+  "version": 1,
+  "admitted": true,
+  "category": "media_external_audio",
+  "tick_rate": 24000,
+  "package_sha256": "c5ecda03c876bd4762c17b34d44862c15c1e575c79a162b03620b4e52c40c3fa",
+  "sections": [
+    {
+      "identity": "MovieSceneAudioSection_0",
+      "source": "/Game/Audio/WAV/MUSIC/Alpha/Characters/MUS_LaNaissanceDAlicia_OrchestralChoir.MUS_LaNaissanceDAlicia_OrchestralChoir",
+      "lower": 0,
+      "upper": 2760800,
+      "source_offset": 0,
+      "default": 0.11999999731779099,
+      "keys": [
+        {
+          "frame": 352000,
+          "value": 1.0,
+          "arrive_tangent": 0.0,
+          "leave_tangent": 0.0
+        },
+        {
+          "frame": 378400,
+          "value": 0.5,
+          "arrive_tangent": -2.8205127819092013e-05,
+          "leave_tangent": -2.8205127819092013e-05
+        },
+        {
+          "frame": 383200,
+          "value": 0.11999999731779099,
+          "arrive_tangent": 0.0,
+          "leave_tangent": 0.0
+        },
+        {
+          "frame": 2425600,
+          "value": 0.11999999731779099,
+          "arrive_tangent": 0.0,
+          "leave_tangent": 0.0
+        },
+        {
+          "frame": 2446400,
+          "value": 0.5,
+          "arrive_tangent": 0.0,
+          "leave_tangent": 0.0
+        },
+        {
+          "frame": 2714400,
+          "value": 0.5,
+          "arrive_tangent": 0.0,
+          "leave_tangent": 0.0
+        },
+        {
+          "frame": 2740000,
+          "value": 0.20000000298023224,
+          "arrive_tangent": 0.0,
+          "leave_tangent": 0.0
+        }
+      ],
+      "ease_in": 0,
+      "ease_out": 19200,
+      "payload_sha256": "cc3950820d55ef898a3cc27d60454b9e37aa937ee5608209655351b48f55d50a"
+    },
+    {
+      "identity": "MovieSceneAudioSection_10",
+      "source": "/Game/Audio/WAV/VO/Cinematics/LumiereMayhem/VO_CS_3_20_0C_AliciaBirth_21_LumiereMother.VO_CS_3_20_0C_AliciaBirth_21_LumiereMother",
+      "lower": 1248000,
+      "upper": 1350400,
+      "source_offset": 0,
+      "default": 1.0,
+      "keys": [],
+      "ease_in": 0,
+      "ease_out": 0,
+      "payload_sha256": "75c6eae7a3cae3dafceb18b99fd11ef51724572d162a7f708524e8f5889b27b7"
+    },
+    {
+      "identity": "MovieSceneAudioSection_11",
+      "source": "/Game/Audio/WAV/VO/Cinematics/LumiereMayhem/VO_CS_3_20_0C_AliciaBirth_22_LumiereMother.VO_CS_3_20_0C_AliciaBirth_22_LumiereMother",
+      "lower": 1369600,
+      "upper": 1424800,
+      "source_offset": 0,
+      "default": 1.0,
+      "keys": [],
+      "ease_in": 0,
+      "ease_out": 0,
+      "payload_sha256": "14202e479347350f226c49cd7c2560fc756bacfbfa7bf6cc7547702f6477dfcd"
+    },
+    {
+      "identity": "MovieSceneAudioSection_12",
+      "source": "/Game/Audio/WAV/VO/Cinematics/LumiereMayhem/VO_CS_3_20_0C_AliciaBirth_23_LumiereMother.VO_CS_3_20_0C_AliciaBirth_23_LumiereMother",
+      "lower": 1442400,
+      "upper": 1497600,
+      "source_offset": 0,
+      "default": 1.0,
+      "keys": [],
+      "ease_in": 0,
+      "ease_out": 0,
+      "payload_sha256": "6c7b3b75c24fa9a54edc537c4ec69cab6d32ec3fdd435a9225b3468f058ebf62"
+    },
+    {
+      "identity": "MovieSceneAudioSection_13",
+      "source": "/Game/Audio/WAV/VO/Cinematics/LumiereMayhem/VO_CS_3_20_0C_AliciaBirth_24_LumiereMother.VO_CS_3_20_0C_AliciaBirth_24_LumiereMother",
+      "lower": 1513600,
+      "upper": 1613600,
+      "source_offset": 0,
+      "default": 1.0,
+      "keys": [],
+      "ease_in": 0,
+      "ease_out": 0,
+      "payload_sha256": "a71a77438be8af66cd52b343c7940f79bcb0baa1774519a6ca7959dbd889977b"
+    },
+    {
+      "identity": "MovieSceneAudioSection_14",
+      "source": "/Game/Audio/WAV/VO/Cinematics/LumiereMayhem/VO_CS_3_20_0C_AliciaBirth_25_LumiereMother.VO_CS_3_20_0C_AliciaBirth_25_LumiereMother",
+      "lower": 1707200,
+      "upper": 1753600,
+      "source_offset": 0,
+      "default": 1.0,
+      "keys": [],
+      "ease_in": 0,
+      "ease_out": 0,
+      "payload_sha256": "db897b4ae361db95298b74a82c7a8d6d2520c539c4a85d7f5f0ef04a0d5cad9a"
+    },
+    {
+      "identity": "MovieSceneAudioSection_15",
+      "source": "/Game/Audio/WAV/VO/Cinematics/LumiereMayhem/VO_CS_3_20_0C_AliciaBirth_26_LumiereMother.VO_CS_3_20_0C_AliciaBirth_26_LumiereMother",
+      "lower": 1776800,
+      "upper": 1845600,
+      "source_offset": 0,
+      "default": 1.0,
+      "keys": [],
+      "ease_in": 0,
+      "ease_out": 0,
+      "payload_sha256": "d5a303768f2398692a573ba2a3c97359a7b1320eb7d1789084eb971391b7d7f1"
+    },
+    {
+      "identity": "MovieSceneAudioSection_16",
+      "source": "/Game/Audio/WAV/VO/Cinematics/LumiereMayhem/VO_CS_3_20_0C_AliciaBirth_27_LumiereMother.VO_CS_3_20_0C_AliciaBirth_27_LumiereMother",
+      "lower": 1852000,
+      "upper": 1948800,
+      "source_offset": 0,
+      "default": 1.0,
+      "keys": [],
+      "ease_in": 0,
+      "ease_out": 0,
+      "payload_sha256": "78c1140f8e64617d232c9c662c1680354419d28131e15b5f27702cd351339b1a"
+    },
+    {
+      "identity": "MovieSceneAudioSection_17",
+      "source": "/Game/Audio/WAV/VO/Cinematics/LumiereMayhem/VO_CS_3_20_0C_AliciaBirth_28_LumiereMother.VO_CS_3_20_0C_AliciaBirth_28_LumiereMother",
+      "lower": 1957600,
+      "upper": 1992000,
+      "source_offset": 0,
+      "default": 1.0,
+      "keys": [],
+      "ease_in": 0,
+      "ease_out": 0,
+      "payload_sha256": "07ff6ecc5f7b41d9824f140475158463250e46630ab2412875c154c66268cb04"
+    },
+    {
+      "identity": "MovieSceneAudioSection_18",
+      "source": "/Game/Audio/WAV/VO/Cinematics/LumiereMayhem/VO_CS_3_20_0C_AliciaBirth_29_LumiereMother.VO_CS_3_20_0C_AliciaBirth_29_LumiereMother",
+      "lower": 2001600,
+      "upper": 2035200,
+      "source_offset": 0,
+      "default": 1.0,
+      "keys": [],
+      "ease_in": 0,
+      "ease_out": 0,
+      "payload_sha256": "8d8b43bf22542ed614338aa3aca2e50f0851bee1fcfff301e313bbdac36622c8"
+    },
+    {
+      "identity": "MovieSceneAudioSection_19",
+      "source": "/Game/Audio/WAV/VO/Cinematics/LumiereMayhem/VO_CS_3_20_0C_AliciaBirth_30_LumiereMother.VO_CS_3_20_0C_AliciaBirth_30_LumiereMother",
+      "lower": 2049600,
+      "upper": 2108800,
+      "source_offset": 0,
+      "default": 1.0,
+      "keys": [],
+      "ease_in": 0,
+      "ease_out": 0,
+      "payload_sha256": "2ed95d784db5bea38b500ebb7f8dba7b649466edacfb2d45c867726bdbd9f17e"
+    },
+    {
+      "identity": "MovieSceneAudioSection_2",
+      "source": "/Game/Audio/WAV/SFX/CutScene/CS_3_20_LumiereMayhem/CS_3_20_0C_AliciaBirth/SFX_CS_3_20_0C_AliciaBirth_P3.SFX_CS_3_20_0C_AliciaBirth_P3",
+      "lower": 0,
+      "upper": 936800,
+      "source_offset": 0,
+      "default": 1.0,
+      "keys": [],
+      "ease_in": 0,
+      "ease_out": 0,
+      "payload_sha256": "e6eca3b88e786b6f22153677e60d7d35e57903475194264714faf49aae313cb1"
+    },
+    {
+      "identity": "MovieSceneAudioSection_20",
+      "source": "/Game/Audio/WAV/VO/Cinematics/LumiereMayhem/VO_CS_3_20_0C_AliciaBirth_31_LumiereMother.VO_CS_3_20_0C_AliciaBirth_31_LumiereMother",
+      "lower": 2113600,
+      "upper": 2188038,
+      "source_offset": 0,
+      "default": 1.0,
+      "keys": [],
+      "ease_in": 0,
+      "ease_out": 0,
+      "payload_sha256": "49796cd3ddf8bcb130e0fbc7b8d4011cb889c93ba7f45c1bace24791900f3589"
+    },
+    {
+      "identity": "MovieSceneAudioSection_21",
+      "source": "/Game/Audio/WAV/VO/Cinematics/LumiereMayhem/VO_CS_3_20_0C_AliciaBirth_32_LumiereMother.VO_CS_3_20_0C_AliciaBirth_32_LumiereMother",
+      "lower": 2208000,
+      "upper": 2297600,
+      "source_offset": 0,
+      "default": 1.0,
+      "keys": [],
+      "ease_in": 0,
+      "ease_out": 0,
+      "payload_sha256": "6d37a115feb0f385e599dcfb8741fe1bd5be2c43b2cc6e5911a33919eff89f8e"
+    },
+    {
+      "identity": "MovieSceneAudioSection_22",
+      "source": "/Game/Audio/WAV/VO/Cinematics/LumiereMayhem/VO_CS_3_20_0C_AliciaBirth_33_LumiereMother.VO_CS_3_20_0C_AliciaBirth_33_LumiereMother",
+      "lower": 2354400,
+      "upper": 2433600,
+      "source_offset": 0,
+      "default": 1.0,
+      "keys": [],
+      "ease_in": 0,
+      "ease_out": 0,
+      "payload_sha256": "808e343267f170970784edfb6bffb6515d48cc8fcc0a40b828934a3816729c63"
+    },
+    {
+      "identity": "MovieSceneAudioSection_23",
+      "source": "/Game/Audio/WAV/VO/Cinematics/LumiereMayhem/VO_CS_3_20_0C_AliciaBirth_34_LumiereMother.VO_CS_3_20_0C_AliciaBirth_34_LumiereMother",
+      "lower": 2741600,
+      "upper": 2782400,
+      "source_offset": 0,
+      "default": 1.0,
+      "keys": [],
+      "ease_in": 0,
+      "ease_out": 0,
+      "payload_sha256": "64b15ded6465dfc3664f20899a4e02b67596ba5c915441a9d71be4ed5078e0e2"
+    },
+    {
+      "identity": "MovieSceneAudioSection_24",
+      "source": "/Game/Audio/WAV/VO/Cinematics/LumiereMayhem/VO_CS_3_20_0C_AliciaBirth_35_LumiereMother.VO_CS_3_20_0C_AliciaBirth_35_LumiereMother",
+      "lower": 2952800,
+      "upper": 2985600,
+      "source_offset": 0,
+      "default": 1.0,
+      "keys": [],
+      "ease_in": 0,
+      "ease_out": 0,
+      "payload_sha256": "76726547247ef7525163e13a840e50bb8e244f6b26fc11aa7b173b39d17f7b42"
+    },
+    {
+      "identity": "MovieSceneAudioSection_25",
+      "source": "/Game/Audio/WAV/VO/Cinematics/LumiereMayhem/VO_CS_3_20_0C_AliciaBirth_36_LumiereMother.VO_CS_3_20_0C_AliciaBirth_36_LumiereMother",
+      "lower": 3121659,
+      "upper": 3148000,
+      "source_offset": 0,
+      "default": 1.0,
+      "keys": [],
+      "ease_in": 0,
+      "ease_out": 0,
+      "payload_sha256": "5902369328c4fa7761047101d70e4324267fa6bca8d8b44e4777369546f4621a"
+    },
+    {
+      "identity": "MovieSceneAudioSection_27",
+      "source": "/Game/Audio/WAV/MUSIC/Alpha/Characters/MUS_LaNaissanceDAlicia_OrchestralChoir.MUS_LaNaissanceDAlicia_OrchestralChoir",
+      "lower": 2741600,
+      "upper": 3264873,
+      "source_offset": 3484000,
+      "default": 0.5,
+      "keys": [
+        {
+          "frame": 2018400,
+          "value": 0.5,
+          "arrive_tangent": 0.0,
+          "leave_tangent": 0.0
+        },
+        {
+          "frame": 2811200,
+          "value": 0.25,
+          "arrive_tangent": 0.0,
+          "leave_tangent": 0.0
+        },
+        {
+          "frame": 2985600,
+          "value": 0.25,
+          "arrive_tangent": 0.0,
+          "leave_tangent": 0.0
+        },
+        {
+          "frame": 3023200,
+          "value": 0.5,
+          "arrive_tangent": 0.0,
+          "leave_tangent": 0.0
+        }
+      ],
+      "ease_in": 19200,
+      "ease_out": 0,
+      "payload_sha256": "976df094210bf03b8072a4482aa1a8214ab15cfeef1e3cbeca6ff3d4d2051af5"
+    },
+    {
+      "identity": "MovieSceneAudioSection_30",
+      "source": "/Game/Audio/WAV/VO/Cinematics/LumiereMayhem/VO_CS_3_20_0C_AliciaBirth_14_LumiereFather.VO_CS_3_20_0C_AliciaBirth_14_LumiereFather",
+      "lower": 352557,
+      "upper": 480800,
+      "source_offset": 0,
+      "default": 1.0,
+      "keys": [],
+      "ease_in": 0,
+      "ease_out": 0,
+      "payload_sha256": "968990c45b7a8b59ad79e8303b9514f221e2c959a0337cbae7ce739fb235dfcc"
+    },
+    {
+      "identity": "MovieSceneAudioSection_31",
+      "source": "/Game/Audio/WAV/VO/Cinematics/LumiereMayhem/VO_CS_3_20_0C_AliciaBirth_15_LumiereFather.VO_CS_3_20_0C_AliciaBirth_15_LumiereFather",
+      "lower": 492593,
+      "upper": 670400,
+      "source_offset": 0,
+      "default": 1.0,
+      "keys": [],
+      "ease_in": 0,
+      "ease_out": 0,
+      "payload_sha256": "9566f9bdb3966675f4f573e0f4faf089a9d0de6022ef5e9029010fa46908a6ba"
+    },
+    {
+      "identity": "MovieSceneAudioSection_32",
+      "source": "/Game/Audio/WAV/VO/Cinematics/LumiereMayhem/VO_CS_3_20_0C_AliciaBirth_16_LumiereFather.VO_CS_3_20_0C_AliciaBirth_16_LumiereFather",
+      "lower": 682650,
+      "upper": 803200,
+      "source_offset": 0,
+      "default": 2.0,
+      "keys": [],
+      "ease_in": 0,
+      "ease_out": 0,
+      "payload_sha256": "5063284e0f9532a8a8ebe60e05390529643a349c0e4202c0c6f5e8572058172e"
+    },
+    {
+      "identity": "MovieSceneAudioSection_6",
+      "source": "/Game/Audio/WAV/VO/Cinematics/LumiereMayhem/VO_CS_3_20_0C_AliciaBirth_17_LumiereMother.VO_CS_3_20_0C_AliciaBirth_17_LumiereMother",
+      "lower": 816800,
+      "upper": 846400,
+      "source_offset": 0,
+      "default": 1.0,
+      "keys": [],
+      "ease_in": 0,
+      "ease_out": 0,
+      "payload_sha256": "f1a2851600fdb508d95137497977acaa27775100d85f89436dd09b6899edc478"
+    },
+    {
+      "identity": "MovieSceneAudioSection_7",
+      "source": "/Game/Audio/WAV/VO/Cinematics/LumiereMayhem/VO_CS_3_20_0C_AliciaBirth_18_LumiereMother.VO_CS_3_20_0C_AliciaBirth_18_LumiereMother",
+      "lower": 866400,
+      "upper": 991200,
+      "source_offset": 0,
+      "default": 1.0,
+      "keys": [],
+      "ease_in": 0,
+      "ease_out": 0,
+      "payload_sha256": "1f131cfd717e84faeb6cafcc9cda1703650a1ad04ef37e056704e1709dd48d1c"
+    },
+    {
+      "identity": "MovieSceneAudioSection_8",
+      "source": "/Game/Audio/WAV/VO/Cinematics/LumiereMayhem/VO_CS_3_20_0C_AliciaBirth_19_LumiereMother.VO_CS_3_20_0C_AliciaBirth_19_LumiereMother",
+      "lower": 1012000,
+      "upper": 1130400,
+      "source_offset": 0,
+      "default": 1.0,
+      "keys": [],
+      "ease_in": 0,
+      "ease_out": 0,
+      "payload_sha256": "b3cc24526ecae305df6d0baf7b29f8a8e6243822fd75b4b321c0a72ecb5c5f74"
+    },
+    {
+      "identity": "MovieSceneAudioSection_9",
+      "source": "/Game/Audio/WAV/VO/Cinematics/LumiereMayhem/VO_CS_3_20_0C_AliciaBirth_20_LumiereMother.VO_CS_3_20_0C_AliciaBirth_20_LumiereMother",
+      "lower": 1152800,
+      "upper": 1232000,
+      "source_offset": 0,
+      "default": 1.0,
+      "keys": [],
+      "ease_in": 0,
+      "ease_out": 0,
+      "payload_sha256": "be23101e6e677cb590c14dc1c38eb800bcd33bbae1e13783e3d30c73f6b16da5"
+    }
+  ],
+  "limitations": [
+    "Live synchronization unverified",
+    "Source attenuation/concurrency policy remains engine owned",
+    "Subtitle parity unverified"
+  ],
+  "proof": [
+    "audio-admission-current.json",
+    "float-formula.json",
+    "float-bezier.json",
+    "easing-assembly.json",
+    "audio-clock.json",
+    "sequence-context.json",
+    "sequence-evalrange.json",
+    "aliciabirth-media-origin.json"
+  ],
+  "media": {
+    "definition": "Sandfall/Content/Cinematics/Lumiere/Act03/AliciaBirth/DA_GA_CIN_AliciaBirth_P3_PreRender.uasset",
+    "definition_sha256": "f4bf2bb217362d7c7794c14fa006490db2480ca5c3425375d4e926d287b289fe",
+    "sequence": "/Game/Cinematics/Lumiere/Act03/AliciaBirth/MCS_AliciaBirth_P3.MCS_AliciaBirth_P3",
+    "saved_id": "CS_AliciaAtelier",
+    "movie_path": "./Movies/CS_Aliciabirth Prerender.mp4"
+  },
+  "admission": "Controlled build-specific candidate; audiovisual synchronization and subtitle presentation remain live-unverified",
+  "source_policy_evidence": ".agent-work/reverse_engineering/coverage/alicia-source-policy-audit.json"
+}

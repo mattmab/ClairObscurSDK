@@ -134,6 +134,29 @@ class Catalog:
         combined._paths = {}
         return combined
 
+    def subset(self, objects):
+        """Keep selected observations and their class/superclass/outer closure.
+
+        This performs no live read and does not refresh or relax identities.
+        Excluding unrelated transient objects avoids keeping their recyclable
+        registry slots in a long-lived planning catalog.
+        """
+        pending = [self.resolve(obj).index for obj in objects]
+        included = set()
+        while pending:
+            index = pending.pop()
+            if index in included:
+                continue
+            included.add(index)
+            obj = self.by_index[index]
+            pending.append(obj.class_index)
+            if obj.outer_index != -1:
+                pending.append(obj.outer_index)
+            if index in self.classes and self.classes[index].super_index != -1:
+                pending.append(self.classes[index].super_index)
+        return Catalog(self.pid, [o for o in self.objects if o.index in included],
+                       [c for i, c in self.classes.items() if i in included])
+
     def outer_chain(self, observed):
         """Root-first ownership chain. No unverified Unreal path punctuation."""
         current = self.resolve(observed)

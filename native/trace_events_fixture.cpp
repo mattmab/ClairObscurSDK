@@ -45,6 +45,18 @@ int main() {
     assert(expiry.status(110).state == State::expired);
     assert(!expiry.offer(ticket, 7, 110, object, value));
     assert(expiry.pop(ticket, event));
+    assert(!expiry.renew(ticket, 111, 100, 3)); // Expired work cannot be revived.
+    Events<4> renewable;
+    assert(renewable.open(ticket, 7, 100, 10, 2));
+    assert(renewable.offer(ticket, 7, 101, object, value));
+    assert(!renewable.renew({1,3}, 105, 100, 3));
+    assert(renewable.renew(ticket, 105, 100, 3));
+    assert(renewable.offer(ticket, 7, 120, object, value));
+    assert(renewable.pop(ticket,event) && event.sequence==1);
+    assert(renewable.pop(ticket,event) && event.sequence==2);
+    assert(renewable.status(120).state==State::active);
+    assert(renewable.stop(ticket));
+    assert(!renewable.renew(ticket,121,100,3));
     // Exercise actual thunk -> independent copy -> bounded queue -> drain.
     Context ctx;
     assert(ctx.queue.open(ctx.ticket, GetCurrentThreadId(), GetTickCount64(), 10000, 10));

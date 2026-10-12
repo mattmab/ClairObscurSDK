@@ -28,6 +28,12 @@ def main():
     for version in range(13,20):
         assert f'build/runtime-session-v{version}/runtime_session_v{version}.dll' in expected
         assert f'build/research-probe-v{version}/research_probe.exe' in expected
+    assert {'build/runtime-session-v20-ui/runtime_session_v20_ui.dll',
+            'build/research-probe-v20-ui/research_probe.exe'}.issubset(expected)
+    assert {'build/runtime-session-v22-pause/runtime_session_v22_pause.dll',
+            'build/research-probe-v22-pause/research_probe.exe'}.issubset(expected)
+    assert {'build/runtime-session-v23-pause-vector/runtime_session_v23_pause_vector.dll',
+            'build/research-probe-v23-pause-vector/research_probe.exe'}.issubset(expected)
     with zipfile.ZipFile(archive) as zipped:
         assert len(zipped.namelist())==len(expected) and set(zipped.namelist())==expected
         for name in expected:
@@ -35,7 +41,7 @@ def main():
     assert {'runtime/python.exe', 'runtime/LICENSE.txt'}.issubset(expected)
     python = str(root/'runtime/python.exe')
     help_text=subprocess.check_output([python,'-I','-S','-B',str(root/'scripts/run_sdk.py'),'--help'],text=True)
-    assert all(flag in help_text for flag in ('--menu-ownership', '--button-references', '--button-actions', '--multi-controls', '--traces', '--keybinds'))
+    assert all(flag in help_text for flag in ('--menu-ownership', '--button-references', '--button-actions', '--multi-controls', '--traces', '--keybinds', '--ui-batch'))
     assert {'scripts/e33_agent.py', 'scripts/e33_introspect.py',
             'src/expedition33/introspection/agent.py'}.issubset(expected)
     agent_help=subprocess.check_output([python,'-I','-S','-B',str(root/'scripts/e33_agent.py'),'--help'],text=True)

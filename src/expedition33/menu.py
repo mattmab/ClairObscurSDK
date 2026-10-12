@@ -116,6 +116,15 @@ class NativeMenu:
             self._controls = MenuControls(self)
         return self._controls.bind(child, callback)
 
+    def bind_controls(self, bindings):
+        if self._controls is None:
+            from .multi_controls import MenuControls
+            self._controls = MenuControls(self)
+        return self._controls.bind_many(bindings)
+
+    def remove_controls(self, controls):
+        return self._controls.remove_many(controls) if self._controls is not None else not controls
+
     def bind_action(self, callback):
         session = self._session()
         if session is None: raise MenuError('Menu session unavailable', outcome='unknown')
@@ -135,7 +144,7 @@ class NativeMenu:
     def __exit__(self, *_exc): self.close()
 
 
-def prepare(session, widget, child, player, leases, *, z_order=1000, catalog=None):
+def prepare(session, widget, child, player, leases, *, z_order=1000, catalog=None, _plan_only=False):
     session._check()
     if getattr(session._transport, 'menu_protocol', 0) != 1:
         raise MenuError('Menu ownership requires v14', outcome='not_started')
@@ -176,7 +185,22 @@ def prepare(session, widget, child, player, leases, *, z_order=1000, catalog=Non
              (widget,'CommonActivatableWidget','DeactivateWidget',{}),
              (widget,'Widget','RemoveFromParent',{}),
              (library,'WidgetBlueprintLibrary','SetFocusToGameViewport',{}))
-    plans = tuple(encode_plan(prepare_call(catalog,obj,function(owner,name),args)) for obj,owner,name,args in specs)
+    # Keep one bounded set of planning bytes per session. This is not native
+    # ownership: every prepare captures a fresh focus baseline and the target
+    # validates all identities and schemas again. A changed player/widget or
+    # function identity cannot reuse the previous plan set.
+    functions = tuple(function(owner, name) for _, owner, name, _ in specs)
+    key = (z_order, tuple((o.pid, o.index, o.serial, o.address)
+                        for o in (engine, widget, child, player, library, *functions)))
+    cached = getattr(session, '_menu_plan_cache', None)
+    if cached is not None and cached[0] == key:
+        plans = cached[1]
+    else:
+        plans = tuple(encode_plan(prepare_call(catalog, obj, fn, args))
+                      for (obj, _, _, args), fn in zip(specs, functions))
+        session._menu_plan_cache = (key, plans)
+    if _plan_only:
+        return
     menu = NativeMenu(session, selected)
     session._menus.add(menu)  # Durable Python owner exists before any native acquisition.
     if not menu._send('prepare', leases=tuple(lease._token for lease in selected),

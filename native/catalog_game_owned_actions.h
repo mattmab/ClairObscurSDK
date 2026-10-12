@@ -1,0 +1,102 @@
+#pragma once
+#include <cstddef>
+// Final scope: 83 mapped original action paths. Runtime exact class/schema checks remain required.
+// additionally validate the exact audited class and reflected parameter schema.
+struct CatalogGameOwnedAction {const char* package;const char* name;};
+// Source SHA256: 80745dce3a29f2f4e5fb32d59fb92fc55f68aca6499e07e235e5772b688f8ebb
+inline constexpr CatalogGameOwnedAction kCatalogGameOwnedActions[]={
+    {"/Game/Cinematics/AncientSanctuary/ArrivingInTheRedForest/DA_GA_CIN_ArrivingInAncientSanctuary","DA_GA_CIN_ArrivingInAncientSanctuary"},
+    {"/Game/Cinematics/Camp/Forced/CampAfterFirstAxon/DA_GA_CIN_CampAfterTheFirstAxon_Enter","DA_GA_CIN_CampAfterTheFirstAxon_Enter"},
+    {"/Game/Cinematics/Camp/Forced/CampAfterFirstAxon/DA_GA_CIN_CampAfterTheFirstAxon_Exit","DA_GA_CIN_CampAfterTheFirstAxon_Exit"},
+    {"/Game/Cinematics/Camp/Forced/CampAfterSecondAxon/DA_GA_CIN_MCS_CampAfterSecondAxon_Enter","DA_GA_CIN_MCS_CampAfterSecondAxon_Enter"},
+    {"/Game/Cinematics/Camp/Forced/CampAfterSecondAxon/DA_GA_CIN_MCS_CampAfterSecondAxon_Exit","DA_GA_CIN_MCS_CampAfterSecondAxon_Exit"},
+    {"/Game/Cinematics/Camp/Forced/ForcedCampPostGestralVillage/DA_GA_CIN_ForcedCampPostGestralVillage","DA_GA_CIN_ForcedCampPostGestralVillage"},
+    {"/Game/Cinematics/Camp/Forced/ForcedCampSciel/DA_GA_CIN_ForcedCampSciel","DA_GA_CIN_ForcedCampSciel"},
+    {"/Game/Cinematics/Camp/Forced/LuneAndSciel/DA_GA_CIN_LuneAndSciel","DA_GA_CIN_LuneAndSciel"},
+    {"/Game/Cinematics/Camp/Forced/LuneCampFairytales/DA_GA_CIN_LuneCampFairytales","DA_GA_CIN_LuneCampFairytales"},
+    {"/Game/Cinematics/Camp/Forced/MaelleAndVersoBond/DA_GA_CIN_MaelleAndVersoBond","DA_GA_CIN_MaelleAndVersoBond"},
+    {"/Game/Cinematics/Camp/Forced/MaelleThePyro/DA_GA_CIN_MaelleThePyro","DA_GA_CIN_MaelleThePyro"},
+    {"/Game/Cinematics/Camp/Forced/OnwardToMonocosStation/DA_GA_CIN_OnwardToMonocosStation","DA_GA_CIN_OnwardToMonocosStation"},
+    {"/Game/Cinematics/Camp/Forced/PostSpringMeadows/DA_GA_CIN_PostSpringMeadows","DA_GA_CIN_PostSpringMeadows"},
+    {"/Game/Cinematics/Camp/Forced/SoStartTheAxonHunt/DA_GA_CIN_SoStartTheAxonHunt","DA_GA_CIN_SoStartTheAxonHunt"},
+    {"/Game/Cinematics/Camp/Forced/VersoTriesToTalkToMaelle/DA_GA_CIN_VersoTriesToTalkToMaelle","DA_GA_CIN_VersoTriesToTalkToMaelle"},
+    {"/Game/Cinematics/CleaWorkshop/DA_GA_CIN_MCS_CleaWorkshop_Lampmaster","DA_GA_CIN_MCS_CleaWorkshop_Lampmaster"},
+    {"/Game/Cinematics/CleasTower/MirrorCleaIntro/DA_GA_CIN_MirrorCleaIntro","DA_GA_CIN_MirrorCleaIntro"},
+    {"/Game/Cinematics/EsquieNest/EntereringEsquiesNest/DA_GA_CIN_EnteringEsquieNest","DA_GA_CIN_EnteringEsquieNest"},
+    {"/Game/Cinematics/EsquieNest/EsquieJoinsTheGroup/DA_GA_CIN_EsquieJoinsTheGroup","DA_GA_CIN_EsquieJoinsTheGroup"},
+    {"/Game/Cinematics/EsquieNest/MeetingEsquie/DA_GA_CIN_MeetingEsquie","DA_GA_CIN_MeetingEsquie"},
+    {"/Game/Cinematics/ForgottenBattlefield/Cutscene/BattleDuelliste/DA_GA_CIN_BattleDuelliste","DA_GA_CIN_BattleDuelliste"},
+    {"/Game/Cinematics/ForgottenBattlefield/Cutscene/PostDuallist/DA_GA_CIN_PostDuallist","DA_GA_CIN_PostDuallist"},
+    {"/Game/Cinematics/ForgottenBattlefield/Cutscene/RipGustave/DA_GA_CIN_RipGustave","DA_GA_CIN_RipGustave"},
+    {"/Game/Cinematics/GestralVillage/PostGestralTournament/DA_GA_CIN_PostGestralTournament","DA_GA_CIN_PostGestralTournament"},
+    {"/Game/Cinematics/Goblu/FindingMaelleInTheManor/DA_GA_CIN_FindingMaelleintheManor_GobluPart","DA_GA_CIN_FindingMaelleintheManor_GobluPart"},
+    {"/Game/Cinematics/Goblu/FindingMaelleInTheManor/DA_GA_CIN_FindingMaelleintheManor_ManorPart","DA_GA_CIN_FindingMaelleintheManor_ManorPart"},
+    {"/Game/Cinematics/Goblu/NocoIntro/DA_GA_CIN_NocoIntro","DA_GA_CIN_NocoIntro"},
+    {"/Game/Cinematics/Goblu/WelcomeToTheFlyingWaters/DA_GA_CIN_WelcometotheFlyingWaters","DA_GA_CIN_WelcometotheFlyingWaters"},
+    {"/Game/Cinematics/Lumiere/Act01/MyFlower/DA_GA_CIN_MyFlower_P1","DA_GA_CIN_MyFlower_P1"},
+    {"/Game/Cinematics/Lumiere/Act01/MyFlower/DA_GA_CIN_MyFlower_P2","DA_GA_CIN_MyFlower_P2"},
+    {"/Game/Cinematics/Lumiere/Act01/TheGommage/DA_GA_CIN_TheGommage","DA_GA_CIN_TheGommage"},
+    {"/Game/Cinematics/Lumiere/Act03/AliciaAtelier/DA_GA_CIN_AliciaAtelier","DA_GA_CIN_AliciaAtelier"},
+    {"/Game/Cinematics/Lumiere/Act03/AliciaBirth/DA_GA_CIN_AliciaBirth","DA_GA_CIN_AliciaBirth"},
+    {"/Game/Cinematics/Lumiere/Act03/EndingIfMaelleWins/DA_GA_CIN_EndingIfMaelleWins_P1","DA_GA_CIN_EndingIfMaelleWins_P1"},
+    {"/Game/Cinematics/Lumiere/Act03/EndingIfVersoWins/DA_GA_CIN_EndingIfVersoWins_P1","DA_GA_CIN_EndingIfVersoWins_P1"},
+    {"/Game/Cinematics/Lumiere/Act03/MeetingRealRenoir/DA_GA_CIN_MeetingRealRenoir","DA_GA_CIN_MeetingRealRenoir"},
+    {"/Game/Cinematics/Lumiere/Act03/Paris/DA_GA_CIN_Paris","DA_GA_CIN_Paris"},
+    {"/Game/Cinematics/Lumiere/Act03/RedAndWhiteTree/DA_GA_CIN_RedAndWhiteTree","DA_GA_CIN_RedAndWhiteTree"},
+    {"/Game/Cinematics/MonocoStation/MonocoJoinsTheGroup/DA_GA_CIN_MonocoJoinsTheGroup","DA_GA_CIN_MonocoJoinsTheGroup"},
+    {"/Game/Cinematics/MonocoStation/MonocoJoinsTheGroup/DA_GA_CIN_MonocoJoinsTheGroup_GrandisOutside","DA_GA_CIN_MonocoJoinsTheGroup_GrandisOutside"},
+    {"/Game/Cinematics/MonocoStation/StalactAttacks/DA_GA_CIN_StalactAttacksP1","DA_GA_CIN_StalactAttacksP1"},
+    {"/Game/Cinematics/MonocoStation/StalactAttacks/DA_GA_CIN_StalactAttacksP2","DA_GA_CIN_StalactAttacksP2"},
+    {"/Game/Cinematics/MonolithInterior/FinalFightWithMirrorRenoir/DA_GA_CIN_FinalFightWithMirrorRenoir","DA_GA_CIN_FinalFightWithMirrorRenoir"},
+    {"/Game/Cinematics/MonolithInterior/Locomotive/DA_GA_CIN_Locomotive_LumiereToMonoco","DA_GA_CIN_Locomotive_LumiereToMonoco"},
+    {"/Game/Cinematics/MonolithInterior/Locomotive/DA_GA_CIN_Locomotive_MonocoToLumiere","DA_GA_CIN_Locomotive_MonocoToLumiere"},
+    {"/Game/Cinematics/OldLumiere/ArrivingInOldLumiere/DA_GA_CIN_ArrivingInOldLumiere_P2","DA_GA_CIN_ArrivingInOldLumiere_P2"},
+    {"/Game/Cinematics/OldLumiere/DiscoveringTheTruth/DA_GA_CIN_DiscoveringTheTruth_P1","DA_GA_CIN_DiscoveringTheTruth_P1"},
+    {"/Game/Cinematics/OldLumiere/DiscoveringTheTruth/DA_GA_CIN_DiscoveringTheTruth_P2","DA_GA_CIN_DiscoveringTheTruth_P2"},
+    {"/Game/Cinematics/OldLumiere/NocosDeath/DA_GA_CIN_NocosDeath","DA_GA_CIN_NocosDeath"},
+    {"/Game/Cinematics/ReacherZone/MeetingTheReacher/DA_GA_CIN_MeetingTheReacher","DA_GA_CIN_MeetingTheReacher"},
+    {"/Game/Cinematics/ReacherZone/TheEndOfTheRealReacher/DA_GA_CIN_TheEndOfTheRealReacher","DA_GA_CIN_TheEndOfTheRealReacher"},
+    {"/Game/Cinematics/ReacherZone/TheTwinTowers/DA_GA_CIN_TheTwinTowers","DA_GA_CIN_TheTwinTowers"},
+    {"/Game/Cinematics/ReacherZone/TheWorkshop/DA_GA_CIN_TheWorkshop","DA_GA_CIN_TheWorkshop"},
+    {"/Game/Cinematics/SeaCliff/EnteringCliffs/DA_GA_CIN_EnteringCliffs","DA_GA_CIN_EnteringCliffs"},
+    {"/Game/Cinematics/SeaCliff/GustavesFinalAct/DA_GA_CIN_GustavesFinalAct_Part1","DA_GA_CIN_GustavesFinalAct_Part1"},
+    {"/Game/Cinematics/SeaCliff/GustavesFinalAct/DA_GA_CIN_GustavesFinalAct_Part2","DA_GA_CIN_GustavesFinalAct_Part2"},
+    {"/Game/Cinematics/SeaCliff/MeetingTheLampmaster/DA_GA_CIN_MeetingTheLampmaster","DA_GA_CIN_MeetingTheLampmaster"},
+    {"/Game/Cinematics/Simon/SimonOutro/DA_GA_CIN_SimonOutro","DA_GA_CIN_SimonOutro"},
+    {"/Game/Cinematics/Siren/IntroSirene/DA_GA_CIN_IntroSirene","DA_GA_CIN_IntroSirene"},
+    {"/Game/Cinematics/SpringMeadow/EvequeOutro/DA_GA_CIN_MCS_EvequeOutro","DA_GA_CIN_MCS_EvequeOutro"},
+    {"/Game/Cinematics/SpringMeadow/FirstLancelierOutro/DA_GA_CIN_FirstLancelierOutro","DA_GA_CIN_FirstLancelierOutro"},
+    {"/Game/Cinematics/SpringMeadow/LuneArrives/DA_GA_CIN_LuneArrives","DA_GA_CIN_LuneArrives"},
+    {"/Game/Cinematics/TheBarrier/BreakingTheBarrier/DA_GA_CIN_BreakingTheBarrier","DA_GA_CIN_BreakingTheBarrier"},
+    {"/Game/Cinematics/ThePaintress/ThePaintress/DA_GA_CIN_ThePaintress","DA_GA_CIN_ThePaintress"},
+    {"/Game/Cinematics/VersoDraft/MeetingOsquio/DA_GA_CIN_MCS_MeetingOsquio","DA_GA_CIN_MCS_MeetingOsquio"},
+    {"/Game/Cinematics/VersoDraft/TheEndOfOsquio/DA_GA_CIN_TheEndOfOsquio","DA_GA_CIN_TheEndOfOsquio"},
+    {"/Game/Cinematics/Visages/Anger/DA_GA_CIN_AngerIntro","DA_GA_CIN_AngerIntro"},
+    {"/Game/Cinematics/Visages/Anger/DA_GA_CIN_AngerOutro","DA_GA_CIN_AngerOutro"},
+    {"/Game/Cinematics/Visages/Joy/DA_GA_CIN_JoyIntro","DA_GA_CIN_JoyIntro"},
+    {"/Game/Cinematics/Visages/Joy/DA_GA_CIN_JoyOutro","DA_GA_CIN_JoyOutro"},
+    {"/Game/Cinematics/Visages/LevelTeleport/DA_GA_CIN_Visages_Teleport_Anger_Entry","DA_GA_CIN_Visages_Teleport_Anger_Entry"},
+    {"/Game/Cinematics/Visages/LevelTeleport/DA_GA_CIN_Visages_Teleport_Anger_Exit","DA_GA_CIN_Visages_Teleport_Anger_Exit"},
+    {"/Game/Cinematics/Visages/LevelTeleport/DA_GA_CIN_Visages_Teleport_Joy_Entry","DA_GA_CIN_Visages_Teleport_Joy_Entry"},
+    {"/Game/Cinematics/Visages/LevelTeleport/DA_GA_CIN_Visages_Teleport_Joy_Exit","DA_GA_CIN_Visages_Teleport_Joy_Exit"},
+    {"/Game/Cinematics/Visages/LevelTeleport/DA_GA_CIN_Visages_Teleport_SadnessEXit","DA_GA_CIN_Visages_Teleport_SadnessEXit"},
+    {"/Game/Cinematics/Visages/Sadness/DA_GA_CIN_SadnessIntro","DA_GA_CIN_SadnessIntro"},
+    {"/Game/Cinematics/Visages/Sadness/DA_GA_CIN_SadnessOutro","DA_GA_CIN_SadnessOutro"},
+    {"/Game/Cinematics/Visages/Visages/DA_GA_CIN_Visages","DA_GA_CIN_Visages"},
+    {"/Game/Cinematics/WalkToThePaintress/GoingInsideTheMonolith/DA_GA_CIN_GoingInsideTheMonolith","DA_GA_CIN_GoingInsideTheMonolith"},
+    {"/Game/Cinematics/WalkToThePaintress/MeetingThePaintress/DA_GA_CIN_MeetingThePaintress","DA_GA_CIN_MeetingThePaintress"},
+    {"/Game/Levels/OrangeForest/GameActions/DA_GA_CIN_MCS_ScavengerIntro","DA_GA_CIN_MCS_ScavengerIntro"},
+    {"/Game/Levels/SmallLevels/Reacher/GameActions/DA_GA_CIN_Crows","DA_GA_CIN_Crows"},
+    {"/Game/Levels/Yellow_Forest/GameActions/DA_GA_CIN_MCS_GlaiseArrives","DA_GA_CIN_MCS_GlaiseArrives"},
+};
+static_assert(sizeof(kCatalogGameOwnedActions)/sizeof(kCatalogGameOwnedActions[0])<=256);
+template<class Match>
+bool catalog_game_owned_action(Match&& matches) {
+#ifdef E33_CATALOG_GAME_OWNED_SESSION
+    for(const auto& entry:kCatalogGameOwnedActions)
+        if(matches(entry.name,entry.package))return true;
+#else
+    (void)matches;
+#endif
+    return false;
+}

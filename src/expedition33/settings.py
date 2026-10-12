@@ -61,8 +61,10 @@ def _validate(document):
         raise SettingsError('Expected at most 1024 mod settings records')
     for mod_id, record in document['mods'].items():
         identifier(mod_id)
-        if type(record) is not dict or set(record) - {'enabled', 'options', 'keybinds'}:
+        if type(record) is not dict or set(record) - {'enabled', 'folder', 'options', 'keybinds'}:
             raise SettingsError('Invalid mod settings record')
+        if 'folder' in record and (type(record['folder']) is not str or not re.fullmatch(r'[A-Za-z0-9_.-]{1,128}', record['folder']) or record['folder'] in ('.', '..')):
+            raise SettingsError('Invalid saved mod folder')
         if 'enabled' in record and type(record['enabled']) is not bool:
             raise SettingsError('Enabled preference must be a boolean')
         for category in ('options', 'keybinds'):
@@ -165,6 +167,10 @@ class SettingsStore:
     def get(self, mod_id):
         self._check()
         return copy.deepcopy(self._document['mods'].get(identifier(mod_id), {}))
+
+    def records(self):
+        self._check()
+        return copy.deepcopy(self._document['mods'])
 
     @property
     def revision(self):

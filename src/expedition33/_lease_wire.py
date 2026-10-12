@@ -32,7 +32,9 @@ class LeaseReply:
     token: int
 
 
-def decode(command, sent, encoded):
+def decode(command, sent, encoded, *, capacity=128):
+    if type(capacity) is not int or not 1<=capacity<=4096:
+        raise ValueError('Invalid negotiated lease bound')
     if type(sent) is not bytes or len(sent) != SIZE or not isinstance(encoded, str) or len(encoded) != SIZE * 2:
         raise ValueError('Invalid lease packet size; operation outcome unknown')
     original = PACKET.unpack(sent)
@@ -42,7 +44,7 @@ def decode(command, sent, encoded):
         raise ValueError('Invalid lease packet encoding; operation outcome unknown') from error
     version, error, outcome, active, index, serial, address, token = received
     if (version != 1 or received[4:7] != original[4:7] or
-            outcome not in (0, 1, 2) or active > 128 or
+            outcome not in (0, 1, 2) or active > capacity or
             error not in (0, *range(400, 412)) or
             (outcome == 0 and not error) or
             (command != 'lease-acquire' and token != original[7]) or

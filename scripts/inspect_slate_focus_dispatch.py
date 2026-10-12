@@ -38,7 +38,7 @@ def _observe_once():
     def array(address, limit):
         header = read(address, 16)
         pointer, count, capacity = struct.unpack('<Qii', header)
-        assert 0 <= count <= capacity <= limit
+        assert 0 <= count <= capacity <= limit, f'Array header at {address:#x}: count={count}, capacity={capacity}, limit={limit}'
         return header, pointer, count
     def rva(address):
         assert base <= address < base + 166776832
@@ -57,7 +57,8 @@ def _observe_once():
                       controller_user_query=rva(u64(u64(mapping)+0x38)))
         # 15ed2d0 indexes 16-byte user references at application+2f8.
         # 163dc80 promotes the last weak widget in user+70's focus path.
-        header, users, count = array(app+0x2f8, 16)
+        header, users, count = array(app+0x2f8, 64)
+        assert count <= 16, 'Diagnostic only inspects at most sixteen Slate users'
         result['users'] = []
         for index in range(count):
             reference = read(users+index*16, 16)

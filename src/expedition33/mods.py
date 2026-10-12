@@ -256,7 +256,7 @@ class ModLoader:
             return
         if self._session is None:
             self._session = Session()
-        session = SessionScope(self._session)
+        session = SessionScope(self._session,lease_owner=name)
         session.mods = self.registry
         from .introspection.agent import ScopedActions
         session.actions = ScopedActions(self.actions, session, name)
