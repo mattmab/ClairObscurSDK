@@ -6,6 +6,7 @@ armed before borrowing the grid; click observation never changes engine calls.
 import logging
 import time
 from dataclasses import replace
+from contextlib import contextmanager
 from .catalog import capture_matching, capture_selected
 from .values import read_values, read_object_reference
 from .invocation import prepare_call
@@ -31,6 +32,7 @@ class PauseMenuEntry:
         self._return_focus = False
         self._functions = {}
         self._next_world_check = 0.
+        self._world_reader = None
 
     @staticmethod
     def current_entry(catalog):
@@ -231,6 +233,28 @@ class PauseMenuEntry:
             self._return_focus = True
             log.info('Native Mods pause click opened SDK menu')
 
+    @contextmanager
+    def _world_read_operation(self):
+        """Reuse process validation, never controller or UObject observations."""
+        if active_reader() is not None:
+            with ReadBatch(self.parent_scope.pid):
+                yield
+            return
+        if self._world_reader is None:
+            self._world_reader = ReadBatch(self.parent_scope.pid, share=True)
+        reader = self._world_reader
+        try:
+            with reader.bind():
+                yield
+        except BaseException:
+            # No retry: poll retains its failed lifecycle state. A failed
+            # read-only subprocess must not remain available to later work.
+            try:
+                reader.close()
+            finally:
+                self._world_reader = None
+            raise
+
     def poll(self):
         if not self.available or self.state in ('closed','failed'): return
         now = time.monotonic()
@@ -243,10 +267,10 @@ class PauseMenuEntry:
             if self.state != 'attached' or now < self._next_poll: return
             self._next_poll = now + .02
             if now >= self._next_world_check:
-                # Fast polling is affordable only with an already owned worker;
-                # older launchers must not spawn a reader four times per second.
-                self._next_world_check = now + (.25 if active_reader() is not None else 2.)
-                with ReadBatch(self.parent_scope.pid):
+                # A reader is retained on this owner thread between checks;
+                # each check still captures the live identity and property.
+                self._next_world_check = now + .25
+                with self._world_read_operation():
                     # Travel may reuse slots from the old world's catalog. Do
                     # not merge the replacement controller into that inventory.
                     # The persistent LocalPlayer and its fresh class closure are
@@ -287,6 +311,9 @@ class PauseMenuEntry:
     def close(self):
         if self.state == 'closed': return
         self._return_focus = False
+        if self._world_reader is not None:
+            self._world_reader.close()
+            self._world_reader = None
         if self.observer is not None:
             self.observer.close()
             self.observer = None

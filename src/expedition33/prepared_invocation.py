@@ -107,6 +107,24 @@ class InvocationPlanner:
             _metadata=self._metadata)
         return PreparedInvocation(self, plan)
 
+    def adopt_observations(self, catalog):
+        """Merge a fresh selected closure while retaining checked metadata.
+
+        Existing prepared calls are revoked. Descriptor reuse still resolves
+        every recorded dependency against the merged catalog, and each native
+        dispatch validates the live function/schema. Use refresh_from when a
+        completely new metadata observation is required.
+        """
+        session = self._check()
+        from .catalog import Catalog
+        if not isinstance(catalog, Catalog) or catalog.pid != session.pid:
+            raise ValueError('Expected a catalog from this process')
+        if self._catalog is None:
+            raise RuntimeError('Refresh the planner before adopting observations')
+        combined = self._catalog.with_observations(catalog)
+        self._generation += 1
+        self._catalog = combined
+
     def observations(self):
         """Copy metadata for a new scope. Native dispatch still validates it all."""
         self._check()

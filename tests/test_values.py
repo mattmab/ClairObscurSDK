@@ -9,6 +9,20 @@ from test_catalog import fixture
 
 
 class ValueTests(unittest.TestCase):
+    def test_projected_reference_keeps_identity_checks(self):
+        self.property('Child', 'ObjectProperty'); self.value('Child', None)
+        with patch('expedition33.values._query', return_value=({'pid':123}, self.rows)) as query:
+            value, _ = read_object_reference(self.catalog, self.obj, self.catalog.by_index[2], 'Child', project=True)
+            self.assertIsNone(value)
+            self.assertTrue(query.call_args.args[0][-1].endswith(';Child'))
+            self.rows[0]['serial'] += 1
+            with self.assertRaises(RuntimeQueryError):
+                read_object_reference(self.catalog, self.obj, self.catalog.by_index[2], 'Child', project=True)
+        with patch('expedition33.values._query') as query:
+            with self.assertRaises(ValueError):
+                read_object_reference(self.catalog, self.obj, self.catalog.by_index[2], 'Child|Other', project=True)
+            query.assert_not_called()
+
     def test_direct_reference_adopts_fresh_closure_without_full_scan(self):
         objects, classes = fixture()
         initial = Catalog(123, objects[:-1], classes)

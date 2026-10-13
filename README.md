@@ -1,14 +1,17 @@
 # Clair Obscur: Expedition 33 — independent Python SDK
 
-Private v0.1 release candidate for the verified Windows Steam build. Our native
+MIT-licensed v0.1 release candidate for the verified Windows Steam build. Our native
 runtime independently identifies live Unreal objects and executes supported
 engine operations on the game thread. Python runs in a persistent external
 controller. No Borderlands offsets or layouts are used as Expedition 33 facts.
 
 The installable release candidate is built with `scripts/package_release_candidate.py`.
 Extract its game-root ZIP beside `Sandfall`; normal game launch starts the SDK
-and restores saved mod choices after loading a save. All eleven mods are packaged
-under `SDK_Mods`. See [installation and restart instructions](docs/INSTALLABLE_RELEASE.md).
+and restores saved mod choices after loading a save. Only SDK Management and
+Introspection Harness are bundled. Choose optional `.sdkmod` downloads from the
+[Mods catalog](mods/README.md), including ContinentFlight, Picto Editor, Statistics,
+and Cinematics. Each has its own release. See
+[installation and restart instructions](docs/INSTALLABLE_RELEASE.md).
 The checkout's `launch-sdk.cmd` delegates to the installed SDK using `SDK_GAME_DIR`
 or the local, untracked `settings/install-path.txt`.
 

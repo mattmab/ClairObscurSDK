@@ -6,9 +6,10 @@ import ctypes
 import logging
 import math
 import time
-from contextlib import nullcontext
+from contextlib import contextmanager
+from concurrent.futures import ThreadPoolExecutor
 from expedition33.catalog import capture_matching
-from expedition33._reader import ReadBatch
+from expedition33._reader import ReadBatch, active_reader
 from expedition33.management import Action, Keybind, ModDefinition
 from expedition33.values import read_values
 from expedition33.invocation import InvocationError
@@ -54,6 +55,40 @@ class DoubleTap:
         return False
 
 
+def discover_snapshot(pid, cached=None):
+    """Pure reflection reads; never accesses a scope or prepares engine calls."""
+    names = ('CharMoveComp', 'SetMovementMode', 'K2_GetActorLocation', 'IsFlying',
+             'GetLastInputVector', 'GetVelocity', 'AddImpulse', 'StopMovementImmediately',
+             'IsLocallyControlled', 'Vector', 'EMovementMode')
+    catalog = cached if cached is not None else capture_matching(pid,
+        names=names, classes=('BP_jRPG_Character_WorldMap_pawn_C', 'BP_jRPG_Character_World_C', 'PlayerController'))
+    controller_class = catalog.find_class('Controller').index
+    player_class = catalog.find_class('PlayerController').index
+    candidates = []
+    for controller in catalog.select('PlayerController'):
+        if controller.object_flags & 0x10: continue
+        values = read_values(catalog, controller).values
+        if values.get((player_class, 'bIsLocalPlayerController')) is not True: continue
+        current = values.get((controller_class, 'Pawn'))
+        if current is not None and current.class_name in (
+                'BP_jRPG_Character_WorldMap_pawn_C', 'BP_jRPG_Character_World_C'):
+            candidates.append(current)
+    if len(candidates) != 1:
+        raise ExplorationNotReady('Waiting for one locally possessed exploration character')
+    pawn = candidates[0]
+    moves = [o for o in catalog.objects if o.outer_index == pawn.index and o.name == 'CharMoveComp']
+    if len(moves) != 1:
+        raise RuntimeError('Expected the exploration character movement component')
+    movement = moves[0]
+    return catalog, pawn, movement
+
+
+def discover_worker(pid):
+    # Construct and close the reader on this one worker thread.
+    with ReadBatch(pid):
+        return discover_snapshot(pid)
+
+
 class Mod:
     def __init__(self):
         self.session = self.planner = None
@@ -69,6 +104,53 @@ class Mod:
         self.next_discovery = 0.
         self.next_identity_check = 0.
         self.restore_mode = None
+        self.reader = None
+        self.next_slow_diagnostic = 0.
+        self.discovery_worker = None
+        self.discovery_future = None
+        self.discovery_generation = 0
+        self.discovery_pending_generation = None
+        self.disabled = False
+
+    def _diagnose_slow(self, phase, started, error=None):
+        elapsed = (time.perf_counter() - started) * 1000
+        now = time.monotonic()
+        if elapsed >= 100 and now >= self.next_slow_diagnostic:
+            self.next_slow_diagnostic = now + 5.
+            LOG.info('Flight slow phase=%s elapsed_ms=%.2f prepared_calls=%s flying=%s error=%s reader_closed=%s',
+                phase, elapsed, len(self.calls), self.flying, error,
+                getattr(self.reader, '_closed', None))
+
+    def _close_reader(self):
+        reader, self.reader = self.reader, None
+        if reader is not None:
+            reader.close()
+
+    @contextmanager
+    def operation(self):
+        # Bind only during this mod's work. Every query still validates live
+        # identities; retaining the worker does not retain query results.
+        if active_reader() is not None:
+            with ReadBatch(self.session.pid):
+                yield
+            return
+        if self.reader is None:
+            self.reader = ReadBatch(self.session.pid, share=True)
+        owner = self.reader
+        try:
+            with owner.bind():
+                yield
+        except ExplorationNotReady:
+            # A valid discovery can find no supported pawn (mounted/menu
+            # startup). Keep its healthy read worker for the next fresh scan.
+            if getattr(owner, '_closed', False) is True:
+                self._close_reader()
+            raise
+        except BaseException:
+            # A rejected read can close its worker permanently. Dispose it
+            # without retrying this operation or an uncertain mutation.
+            self._close_reader()
+            raise
 
     def management(self):
         return ModDefinition('continent-flight', 'Continent Flight', version='0.4-experimental',
@@ -84,6 +166,7 @@ class Mod:
         if not getattr(session, 'supports_vector_values', False):
             raise RuntimeError('Continent Flight requires Vector support. Use the native Mods launcher (unified pause-menu runtime).')
         self.session = session
+        self.disabled = False
         self.user32 = ctypes.WinDLL('user32', use_last_error=True)
         self.user32.GetAsyncKeyState.argtypes = [ctypes.c_int]
         self.user32.GetAsyncKeyState.restype = ctypes.c_short
@@ -105,6 +188,7 @@ class Mod:
         LOG.info('Ready in %.1f ms: F6 toggles flight; Space remains jump', self.enable_ms)
 
     def refresh(self, _):
+        self.discovery_generation += 1
         if self.flying:
             self.land(None)
         self.cached_observations = None
@@ -113,45 +197,30 @@ class Mod:
 
     def _prepare(self, *, use_cache):
         cached = self.cached_observations if use_cache else None
+        started = time.perf_counter()
+        failure = None
         try:
-            with nullcontext() if cached else ReadBatch(self.session.pid):
+            with self.operation():
                 self._prepare_calls(cached)
-        except Exception:
+        except Exception as error:
             # The next explicit enable rediscovers; never reuse rejected data or
             # retry an invocation whose dispatch outcome could be uncertain.
             self.cached_observations = None
+            failure = str(error)
             raise
+        finally:
+            self._diagnose_slow('prepare', started, failure)
 
-    def _prepare_calls(self, cached):
-        names = ('CharMoveComp', 'SetMovementMode', 'K2_GetActorLocation', 'IsFlying',
-                 'GetLastInputVector', 'GetVelocity', 'AddImpulse', 'StopMovementImmediately',
-                 'IsLocallyControlled', 'Vector', 'EMovementMode')
-        catalog = cached.catalog if cached else capture_matching(self.session.pid,
-            names=names, classes=('BP_jRPG_Character_WorldMap_pawn_C', 'BP_jRPG_Character_World_C', 'PlayerController'))
-        controller_class = catalog.find_class('Controller').index
-        player_class = catalog.find_class('PlayerController').index
-        candidates = []
-        for controller in catalog.select('PlayerController'):
-            if controller.object_flags & 0x10: continue
-            values = read_values(catalog, controller).values
-            if values.get((player_class, 'bIsLocalPlayerController')) is not True: continue
-            current = values.get((controller_class, 'Pawn'))
-            if current is not None and current.class_name in (
-                    'BP_jRPG_Character_WorldMap_pawn_C', 'BP_jRPG_Character_World_C'):
-                candidates.append(current)
-        if len(candidates) != 1:
-            raise ExplorationNotReady('Waiting for one locally possessed exploration character')
-        pawn = candidates[0]
-        moves = [o for o in catalog.objects if o.outer_index == pawn.index and o.name == 'CharMoveComp']
-        if len(moves) != 1:
-            raise RuntimeError('Expected the exploration character movement component')
-        movement = moves[0]
+    def _prepare_calls(self, cached, snapshot=None):
+        catalog, pawn, movement = snapshot if snapshot is not None else discover_snapshot(
+            self.session.pid, cached.catalog if cached else None)
         self.movement = movement
         self.movement_class = catalog.find_class('CharacterMovementComponent').index
         functions = {catalog.path_name(o): o for o in catalog.objects if o.class_name == 'Function'}
         if self.planner:
             self.planner.close()
-        self.planner = self.session.invocation_planner(**({'observations': cached} if cached else {'catalog': catalog}))
+        self.planner = self.session.invocation_planner(selected_results=True,
+            **({'observations': cached} if cached else {'catalog': catalog}))
         def prepare(path, target=pawn, **args):
             return self.planner.prepare(target, functions[path], **args)
         self.calls = {
@@ -177,21 +246,29 @@ class Mod:
         self.cached_observations = self.planner.observations()
 
     def invoke(self, name):
+        started = time.perf_counter()
+        failure = None
         try:
-            with self.calls[name].invoke() as result:
-                return result.return_value
+            with self.operation():
+                with self.calls[name].invoke() as result:
+                    return result.return_value
         except InvocationError as error:
+            failure = str(error)
             if error.native_error == 202 and error.outcome == 'not_dispatched':
                 self._forget_target('Exploration character changed; waiting to rediscover')
             raise
+        finally:
+            self._diagnose_slow('invoke.' + name, started, failure)
 
     def _forget_target(self, reason):
+        self.discovery_generation += 1
         # Revocation is local only: never call the destroyed pawn to clean up.
         self.flying = False
         self.direction = 0
         self.restore_mode = None
         self.cached_observations = None
         self.calls = {}
+        self._close_reader()
         if self.planner: self.planner.close()
         self.planner = None
         self.error = reason
@@ -207,7 +284,8 @@ class Mod:
             raise RuntimeError('The exploration character is not currently controlled')
         if self.flying:
             return self.land(None)
-        values = read_values(self.planner._catalog, self.movement).values
+        with self.operation():
+            values = read_values(self.planner._catalog, self.movement).values
         mode = values.get((self.movement_class, 'MovementMode'))
         custom = values.get((self.movement_class, 'CustomMovementMode'))
         if type(mode) is not int or type(custom) is not int or mode in (0, 5):
@@ -235,17 +313,34 @@ class Mod:
     def poll(self):
         now = time.monotonic()
         elapsed, self.last_poll = now - self.last_poll, now
+        if self.disabled:
+            return
         if not self.calls:
-            if self.session is not None and now >= self.next_discovery:
-                self.next_discovery = now + 2.
+            if self.discovery_future is not None:
+                if not self.discovery_future.done():
+                    return
+                future, self.discovery_future = self.discovery_future, None
+                if self.discovery_pending_generation != self.discovery_generation:
+                    return
                 try:
-                    self._prepare(use_cache=False)
+                    snapshot = future.result()
+                    with self.operation():
+                        self._prepare_calls(None, snapshot)
                     LOG.info('Attached to current exploration character: %s; flight remains off', self.pawn)
                 except Exception as exc:
                     if self.planner: self.planner.close()
                     self.planner = None
                     self.calls = {}
                     self.error = str(exc)
+                self.next_discovery = now + 2.
+                return
+            if self.session is not None and now >= self.next_discovery:
+                self.next_discovery = now + 2.
+                if self.discovery_worker is None:
+                    self.discovery_worker = ThreadPoolExecutor(max_workers=1, thread_name_prefix='flight-discovery')
+                self.discovery_pending_generation = self.discovery_generation
+                # Capture PID on owner thread; worker never touches session/scope.
+                self.discovery_future = self.discovery_worker.submit(discover_worker, self.session.pid)
             return
         if self.error:
             return
@@ -283,8 +378,9 @@ class Mod:
             current = self.invoke('velocity')
             correction = smooth_correction(desired, current, elapsed)
             if any(abs(value) > 1.0 for value in correction.values()):
-                with self.calls['impulse'].bind(Impulse=correction, bVelocityChange=True).invoke():
-                    pass
+                with self.operation():
+                    with self.calls['impulse'].bind(Impulse=correction, bVelocityChange=True).invoke():
+                        pass
         except Exception as exc:
             self.direction = 0
             if isinstance(exc, InvocationError) and exc.native_error == 202 and exc.outcome == 'not_dispatched':
@@ -319,10 +415,23 @@ class Mod:
         return state
 
     def disable(self):
+        self.disabled = True
+        self.discovery_generation += 1
+        if self.discovery_future is not None:
+            self.discovery_future.cancel()
+            self.discovery_future = None
+        if self.discovery_worker is not None:
+            # Any already-running task owns only a read context, and closes it
+            # itself. Its result is discarded and can never invoke game code.
+            self.discovery_worker.shutdown(wait=False, cancel_futures=True)
+            self.discovery_worker = None
         try:
             self.land(None)
         finally:
-            if self.planner:
-                self.planner.close()
-            self.calls = {}
-            self.planner = self.session = None
+            try:
+                if self.planner:
+                    self.planner.close()
+            finally:
+                self._close_reader()
+                self.calls = {}
+                self.planner = self.session = None

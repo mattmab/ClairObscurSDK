@@ -31,6 +31,17 @@ class PreparedRetainedTests(unittest.TestCase):
         prepared = planner.prepare(self.p.target, self.p.function)
         return planner, prepared
 
+    def test_selected_adoption_revokes_calls_but_preserves_checked_metadata(self):
+        planner, prepared = self.planner()
+        planner.adopt_observations(self.p.catalog)
+        with self.assertRaisesRegex(RuntimeError, 'revoked'):
+            prepared.invoke()
+        with patch('expedition33.invocation.describe', side_effect=AssertionError('redundant describe')):
+            planner.prepare(self.p.target, self.p.function)
+        from expedition33.catalog import Catalog
+        with self.assertRaises(ValueError):
+            planner.adopt_observations(Catalog(self.session.pid+1, (), ()))
+
     def test_copied_observations_survive_close_without_reusing_old_scope(self):
         planner, prepared = self.planner()
         observations = planner.observations()

@@ -9,6 +9,22 @@ build_all = runpy.run_path(str(Path(__file__).resolve().parents[1] / 'scripts/pa
 
 
 class PackageMods(unittest.TestCase):
+    def test_core_selection_excludes_optional_payloads_and_rejects_missing(self):
+        with tempfile.TemporaryDirectory() as folder:
+            root = Path(folder)
+            for name in ('SDKManagement', 'IntrospectionHarness', 'PictoEditor'):
+                source = root / 'mods' / name
+                source.mkdir(parents=True)
+                (source / 'mod.py').write_text('value = 1\n')
+            manifest = build_all(root / 'mods', root / 'core',
+                                 include={'SDKManagement', 'IntrospectionHarness'})
+            self.assertEqual({row['folder'] for row in manifest['mods']},
+                             {'SDKManagement', 'IntrospectionHarness'})
+            self.assertFalse((root / 'core/PictoEditor.sdkmod').exists())
+            with self.assertRaises(ValueError):
+                build_all(root / 'mods', root / 'missing', include={'Missing'})
+            self.assertFalse((root / 'missing').exists())
+
     def test_resources_reproducible_and_no_source_execution(self):
         with tempfile.TemporaryDirectory() as folder:
             root = Path(folder)

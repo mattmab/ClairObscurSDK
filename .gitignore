@@ -22,3 +22,4 @@ research/USER_REQUEST*.txt
 .sdk-loader.lock
 .test-tmp/
 .agent-work/
+ClairObscurSDK.zip.*

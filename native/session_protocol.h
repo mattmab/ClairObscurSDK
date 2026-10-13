@@ -1,5 +1,6 @@
 #pragma once
 #include "picto_progression_protocol.h"
+#include "picto_batch_protocol.h"
 #ifdef E33_GROWING_LEASE_SESSION
 #include "lease_policy_protocol.h"
 #endif

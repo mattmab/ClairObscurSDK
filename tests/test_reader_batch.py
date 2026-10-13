@@ -85,3 +85,38 @@ class ReadBatchTests(unittest.TestCase):
         self.assertIs(_active.get(), owner)
         with patch('expedition33._reader.subprocess.Popen', side_effect=AssertionError('no restart')):
             with self.assertRaisesRegex(RuntimeQueryError, 'closed'): ReadBatch(17).__enter__()
+
+
+class ReaderBindingTests(unittest.TestCase):
+    def owner(self):
+        owner = ReadBatch(17, share=True)
+        owner._process = SimpleNamespace(stdin=io.StringIO(), stdout=io.StringIO(),
+            wait=Mock(return_value=0), kill=Mock())
+        self.addCleanup(owner.close)
+        return owner
+
+    def test_bind_reuses_worker_and_does_not_leak_context(self):
+        owner = self.owner()
+        owner._line = Mock(side_effect=['first\n', '{"event":"reader_result","sequence":1,"code":0}\n',
+            'second\n', '{"event":"reader_result","sequence":2,"code":0}\n'])
+        with patch('expedition33._reader.subprocess.Popen', side_effect=AssertionError('must not respawn')):
+            with owner.bind():
+                self.assertIs(_active.get(), owner)
+                self.assertEqual(owner.query(['--catalog']), 'first\n')
+            self.assertIsNone(_active.get())
+            with owner.bind():
+                with ReadBatch(17) as borrowed:
+                    self.assertEqual(borrowed.query(['--catalog']), 'second\n')
+            self.assertIsNone(_active.get())
+        owner._process.wait.assert_not_called()
+
+    def test_failed_binding_cannot_restart_or_return_stale_data(self):
+        owner = self.owner()
+        owner._line = Mock(side_effect=RuntimeQueryError('lost process'))
+        with self.assertRaises(RuntimeQueryError):
+            with owner.bind():
+                owner.query(['--catalog'])
+        self.assertIsNone(_active.get())
+        with patch('expedition33._reader.subprocess.Popen', side_effect=AssertionError('no restart')):
+            with self.assertRaisesRegex(RuntimeQueryError, 'closed'):
+                with owner.bind(): pass

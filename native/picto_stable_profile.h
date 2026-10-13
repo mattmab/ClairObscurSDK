@@ -44,12 +44,12 @@ inline bool picto_stable_script(uint64_t base,uint64_t function,uint32_t index) 
  if(index>=sizeof(picto_scripts)/sizeof(PictoScriptShape))return false;
  const auto& s=picto_scripts[index];
  if(!picto_stable_object(base,function,s.object_id) || local_read<uint32_t>(function+0xb0)!=s.flags ||
- local_read<uint16_t>(function+0xb6)!=s.params || local_read<uint16_t>(function+0xb8)!=65535 ||
+ local_read<uint16_t>(function+0xb6)!=s.params || local_read<uint16_t>(function+0xb8)!=s.return_offset ||
  local_read<uint32_t>(function+0x58)!=s.extent || local_read<uint64_t>(function+0xd8)!=base+0x13937a0 ||
- local_read<int32_t>(function+0x68)!=static_cast<int32_t>(s.size) || s.size>4096)return false;
+ local_read<int32_t>(function+0x68)!=static_cast<int32_t>(s.size) || s.size>8192)return false;
  const auto script=local_read<uint64_t>(function+0x60);
  if(!script)return false;
- uint8_t normalized[4096]{};picto_profile_copy(script,normalized,s.size);
+ uint8_t normalized[8192]{};picto_profile_copy(script,normalized,s.size);
  size_t end=0;
  for(size_t i=0;i<s.count;++i) {
   const auto& b=s.bindings[i];const size_t width=b.kind==2?12:8;

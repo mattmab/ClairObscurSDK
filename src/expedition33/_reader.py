@@ -1,5 +1,6 @@
 """Explicitly owned read-only worker; no cached runtime observations or retries."""
 from contextvars import ContextVar
+from contextlib import contextmanager
 import json
 from pathlib import Path
 import queue
@@ -10,7 +11,7 @@ import time
 from . import RuntimeQueryError
 
 _active = ContextVar('expedition33_read_batch', default=None)
-_SELECTED = frozenset(('--catalog-select', '--catalog-match', '--describe', '--read-values', '--describe-enums'))
+_SELECTED = frozenset(('--catalog-select', '--catalog-match', '--describe', '--read-values', '--read-table', '--describe-enums'))
 
 
 def active_reader():
@@ -143,6 +144,28 @@ class ReadBatch:
         except BaseException:
             self.close()
             raise
+
+    @contextmanager
+    def bind(self):
+        """Bind an explicitly owned worker for one operation without restarting it.
+
+        The owner must close it on its creating thread. Each query still checks
+        live anchors and identities; failures permanently close this worker.
+        No observations are cached and no context leaks into other mod polls.
+        """
+        self._check()
+        if self._token is not None or _active.get() is not None:
+            raise RuntimeQueryError('Reader owner is already bound to an operation')
+        if self._process is None:
+            self.__enter__()
+        else:
+            self._token = _active.set(self)
+        try:
+            yield self
+        finally:
+            if self._token is not None:
+                _active.reset(self._token)
+                self._token = None
 
     def close(self):
         if threading.get_ident() != self._owner:

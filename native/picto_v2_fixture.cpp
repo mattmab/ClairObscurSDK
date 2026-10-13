@@ -46,5 +46,27 @@ int main() {
     badp=pp;badp.observed=40;assert(!valid_picto_progression(badp));
     badp=pp;badp.game_instance.address=0;assert(!valid_picto_progression(badp));
     badp=pp;badp.operation=4;assert(!valid_picto_progression(badp));
+    pp.operation=6;pp.panel={};assert(valid_picto_progression(pp));
+    badp=pp;badp.panel.serial=1;assert(!valid_picto_progression(badp));
+    badp=pp;badp.operation=9;assert(!valid_picto_progression(badp));
+    pp.operation=5;pp.expected=2147483647;assert(valid_picto_progression(pp));
+    pp.operation=4;pp.expected=33;pp.value=32;pp.source={};pp.game_instance={};assert(valid_picto_progression(pp));
+    badp=pp;badp.value=34;assert(!valid_picto_progression(badp));
+    pp.operation=9;pp.expected=249;pp.value=6;pp.panel={};pp.source={};pp.game_instance={};
+    assert(valid_picto_progression(pp));
+    badp=pp;badp.value=2;assert(!valid_picto_progression(badp));
+    badp=pp;badp.expected=-1;assert(!valid_picto_progression(badp));
+    badp=pp;badp.source.address=0x1000;assert(!valid_picto_progression(badp));
+    badp=pp;badp.panel.address=0x1000;assert(!valid_picto_progression(badp));
+    pp.operation=1;pp.expected=33;pp.value=32;pp.panel={1,2,0x1000};
+    pp={};pp.operation=10;pp.target=pp.function=pp.source=pp.panel=pp.game_instance={1,2,0x1000};pp.value=1;
+    assert(valid_picto_progression(pp));
+    badp=pp;badp.expected=2;assert(!valid_picto_progression(badp));
+    badp=pp;badp.value=-1;assert(!valid_picto_progression(badp));
+    badp=pp;badp.panel={};assert(!valid_picto_progression(badp));
+    badp=pp;badp.source={};assert(!valid_picto_progression(badp));
+    pp.operation=11;pp.value=0;pp.panel={};pp.game_instance={};assert(valid_picto_progression(pp));
+    badp=pp;badp.value=1;assert(!valid_picto_progression(badp));
+    badp=pp;badp.panel={1,2,0x1000};assert(!valid_picto_progression(badp));
     std::cout<<"asset contract guards passed\n";
 }

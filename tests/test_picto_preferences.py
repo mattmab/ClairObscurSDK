@@ -43,6 +43,30 @@ class Preferences(unittest.TestCase):
                 stale.remember('Cheater', 'cost', 5)
             self.assertEqual(prefs.PictoPreferences(path).profiles['Cheater']['cost'], 30)
 
+    def test_clear_one_then_all_preserves_settings_and_other_profiles(self):
+        from expedition33.picto_saved_changes import clear_saved
+        with tempfile.TemporaryDirectory() as folder:
+            path=Path(folder)/'pictos.json'
+            store=prefs.PictoPreferences(path)
+            store.remember('Cheater','cost',2)
+            store.remember('ComboAttack3','level',26)
+            clear_saved(store,'Cheater')
+            self.assertEqual(prefs.PictoPreferences(path).profiles,{'ComboAttack3':{'level':26}})
+            clear_saved(store)
+            self.assertEqual(prefs.PictoPreferences(path).profiles,{})
+
+    def test_failed_clear_keeps_in_memory_profiles(self):
+        from expedition33.picto_saved_changes import clear_saved
+        with tempfile.TemporaryDirectory() as folder:
+            path=Path(folder)/'pictos.json'
+            store=prefs.PictoPreferences(path)
+            store.remember('Cheater','cost',2)
+            stale=prefs.PictoPreferences(path)
+            store.remember('Cheater','cost',3)
+            with self.assertRaises(prefs.SettingsError):clear_saved(stale)
+            self.assertEqual(stale.profiles,{'Cheater':{'cost':2}})
+            self.assertEqual(prefs.PictoPreferences(path).profiles,{'Cheater':{'cost':3}})
+
     def test_future_schema_does_not_get_overwritten(self):
         with tempfile.TemporaryDirectory() as folder:
             path = Path(folder) / 'pictos.json'

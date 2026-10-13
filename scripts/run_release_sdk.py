@@ -52,6 +52,7 @@ def main():
     parser.add_argument('--check', action='store_true', help='Verify package without attaching')
     parser.add_argument('--game-pid', type=int)
     parser.add_argument('--commands', action='store_true', help='Enable authenticated structured local commands')
+    parser.add_argument('--poll-diagnostics', action='store_true', help='Log bounded shared poll latency measurements')
     args = parser.parse_args()
     if sys.version_info[:2] != (3, 13):
         raise RuntimeError('Use the bundled Python 3.13 runtime')
@@ -105,13 +106,13 @@ def main():
             return transport
         sdk.SessionTransport = release_transport
         settings = SettingsStore(ROOT / 'settings/management.json')
-        with sdk.Session(multiple_pause_entries=True) as session, ModLoader(mod_root, settings=settings, session=session) as loader:
+        with sdk.Session(multiple_pause_entries=True) as session, ModLoader(mod_root, settings=settings, session=session, poll_diagnostics=args.poll_diagnostics) as loader:
             from expedition33.lease_policy import configure
             configure(session, hard_limit=1024, owner_quota=256, cleanup_reserve=64)
             session.console.enable()
             # Only core/default UI mods start automatically on a fresh install.
             # Explicit saved false always wins for optional mods.
-            for name in ('SDKManagement', 'IntrospectionHarness', 'Cinematics', 'PictoEditor'):
+            for name in ('SDKManagement', 'IntrospectionHarness'):
                 if name != 'SDKManagement' and name not in loader.discover():
                     continue
                 selection = loader.registry.load(name)

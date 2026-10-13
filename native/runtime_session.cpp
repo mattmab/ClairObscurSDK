@@ -57,6 +57,10 @@ static uint64_t lease_session=0;
 static SchedulePacket target{};
 static ObserverBuffer session_events{};
 static uint64_t runtime_base = 0, target_object = 0, target_function = 0;
+#ifdef E33_AUDIO_ISOLATION_SESSION
+#include "picto_batch.h"
+static PictoBatch session_picto_batch;
+#endif
 #ifdef E33_KEYBIND_SESSION
 static e33_keys::State session_keys;
 #endif
@@ -540,8 +544,14 @@ uint32_t backend_command(SessionPacket* packet) {
 #ifdef E33_AUDIO_ISOLATION_SESSION
     case SessionPictoProgression: {
         auto& wire=*reinterpret_cast<PictoProgressionPacket*>(packet->console_text);
-        if(session_sequence.active()) { wire.error=1712; return 0; }
+        if(session_sequence.active() || session_picto_batch.active()) { wire.error=1712; return 0; }
         picto_progression(runtime_base,wire);
+        return 0;
+    }
+    case SessionPictoBatch: {
+        auto& wire=*reinterpret_cast<PictoBatchPacket*>(packet->console_text);
+        if(wire.operation==1 && session_sequence.active()){wire.error=1712;return 0;}
+        session_picto_batch.command(runtime_base,packet->lease_owner,wire);
         return 0;
     }
     case SessionScopedAssignment: {
@@ -851,6 +861,9 @@ static StrongLeaseResult guarded_lease_close() {
 }
 #endif
 uint32_t backend_close() {
+#ifdef E33_AUDIO_ISOLATION_SESSION
+    session_picto_batch.stop();
+#endif
 #ifdef E33_SEQUENCE_PLAYER_SESSION
     const auto sequence_cleanup=guarded_sequence_close();
     if(sequence_cleanup==407 && !backend_shutting_down()) return kSessionCloseDeferred;
@@ -924,6 +937,9 @@ uint32_t backend_close() {
     return result;
 }
 void backend_message(MSG* message) {
+#ifdef E33_AUDIO_ISOLATION_SESSION
+    if(session_picto_batch.active())session_picto_batch.tick(runtime_base,lifetime_valid() && !session_sequence.active());
+#endif
 #ifdef E33_SEQUENCE_PLAYER_SESSION
     if(session_sequence.active()
 #ifdef E33_AUDIO_ISOLATION_SESSION

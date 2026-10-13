@@ -5,6 +5,20 @@ from expedition33._pause_clicks import PauseClicks
 
 
 class PauseClicksTests(TestCase):
+    def test_group_polls_once_and_retains_other_subscriptions(self):
+        session, function = NS(), object()
+        a, b = NS(pid=1, index=2, serial=3), NS(pid=1, index=4, serial=5)
+        trace = Mock(state='active', _observed=0)
+        trace.read.return_value = (b, a)
+        with patch('expedition33._pause_clicks._traces.start', return_value=trace):
+            first = PauseClicks(session, function, a, None)
+            second = PauseClicks(session, function, b, None)
+        self.assertEqual(first.read(), (a,))
+        self.assertEqual(second.read(poll=False), (b,))
+        self.assertEqual(second.read(poll=False), ())
+        trace.read.assert_called_once()
+        first.close(); second.close()
+
     def test_independent_routing_and_last_owner_cleanup(self):
         session, function = NS(), object()
         trace = Mock(state='active', _observed=0)

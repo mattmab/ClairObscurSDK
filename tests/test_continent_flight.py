@@ -1,5 +1,8 @@
 import importlib.util
 from pathlib import Path
+from contextlib import nullcontext
+from concurrent.futures import Future
+from types import SimpleNamespace
 import unittest
 from unittest.mock import Mock, patch
 from expedition33.invocation import InvocationError
@@ -10,6 +13,9 @@ spec.loader.exec_module(flight)
 
 
 class FlightCleanupTests(unittest.TestCase):
+    def setUp(self):
+        operation=patch.object(flight.Mod,'operation',side_effect=lambda:nullcontext())
+        operation.start();self.addCleanup(operation.stop)
     def test_enable_waits_for_supported_pawn_but_propagates_other_errors(self):
         for error, deferred in ((flight.ExplorationNotReady('mounted'), True),
                                 (RuntimeError('unknown dispatch'), False)):
@@ -68,6 +74,7 @@ class FlightCleanupTests(unittest.TestCase):
         mod.calls = {'input': call}
         with self.assertRaises(InvocationError): mod.invoke('input')
         self.assertTrue(mod.flying)
+
         planner.close.assert_not_called()
 
     def test_flight_binding_is_separate_from_jump(self):
@@ -75,13 +82,17 @@ class FlightCleanupTests(unittest.TestCase):
 
     def test_rediscovery_does_not_resume_flight(self):
         mod = flight.Mod()
-        mod.session = object()
-        def attach(**_):
+        mod.session = SimpleNamespace(pid=123)
+        future=Future();snapshot=object()
+        mod.discovery_worker=Mock();mod.discovery_worker.submit.return_value=future
+        def attach(*_):
             mod.pawn = 'new-area-pawn'
             mod.calls = {'controlled': Mock()}
-        mod._prepare = Mock(side_effect=attach)
+        mod._prepare_calls = Mock(side_effect=attach)
         mod.poll()
-        mod._prepare.assert_called_once_with(use_cache=False)
+        mod._prepare_calls.assert_not_called()
+        future.set_result(snapshot);mod.poll()
+        mod._prepare_calls.assert_called_once_with(None,snapshot)
         self.assertFalse(mod.flying)
         self.assertIsNone(mod.error)
         self.assertTrue(mod.calls)
@@ -116,3 +127,83 @@ class FlightCleanupTests(unittest.TestCase):
         mod.invoke.assert_called_once_with('stop')
         planner.close.assert_called_once()
         self.assertTrue(mod.flying)
+
+
+class FlightReaderTests(unittest.TestCase):
+    def test_pending_discovery_never_blocks_or_stacks_jobs(self):
+        mod=flight.Mod();mod.session=SimpleNamespace(pid=123)
+        pending=Future();mod.discovery_worker=Mock();mod.discovery_worker.submit.return_value=pending
+        mod._prepare_calls=Mock()
+        mod.poll();mod.next_discovery=0;mod.poll();mod.poll()
+        mod.discovery_worker.submit.assert_called_once_with(flight.discover_worker,123)
+        mod._prepare_calls.assert_not_called();self.assertFalse(pending.done())
+        mod.disable();self.assertTrue(pending.cancelled())
+
+    def test_disable_discards_running_discovery_and_prevents_late_adoption(self):
+        mod=flight.Mod();mod.session=SimpleNamespace(pid=123)
+        future=Future();future.set_running_or_notify_cancel()
+        worker=mod.discovery_worker=Mock();worker.submit.return_value=future
+        mod._prepare_calls=Mock();mod.poll();mod.disable()
+        future.set_result(object());mod.poll()
+        mod._prepare_calls.assert_not_called();self.assertIsNone(mod.discovery_future)
+        worker.shutdown.assert_called_once_with(wait=False,cancel_futures=True)
+
+    def test_explicit_refresh_generation_discards_old_discovery(self):
+        mod=flight.Mod();mod.session=SimpleNamespace(pid=123)
+        mod.discovery_future=Future();mod.discovery_future.set_result(object())
+        mod.discovery_pending_generation=0;mod.discovery_generation=1
+        mod._prepare_calls=Mock();mod.poll()
+        mod._prepare_calls.assert_not_called();self.assertIsNone(mod.discovery_future)
+
+    def test_read_worker_closes_its_context_on_unavailable_pawn(self):
+        reader=Mock();reader.__enter__=Mock();reader.__exit__=Mock(return_value=False)
+        with patch.object(flight,'ReadBatch',return_value=reader),patch.object(flight,'discover_snapshot',side_effect=flight.ExplorationNotReady('mounted')):
+            with self.assertRaises(flight.ExplorationNotReady):flight.discover_worker(123)
+        reader.__enter__.assert_called_once();reader.__exit__.assert_called_once()
+
+    def test_supported_pawn_absence_keeps_reader_for_next_fresh_discovery(self):
+        mod,call=self.editor();reader=Mock();reader.bind.side_effect=lambda:nullcontext()
+        mod._prepare_calls=Mock(side_effect=flight.ExplorationNotReady('mounted'))
+        with patch.object(flight,'active_reader',return_value=None),patch.object(flight,'ReadBatch',return_value=reader) as create:
+            for _ in range(2):
+                with self.assertRaises(flight.ExplorationNotReady):mod._prepare(use_cache=False)
+        create.assert_called_once_with(123,share=True)
+        self.assertEqual(mod._prepare_calls.call_count,2)
+        reader.close.assert_not_called();self.assertIs(mod.reader,reader)
+        mod.disable();reader.close.assert_called_once()
+
+    def editor(self):
+        mod=flight.Mod();mod.session=SimpleNamespace(pid=123)
+        call=Mock();call.invoke.side_effect=lambda:nullcontext(SimpleNamespace(return_value=True))
+        mod.calls={'controlled':call}
+        return mod,call
+
+    def test_repeated_invocations_reuse_worker_but_invoke_fresh_guards(self):
+        mod,call=self.editor();reader=Mock();reader.bind.side_effect=lambda:nullcontext()
+        with patch.object(flight,'active_reader',return_value=None),patch.object(flight,'ReadBatch',return_value=reader) as create:
+            self.assertTrue(mod.invoke('controlled'));self.assertTrue(mod.invoke('controlled'))
+        create.assert_called_once_with(123,share=True)
+        self.assertEqual(reader.bind.call_count,2);self.assertEqual(call.invoke.call_count,2)
+        reader.close.assert_not_called()
+        mod.disable();reader.close.assert_called_once();self.assertIsNone(mod.reader)
+
+    def test_failed_invocation_disposes_worker_without_retry(self):
+        mod,call=self.editor();reader=Mock();reader.bind.side_effect=lambda:nullcontext()
+        call.invoke.side_effect=InvocationError('uncertain',outcome='unknown',native_error=202)
+        with patch.object(flight,'active_reader',return_value=None),patch.object(flight,'ReadBatch',return_value=reader):
+            with self.assertRaises(InvocationError):mod.invoke('controlled')
+        call.invoke.assert_called_once();reader.close.assert_called_once();self.assertIsNone(mod.reader)
+        self.assertTrue(mod.calls)  # Preserve the engine cleanup owner on ambiguous dispatch.
+
+    def test_active_shared_reader_is_borrowed_without_retaining_or_closing_it(self):
+        mod,call=self.editor();parent=Mock()
+        with patch.object(flight,'active_reader',return_value=parent),patch.object(flight,'ReadBatch',return_value=nullcontext()) as create:
+            mod.invoke('controlled')
+        create.assert_called_once_with(123)
+        self.assertIsNone(mod.reader);parent.close.assert_not_called();call.invoke.assert_called_once()
+
+    def test_target_revocation_closes_persistent_worker(self):
+        mod,call=self.editor();reader=mod.reader=Mock();mod.planner=Mock()
+        mod._forget_target('travel')
+        reader.close.assert_called_once();self.assertIsNone(mod.reader)
+        call.invoke.assert_not_called();self.assertFalse(mod.calls)

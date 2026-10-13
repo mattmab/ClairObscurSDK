@@ -26,11 +26,16 @@ class PauseClicks:
     def _observed(self):
         return self.hub['trace']._observed
 
-    def read(self):
+    def read(self, *, poll=True):
+        """Drain this subscription, optionally using an already-polled hub.
+
+        A group of controls sharing this hub polls its first subscription once;
+        the remaining subscriptions drain their routed queues with poll=False.
+        """
         if self.closed:
             raise RuntimeError('Pause click subscription is closed')
         queues = self.hub['queues']
-        for event in self.hub['trace'].read():
+        for event in self.hub['trace'].read() if poll else ():
             key = (event.pid, event.index, event.serial)
             if key in queues:
                 if len(queues[key]) >= 64:

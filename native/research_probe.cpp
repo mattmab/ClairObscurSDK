@@ -189,7 +189,8 @@ int run_query(int argc, char** argv) {
         std::string bool_object;
         std::string function_owner, function_name;
         DWORD descriptor_pid = 0;
-        bool read_values = false, read_enums = false, read_script = false;
+        bool read_values = false, read_enums = false, read_script = false, read_table = false;
+        std::unordered_set<std::string> value_fields;
         std::unordered_map<int32_t, std::pair<int32_t, uint64_t>> descriptors;
         bool thread_ping = argc == 2 && std::string(argv[1]) == "--thread-ping";
         bool invoke_proof = argc == 2 && std::string(argv[1]) == "--invoke-proof";
@@ -242,12 +243,24 @@ int run_query(int argc, char** argv) {
             }
             require(!match_names.empty() || !match_classes.empty(), "MATCH_SELECTORS_EMPTY");
         }
-        else if (argc == 4 && (selected_catalog || std::string(argv[1]) == "--describe" || std::string(argv[1]) == "--describe-script" || std::string(argv[1]) == "--read-values" || std::string(argv[1]) == "--describe-enums")) {
+        else if (argc == 4 && (selected_catalog || std::string(argv[1]) == "--describe" || std::string(argv[1]) == "--describe-script" || std::string(argv[1]) == "--read-values" || std::string(argv[1]) == "--read-table" || std::string(argv[1]) == "--describe-enums")) {
             read_script = std::string(argv[1]) == "--describe-script";
-            read_values = std::string(argv[1]) == "--read-values";
+            read_table = std::string(argv[1]) == "--read-table";
+            read_values = read_table || std::string(argv[1]) == "--read-values";
             read_enums = std::string(argv[1]) == "--describe-enums";
             descriptor_pid = std::stoul(argv[2]);
-            std::istringstream tokens(argv[3]); std::string token;
+            std::string selectors=argv[3];
+            const auto projection=selectors.find(';');
+            if(projection!=std::string::npos) {
+                require(read_values,"VALUE_PROJECTION_REQUIRES_READ");
+                std::istringstream fields(selectors.substr(projection+1));std::string name;
+                while(std::getline(fields,name,'|')) {
+                    require(!name.empty() && name.size()<=256 && value_fields.size()<64 && value_fields.insert(name).second,"VALUE_PROJECTION_INVALID");
+                }
+                require(!value_fields.empty(),"VALUE_PROJECTION_EMPTY");
+                selectors.resize(projection);
+            }
+            std::istringstream tokens(selectors); std::string token;
             while (std::getline(tokens, token, ',')) {
                 auto first = token.find(':'), last = token.rfind(':');
                 require(first != std::string::npos && last > first, "DESCRIPTOR_SELECTOR_INVALID");
@@ -366,6 +379,12 @@ int run_query(int argc, char** argv) {
             // Candidate discovery only. Every selected identity and dependency
             // is re-read by the existing strict closure emitter below.
             std::unordered_map<uint64_t, bool> type_matches;
+            std::unordered_map<uint32_t,std::string> candidate_names;
+            auto candidate_name = [&](const ObjectHeader& header) {
+                auto found=candidate_names.find(header.name_id);
+                if(found==candidate_names.end()) found=candidate_names.emplace(header.name_id,read_name(reader,pool,header.name_id)).first;
+                return header.name_number ? found->second+"_"+std::to_string(header.name_number-1) : found->second;
+            };
             std::unordered_set<uint64_t> visiting;
             std::function<bool(uint64_t)> matches_type = [&](uint64_t at) {
                 if (!at || match_classes.empty()) return false;
@@ -376,7 +395,7 @@ int run_query(int argc, char** argv) {
                 const auto slot = item_at(header.index);
                 require(slot.object == at, "MATCH_TYPE_NOT_REGISTERED");
                 const auto parent = reader.get<uint64_t>(at + 0x40);
-                const bool found = match_classes.count(read_name(reader, pool, header.name_id, header.name_number)) || matches_type(parent);
+                const bool found = match_classes.count(candidate_name(header)) || matches_type(parent);
                 const auto again = reader.get<ObjectHeader>(at);
                 const auto slot_again = item_at(header.index);
                 require(slot_again.object == at && slot_again.serial == slot.serial &&
@@ -386,13 +405,17 @@ int run_query(int argc, char** argv) {
                 type_matches.emplace(at, found);
                 return found;
             };
+            std::vector<ObjectItem> candidate_items(65536);
             for (int32_t i = 0; i < array.num_elements; ++i) {
-                const auto item = item_at(i);
+                if(!(i&65535)) {
+                    const auto count=(array.num_elements-i)<65536 ? array.num_elements-i : 65536;
+                    reader.read(chunks[uint32_t(i)>>16],candidate_items.data(),size_t(count)*sizeof(ObjectItem));
+                }
+                const auto item = candidate_items[i&65535];
                 if (!item.object) continue;
                 const auto header = reader.get<ObjectHeader>(item.object);
                 if (header.index != i || !header.cls) continue;
-                const auto name = read_name(reader, pool, header.name_id, header.name_number);
-                if (!match_names.count(name) && !matches_type(header.cls)) continue;
+                if (!matches_type(header.cls) && (match_names.empty() || !match_names.count(candidate_name(header)))) continue;
                 require(descriptors.size() < 1024, "MATCH_RESULT_LIMIT");
                 descriptors.emplace(i, std::make_pair(item.serial, item.object));
             }
@@ -700,9 +723,59 @@ int run_query(int argc, char** argv) {
                 }
             }
             if (reflection) {
+                // DataTable rows use the same reflected value decoder as objects.
+                // Only the verified native row-map accessor supplies row addresses.
+                struct TableRow { std::string name; uint64_t address; };
+                std::vector<TableRow> table_rows;
+                uint64_t row_struct=0;
+                std::vector<uint8_t> table_observation;
+                auto table_snapshot = [&]() {
+                    std::vector<uint8_t> snapshot;
+                    auto append = [&](uint64_t at,size_t n) {
+                        const auto old=snapshot.size();snapshot.resize(old+n);
+                        reader.read(at,snapshot.data()+old,n);
+                    };
+                    append(item.object+40,88);
+                    const auto map=item.object+48;
+                    const auto data=reader.get<uint64_t>(map),heap=reader.get<uint64_t>(map+32);
+                    const auto count=reader.get<int32_t>(map+8),cap=reader.get<int32_t>(map+12),
+                        bits=reader.get<int32_t>(map+40),bitcap=reader.get<int32_t>(map+44),free=reader.get<int32_t>(map+52);
+                    require(count>=0 && count<=cap && cap<=4096 && count<=4096 && bits==count && bitcap>=bits && bitcap<=4096 &&
+                        free>=0 && free<=count && (heap || bitcap<=128) && (!count || (data && !(data&7))),"TABLE_MAP_BOUNDS");
+                    const auto masks=heap?heap:map+16;
+                    if(count) {append(data,size_t(count)*24);append(masks,size_t((count+31)/32)*4);}
+                    int live=0;std::unordered_set<std::string> names;
+                    for(int n=0;n<count;++n) {
+                        if(!(reader.get<uint32_t>(masks+uint64_t(n/32)*4)&(uint32_t(1)<<(n%32))))continue;
+                        ++live;const auto at=data+uint64_t(n)*24,key=reader.get<uint64_t>(at),row=reader.get<uint64_t>(at+8);
+                        const auto row_name=read_name(reader,pool,uint32_t(key),uint32_t(key>>32));
+                        require(row && !(row&7) && names.insert(row_name).second,"TABLE_ROW_INVALID");
+                        if(table_observation.empty())table_rows.push_back({row_name,row});
+                        const auto extent=reader.get<int32_t>(row_struct+0x58);
+                        require(extent>0 && extent<=4096,"TABLE_ROW_EXTENT");append(row,size_t(extent));
+                    }
+                    require(live==count-free,"TABLE_OCCUPANCY_CHANGED");return snapshot;
+                };
+                if(read_table) {
+                    require(class_name=="DataTable" || class_name=="CompositeDataTable","TABLE_TYPE_UNSUPPORTED");
+                    const auto cls_outer=reader.get<ObjectHeader>(cls.outer);
+                    require(read_name(reader,pool,cls_outer.name_id,cls_outer.name_number)=="/Script/Engine","TABLE_CLASS_OWNER");
+                    const uint8_t expected[]={0x48,0x8d,0x41,0x30,0xc3};uint8_t actual[5];
+                    reader.read(reader.get<uint64_t>(reader.get<uint64_t>(item.object)+0x2d8),actual,5);
+                    require(!std::memcmp(actual,expected,5),"TABLE_ACCESSOR_UNSUPPORTED");
+                    row_struct=reader.get<uint64_t>(item.object+40);
+                    const auto rh=reader.get<ObjectHeader>(row_struct),rc=reader.get<ObjectHeader>(rh.cls);
+                    require(item_at(rh.index).object==row_struct && item_at(rc.index).object==rh.cls &&
+                        (read_name(reader,pool,rc.name_id,rc.name_number)=="ScriptStruct" ||
+                         read_name(reader,pool,rc.name_id,rc.name_number)=="UserDefinedStruct"),"TABLE_ROW_TYPE_UNSUPPORTED");
+                    table_observation=table_snapshot();
+                } else table_rows.push_back({"",item.object});
+                for(const auto& table_row:table_rows) {
+                if(read_table)std::cout<<"{\"event\":\"table_row\",\"name\":"<<quote(table_row.name)<<"}\n";
+                const auto value_base=table_row.address;
                 // Derived from target routines 1412792f0, 1412813d0, 14134c3b0,
                 // 1412ab240 and 1412aca00. Research metadata, not callable handles.
-                uint64_t owner = bool_object.empty() && !read_values ? item.object : object.cls;
+                uint64_t owner = read_table ? row_struct : bool_object.empty() && !read_values ? item.object : object.cls;
                 std::unordered_set<uint64_t> owners;
                 while (owner) {
                     require(owners.size() < 128 && owners.insert(owner).second, "CLASS_CHAIN_CYCLE_OR_LIMIT");
@@ -737,6 +810,7 @@ int run_query(int argc, char** argv) {
                                 int64_t(p.offset) + int64_t(p.dimension) * p.element_size <= size,
                                 "PROPERTY_EXTENT_INVALID");
                         auto field_name = read_name(reader, pool, p.name_id, p.number);
+                        if(read_values && !value_fields.empty() && !value_fields.count(field_name)) { field=p.next; continue; }
                         auto type = read_name(reader, pool, uint32_t(type_name), uint32_t(type_name >> 32));
                         auto p_again = reader.get<PropertyPrefix>(field);
                         require(std::memcmp(&p, &p_again, sizeof(p)) == 0, "PROPERTY_CHANGED");
@@ -1054,7 +1128,7 @@ int run_query(int argc, char** argv) {
                             try {
                                 require(p.dimension <= 64 && p.element_size <= 65536, "STRUCT_VALUE_LIMIT");
                                 for (int32_t element = 0; element < p.dimension; ++element) {
-                                    const auto at = item.object + p.offset + uint64_t(element) * p.element_size;
+                                    const auto at = value_base + p.offset + uint64_t(element) * p.element_size;
                                     std::vector<uint8_t> bytes(p.element_size);
                                     reader.read(at, bytes.data(), bytes.size());
                                     const auto value = struct_json(field, p, at, bytes.data(), 0);
@@ -1089,10 +1163,12 @@ int run_query(int argc, char** argv) {
                                 const bool name_bool = key_kind == "NameProperty" && value_kind == "BoolProperty";
                                 const bool byte_struct = key_kind == "ByteProperty" && value_kind == "StructProperty";
                                 const bool name_struct = key_kind == "NameProperty" && value_kind == "StructProperty";
+                                const bool name_object = key_kind == "NameProperty" && value_kind == "ObjectProperty";
                                 const bool byte_double = key_kind == "ByteProperty" && value_kind == "DoubleProperty";
+                                const bool byte_int = key_kind == "ByteProperty" && value_kind == "IntProperty";
                                 const bool struct_object = key_kind == "StructProperty" && value_kind == "ObjectProperty";
                                 const bool struct_struct = key_kind == "StructProperty" && value_kind == "StructProperty";
-                                require(name_bool || byte_struct || name_struct || byte_double || struct_object || struct_struct,
+                                require(name_bool || byte_struct || name_struct || name_object || byte_double || byte_int || struct_object || struct_struct,
                                         "MAP_ELEMENT_TYPE_UNSUPPORTED");
                                 const bool struct_key = struct_object || struct_struct;
                                 const bool struct_value = byte_struct || name_struct || struct_struct;
@@ -1101,17 +1177,17 @@ int run_query(int argc, char** argv) {
                                         key_layout.dimension == 1 && value_layout.dimension == 1 &&
                                         key_layout.offset == 0 && (struct_key ?
                                             (key_layout.element_size > 0 && key_layout.element_size <= 128) :
-                                            key_layout.element_size == ((name_bool || name_struct) ? 8 : 1)) &&
+                                            key_layout.element_size == ((name_bool || name_struct || name_object) ? 8 : 1)) &&
                                         value_layout.offset == value_offset && value_layout.element_size > 0 &&
                                         (name_bool ? value_layout.element_size == 1 :
-                                         struct_value ? value_layout.element_size <= 512 : value_layout.element_size == 8) &&
+                                         struct_value ? value_layout.element_size <= 512 : value_layout.element_size == (byte_int ? 4 : 8)) &&
                                         value_offset >= key_layout.element_size && value_offset < stride && stride <= 1024 &&
                                         value_layout.element_size <= stride - value_offset,
                                         "MAP_PAIR_LAYOUT_INVALID");
                                 const auto key_constraint = struct_key ? reader.get<uint64_t>(key_address + 0x70) : 0;
-                                const auto value_constraint = !byte_double ? reader.get<uint64_t>(value_address + 0x70) : 0;
+                                const auto value_constraint = !(byte_double || byte_int) ? reader.get<uint64_t>(value_address + 0x70) : 0;
                                 require(!name_bool || uint32_t(value_constraint) == 0xff010001, "MAP_BOOL_ENCODING_UNSUPPORTED");
-                                const auto at = item.object + p.offset;
+                                const auto at = value_base + p.offset;
                                 uint8_t storage[80], storage_again[80];
                                 reader.read(at, storage, sizeof(storage));
                                 auto s32 = [&](size_t off) { int32_t v; std::memcpy(&v, storage + off, 4); return v; };
@@ -1154,7 +1230,7 @@ int run_query(int argc, char** argv) {
                                         pairs << struct_json(value_address, value_layout,
                                             data + uint64_t(index) * stride + value_offset, source + value_offset, 0);
                                     } else {
-                                        uint64_t raw; std::memcpy(&raw, source + value_offset, 8);
+                                        uint64_t raw=0; std::memcpy(&raw, source + value_offset, byte_int ? 4 : 8);
                                         pairs << scalar_json(value_kind, raw);
                                     }
                                     pairs << ']';
@@ -1176,7 +1252,7 @@ int run_query(int argc, char** argv) {
                                         !std::memcmp(&value_layout, &value_again, sizeof(value_layout)) &&
                                         !std::memcmp(&p, &map_again, sizeof(p)) &&
                                         (!struct_key || reader.get<uint64_t>(key_address + 0x70) == key_constraint) &&
-                                        (byte_double || reader.get<uint64_t>(value_address + 0x70) == value_constraint), "MAP_OBSERVATION_CHANGED");
+                                        (byte_double || byte_int || reader.get<uint64_t>(value_address + 0x70) == value_constraint), "MAP_OBSERVATION_CHANGED");
                                 std::cout << "{\"event\":\"stored_value\",\"owner_index\":" << header.index
                                           << ",\"name\":" << quote(field_name) << ",\"element\":0,\"value\":{\"$map\":{\"length\":"
                                           << live << ",\"items\":[" << pairs.str() << "]}}}\n";
@@ -1208,7 +1284,7 @@ int run_query(int argc, char** argv) {
                                         child.element_size == width && (reader.get<uint64_t>(child.type + 0x10) & 0x8000),
                                         "ARRAY_INNER_LAYOUT_INVALID");
                                 for (int32_t element = 0; element < p.dimension; ++element) {
-                                    const auto at = item.object + p.offset + uint64_t(element) * 16;
+                                    const auto at = value_base + p.offset + uint64_t(element) * 16;
                                     const auto observed_array = reader.get<ArrayHeader>(at);
                                     require(observed_array.count >= 0 && observed_array.count <= observed_array.capacity && observed_array.capacity <= 1048576,
                                             "ARRAY_COUNTS_INVALID");
@@ -1259,7 +1335,7 @@ int run_query(int argc, char** argv) {
                                 try {
                                     require(p.element_size == width && p.dimension <= 1024, "VALUE_LAYOUT_INVALID");
                                     for (int32_t element = 0; element < p.dimension; ++element) {
-                                        const auto at = item.object + p.offset + uint64_t(element) * width;
+                                        const auto at = value_base + p.offset + uint64_t(element) * width;
                                         uint64_t raw = 0, value_again = 0;
                                         reader.read(at, &raw, width);
                                         const auto value = scalar_json(type, raw);
@@ -1282,7 +1358,7 @@ int run_query(int argc, char** argv) {
                                 static_assert(sizeof(StringHeader) == 16);
                                 require(p.element_size == 16 && p.dimension <= 1024, "STRING_PROPERTY_LAYOUT_INVALID");
                                 for (int32_t element = 0; element < p.dimension; ++element) {
-                                    const auto at = item.object + p.offset + uint64_t(element) * 16;
+                                    const auto at = value_base + p.offset + uint64_t(element) * 16;
                                     const auto text = reader.get<StringHeader>(at);
                                     require(text.count >= 0 && text.count <= text.capacity && text.capacity <= 1048576,
                                             "STRING_COUNTS_INVALID");
@@ -1332,7 +1408,7 @@ int run_query(int argc, char** argv) {
                             require(mask && byte_offset < p.element_size &&
                                     p.dimension <= 1024, "BOOL_ENCODING_INVALID");
                             for (int32_t element = 0; element < p.dimension; ++element) {
-                                uint64_t at = item.object + p.offset +
+                                uint64_t at = value_base + p.offset +
                                               uint64_t(element) * p.element_size + byte_offset;
                                 uint8_t raw = reader.get<uint8_t>(at);
                                 require(reader.get<uint8_t>(at) == raw &&
@@ -1359,6 +1435,8 @@ int run_query(int argc, char** argv) {
                             reader.get<uint64_t>(owner + 0x50) == first, "REFLECTION_OWNER_CHANGED");
                     owner = super;
                 }
+                }
+                if(read_table)require(table_snapshot()==table_observation,"TABLE_OBSERVATION_CHANGED");
                 auto final_item = item_at(i);
                 auto final_header = reader.get<ObjectHeader>(item.object);
                 require(final_item.object == item.object && final_item.serial == item.serial &&
@@ -1391,4 +1469,7 @@ int main(int argc, char** argv) {
         return run_reader_session(argv[2], run_query);
     return run_query(argc, argv);
 }
+
+
+
 

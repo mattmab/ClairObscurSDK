@@ -12,10 +12,15 @@ ZERO_RUN = re.compile(b'\x00{16,}')
 LAYOUT_SETTERS = frozenset(('SetPosition', 'SetSize', 'SetAnchors', 'SetHorizontalAlignment',
     'SetVerticalAlignment', 'SetJustification', 'SetStyle', 'SetBrushColor',
     'SetBackgroundColor', 'SetOwningPlayer'))
+EXTENDED_LAYOUT_SETTERS = frozenset(('SetMinDimensions', 'SetIsSelectable', 'SetIsToggleable',
+    'SetRenderScale', 'SetRenderTransformPivot', 'SetPadding', 'SetLayer'))
+
+def extended_layout_available(session):
+    return available(session) and getattr(session._transport, 'layout_batch_protocol', 0) == 2
 
 def layout_available(session):
     version = getattr(session._transport, 'layout_batch_protocol', 0)
-    return available(session) and type(version) is int and version == 1
+    return available(session) and type(version) is int and version in (1, 2)
 
 def pack_sparse(data):
     chunks, start = [], 0
@@ -104,7 +109,8 @@ def invoke_setters(scope, prepared):
         planner, session = call._check()
         plan = call._plan
         if plan.function.name not in ('SetText', 'SetIsEnabled', 'SetVisibility'):
-            if not layout_available(session) or plan.function.name not in LAYOUT_SETTERS:
+            allowed = LAYOUT_SETTERS | (EXTENDED_LAYOUT_SETTERS if extended_layout_available(session) else frozenset())
+            if not layout_available(session) or plan.function.name not in allowed:
                 raise ValueError('Only supported menu setters can be batched')
         if any(parameter.flags & 0x500 for parameter in plan.parameters):
             raise ValueError('UI setters cannot return outputs')

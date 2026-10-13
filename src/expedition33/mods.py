@@ -6,6 +6,8 @@ does not detach another mod's transport or console. No sys.path changes occur.
 from dataclasses import dataclass
 import importlib.util
 import hashlib
+import logging
+import time
 from pathlib import Path
 import sys
 import threading
@@ -39,7 +41,7 @@ def _error(phase, error):
 
 
 class ModLoader:
-    def __init__(self, root, *, settings=None, session=None):
+    def __init__(self, root, *, settings=None, session=None, poll_diagnostics=False):
         self.root = Path(root).resolve(strict=True)
         self._loaded = {}
         self._owner = threading.get_ident()
@@ -47,6 +49,9 @@ class ModLoader:
         self._session = session
         self._borrowed = session is not None
         self._polling = False
+        self._poll_diagnostics = bool(poll_diagnostics)
+        self._poll_timings = {}
+        self._poll_sample_count = 0
         self._keys = None
         self._disabling = set()
         self._enabling = set()
@@ -324,6 +329,20 @@ class ModLoader:
                            '; restart the controller before loading/enabling it: ' +
                            self._cleanup_failures[name])
 
+    def _record_poll_timing(self, phase, elapsed):
+        sample = self._poll_timings.setdefault(phase, {'count': 0, 'total_ms': 0., 'max_ms': 0.})
+        milliseconds = elapsed * 1000.
+        sample['count'] += 1
+        sample['total_ms'] += milliseconds
+        sample['max_ms'] = max(sample['max_ms'], milliseconds)
+
+    def _timed_poll(self, phase, callback):
+        started = time.perf_counter()
+        try:
+            return callback()
+        finally:
+            self._record_poll_timing(phase, time.perf_counter() - started)
+
     def poll(self, name=None):
         """Drain shared transport once, then poll selected/all enabled mods."""
         self._check_thread()
@@ -336,12 +355,16 @@ class ModLoader:
         if shared is None:
             return 0
         self._polling = True
+        started = time.perf_counter() if self._poll_diagnostics else None
         try:
-            shared.console.poll()
+            if self._poll_diagnostics:
+                self._timed_poll('shared.console.poll', shared.console.poll)
+            else:
+                shared.console.poll()
             # Console actions may disable the last mod and close this session.
             if self._session is not shared:
                 return 0
-            delivered = shared.poll()
+            delivered = self._timed_poll('shared.poll', shared.poll) if self._poll_diagnostics else shared.poll()
             if self._session is not shared or getattr(shared, '_closed', False):
                 return delivered
             from ._session import supports_keys
@@ -351,7 +374,7 @@ class ModLoader:
                     if self._keys is not None:
                         self._keys.close()
                     self._keys = KeybindService(shared, self.registry)
-                delivered += self._keys.poll()
+                delivered += self._timed_poll('keys.poll', self._keys.poll) if self._poll_diagnostics else self._keys.poll()
                 if self._session is not shared:
                     return delivered
             failures = []
@@ -362,7 +385,10 @@ class ModLoader:
                 callback = getattr(record[1], 'poll', None)
                 if callback is not None:
                     try:
-                        callback()
+                        if self._poll_diagnostics:
+                            self._timed_poll('mod.' + key, callback)
+                        else:
+                            callback()
                     except BaseException as error:
                         failures.append(str(_error('poll', error)))
             if failures:
@@ -370,6 +396,13 @@ class ModLoader:
             return delivered
         finally:
             self._polling = False
+            if self._poll_diagnostics:
+                self._record_poll_timing('total', time.perf_counter() - started)
+                self._poll_sample_count += 1
+                if self._poll_sample_count == 30:
+                    logging.getLogger(__name__).info('Mod poll latency (30 polls): %s', self._poll_timings)
+                    self._poll_timings = {}
+                    self._poll_sample_count = 0
 
     def unload(self, name):
         self._check_thread()

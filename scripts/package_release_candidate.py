@@ -31,15 +31,16 @@ def build(destination, version):
     copy('scripts/run_release_sdk.py', 'scripts/run_release_sdk.py')
     copy('scripts/sdk_command.py', 'scripts/sdk_command.py')
     copy('docs/INSTALLABLE_RELEASE.md', 'README.md')
+    copy('LICENSE', 'LICENSE')
+    copy('THIRD_PARTY_NOTICES.md', 'THIRD_PARTY_NOTICES.md')
     for directory in ('research-probe', 'readonly-worker', 'research-probe-picto-v4'):
         copy('build/release/research-probe-picto-v4/research_probe.exe', f'build/{directory}/research_probe.exe')
     copy('build/release/runtime-session-picto-v4/runtime_session_picto_v4.dll', 'build/runtime-session-picto-v4/runtime_session_picto_v4.dll')
     # Launchers inside SDK are install-relative and never search a dev checkout.
     (sdk / 'launch-sdk.cmd').write_text('@echo off\r\ncd /d "%~dp0"\r\n"%~dp0runtime\\python.exe" -I -S -B "%~dp0scripts\\run_release_sdk.py" %*\r\n', encoding='ascii')
     (sdk / 'launch-cinematics.cmd').write_text('@echo off\r\ncall "%~dp0launch-sdk.cmd" %*\r\n', encoding='ascii')
-    manifest = build_all(ROOT / 'mods', stage / 'SDK_Mods')
-    if len(manifest['mods']) != 11:
-        raise ValueError('This RC must contain the eleven reviewed mods')
+    manifest = build_all(ROOT / 'mods', stage / 'SDK_Mods',
+                         include={'SDKManagement', 'IntrospectionHarness'})
     bootstrap = stage / 'Sandfall/Binaries/Win64/version.dll'
     bootstrap.parent.mkdir(parents=True)
     shutil.copy2(ROOT / 'build/bootstrap/version.dll', bootstrap)

@@ -212,7 +212,7 @@ inline void run_runtime_session(DWORD pid, DWORD thread, int32_t object_index, i
     require(UnhookWindowsHookEx(connection.bootstrap), "SESSION_BOOTSTRAP_REMOVE_FAILED"); connection.bootstrap = nullptr;
     std::cout << "{\"event\":\"session_ready\",\"pid\":" << pid << ",\"game_thread_id\":" << thread
 #ifdef E33_CATALOG_GAME_OWNED_SESSION
-              << ",\"picto_edit_protocol\":1,\"picto_progression_protocol\":1,\"picto_class_load_protocol\":1,\"picto_cost_protocol\":1"
+              << ",\"picto_edit_protocol\":1,\"picto_progression_protocol\":1,\"picto_class_load_protocol\":1,\"picto_cost_protocol\":1,\"picto_startup_protocol\":1,\"picto_stat_clear_protocol\":1,\"picto_stat_remove_protocol\":1,\"picto_inventory_protocol\":1,\"picto_batch_protocol\":1,\"picto_level_batch_protocol\":1,\"picto_mastery_batch_protocol\":1"
 #endif
 #ifdef E33_REFLECTED_SESSION
               << ",\"reflected_protocol\":1"
@@ -265,7 +265,7 @@ inline void run_runtime_session(DWORD pid, DWORD thread, int32_t object_index, i
 #ifdef E33_UI_BATCH_SESSION
               << ",\"ui_batch_protocol\":1"
 #ifdef E33_LAYOUT_BATCH_SESSION
-              << ",\"layout_batch_protocol\":1"
+              << ",\"layout_batch_protocol\":2"
 #endif
 #endif
 #ifdef E33_VECTOR_SESSION
@@ -411,6 +411,15 @@ inline void run_runtime_session(DWORD pid, DWORD thread, int32_t object_index, i
         }
 #endif
 #ifdef E33_AUDIO_ISOLATION_SESSION
+        bool picto_batch=command.substr(0,separator)=="picto-batch";
+        if(picto_batch) {
+            require(separator!=std::string::npos,"PICTO_BATCH_PAYLOAD_MISSING");auto encoded=command.substr(separator+1);
+            require(encoded.size()==sizeof(PictoBatchPacket)*2,"PICTO_BATCH_PAYLOAD_SIZE");
+            auto* destination=reinterpret_cast<uint8_t*>(packet.console_text);
+            auto digit=[](char c)->unsigned {if(c>='0'&&c<='9')return c-'0';if(c>='a'&&c<='f')return c-'a'+10;throw std::runtime_error("PICTO_BATCH_ENCODING");};
+            for(size_t i=0;i<sizeof(PictoBatchPacket);++i)destination[i]=static_cast<uint8_t>(digit(encoded[i*2])*16+digit(encoded[i*2+1]));
+            command.resize(separator);separator=std::string::npos;
+        }
         bool picto_progress=command.substr(0,separator)=="picto-progression";
         if(picto_progress) {
             require(separator!=std::string::npos,"PICTO_PAYLOAD_MISSING");auto encoded=command.substr(separator+1);
@@ -684,6 +693,7 @@ inline void run_runtime_session(DWORD pid, DWORD thread, int32_t object_index, i
 #endif
 #ifdef E33_AUDIO_ISOLATION_SESSION
         if(picto_progress) action=SessionPictoProgression;
+        if(picto_batch) action=SessionPictoBatch;
         if(scoped_assignment) action=SessionScopedAssignment;
 #endif
 #ifdef E33_MUSIC_AUDIO_SESSION
@@ -753,6 +763,12 @@ inline void run_runtime_session(DWORD pid, DWORD thread, int32_t object_index, i
         }
 #endif
 #ifdef E33_AUDIO_ISOLATION_SESSION
+        if(picto_batch) {
+            static const char digits[]="0123456789abcdef";const auto* source=reinterpret_cast<const uint8_t*>(packet.console_text);
+            std::string encoded(sizeof(PictoBatchPacket)*2,'0');
+            for(size_t i=0;i<sizeof(PictoBatchPacket);++i){encoded[i*2]=digits[source[i]>>4];encoded[i*2+1]=digits[source[i]&15];}
+            std::cout << ",\"picto_batch_packet\":" << quote(encoded);
+        }
         if(picto_progress) {
             static const char digits[]="0123456789abcdef";const auto* source=reinterpret_cast<const uint8_t*>(packet.console_text);
             std::string encoded(sizeof(PictoProgressionPacket)*2,'0');
@@ -902,6 +918,7 @@ inline void run_runtime_session(DWORD pid, DWORD thread, int32_t object_index, i
         if (action == SessionClose) break;
     }
 }
+
 
 
 

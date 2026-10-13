@@ -61,11 +61,11 @@ class StoredMapEntries:
 def _map_value(metadata, value, catalog=None):
     kinds = metadata.get('map_key_type'), metadata.get('map_value_type')
     if kinds not in (('NameProperty', 'BoolProperty'), ('ByteProperty', 'StructProperty'),
-                     ('NameProperty', 'StructProperty'), ('ByteProperty', 'DoubleProperty'),
-                     ('StructProperty', 'ObjectProperty'), ('StructProperty', 'StructProperty')):
+                     ('NameProperty', 'StructProperty'), ('ByteProperty', 'DoubleProperty'), ('ByteProperty', 'IntProperty'),
+                     ('NameProperty', 'ObjectProperty'), ('StructProperty', 'ObjectProperty'), ('StructProperty', 'StructProperty')):
         raise ValueError('Unsupported map element types')
     struct_key, struct_value = kinds[0] == 'StructProperty', kinds[1] == 'StructProperty'
-    if (struct_key or struct_value) and catalog is None:
+    if (struct_key or struct_value or kinds[1] == 'ObjectProperty') and catalog is None:
         raise ValueError('Struct maps require an identity catalog')
     expected = _struct_type(catalog, metadata, 'map_value_struct') if struct_value else None
     expected_key = _struct_type(catalog, metadata, 'map_key_struct') if struct_key else None
@@ -105,6 +105,9 @@ def _map_value(metadata, value, catalog=None):
         elif kinds[1] == 'BoolProperty':
             if type(entry) is not bool:
                 raise ValueError('Invalid map entry')
+        elif kinds[1] == 'IntProperty':
+            if type(entry) is not int or not -2147483648 <= entry <= 2147483647:
+                raise ValueError('Invalid map integer value')
         elif kinds[1] == 'DoubleProperty':
             if type(entry) in (int, float):
                 entry = float(entry)
@@ -216,7 +219,69 @@ def read_values(catalog, observed):
     return _decode_values(catalog, obj, start, rows)
 
 
-def read_values_with_references(catalog, observed):
+def read_table_rows(catalog, observed):
+    """Read up to 256 DataTable rows through the ordinary reflected decoder.
+
+    Native storage, accessor, row schema and table identity are verified afresh.
+    No addresses are accepted for individual rows and nothing is invoked.
+    """
+    obj = catalog.resolve(observed)
+    if obj.class_name not in ('DataTable', 'CompositeDataTable'):
+        raise ValueError('Expected a DataTable observation')
+    start, rows = _query(['--read-table', str(catalog.pid), f'{obj.index}:{obj.serial}:{obj.address:x}'])
+    targets = [row for row in rows if row['event'] == 'object']
+    if len(targets) != 1:
+        raise RuntimeQueryError('Table target missing or ambiguous')
+    # Validate even an empty table's identity.
+    _decode_values(catalog, obj, start, targets)
+    groups, current = {}, None
+    for row in rows:
+        if row['event'] == 'table_row':
+            current = row.get('name')
+            if type(current) is not str or not current or current in groups or len(groups) >= 4096:
+                raise RuntimeQueryError('Invalid table row identity')
+            groups[current] = list(targets)
+        elif current is not None and row['event'] != 'object':
+            groups[current].append(row)
+    return {name: _decode_values(catalog, obj, start, group) for name, group in groups.items()}
+
+
+def read_values_many(catalog, observed, *, fields=None):
+    """Read fresh values for up to 1023 identities in one bounded request.
+
+    Optional named-field projection avoids reading unrelated complex values.
+    Each object is independently identity-validated by the native reader and
+    existing decoder; the result is an observation, not an atomic snapshot.
+    """
+    objects = tuple(catalog.resolve(obj) for obj in observed)
+    if not objects:
+        return {}
+    if len(objects) > 1023 or len({obj.index for obj in objects}) != len(objects):
+        raise ValueError('Read batch requires unique identities within limit')
+    selector = ','.join(f'{obj.index}:{obj.serial}:{obj.address:x}' for obj in objects)
+    if fields is not None:
+        fields = tuple(fields)
+        if not 1 <= len(fields) <= 64 or len(set(fields)) != len(fields) or any(
+            type(name) is not str or not 1 <= len(name) <= 256 or any(ch in name for ch in ';|\r\n\t\0') for name in fields):
+            raise ValueError('Invalid stored-value field projection')
+        selector += ';' + '|'.join(fields)
+    start, rows = _query(['--read-values', str(catalog.pid), selector])
+    requested = {obj.index: obj for obj in objects}
+    groups, current = {}, None
+    for row in rows:
+        if row['event'] == 'object':
+            current = row['index']
+            if current not in requested or current in groups:
+                raise RuntimeQueryError('Unexpected value batch identity')
+            groups[current] = []
+        if current is not None:
+            groups[current].append(row)
+    if set(groups) != set(requested):
+        raise RuntimeQueryError('Incomplete value batch')
+    return {index: _decode_values(catalog, requested[index], start, group) for index, group in groups.items()}
+
+
+def read_values_with_references(catalog, observed, *, fields=None):
     """Read stored values and capture missing structured reference closures.
 
     The initial decoder validates the response before its reference identities
@@ -226,7 +291,14 @@ def read_values_with_references(catalog, observed):
     """
     from .catalog import capture_selected
     obj = catalog.resolve(observed)
-    start, rows = _query(['--read-values', str(catalog.pid), f'{obj.index}:{obj.serial}:{obj.address:x}'])
+    selector = f'{obj.index}:{obj.serial}:{obj.address:x}'
+    if fields is not None:
+        fields = tuple(fields)
+        if not 1 <= len(fields) <= 64 or len(set(fields)) != len(fields) or any(
+            type(name) is not str or not 1 <= len(name) <= 256 or any(ch in name for ch in ';|\r\n\t\0') for name in fields):
+            raise ValueError('Invalid stored-value field projection')
+        selector += ';' + '|'.join(fields)
+    start, rows = _query(['--read-values', str(catalog.pid), selector])
     result = _decode_values(catalog, obj, start, rows)
     missing = set()
     def reference(raw):
@@ -258,7 +330,7 @@ def read_values_with_references(catalog, observed):
     return result, catalog
 
 
-def read_object_reference(catalog, observed, owner, name):
+def read_object_reference(catalog, observed, owner, name, *, project=False):
     """Observe one direct object property and its fresh dependency closure.
 
     Returns (reference_or_none, extended_catalog). No full enumeration, property
@@ -267,7 +339,14 @@ def read_object_reference(catalog, observed, owner, name):
     """
     from .catalog import capture_selected
     obj, owner = catalog.resolve(observed), catalog.resolve(owner)
-    start, rows = _query(['--read-values', str(catalog.pid), f'{obj.index}:{obj.serial}:{obj.address:x}'])
+    selector = f'{obj.index}:{obj.serial}:{obj.address:x}'
+    if type(project) is not bool:
+        raise ValueError('Reference projection must be bool')
+    if project:
+        if type(name) is not str or not 1 <= len(name) <= 256 or any(ch in name for ch in ';|\r\n\t\0'):
+            raise ValueError('Invalid reference field projection')
+        selector += ';' + name
+    start, rows = _query(['--read-values', str(catalog.pid), selector])
     # Validate the complete original response before using an observed selector.
     _decode_values(catalog, obj, start, rows)
     key = (owner.index, name)
@@ -434,3 +513,5 @@ def _decode_values(catalog, obj, start, rows):
         values[key] = sequence[0] if meta['dimension'] == 1 else sequence
     return StoredValues(obj, MappingProxyType(values), MappingProxyType(errors),
                         MappingProxyType({key: meta['type'] for key, meta in metadata.items()}), frozenset(truncated))
+
+

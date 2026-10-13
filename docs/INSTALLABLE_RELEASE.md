@@ -24,17 +24,22 @@ same installed SDK is rejected by an operating-system file lock.
 
 ## Mods and settings
 
-The eleven bundled `.sdkmod` files are in `SDK_Mods`. Add or replace trusted mod
+Only SDKManagement and IntrospectionHarness are bundled in `SDK_Mods`.
+Download optional mods separately from the repository's Mods catalog and releases.
+Add or replace trusted mod
 archives there while the controller is stopped. They are validated and extracted
 into a generated `SDK/mods` cache at startup. Do not edit the generated cache.
 Archives execute trusted Python code; they are not sandboxed or digitally signed.
 Limits: 64 archives, 32 MiB per archive, 64 MiB expanded per archive, 256 MiB total.
 
-Management starts first. On a fresh installation the Introspection Harness,
-Cinematics and Picto Editor are enabled by default; other mods are available in
-the menu. Explicit enable/disable choices survive restarts in
+Management starts first. On a fresh installation only the Introspection Harness
+and Management are enabled by default. Optional mods must be installed and enabled
+through the Mods menu. Explicit enable/disable choices survive restarts in
 `SDK/settings/management.json`; individual mod settings also live in `SDK/settings`.
 The ZIP contains no user settings and does not overwrite them during upgrades.
+Upgrading does not delete optional archives installed by an older bundled release.
+To remove one, disable it, shut down the SDK/game, and remove its `.sdkmod` from
+`SDK_Mods`; keep `SDK/settings` to preserve preferences. No pip installation is needed.
 Failed activation is logged; the saved desired state is retained for diagnosis.
 
 ## Stop, restart, or disable autostart

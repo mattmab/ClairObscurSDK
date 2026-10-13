@@ -8,17 +8,21 @@ ROOT = Path(__file__).resolve().parents[1]
 archive = runpy.run_path(str(ROOT / 'src/expedition33/mod_archive.py'))
 
 
-def build_all(source, destination):
+def build_all(source, destination, *, include=None):
     source, destination = Path(source).resolve(strict=True), Path(destination).resolve()
     if destination.is_relative_to(source):
         raise ValueError('Archive destination must be outside mod sources')
     # Prepare and validate every payload before creating the output directory.
     payloads = []
     for entry in sorted(source.glob('*/mod.py')):
+        if include is not None and entry.parent.name not in include:
+            continue
         data, candidate = archive['build_bytes'](entry.parent)
         payloads.append((entry.parent.name, data, candidate.summary()))
     if not payloads:
         raise ValueError('No mod entry points found')
+    if include is not None and {name for name, _, _ in payloads} != set(include):
+        raise ValueError('Requested mod source missing')
     destination.mkdir(parents=True, exist_ok=False)
     result = []
     for name, data, summary in payloads:

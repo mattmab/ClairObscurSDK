@@ -70,7 +70,7 @@ bool reader_arguments(const std::vector<std::string>& args, DWORD pid) {
     if (args.size() == 1 && args[0] == "--catalog") return true;
     if (args.size() != 3 || args[1] != std::to_string(pid)) return false;
     return args[0] == "--catalog-select" || args[0] == "--catalog-match" || args[0] == "--describe" ||
-        args[0] == "--read-values" || args[0] == "--describe-enums";
+        args[0] == "--read-values" || args[0] == "--read-table" || args[0] == "--describe-enums";
 }
 
 int run_reader_session(const std::string& expected_pid, int (*query)(int, char**)) {

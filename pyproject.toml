@@ -7,6 +7,7 @@ name = "expedition33-research"
 version = "0.1.0"
 description = "Independent build-specific Expedition 33 Python modding SDK"
 requires-python = ">=3.13"
+license = "MIT"
 
 [tool.setuptools.packages.find]
 where = ["src"]
