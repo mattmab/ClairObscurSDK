@@ -1,7 +1,7 @@
 # SDK 0.1.0-rc4: optional mod distribution
 
 The SDK ZIP now includes only SDKManagement and IntrospectionHarness. Optional
-mods have independent release tags and `.sdkmod` downloads in the [Mods catalog](../mods/README.md).
+mods have independent release tags and `.sdkmod` downloads in the [Mods catalog](https://github.com/mattmab/ClairObscurSDK/blob/main/mods/README.md).
 They are no longer automatically enabled on a fresh install. Existing installed
 archives and saved enable choices remain intact on upgrade.
 
