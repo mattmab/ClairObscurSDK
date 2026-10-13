@@ -1,4 +1,59 @@
-# E33 Live Object Viewer 0.1.1
+# E33 Live Object Viewer 0.2.0 candidate
+
+## Overhaul status (October 12, 2026)
+
+Compared against the supplied Oak2 0.10.0 README. This is an independently
+implemented E33 candidate, not a claim of full Oak2 parity. It is bundled with SDK RC5.
+
+- Eight browser rows; Inspect tools contains monitoring, snapshots, comparison,
+  bookmarks, object search presets, schema, roots and manual refresh. Page control
+  cycles back to the first page. One shared 12-control UMG panel is retained.
+- `lov_filter text` filters names; `lov_filter value:text` filters already observed
+  values. `lov_mode simple|advanced` controls friendly/raw labels.
+- Select a direct scalar property, then Inspect tools → Live monitoring. Only that
+  property is polled, at most once per second, with adaptive backoff for slow reads.
+  Closing, changing nodes, or a failed read stops monitoring. No background scans
+  while hidden. Object identities are checked before rereading.
+- Snapshot comparison includes removed fields and ignores display filters when
+  capturing its baseline. Bookmarks are bounded to 32, session-only and re-resolved.
+- Guarded editing: select a direct property; `lov_edit` accepts a boolean, number,
+  null or an identity-bearing reference JSON value. Inspect tools → APPLY
+  staged edit (or `lov_apply`) performs an explicit guarded write. Drafts expire in
+  30 seconds, reject changed before-values, and are consumed before dispatch.
+  `lov_cancel` discards a draft. Writes are not automatically undone.
+  Reference properties stay selected for editing; Inspect tools → Follow selected
+  object reference navigates to the referenced object. The staged expected value
+  is carried into native compare-before-write validation.
+
+- Inspect tools page three offers a boolean toggle and numeric +1/-1 staging.
+  For an exact value use `lov_edit 1.25` or `lov_edit true`, then `lov_apply`.
+  Supported scalar descriptors are bool, signed int32, float32 and float64.
+  Writes run on the game thread with identity, type, owner, extent, flags and
+  expected-value checks. Packed bool writes preserve adjacent bits. Read-only,
+  replicated, parameter and accessor-backed descriptors are rejected. These are
+  stored-field edits; engine setter side effects are not synthesized.
+
+**Not implemented:** string writes, native text entry, multi-property watch
+charts, Oak2 item serials/definitions, arbitrary nested container edits.
+
+Live evidence (October 12): viewer-v2 opened while mounted on Esquie, accepted
+mouse navigation, displayed live LookUpDownRate and closed with Escape. The
+Harness/viewer edit path changed bIsVariable false→true→false on an SDK-owned
+widget and LookUpDownRate 1.0→2.25→1.0 on the possessed pawn. Both passed native
+dispatch, readback, polling and restoration. MinDesiredWidth was safely rejected
+for an unsupported accessor descriptor. Int32/float64 editing remains unverified
+live. Party-screen focus rejection and travel still need separate acceptance.
+Raw local evidence: `.agent-work/viewer-scalar-live-result.json`.
+Large object-reference property batches can still be slow; focused scalar
+monitoring does not scan those references.
+
+Mounted input uses verified UIOnlyEx/GameOnly calls and restores viewport focus.
+Preparation/attachment and focus run on consecutive engine frames through the
+existing message-pump dispatcher, using the same frame counter as Picto Editor.
+This is not a new engine Tick hook.
+
+The following describes the original viewer and is retained as historical context;
+its six-row UI and 128-slot pool notes do not describe this candidate.
 
 An E33-native implementation of the core browsing workflow in the supplied
 Oak2 Live Object Viewer. It uses this checkout's E33 Harness and native UMG
@@ -10,7 +65,7 @@ copied. The native panel uses the SDK's existing E33 menu layout.
 ## Start
 
 1. Start E33 normally and load a save.
-2. Run **Launch Native Mods.cmd** in the game folder (one controller per game).
+2. Use installed SDK autostart or `SDK/launch-sdk.cmd` (one controller per game).
 3. Open the backtick console and enter:
 
 ```text

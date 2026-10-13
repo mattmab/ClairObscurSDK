@@ -223,6 +223,11 @@ class SessionScope:
         return self._session.supports_object_assignment
 
     @property
+    def supports_scalar_assignment(self):
+        self._check()
+        return self._session.supports_scalar_assignment
+
+    @property
     def supports_vector_values(self):
         self._check()
         return self._session.supports_vector_values
@@ -261,6 +266,12 @@ class SessionScope:
         self._check()
         return self._session.assign_object(obj, owner, name, value, expected=expected,
                                            element=element, allow_mutation=allow_mutation, catalog=catalog)
+
+    def assign_scalar(self, obj, name, value, *, expected, allow_mutation=False, catalog=None):
+        self._check()
+        with self._lease_context():
+            return self._session.assign_scalar(obj, name, value, expected=expected,
+                                              allow_mutation=allow_mutation, catalog=catalog)
 
     def invoke_retained(self, obj, function, **arguments):
         self._check()

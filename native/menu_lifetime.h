@@ -69,7 +69,12 @@ public:
         auto ready=context(ops); if(ready!=MenuResult::Ok) return ready;
         if(!ops.prior_target_valid()) return MenuResult::Invalid;
         state_=MenuState::FocusUnknown;
-        if(!ops.focus()) return quarantine();
+        if(!ops.focus()) {
+#ifdef E33_VIEWER_MENU_SESSION
+            if(ops.recover_focus()) {state_=MenuState::Attached;return MenuResult::Invalid;}
+#endif
+            return quarantine();
+        }
         state_=MenuState::Focused;
         return MenuResult::Ok;
     }

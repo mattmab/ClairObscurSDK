@@ -1,0 +1,271 @@
+Vendored source header excerpts; preserved verbatim. The companion mimalloc MIT license applies.
+
+Source: https://github.com/python/cpython/blob/4061bc4c35f7c26f25264666d4ba083b93d2f6f9/Objects/mimalloc/alloc-aligned.c
+
+/* ----------------------------------------------------------------------------
+Copyright (c) 2018-2021, Microsoft Research, Daan Leijen
+This is free software; you can redistribute it and/or modify it under the
+terms of the MIT license. A copy of the license can be found in the file
+"LICENSE" at the root of this distribution.
+-----------------------------------------------------------------------------*/
+
+Source: https://github.com/python/cpython/blob/4061bc4c35f7c26f25264666d4ba083b93d2f6f9/Objects/mimalloc/alloc-override.c
+
+/* ----------------------------------------------------------------------------
+Copyright (c) 2018-2021, Microsoft Research, Daan Leijen
+This is free software; you can redistribute it and/or modify it under the
+terms of the MIT license. A copy of the license can be found in the file
+"LICENSE" at the root of this distribution.
+-----------------------------------------------------------------------------*/
+
+Source: https://github.com/python/cpython/blob/4061bc4c35f7c26f25264666d4ba083b93d2f6f9/Objects/mimalloc/alloc-posix.c
+
+/* ----------------------------------------------------------------------------
+Copyright (c) 2018-2021, Microsoft Research, Daan Leijen
+This is free software; you can redistribute it and/or modify it under the
+terms of the MIT license. A copy of the license can be found in the file
+"LICENSE" at the root of this distribution.
+-----------------------------------------------------------------------------*/
+
+Source: https://github.com/python/cpython/blob/4061bc4c35f7c26f25264666d4ba083b93d2f6f9/Objects/mimalloc/alloc.c
+
+/* ----------------------------------------------------------------------------
+Copyright (c) 2018-2022, Microsoft Research, Daan Leijen
+This is free software; you can redistribute it and/or modify it under the
+terms of the MIT license. A copy of the license can be found in the file
+"LICENSE" at the root of this distribution.
+-----------------------------------------------------------------------------*/
+
+Source: https://github.com/python/cpython/blob/4061bc4c35f7c26f25264666d4ba083b93d2f6f9/Objects/mimalloc/arena.c
+
+/* ----------------------------------------------------------------------------
+Copyright (c) 2019-2023, Microsoft Research, Daan Leijen
+This is free software; you can redistribute it and/or modify it under the
+terms of the MIT license. A copy of the license can be found in the file
+"LICENSE" at the root of this distribution.
+-----------------------------------------------------------------------------*/
+
+Source: https://github.com/python/cpython/blob/4061bc4c35f7c26f25264666d4ba083b93d2f6f9/Objects/mimalloc/bitmap.c
+
+/* ----------------------------------------------------------------------------
+Copyright (c) 2019-2023 Microsoft Research, Daan Leijen
+This is free software; you can redistribute it and/or modify it under the
+terms of the MIT license. A copy of the license can be found in the file
+"LICENSE" at the root of this distribution.
+-----------------------------------------------------------------------------*/
+
+Source: https://github.com/python/cpython/blob/4061bc4c35f7c26f25264666d4ba083b93d2f6f9/Objects/mimalloc/bitmap.h
+
+/* ----------------------------------------------------------------------------
+Copyright (c) 2019-2023 Microsoft Research, Daan Leijen
+This is free software; you can redistribute it and/or modify it under the
+terms of the MIT license. A copy of the license can be found in the file
+"LICENSE" at the root of this distribution.
+-----------------------------------------------------------------------------*/
+
+Source: https://github.com/python/cpython/blob/4061bc4c35f7c26f25264666d4ba083b93d2f6f9/Objects/mimalloc/heap.c
+
+/*----------------------------------------------------------------------------
+Copyright (c) 2018-2021, Microsoft Research, Daan Leijen
+This is free software; you can redistribute it and/or modify it under the
+terms of the MIT license. A copy of the license can be found in the file
+"LICENSE" at the root of this distribution.
+-----------------------------------------------------------------------------*/
+
+Source: https://github.com/python/cpython/blob/4061bc4c35f7c26f25264666d4ba083b93d2f6f9/Objects/mimalloc/init.c
+
+/* ----------------------------------------------------------------------------
+Copyright (c) 2018-2022, Microsoft Research, Daan Leijen
+This is free software; you can redistribute it and/or modify it under the
+terms of the MIT license. A copy of the license can be found in the file
+"LICENSE" at the root of this distribution.
+-----------------------------------------------------------------------------*/
+
+Source: https://github.com/python/cpython/blob/4061bc4c35f7c26f25264666d4ba083b93d2f6f9/Objects/mimalloc/options.c
+
+/* ----------------------------------------------------------------------------
+Copyright (c) 2018-2021, Microsoft Research, Daan Leijen
+This is free software; you can redistribute it and/or modify it under the
+terms of the MIT license. A copy of the license can be found in the file
+"LICENSE" at the root of this distribution.
+-----------------------------------------------------------------------------*/
+
+Source: https://github.com/python/cpython/blob/4061bc4c35f7c26f25264666d4ba083b93d2f6f9/Objects/mimalloc/os.c
+
+/* ----------------------------------------------------------------------------
+Copyright (c) 2018-2023, Microsoft Research, Daan Leijen
+This is free software; you can redistribute it and/or modify it under the
+terms of the MIT license. A copy of the license can be found in the file
+"LICENSE" at the root of this distribution.
+-----------------------------------------------------------------------------*/
+
+Source: https://github.com/python/cpython/blob/4061bc4c35f7c26f25264666d4ba083b93d2f6f9/Objects/mimalloc/page-queue.c
+
+/*----------------------------------------------------------------------------
+Copyright (c) 2018-2020, Microsoft Research, Daan Leijen
+This is free software; you can redistribute it and/or modify it under the
+terms of the MIT license. A copy of the license can be found in the file
+"LICENSE" at the root of this distribution.
+-----------------------------------------------------------------------------*/
+
+Source: https://github.com/python/cpython/blob/4061bc4c35f7c26f25264666d4ba083b93d2f6f9/Objects/mimalloc/page.c
+
+/*----------------------------------------------------------------------------
+Copyright (c) 2018-2020, Microsoft Research, Daan Leijen
+This is free software; you can redistribute it and/or modify it under the
+terms of the MIT license. A copy of the license can be found in the file
+"LICENSE" at the root of this distribution.
+-----------------------------------------------------------------------------*/
+
+Source: https://github.com/python/cpython/blob/4061bc4c35f7c26f25264666d4ba083b93d2f6f9/Objects/mimalloc/prim/osx/alloc-override-zone.c
+
+/* ----------------------------------------------------------------------------
+Copyright (c) 2018-2022, Microsoft Research, Daan Leijen
+This is free software; you can redistribute it and/or modify it under the
+terms of the MIT license. A copy of the license can be found in the file
+"LICENSE" at the root of this distribution.
+-----------------------------------------------------------------------------*/
+
+Source: https://github.com/python/cpython/blob/4061bc4c35f7c26f25264666d4ba083b93d2f6f9/Objects/mimalloc/prim/osx/prim.c
+
+/* ----------------------------------------------------------------------------
+Copyright (c) 2018-2023, Microsoft Research, Daan Leijen
+This is free software; you can redistribute it and/or modify it under the
+terms of the MIT license. A copy of the license can be found in the file
+"LICENSE" at the root of this distribution.
+-----------------------------------------------------------------------------*/
+
+Source: https://github.com/python/cpython/blob/4061bc4c35f7c26f25264666d4ba083b93d2f6f9/Objects/mimalloc/prim/prim.c
+
+/* ----------------------------------------------------------------------------
+Copyright (c) 2018-2023, Microsoft Research, Daan Leijen
+This is free software; you can redistribute it and/or modify it under the
+terms of the MIT license. A copy of the license can be found in the file
+"LICENSE" at the root of this distribution.
+-----------------------------------------------------------------------------*/
+
+Source: https://github.com/python/cpython/blob/4061bc4c35f7c26f25264666d4ba083b93d2f6f9/Objects/mimalloc/prim/unix/prim.c
+
+/* ----------------------------------------------------------------------------
+Copyright (c) 2018-2023, Microsoft Research, Daan Leijen
+This is free software; you can redistribute it and/or modify it under the
+terms of the MIT license. A copy of the license can be found in the file
+"LICENSE" at the root of this distribution.
+-----------------------------------------------------------------------------*/
+
+Source: https://github.com/python/cpython/blob/4061bc4c35f7c26f25264666d4ba083b93d2f6f9/Objects/mimalloc/prim/wasi/prim.c
+
+/* ----------------------------------------------------------------------------
+Copyright (c) 2018-2023, Microsoft Research, Daan Leijen
+This is free software; you can redistribute it and/or modify it under the
+terms of the MIT license. A copy of the license can be found in the file
+"LICENSE" at the root of this distribution.
+-----------------------------------------------------------------------------*/
+
+Source: https://github.com/python/cpython/blob/4061bc4c35f7c26f25264666d4ba083b93d2f6f9/Objects/mimalloc/prim/windows/prim.c
+
+/* ----------------------------------------------------------------------------
+Copyright (c) 2018-2023, Microsoft Research, Daan Leijen
+This is free software; you can redistribute it and/or modify it under the
+terms of the MIT license. A copy of the license can be found in the file
+"LICENSE" at the root of this distribution.
+-----------------------------------------------------------------------------*/
+
+Source: https://github.com/python/cpython/blob/4061bc4c35f7c26f25264666d4ba083b93d2f6f9/Objects/mimalloc/random.c
+
+/* ----------------------------------------------------------------------------
+Copyright (c) 2019-2021, Microsoft Research, Daan Leijen
+This is free software; you can redistribute it and/or modify it under the
+terms of the MIT license. A copy of the license can be found in the file
+"LICENSE" at the root of this distribution.
+-----------------------------------------------------------------------------*/
+
+Source: https://github.com/python/cpython/blob/4061bc4c35f7c26f25264666d4ba083b93d2f6f9/Objects/mimalloc/segment-map.c
+
+/* ----------------------------------------------------------------------------
+Copyright (c) 2019-2023, Microsoft Research, Daan Leijen
+This is free software; you can redistribute it and/or modify it under the
+terms of the MIT license. A copy of the license can be found in the file
+"LICENSE" at the root of this distribution.
+-----------------------------------------------------------------------------*/
+
+Source: https://github.com/python/cpython/blob/4061bc4c35f7c26f25264666d4ba083b93d2f6f9/Objects/mimalloc/segment.c
+
+/* ----------------------------------------------------------------------------
+Copyright (c) 2018-2020, Microsoft Research, Daan Leijen
+This is free software; you can redistribute it and/or modify it under the
+terms of the MIT license. A copy of the license can be found in the file
+"LICENSE" at the root of this distribution.
+-----------------------------------------------------------------------------*/
+
+Source: https://github.com/python/cpython/blob/4061bc4c35f7c26f25264666d4ba083b93d2f6f9/Objects/mimalloc/static.c
+
+/* ----------------------------------------------------------------------------
+Copyright (c) 2018-2020, Microsoft Research, Daan Leijen
+This is free software; you can redistribute it and/or modify it under the
+terms of the MIT license. A copy of the license can be found in the file
+"LICENSE" at the root of this distribution.
+-----------------------------------------------------------------------------*/
+
+Source: https://github.com/python/cpython/blob/4061bc4c35f7c26f25264666d4ba083b93d2f6f9/Objects/mimalloc/stats.c
+
+/* ----------------------------------------------------------------------------
+Copyright (c) 2018-2021, Microsoft Research, Daan Leijen
+This is free software; you can redistribute it and/or modify it under the
+terms of the MIT license. A copy of the license can be found in the file
+"LICENSE" at the root of this distribution.
+-----------------------------------------------------------------------------*/
+
+Source: https://github.com/python/cpython/blob/4061bc4c35f7c26f25264666d4ba083b93d2f6f9/Include/internal/mimalloc/mimalloc/atomic.h
+
+/* ----------------------------------------------------------------------------
+Copyright (c) 2018-2023 Microsoft Research, Daan Leijen
+This is free software; you can redistribute it and/or modify it under the
+terms of the MIT license. A copy of the license can be found in the file
+"LICENSE" at the root of this distribution.
+-----------------------------------------------------------------------------*/
+
+Source: https://github.com/python/cpython/blob/4061bc4c35f7c26f25264666d4ba083b93d2f6f9/Include/internal/mimalloc/mimalloc/internal.h
+
+/* ----------------------------------------------------------------------------
+Copyright (c) 2018-2023, Microsoft Research, Daan Leijen
+This is free software; you can redistribute it and/or modify it under the
+terms of the MIT license. A copy of the license can be found in the file
+"LICENSE" at the root of this distribution.
+-----------------------------------------------------------------------------*/
+
+Source: https://github.com/python/cpython/blob/4061bc4c35f7c26f25264666d4ba083b93d2f6f9/Include/internal/mimalloc/mimalloc/prim.h
+
+/* ----------------------------------------------------------------------------
+Copyright (c) 2018-2023, Microsoft Research, Daan Leijen
+This is free software; you can redistribute it and/or modify it under the
+terms of the MIT license. A copy of the license can be found in the file
+"LICENSE" at the root of this distribution.
+-----------------------------------------------------------------------------*/
+
+Source: https://github.com/python/cpython/blob/4061bc4c35f7c26f25264666d4ba083b93d2f6f9/Include/internal/mimalloc/mimalloc/track.h
+
+/* ----------------------------------------------------------------------------
+Copyright (c) 2018-2023, Microsoft Research, Daan Leijen
+This is free software; you can redistribute it and/or modify it under the
+terms of the MIT license. A copy of the license can be found in the file
+"LICENSE" at the root of this distribution.
+-----------------------------------------------------------------------------*/
+
+Source: https://github.com/python/cpython/blob/4061bc4c35f7c26f25264666d4ba083b93d2f6f9/Include/internal/mimalloc/mimalloc/types.h
+
+/* ----------------------------------------------------------------------------
+Copyright (c) 2018-2023, Microsoft Research, Daan Leijen
+This is free software; you can redistribute it and/or modify it under the
+terms of the MIT license. A copy of the license can be found in the file
+"LICENSE" at the root of this distribution.
+-----------------------------------------------------------------------------*/
+
+Source: https://github.com/python/cpython/blob/4061bc4c35f7c26f25264666d4ba083b93d2f6f9/Include/internal/mimalloc/mimalloc.h
+
+/* ----------------------------------------------------------------------------
+Copyright (c) 2018-2023, Microsoft Research, Daan Leijen
+This is free software; you can redistribute it and/or modify it under the
+terms of the MIT license. A copy of the license can be found in the file
+"LICENSE" at the root of this distribution.
+-----------------------------------------------------------------------------*/

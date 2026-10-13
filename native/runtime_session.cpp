@@ -29,6 +29,9 @@ static const CallPodValidation* session_pod_validation=nullptr;
 #endif
 #ifdef E33_ASSIGNMENT_SESSION
 #include "target_object_assignment.h"
+#ifdef E33_SCALAR_ASSIGNMENT_SESSION
+#include "scalar_assignment.h"
+#endif
 #endif
 #ifdef E33_ENUM_SESSION
 #include "enum_schema.h"
@@ -164,7 +167,11 @@ static MenuResult menu_command(MenuPacket& wire) {
     if(gate==ButtonDelegateResult::Deferred) return MenuResult::Deferred;
     if(gate!=ButtonDelegateResult::Ok) { s.menu.quarantine(); return MenuResult::Quarantined; }
 #endif
-    if(operation==MenuOperation::Prepare) {
+    if(operation==MenuOperation::Prepare
+#ifdef E33_VIEWER_MENU_SESSION
+        || operation==MenuOperation::Open
+#endif
+        ) {
         if(s.menu.active()) return MenuResult::Busy;
         // Copy before acquiring any ownership; IPC is never cleanup storage.
         s.base=runtime_base; s.session=lease_session; s.owner=wire.owner;
@@ -172,7 +179,14 @@ static MenuResult menu_command(MenuPacket& wire) {
         s.engine=wire.engine; s.widget=wire.widget; s.child=wire.child;
         s.player=wire.player; s.library=wire.library;
         std::memcpy(s.plans,wire.plans,sizeof(s.plans));
-        return s.menu.prepare(ops,s.session,s.owner,s.widget_lease,s.child_lease);
+        auto result=s.menu.prepare(ops,s.session,s.owner,s.widget_lease,s.child_lease);
+#ifdef E33_VIEWER_MENU_SESSION
+        if(operation==MenuOperation::Open && result==MenuResult::Ok) {
+            result=s.menu.attach(ops,s.session,s.owner);
+
+        }
+#endif
+        return result;
     }
     if(s.menu.active() && (s.session!=lease_session || s.owner!=wire.owner)) return MenuResult::Invalid;
     switch(operation) {
@@ -202,7 +216,7 @@ static void guarded_menu_command(MenuPacket& wire) {
         auto result=menu_command(wire);
         wire.error=result==MenuResult::Ok ? 0 : 810+static_cast<uint32_t>(result);
 #ifdef E33_MENU_DIAGNOSTIC_SESSION
-        if(wire.error==811 && wire.operation==1 && !session_menu.menu.active() && session_menu.preparation_diagnostic)
+        if(wire.error==811 && (wire.operation==1 || wire.operation==6) && !session_menu.menu.active() && session_menu.preparation_diagnostic)
             wire.error=session_menu.preparation_diagnostic;
 #endif
         wire.outcome=static_cast<uint32_t>(MenuOutcome::Returned);
@@ -669,6 +683,14 @@ uint32_t backend_command(SessionPacket* packet) {
 #endif
 #ifdef E33_ASSIGNMENT_SESSION
     case SessionObjectAssign: {
+#ifdef E33_SCALAR_ASSIGNMENT_SESSION
+        if(packet->assignment.version==2) {
+            auto& scalar=*reinterpret_cast<ScalarAssignmentPacket*>(&packet->assignment);
+            if(!session_leases.owns_object(lease_session,scalar.token,scalar.target.address)) { scalar.error=7; return 0; }
+            assign_scalar(runtime_base,scalar);
+            return 0;
+        }
+#endif
         auto& wire=packet->assignment;
         auto& assignment=wire.assignment;
         if(wire.version!=1 || wire.error || !valid_object_assignment(assignment)) {
@@ -1018,3 +1040,13 @@ void backend_message(MSG* message) {
     reinterpret_cast<Transition>(transition)(reinterpret_cast<void*>(attached_console),current?0:open);
 }
 #include "session_transport.h"
+
+#ifdef E33_VIEWER_MENU_SESSION
+uint64_t backend_menu_frame() {
+    __try {
+        return runtime_base && picto_frame_source(runtime_base) &&
+            GetCurrentThreadId()==local_read<DWORD>(runtime_base+0x9272d30) ?
+            local_read<uint64_t>(runtime_base+0x9272d10):0;
+    } __except(EXCEPTION_EXECUTE_HANDLER) {return 0;}
+}
+#endif

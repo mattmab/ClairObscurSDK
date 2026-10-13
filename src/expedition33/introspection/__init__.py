@@ -6,7 +6,7 @@ core is preserved verbatim; remaining operations are explicit pending work.
 import threading
 from types import SimpleNamespace
 
-from ..catalog import capture
+from ..catalog import capture, capture_matching, capture_selected
 from ..reflection import describe
 from ..enums import describe_enums, EnumValue
 from ..values import read_values, StoredArray, StoredStruct
@@ -79,6 +79,14 @@ class _Object:
         before = getattr(self, name)
         if before is not None and not isinstance(before, _Object):
             raise UnsupportedCapability('Current object reference could not be observed')
+        staged = getattr(backend, 'assignment_expected', None)
+        if staged is not None:
+            target, member, expected = staged
+            if target != self._observed or member != name:
+                raise ValueError('Staged assignment target changed')
+            # Preserve the user's staged expectation through native CAS. A fresh
+            # read here must never silently authorize overwriting a newer value.
+            before = expected
         backend.session.assign_object(self._observed,
             backend.catalog.by_index[prop._row['owner_index']], name,
             value._observed if value is not None else None,
@@ -196,6 +204,20 @@ class _Property:
 
 
 class _Explorer(Explorer):
+    def ref(self, obj):
+        result = super().ref(obj)
+        observed = getattr(obj, '_observed', None)
+        if observed is not None:
+            result['$identity'] = dict(pid=observed.pid, index=observed.index,
+                                       serial=observed.serial, address=hex(observed.address))
+        return result
+
+    def resolve(self, spec):
+        obj = super().resolve(spec)
+        if '$identity' in spec and self.ref(obj).get('$identity') != spec['$identity']:
+            raise ValueError('Object identity changed; reacquire it from live roots or search')
+        return obj
+
     """Add copied inner-type metadata without modifying the preserved core."""
     def __init__(self, sdk):
         super().__init__(sdk)
@@ -238,6 +260,66 @@ class _Explorer(Explorer):
             self._sweep_owners()
 
     def dispatch(self, request):
+        if request['op'] == 'set' and type(request.get('value')) in (bool,int,float):
+            if request.get('allow_mutation') is not True or 'expected' not in request:
+                raise ValueError('Scalar editing requires allow_mutation:true and an expected value')
+            if not request.get('target',{}).get('$identity'):
+                raise ValueError('Scalar editing requires an observed target identity')
+            obj=self.resolve(request['target'])
+            if self.sdk.session is None: raise UnsupportedCapability('Scalar editing requires a runtime session')
+            result=self.sdk.session.assign_scalar(obj._observed,request['member'],request['value'],
+                expected=request['expected'],allow_mutation=True,catalog=self.sdk.catalog)
+            self.sdk.mutation_completed=True
+            return {'before':result.before,'after':result.after,'outcome':result.outcome}
+        if request['op'] == 'set' and 'expected' in request:
+            if request.get('allow_mutation') is not True:
+                raise ValueError('Explicit allow_mutation:true required for set')
+            target = self.resolve(request['target'])
+            expected = request['expected']
+            if expected is not None:
+                if not isinstance(expected, dict) or not expected.get('$identity'):
+                    raise ValueError('Expected reference requires an observed identity')
+                expected = self.resolve(expected)
+            self.sdk.assignment_expected = (target._observed, request['member'], expected)
+            try:
+                return super().dispatch(request)
+            finally:
+                self.sdk.assignment_expected = None
+        if request['op'] == 'inspect' and request.get('target',{}).get('$identity'):
+            from .core import bounded
+            from ..values import read_values_many, read_object_reference
+            if 'members' in request and (not isinstance(request['members'],list) or len(request['members'])>64 or not all(isinstance(name,str) for name in request['members'])):
+                raise ValueError('members must be a list of up to 64 property names')
+            obj=self.resolve(request['target'])
+            observed=read_values_many(self.sdk.catalog,(obj._observed,),fields=tuple(request['members']) if 'members' in request else None)[obj._observed.index]
+            keys=list(observed.types)
+            if 'members' in request: keys=[key for key in keys if key[1] in request['members']]
+            offset=max(0,min(int(request.get('offset',0)),100000)); limit=bounded(request.get('limit'))
+            values={}; budget=[2000]
+            for key in keys[offset:offset+limit]:
+                try:
+                    if observed.types[key]=='ObjectProperty':
+                        value,closure=read_object_reference(self.sdk.catalog,obj._observed,self.sdk.catalog.by_index[key[0]],key[1])
+                        if value is not None:self.sdk.catalog=self.sdk.catalog.with_observations(closure)
+                    else:
+                        if key in observed.errors: raise UnsupportedCapability(observed.errors[key])
+                        value=observed.values[key]
+                    values[key[1]]=self.encode(_adapt(self.sdk,value),bounded(request.get('depth'),2,4),budget)
+                except Exception as error: values[key[1]]={'$error':str(error)[:500]}
+            return {'target':self.ref(obj),'values':values,'next_offset':offset+limit if len(keys)>offset+limit else None}
+        if request['op'] == 'roots':
+            # Filter templates before bounding live roots. The original core
+            # sliced first, which could omit the player behind class defaults.
+            from itertools import islice
+            result = {}
+            for name in ('World', 'GameInstance', 'LocalPlayer', 'PlayerController', 'Pawn'):
+                try:
+                    live = (obj for obj in self.sdk.find_all(name, exact=False)
+                            if not obj._observed.object_flags & 0x30)
+                    result[name] = [self.ref(obj) for obj in islice(live, 32)]
+                except Exception as error:
+                    result[name] = {'$error': str(error)}
+            return result
         try:
             if self._trace_adapter is not None:
                 if request['op'] == 'trace_start':
@@ -260,7 +342,6 @@ class _Explorer(Explorer):
                 else:
                     owner.release()
             self._sweep_owners()
-
     def encode(self, value, depth=2, budget=None):
         from ..tracing import ObservedObject
         if isinstance(value, ObservedObject):
@@ -336,14 +417,35 @@ class _Backend:
         self.enum_descriptors = {}
         self.retained_trace_schemas = set()
 
-    def refresh(self):
-        self.catalog = capture()
+    def refresh(self, request=None):
+        request = request or {}
+        identity = request.get('target', {}).get('$identity')
+        if request.get('op') in ('inspect','set') and identity:
+            self.catalog = capture_selected(identity['pid'], ((identity['index'], identity['serial'], int(identity['address'],16)),))
+        elif request.get('op') == 'roots':
+            from .. import _query
+            from .._reader import active_reader
+            reader=active_reader()
+            pid = self.session.pid if self.session is not None else reader.pid if reader is not None else _query(['--limit','1'])[0]['pid']
+            self.catalog = capture_matching(pid, classes=('World','GameInstance','LocalPlayer','PlayerController'))
+            from ..values import read_values_many, read_object_reference
+            controllers=tuple(o for o in self.catalog.select('PlayerController') if not o.object_flags & 0x30)
+            if controllers:
+                values=read_values_many(self.catalog,controllers,fields=('Pawn',))
+                for controller in controllers:
+                    owners=[owner for owner,name in values[controller.index].types if name=='Pawn']
+                    if len(owners)==1:
+                        pawn,closure=read_object_reference(self.catalog,controller,self.catalog.by_index[owners[0]],'Pawn')
+                        if pawn is not None:self.catalog=self.catalog.with_observations(closure)
+        else:
+            self.catalog = capture()
         self.descriptors, self.properties, self.function_children = {}, {}, {}
         self.observations = {}
         self.enum_descriptors = {}
         self.retained_trace_schemas.clear()
         self._struct_class = self.catalog.find_class('Struct').index
-        self._function_class = self.catalog.find_class('Function').index
+        try: self._function_class = self.catalog.find_class('Function').index
+        except RuntimeQueryError: self._function_class = None
         for obj in self.catalog.objects:
             if self._function_class in self.catalog.ancestors(obj.class_index):
                 self.function_children.setdefault(obj.outer_index, []).append(obj)
@@ -494,7 +596,10 @@ class Harness:
             if self._agent is not None and request['op'] in self._agent.OPERATIONS:
                 return self._agent.dispatch(request)
             if request['op'] not in ('status', 'diff', 'release_value'):
-                self._backend.refresh()
+                if request['op'] == 'roots' or (request['op'] in ('inspect','set') and request.get('target',{}).get('$identity')):
+                    self._backend.refresh(request)
+                else:
+                    self._backend.refresh()
             if request['op'] == 'schema':
                 cls = (self._backend.find_object('Struct', request['struct']) if 'struct' in request
                        else self._backend.find_class(request['class']))
@@ -529,8 +634,10 @@ class Harness:
                 result['trace_types'] = ['native_scalar_post'] if self._explorer._trace_adapter is not None else []
                 result['trace_validation'] = 'live getter return, arithmetic locals and viewport out specimens verified; relaunch/broader coverage pending'
                 result['write_types'] = ['ObjectProperty'] if self._backend.assignment else []
+                if self._backend.session is not None and getattr(self._backend.session,'supports_scalar_assignment',False):
+                    result['write_types'] += ['BoolProperty','IntProperty','FloatProperty','DoubleProperty']
                 result['limitations'] = ['Stored scalars, strings, references, selected arrays and bounded reflected structs; opaque native state is not owned',
-                    ('Set supports scalar ObjectProperty only; other writes pending' if self._backend.assignment else 'Writes pending') +
+                    ('Set supports advertised write_types with verified descriptors and explicit mutation consent; accessor-backed and container writes unsupported') +
                     '; tracing supports scalar native POST only with v18; staged installation is available through the management agent; invocation requires opt-in v6 and supported parameter types',
                     ('Retain supports copied primitives and leased object outputs; opaque native values unsupported'
                      if self._backend.retained else 'Invocation retain and opaque native values unsupported') +

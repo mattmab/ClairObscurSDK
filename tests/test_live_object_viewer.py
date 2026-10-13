@@ -35,7 +35,7 @@ class ViewerTests(unittest.TestCase):
         self.browser.result = {'values': {str(n): n for n in range(20)}}
         frame = self.view.render()
         self.assertEqual(len(frame.controls), 12)
-        for token in (1, 3, 5, 106):
+        for token in (1, 3, 5, 108):
             with self.assertRaises(module.ManagementError):
                 self.view.activate(frame.revision, token)
         next_frame = self.view.activate(frame.revision, 4)
@@ -56,7 +56,8 @@ class ViewerTests(unittest.TestCase):
         self.browser.select('Pawn')
         self.harness.request.side_effect = ValueError('Object no longer exists')
         frame = self.view.render()
-        updated = self.view.activate(frame.revision, 2)
+        tools = self.view.activate(frame.revision, 2)
+        updated = self.view.activate(tools.revision, 107)
         self.assertIn('no longer exists', updated.status)
         self.assertEqual(self.browser.result, {})
         self.assertEqual(self.browser.rows(), [])
@@ -166,6 +167,116 @@ class ViewerTests(unittest.TestCase):
         mod.shared = Mock()
         mod.refresh()
         mod.shared.refresh.assert_not_called()
+
+    def test_filter_snapshot_includes_hidden_fields_and_removed_rows(self):
+        self.harness.request.return_value={'values':{'Health':10,'Speed':20}}
+        self.browser.set_filter('Health')
+        self.browser.snapshot()
+        self.assertEqual(len(self.browser.baseline[1]),2)
+        self.browser.set_filter('')
+        self.harness.request.return_value={'values':{'Health':11}}
+        self.browser.refresh();self.browser.changed_only=True
+        self.assertEqual(dict(self.browser.rows()),{'Health':11,'Speed':{'$removed':20}})
+
+    def test_monitor_stops_when_hidden_or_object_disappears(self):
+        self.browser.request={'op':'inspect','target':{'$object':'/Pawn'}}
+        self.browser.result={'values':{'Health':10}}
+        self.browser.path=['Health']
+        self.browser.toggle_live();self.browser.next_refresh=0
+        self.harness.request.side_effect=ValueError('Object identity changed')
+        self.assertTrue(self.browser.poll(True))
+        self.assertFalse(self.browser.live)
+        self.assertEqual(self.browser.result,{})
+        self.assertIn('identity',self.browser.monitor_error)
+        self.browser.live=True
+        self.browser.poll(False)
+        self.assertFalse(self.browser.live)
+
+    def test_staged_edit_rejects_changed_value_without_dispatch(self):
+        target={'$object':'/Pawn','class':'Pawn','$identity':{'pid':1,'index':2,'serial':3}}
+        self.browser.request={'op':'inspect','target':target}
+        self.browser.path=['Owner']
+        self.harness.request.return_value={'values':{'Owner':None}}
+        self.browser.stage_edit(None)
+        self.harness.request.return_value={'values':{'Owner':{'$object':'/Other'}}}
+        with self.assertRaisesRegex(ValueError,'changed since staging'):self.browser.apply_edit()
+        self.assertFalse(any(call.args[0]['op']=='set' for call in self.harness.request.call_args_list))
+        self.assertIsNone(self.browser.draft)
+
+    def test_scalar_edits_stage_apply_and_reject_type_mismatch(self):
+        self.browser.request={'op':'inspect','target':{'$object':'/Pawn','$identity':{'pid':1,'index':2,'serial':3}}}
+        self.browser.path=['Value']
+        for before,after in ((1,2),(1.25,2.5),(False,True)):
+            self.harness.request.return_value={'values':{'Value':before}}
+            self.browser.stage_edit(after)
+            self.browser.apply_edit()
+            writes=[c.args[0] for c in self.harness.request.call_args_list if c.args[0]['op']=='set']
+            self.assertEqual(writes[-1]['expected'],before)
+            self.assertEqual(writes[-1]['value'],after)
+        self.harness.request.return_value={'values':{'Value':False}}
+        with self.assertRaises(ValueError):self.browser.stage_edit(1)
+
+    def test_tools_and_page_cycle_fit_shared_twelve_controls(self):
+        frame=self.view.render()
+        tools=self.view.activate(frame.revision,2)
+        self.assertLessEqual(len(tools.controls),12)
+        page2=self.view.activate(tools.revision,4)
+        self.assertEqual(page2.page,1)
+        page3=self.view.activate(page2.revision,4)
+        self.assertEqual(page3.page,2)
+        self.assertEqual(self.view.activate(page3.revision,4).page,0)
+
+    def test_monitor_refresh_does_not_reset_tools_page(self):
+        self.view.screen='tools'
+        self.view.page=2
+        self.browser.generation+=1
+        self.assertEqual(self.view.render().page,2)
+
+    def test_selected_reference_remains_editable_until_explicit_follow(self):
+        reference = {'$object': '/World.Other', 'class': 'Pawn'}
+        self.browser.request = {'op': 'inspect', 'target': {'$object': '/World.Pawn'}}
+        self.browser.result = {'values': {'Owner': reference}}
+        self.browser.select('Owner')
+        self.assertEqual(self.browser.path, ['Owner'])
+        self.assertEqual(self.browser.request['target']['$object'], '/World.Pawn')
+        self.harness.request.return_value = {'values': {}}
+        self.browser.follow_reference()
+        self.assertEqual(self.browser.request['target'], reference)
+
+    def test_missing_monitored_member_stops_instead_of_expanding_read(self):
+        self.browser.request = {'op': 'inspect', 'target': {'$object': '/World.Pawn'}}
+        self.browser.result = {'values': {'Health': 1}}
+        self.browser.path = ['Health']
+        self.browser.toggle_live(); self.browser.next_refresh = 0
+        self.harness.request.return_value = {'values': {}}
+        self.browser.poll(True)
+        self.assertFalse(self.browser.live)
+        self.assertIn('disappeared', self.browser.monitor_error)
+
+    def test_apply_passes_staged_expectation_to_native_assignment_request(self):
+        target = {'$object': '/Pawn', '$identity': {'pid': 1, 'index': 2, 'serial': 3}}
+        self.browser.request = {'op': 'inspect', 'target': target}
+        self.browser.path = ['Owner']
+        self.harness.request.return_value = {'values': {'Owner': None}}
+        self.browser.stage_edit(None)
+        self.browser.apply_edit()
+        writes = [c.args[0] for c in self.harness.request.call_args_list if c.args[0]['op'] == 'set']
+        self.assertEqual(len(writes), 1)
+        self.assertIn('expected', writes[0])
+        self.assertIsNone(writes[0]['expected'])
+
+    def test_collection_summary_does_not_dump_raw_reference_json(self):
+        self.assertEqual(module.summary([{'$object': '/World.Pawn'}]), '1 items: Pawn')
+
+    def test_only_acknowledged_focus_preparation_failure_is_cleaned(self):
+        for outcome, code, cleaned in (('returned', 902, True), ('unknown', 902, False), ('returned', 811, False)):
+            mod = module.Mod()
+            mod.browser = self.browser
+            mod.native = Mock(menu=None)
+            mod.native.open.side_effect = module.MenuError('rejected', outcome=outcome, native_error=code)
+            with self.assertRaises((module.ManagementError, module.MenuError)):
+                mod.open()
+            self.assertEqual(mod.native.close_menu.called, cleaned)
 
 
 if __name__ == '__main__':

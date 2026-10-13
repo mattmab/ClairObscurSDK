@@ -1,6 +1,7 @@
 # Optional mods
 
-The SDK installer includes only **SDK Management** and **Introspection Harness**.
+The SDK installer includes **SDK Management**, **Introspection Harness** and
+**LiveObjectViewer** (SDK RC5 or newer). Enable the viewer in Pause → Mods.
 Mods below are separate downloads with independent release tags and MIT licenses.
 They use the SDK runtime; do not install separate controllers.
 
@@ -25,8 +26,8 @@ Only install trusted code: `.sdkmod` archives are not a sandbox.
 
 Sources remain in the named subfolders here. Shared native/reflection support
 remains in the SDK; optional entry points and resources are not in the SDK ZIP.
-Example mods and LiveObjectViewer are source-only development references, not
-published downloads or bundled SDK components.
+Example mods remain source-only development references. LiveObjectViewer is
+bundled with the SDK because it is a runtime inspection tool.
 Each mod can be released independently with `scripts/mod_archive.py build`.
 These are release candidates. Feature-specific limits and live evidence are in
 each mod's README and the repository research documents; publication does not

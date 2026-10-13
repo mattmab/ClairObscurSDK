@@ -86,7 +86,9 @@ inline void run_runtime_session(DWORD pid, DWORD thread, int32_t object_index, i
     packet.request.function_index = function_index; packet.request.function_serial = function_serial;
     wchar_t executable[32768]; require(GetModuleFileNameW(nullptr, executable, 32768) != 0, "SESSION_SELF_PATH");
 #ifdef E33_KEYBIND_SESSION
-#if defined(E33_CATALOG_GAME_OWNED_SESSION)
+#if defined(E33_VIEWER_MENU_SESSION)
+    auto path = std::filesystem::path(executable).parent_path().parent_path() / L"runtime-session-viewer-v2" / L"runtime_session_viewer_v2.dll";
+#elif defined(E33_CATALOG_GAME_OWNED_SESSION)
     auto path = std::filesystem::path(executable).parent_path().parent_path() / L"runtime-session-picto-v4" / L"runtime_session_picto_v4.dll";
 #elif defined(E33_GAME_OWNED_AUDIO_SESSION)
     auto path = std::filesystem::path(executable).parent_path().parent_path() / L"runtime-session-v64-game-owned-audio" / L"runtime_session_v64_game_owned_audio.dll";
@@ -228,6 +230,12 @@ inline void run_runtime_session(DWORD pid, DWORD thread, int32_t object_index, i
 #endif
 #ifdef E33_ASSIGNMENT_SESSION
               << ",\"object_assignment_protocol\":1"
+#endif
+#ifdef E33_VIEWER_MENU_SESSION
+              << ",\"menu_input_protocol\":1"
+#endif
+#ifdef E33_SCALAR_ASSIGNMENT_SESSION
+              << ",\"scalar_assignment_protocol\":1"
 #endif
 #ifdef E33_POD_SESSION
               << ",\"pod_value_protocol\":1"

@@ -8,6 +8,9 @@ uint32_t backend_command(SessionPacket*);
 uint32_t backend_close();
 bool backend_shutting_down();
 void backend_message(MSG*);
+#ifdef E33_VIEWER_MENU_SESSION
+uint64_t backend_menu_frame();
+#endif
 extern "C" __declspec(dllexport) LRESULT CALLBACK SessionScheduleHook(int, WPARAM, LPARAM);
 
 namespace session_transport {
@@ -22,6 +25,14 @@ static HHOOK owned_hook = nullptr;
 static Watch* watch = nullptr;
 static DWORD controller = 0, target_thread = 0;
 static uint64_t nonce = 0;
+#ifdef E33_VIEWER_MENU_SESSION
+static uint64_t menu_frame=0,menu_started=0;
+static UINT_PTR menu_timer=0;
+static void cancel_menu_tick() {
+    if(menu_timer)KillTimer(nullptr,menu_timer);
+    menu_timer=0;menu_frame=menu_started=0;
+}
+#endif
 static volatile LONG completed_closes = 0;
 static volatile LONG last_close_reason = 0;
 static volatile LONG owner_tid = 0;
@@ -53,6 +64,9 @@ static void close(LONG reason) {
     auto* closing = packet;
     if (!closing) return;
     uint32_t error = reason == BackendFailure ? closing->request.error : 0;
+#ifdef E33_VIEWER_MENU_SESSION
+    cancel_menu_tick();
+#endif
     uint32_t cleanup_error = guarded_close();
 #ifdef E33_LEASE_SESSION
     if(cleanup_error==kSessionCloseDeferred) { pending_close_reason=reason; return; }
@@ -150,6 +164,18 @@ extern "C" __declspec(dllexport) LRESULT CALLBACK SessionScheduleHook(int code, 
             && !pending_close_reason
 #endif
             ) guarded_message(message);
+#ifdef E33_VIEWER_MENU_SESSION
+        if(packet && menu_timer) {
+            const auto frame=backend_menu_frame();
+            if(!frame || frame<menu_frame || GetTickCount64()-menu_started>2000 || frame!=menu_frame) {
+                const bool valid=frame>menu_frame && GetTickCount64()-menu_started<=2000;
+                cancel_menu_tick();
+                packet->request.error=valid ? guarded_command(packet):90;
+                InterlockedIncrement(&packet->request.callbacks);
+                InterlockedExchange(&packet->request.state,kComplete);
+            }
+        }
+#endif
         if (request_message && !message->hwnd && message->message == request_message) {
             bool consumed = false;
             if (!packet) consumed = open(message);
@@ -163,9 +189,19 @@ extern "C" __declspec(dllexport) LRESULT CALLBACK SessionScheduleHook(int code, 
                     consumed = true;
                     if (request.action == SessionClose) close(ClosedNormally);
                     else {
+#ifdef E33_VIEWER_MENU_SESSION
+                        if(request.action==SessionMenu && (packet->menu.operation==6 || packet->menu.operation==3)) {
+                            menu_frame=backend_menu_frame();menu_started=GetTickCount64();
+                            if(menu_frame)menu_timer=SetTimer(nullptr,0,USER_TIMER_MINIMUM,nullptr);
+                        }
+                        if(!menu_timer) {
+#endif
                         request.error = guarded_command(packet);
                         InterlockedIncrement(&request.callbacks);
                         InterlockedExchange(&request.state, kComplete);
+#ifdef E33_VIEWER_MENU_SESSION
+                        }
+#endif
                     }
                 }
             }

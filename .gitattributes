@@ -1,0 +1,2 @@
+# Preserve authentic notice bytes; upstream whitespace is intentional.
+licenses/** -text -whitespace

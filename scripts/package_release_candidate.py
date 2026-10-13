@@ -10,9 +10,11 @@ import sys
 ROOT = Path(__file__).resolve().parents[1]
 sys.path.insert(0, str(ROOT / 'scripts'))
 from package_mods import build_all
+from license_manifest import validate_source, verify_archive
 
 
 def build(destination, version):
+    reviewed_licenses = validate_source(ROOT)
     destination = Path(destination).resolve()
     destination.mkdir(parents=True, exist_ok=False)
     stage = destination / 'game-root'
@@ -33,14 +35,17 @@ def build(destination, version):
     copy('docs/INSTALLABLE_RELEASE.md', 'README.md')
     copy('LICENSE', 'LICENSE')
     copy('THIRD_PARTY_NOTICES.md', 'THIRD_PARTY_NOTICES.md')
+    for source in sorted((ROOT / 'licenses').rglob('*')):
+        if source.is_file():
+            copy(source.relative_to(ROOT), source.relative_to(ROOT))
     for directory in ('research-probe', 'readonly-worker', 'research-probe-picto-v4'):
-        copy('build/release/research-probe-picto-v4/research_probe.exe', f'build/{directory}/research_probe.exe')
-    copy('build/release/runtime-session-picto-v4/runtime_session_picto_v4.dll', 'build/runtime-session-picto-v4/runtime_session_picto_v4.dll')
+        copy('build/release/research-probe-viewer-v2/research_probe.exe', f'build/{directory}/research_probe.exe')
+    copy('build/release/runtime-session-viewer-v2/runtime_session_viewer_v2.dll', 'build/runtime-session-viewer-v2/runtime_session_viewer_v2.dll')
     # Launchers inside SDK are install-relative and never search a dev checkout.
     (sdk / 'launch-sdk.cmd').write_text('@echo off\r\ncd /d "%~dp0"\r\n"%~dp0runtime\\python.exe" -I -S -B "%~dp0scripts\\run_release_sdk.py" %*\r\n', encoding='ascii')
     (sdk / 'launch-cinematics.cmd').write_text('@echo off\r\ncall "%~dp0launch-sdk.cmd" %*\r\n', encoding='ascii')
     manifest = build_all(ROOT / 'mods', stage / 'SDK_Mods',
-                         include={'SDKManagement', 'IntrospectionHarness'})
+                         include={'SDKManagement', 'IntrospectionHarness', 'LiveObjectViewer'})
     bootstrap = stage / 'Sandfall/Binaries/Win64/version.dll'
     bootstrap.parent.mkdir(parents=True)
     shutil.copy2(ROOT / 'build/bootstrap/version.dll', bootstrap)
@@ -55,8 +60,10 @@ def build(destination, version):
         for path in sorted(stage.rglob('*')):
             if path.is_file():
                 out.write(path, path.relative_to(stage).as_posix())
+    license_check = verify_archive(archive, reviewed_licenses)
     result = dict(archive=str(archive), sha256=hashlib.sha256(archive.read_bytes()).hexdigest(),
                   bytes=archive.stat().st_size, mods=len(manifest['mods']))
+    result['license_manifest_verification'] = license_check
     (destination / 'artifact.json').write_text(json.dumps(result, indent=2) + '\n', encoding='utf8')
     return result
 

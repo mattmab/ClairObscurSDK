@@ -24,7 +24,9 @@ same installed SDK is rejected by an operating-system file lock.
 
 ## Mods and settings
 
-Only SDKManagement and IntrospectionHarness are bundled in `SDK_Mods`.
+SDKManagement, IntrospectionHarness and LiveObjectViewer are bundled in `SDK_Mods`.
+Enable LiveObjectViewer in Pause → Mods, then choose **Open Live Object Viewer**
+or enter `lov` in the native console. Existing saved enable choices are preserved.
 Download optional mods separately from the repository's Mods catalog and releases.
 Add or replace trusted mod
 archives there while the controller is stopped. They are validated and extracted

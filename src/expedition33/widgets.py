@@ -204,7 +204,8 @@ class OwnedMenuPanel:
             'SetAnchors', 'SetIsEnabled', 'SetVisibility', 'SetBackgroundColor', 'SetBrushColor',
             'SetText', 'AddToViewport', 'IsInViewport', 'ActivateWidget',
             'IsActivated', 'SetUserFocus', 'HasKeyboardFocus', 'HasUserFocus',
-            'DeactivateWidget', 'RemoveFromParent', 'SetFocusToGameViewport'),
+            'DeactivateWidget', 'RemoveFromParent', 'SetFocusToGameViewport',
+            'SetInputMode_UIOnlyEx','SetInputMode_GameOnly','EMouseLockMode'),
             classes=('PlayerController', 'GameEngine')) if self._selected_results else capture()
         if self.catalog.pid != self.scope.pid:
             raise ValueError('Widget catalog belongs to another process')
@@ -356,8 +357,18 @@ class OwnedMenuPanel:
                     isinstance(code, int) and (910 <= code <= 919 or 10000 <= code < 20000)):
                 self.uncertain = False
             raise
-        if not self._mutate(self.menu.attach) or not self._mutate(self.menu.focus):
-            raise RuntimeError('Native panel attachment/focus deferred; close the panel')
+        try:
+            if not self._mutate(self.menu.attach) or not self._mutate(self.menu.focus):
+                raise RuntimeError('Native panel attachment/focus deferred; close the panel')
+        except MenuError as error:
+            # A returned focus rejection has a known native owner. Detach it
+            # immediately; never leave an unfocused overlay trapping the user.
+            # Unknown/quarantined outcomes retain their existing no-retry latch.
+            if error.outcome == 'returned' and error.native_error == 811:
+                self.uncertain = False
+                if self._mutate(self.menu.close):
+                    self.menu = None
+            raise
         self.state = 'open'
 
     def prime_menu_plan(self):

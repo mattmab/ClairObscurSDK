@@ -23,6 +23,9 @@
 // contains SEH around every operation. No v14 transport is installed yet.
 struct TargetMenuStorage {
     uint32_t preparation_diagnostic=0;
+#ifdef E33_VIEWER_MENU_SESSION
+    bool ui_input_owned=false;
+#endif
     uint64_t base=0, session=0, owner=0, widget_lease=0, child_lease=0;
     CallIdentity widget{-1,0,0}, child{-1,0,0}, player{-1,0,0}, library{-1,0,0};
     CallPacket plans[kMenuCalls]{};
@@ -77,6 +80,9 @@ struct TargetMenuOps {
         return objects_valid() ? MenuContext::Ready : MenuContext::Terminal;
     }
     CallIdentity target(MenuCall op) const {
+#ifdef E33_VIEWER_MENU_SESSION
+        if(op==MenuCall::UIInput || op==MenuCall::GameInput) return data.library;
+#endif
         if(op==MenuCall::Restore) return data.library;
         if(op==MenuCall::SetFocus || op==MenuCall::KeyboardFocus || op==MenuCall::UserFocus)
             return data.child;
@@ -94,9 +100,27 @@ struct TargetMenuOps {
         if(!exact_name(data.base,owner+0x18,spec->owner) ||
            !exact_name(data.base,local_read<uint64_t>(owner+0x20)+0x18,
                        spec->rva>=0x4790000 ? "/Script/CommonUI" : "/Script/UMG")) return false;
+#ifdef E33_VIEWER_MENU_SESSION
+        if((op==MenuCall::GameInput || op==MenuCall::UIInput) && !menu_same_identity(p.objects[0].identity,data.player))return false;
+        if(op==MenuCall::UIInput && !menu_same_identity(p.objects[1].identity,data.child))return false;
+#endif
         if(op==MenuCall::SetFocus || op==MenuCall::UserFocus)
             if(!menu_same_identity(p.objects[0].identity,data.player)) return false;
         return true;
+    }
+    uint32_t dispatch(CallPacket& packet,bool validate_only=false) const {
+#ifdef E33_VIEWER_MENU_SESSION
+        if(packet.version==kEnumCallVersion) {
+            RetainedCallPacket retained{}; retained.call=packet;
+            CallRetention retention{nullptr,
+                [](void*,const CallPacket& c)->uint32_t {return retained_call_slots(c) ? 412u:0u;},
+                [](void*,uint32_t,CallIdentity&)->uint32_t {return 412;}};
+            CallEnumValidation enums{&retained,validate_target_enum};
+            auto error=reflected_call(data.base,retained.call,&retention,session_pod_validation,nullptr,&enums,validate_only);
+            packet=retained.call;return error;
+        }
+#endif
+        return reflected_call(data.base,packet,nullptr,nullptr,nullptr,nullptr,validate_only);
     }
     bool prior_target_valid() const {
         TargetMenuFocusSnapshot current{};
@@ -113,7 +137,7 @@ struct TargetMenuOps {
             data.preparation_diagnostic=910+i;
             if(!plan_valid(static_cast<MenuCall>(i))) return false;
             auto packet=data.plans[i];
-            auto error=reflected_call(data.base,packet,nullptr,nullptr,nullptr,nullptr,true);
+            auto error=dispatch(packet,true);
             data.preparation_diagnostic=10000+i*1000+error;
             if(error ||
                packet.outcome!=CallNotDispatched) return false;
@@ -137,7 +161,10 @@ struct TargetMenuOps {
         // Local packet is only a transient dispatch buffer. All lifecycle and
         // prior-focus ownership is already durable in data before this call.
         auto packet=data.plans[static_cast<uint32_t>(op)];
-        auto error=reflected_call(data.base,packet);
+#ifdef E33_VIEWER_MENU_SESSION
+        if(op==MenuCall::UIInput) data.ui_input_owned=true;
+#endif
+        auto error=dispatch(packet);
         if(error || packet.outcome!=CallDispatchReturned) return false;
         if(result) {
             if(packet.return_offset>=kCallBytes || packet.data[packet.return_offset]>1) return false;
@@ -160,8 +187,19 @@ struct TargetMenuOps {
         return attached;
 #endif
     }
+#ifdef E33_VIEWER_MENU_SESSION
+    bool recover_focus() {
+        return context()==MenuContext::Ready && prior_target_valid() &&
+            invoke(MenuCall::GameInput) && invoke(MenuCall::Restore) &&
+            focus_owner()==MenuFocusOwner::Prior && (data.ui_input_owned=false,true);
+    }
+#endif
     bool focus() {
         auto current=focus_owner();
+#ifdef E33_VIEWER_MENU_SESSION
+        if(current!=MenuFocusOwner::Prior && current!=MenuFocusOwner::Owned)return false;
+        if(!invoke(MenuCall::UIInput))return false;
+#endif
         return (current==MenuFocusOwner::Prior || current==MenuFocusOwner::Owned) &&
             invoke(MenuCall::SetFocus) &&
             check(MenuCall::KeyboardFocus,true) && check(MenuCall::UserFocus,true);
@@ -185,11 +223,23 @@ struct TargetMenuOps {
     }
     bool restore() {
         auto current=focus_owner();
+#ifdef E33_VIEWER_MENU_SESSION
+        if(data.ui_input_owned && (current==MenuFocusOwner::Prior || current==MenuFocusOwner::Owned)) {
+            if(!prior_target_valid() || !invoke(MenuCall::GameInput) || !invoke(MenuCall::Restore) || focus_owner()!=MenuFocusOwner::Prior)return false;
+            data.ui_input_owned=false;return true;
+        }
+        if(data.ui_input_owned && current==MenuFocusOwner::Unrelated) {data.ui_input_owned=false;return true;}
+#endif
         if(current==MenuFocusOwner::Prior || current==MenuFocusOwner::Unrelated) return true;
         return current==MenuFocusOwner::Owned && prior_target_valid() && invoke(MenuCall::Restore) &&
             focus_owner()==MenuFocusOwner::Prior;
     }
-    bool deactivate() { return invoke(MenuCall::Deactivate) && check(MenuCall::Active,false); }
+    bool deactivate() {
+#ifdef E33_VIEWER_MENU_SESSION
+        if(data.ui_input_owned && !restore())return false;
+#endif
+        return invoke(MenuCall::Deactivate) && check(MenuCall::Active,false);
+    }
     bool detach() { return invoke(MenuCall::Remove) && check(MenuCall::InViewport,false); }
     bool release_baseline() {
 #ifdef E33_MULTI_BUTTON_SESSION

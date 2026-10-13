@@ -1,0 +1,34 @@
+{
+  "candidate": "0.1.0-rc4-viewer-dev4",
+  "native": "runtime_session_viewer_v2.dll",
+  "game_pid": 4600,
+  "results": {
+    "mounted_mouse_navigation": "PASS",
+    "escape_close": "PASS",
+    "boolean_write_readback_poll_restore": "PASS: SDK-owned CommonTextBlock.bIsVariable false -> true -> false",
+    "float_write_readback_poll_restore": "PASS: possessed BP_WorldMapCharacter.LookUpDownRate 1.0 -> 2.25 -> 1.0",
+    "mouse_numeric_stage_apply": "PASS: after controller restart, Stage numeric +1 then APPLY displayed 2.0; restored to 1.0 through the same guarded write path",
+    "visible_monitor": "PASS: LookUpDownRate displayed with Live ON; closing stopped monitoring",
+    "monitor_tools_paging": "PASS: page 3 remained selected through live refreshes after correction",
+    "unsupported_widget_numeric_descriptor": "PASS: MinDesiredWidth rejected before native dispatch",
+    "controller_clean_restart": "PASS: viewer reopened and accepted numeric UI edit",
+    "settings_install_preservation": "PASS: byte comparison of settings JSON before/after install",
+    "regression_tests": "1007 passed",
+    "native_build": "PASS: MSVC /W4 /WX",
+    "installed_manifest": "PASS"
+  },
+  "raw_evidence": [
+    ".agent-work/viewer-scalar-live-result.json",
+    ".agent-work/viewer-ui-edit-restored.json",
+    ".agent-work/viewer-dev4-tests.log",
+    "S:/SteamLibrary/steamapps/common/Expedition 33/SDK/logs/controller.log"
+  ],
+  "limits": [
+    "Int32 and float64 writes have protocol tests but no live write specimen yet",
+    "Large property batches with object references remain slow",
+    "Party/inventory-screen rejection and travel need additional live acceptance",
+    "Frame-aware menu dispatch uses the existing message pump and verified frame counter, not an engine Tick hook",
+    "Stored-field edits do not invoke engine setters or notifications",
+    "No new public release was published"
+  ]
+}

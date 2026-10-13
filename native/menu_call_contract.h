@@ -1,8 +1,15 @@
 #pragma once
 #include "invocation_protocol.h"
+#ifdef E33_VIEWER_MENU_SESSION
+#include "enum_call_protocol.h"
+#endif
 
 enum class MenuCall : uint32_t { Add, InViewport, Activate, Active, SetFocus,
-    KeyboardFocus, UserFocus, Deactivate, Remove, Restore, Count };
+    KeyboardFocus, UserFocus, Deactivate, Remove, Restore,
+#ifdef E33_VIEWER_MENU_SESSION
+    UIInput, GameInput,
+#endif
+    Count };
 constexpr uint32_t kMenuCalls=static_cast<uint32_t>(MenuCall::Count);
 struct MenuCallSpec { const char* owner; const char* name; uint32_t rva, size, count, result; };
 inline const MenuCallSpec* menu_call_spec(MenuCall call) {
@@ -17,6 +24,10 @@ inline const MenuCallSpec* menu_call_spec(MenuCall call) {
         {"CommonActivatableWidget","DeactivateWidget",0x4796d40,0,0,65535},
         {"Widget","RemoveFromParent",0x31018d0,0,0,65535},
         {"WidgetBlueprintLibrary","SetFocusToGameViewport",0x313faf0,0,0,65535}
+#ifdef E33_VIEWER_MENU_SESSION
+        ,{"WidgetBlueprintLibrary","SetInputMode_UIOnlyEx",0x31405c0,18,4,65535},
+        {"WidgetBlueprintLibrary","SetInputMode_GameOnly",0x31404c0,9,2,65535}
+#endif
     };
     auto index=static_cast<uint32_t>(call);
     return index<kMenuCalls ? &specs[index] : nullptr;
@@ -28,6 +39,29 @@ inline bool menu_same_identity(const CallIdentity& a,const CallIdentity& b) {
 // FProperty and UFunction before dispatch; this is not a substitute for it.
 inline bool valid_menu_call(const CallPacket& p,MenuCall call) {
     auto* spec=menu_call_spec(call);
+#ifdef E33_VIEWER_MENU_SESSION
+    if(call==MenuCall::UIInput || call==MenuCall::GameInput) {
+        const bool ui=call==MenuCall::UIInput;
+        RetainedCallPacket retained{}; retained.call=p;
+        if((ui ? validate_enum_call(retained) : validate_call_packet(p)) ||
+           p.version!=(ui ? kEnumCallVersion : kCallVersion) || p.entry_rva!=spec->rva ||
+           p.parameter_size!=spec->size || p.field_count!=spec->count || p.return_offset!=65535 ||
+           !(p.function_flags&0x400) || p.object_count!=(ui ? 2u:1u))return false;
+        for(uint32_t i=0;i<p.field_count;++i) {
+            const auto& f=p.fields[i];
+            if(f.dimension!=1 || (f.flags&0x500))return false;
+            if(i==0 || (ui && i==1)) {
+                if(f.kind!=CallObject || f.offset!=i*8 || f.width!=8 || p.objects[i].offset!=i*8 ||
+                   std::strcmp(f.name,i==0 ? "PlayerController":"InWidgetToFocus"))return false;
+            } else if(ui && i==2) {
+                if(f.kind!=kEnumCallKind || f.offset!=16 || f.width!=1 || p.data[16] ||
+                   std::strcmp(f.name,"InMouseLockMode"))return false;
+            } else if(f.kind!=CallBool || f.offset!=(ui ? 17u:8u) || f.width!=1 ||
+                      f.bool_encoding!=0xff010001 || p.data[f.offset] || std::strcmp(f.name,"bFlushInput"))return false;
+        }
+        return true;
+    }
+#endif
     if(!spec || validate_call_packet(p) || p.version!=kCallVersion ||
        p.entry_rva!=spec->rva || p.parameter_size!=spec->size ||
        p.return_offset!=spec->result || p.field_count!=spec->count ||

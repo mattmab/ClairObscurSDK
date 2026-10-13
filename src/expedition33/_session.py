@@ -70,6 +70,8 @@ class SessionTransport:
             self.retained_protocol = ready.get('retained_protocol', 0)
             self.stable_identity_protocol = ready.get('stable_identity_protocol', 0)
             self.object_assignment_protocol = ready.get('object_assignment_protocol', 0)
+            self.menu_input_protocol = ready.get('menu_input_protocol', 0)
+            self.scalar_assignment_protocol = ready.get('scalar_assignment_protocol', 0)
             self.pod_value_protocol = ready.get('pod_value_protocol', 0)
             self.string_value_protocol = ready.get("string_value_protocol", 0)
             self.text_value_protocol = ready.get('text_value_protocol', 0)
@@ -334,7 +336,8 @@ class SessionTransport:
             validate_request(payload)
             suffix = ' ' + payload.hex()
         elif menu:
-            from ._menu_wire import SIZE
+            from ._menu_wire import SIZE, CALL_SIZE
+            if getattr(self,'menu_input_protocol',0)==1: SIZE += 2*CALL_SIZE
             if type(payload) is not bytes or len(payload) != SIZE or int.from_bytes(payload[:4], 'little') != 1:
                 raise ValueError('Invalid menu ownership payload')
             suffix = ' ' + payload.hex()

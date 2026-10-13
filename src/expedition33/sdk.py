@@ -212,6 +212,17 @@ class Session:
         return getattr(self._transport, 'object_assignment_protocol', 0) == 1
 
     @property
+    def supports_scalar_assignment(self):
+        self._check()
+        return getattr(self._transport, 'scalar_assignment_protocol', 0) == 1
+
+    def assign_scalar(self, obj, name, value, *, expected, allow_mutation=False, catalog=None):
+        self._check()
+        from .scalar_assignment import assign
+        return assign(self, obj, name, value, expected=expected,
+                      allow_mutation=allow_mutation, catalog=catalog)
+
+    @property
     def supports_vector_values(self):
         """Whether this session selected the experimental Vector runtime."""
         return self._vector_values and self.supports_pod_values

@@ -10,6 +10,22 @@ from expedition33.introspection import Harness, UnsupportedCapability, core
 
 
 class IntrospectionTests(unittest.TestCase):
+    def test_staged_reference_expectation_reaches_native_cas(self):
+        from expedition33.introspection import _Object
+        from unittest.mock import Mock
+        target = SimpleNamespace(class_index=1)
+        prop = SimpleNamespace(Class=SimpleNamespace(Name='ObjectProperty'), ArrayDim=1,
+                               _row={'owner_index': 1})
+        backend = SimpleNamespace(mutation_authorized=True, assignment=True,
+            session=Mock(), catalog=SimpleNamespace(by_index={1: 'owner'}),
+            wrap=lambda _: SimpleNamespace(_find_prop=lambda name: prop), refresh=lambda: None)
+        obj = _Object(backend, target)
+        current = _Object(backend, 'newer-reference')
+        backend.assignment_expected = (target, 'Owner', None)
+        with patch.object(_Object, '__getattr__', return_value=current):
+            obj.Owner = None
+        self.assertIsNone(backend.session.assign_object.call_args.kwargs['expected'])
+
     def test_enum_typed_roundtrip_budget_and_retained_value(self):
         from expedition33.introspection import _Backend, _Explorer
         from expedition33.enums import EnumDescriptor, EnumMember

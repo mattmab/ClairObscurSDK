@@ -1,0 +1,25 @@
+{
+  "version": "0.1.0-rc5",
+  "archive_sha256": "63bbc73e5e9e0d19aa7ea9fe5f0f907e57ccfcb4b3dc7bf7af376f439536a859",
+  "mods": [
+    "SDK_Mods/IntrospectionHarness.sdkmod",
+    "SDK_Mods/LiveObjectViewer.sdkmod",
+    "SDK_Mods/SDKManagement.sdkmod"
+  ],
+  "clean_install": {
+    "release": "0.1.0-rc5",
+    "mods": 3,
+    "verified": true
+  },
+  "native_build": "scripts/build-viewer-candidate.cmd /W4 /WX successful",
+  "tests": 1017,
+  "live_evidence": "research/VIEWER_VALIDATION_2026-10-12.json; existing viewer candidate test, no new RC5 gameplay test",
+  "native_payload": {
+    "build/readonly-worker/research_probe.exe": "7ac3e3f5222fd610d56bdf0f9f4159e118637436f6bcdbd0996284a4d7d77318",
+    "build/research-probe/research_probe.exe": "7ac3e3f5222fd610d56bdf0f9f4159e118637436f6bcdbd0996284a4d7d77318",
+    "build/research-probe-picto-v4/research_probe.exe": "7ac3e3f5222fd610d56bdf0f9f4159e118637436f6bcdbd0996284a4d7d77318",
+    "build/runtime-session-viewer-v2/runtime_session_viewer_v2.dll": "2bfa4c0d9c40d6b5f4249a69f155cd98f64a8e674b23970fa98d323a02097146"
+  },
+  "artifact_bytes": 13614295,
+  "notes": "The authentic OpenSSL AUTHORS Markdown underline is a git diff --check conflict-marker false positive; upstream bytes are intentionally retained."
+}

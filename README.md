@@ -7,8 +7,8 @@ controller. No Borderlands offsets or layouts are used as Expedition 33 facts.
 
 The installable release candidate is built with `scripts/package_release_candidate.py`.
 Extract its game-root ZIP beside `Sandfall`; normal game launch starts the SDK
-and restores saved mod choices after loading a save. Only SDK Management and
-Introspection Harness are bundled. Choose optional `.sdkmod` downloads from the
+and restores saved mod choices after loading a save. SDK Management,
+Introspection Harness and LiveObjectViewer are bundled. Choose optional `.sdkmod` downloads from the
 [Mods catalog](mods/README.md), including ContinentFlight, Picto Editor, Statistics,
 and Cinematics. Each has its own release. See
 [installation and restart instructions](docs/INSTALLABLE_RELEASE.md).

@@ -7,6 +7,21 @@ from expedition33.widgets import OwnedMenuPanel
 
 
 class OwnedWidgetCleanupTests(unittest.TestCase):
+    def test_returned_focus_rejection_detaches_but_unknown_does_not_retry(self):
+        from expedition33.menu import MenuError
+        for outcome, code, cleaned in [('returned',811,True),('unknown',814,False)]:
+            panel,_=self.panel()
+            panel.state='built'
+            panel.widget,panel.buttons,panel.player=object(),[object()],object()
+            menu=Mock()
+            menu.attach.return_value=True
+            menu.focus.side_effect=MenuError('focus rejected',outcome=outcome,native_error=code)
+            menu.close.return_value=True
+            panel.scope.prepare_menu=Mock(return_value=menu)
+            with self.assertRaises(MenuError): panel.open()
+            self.assertEqual(menu.close.called,cleaned)
+            self.assertEqual(panel.uncertain,not cleaned)
+
     def test_rejected_prepare_allows_cleanup_but_unknown_remains_latched(self):
         from expedition33.menu import MenuError
         for outcome, code, uncertain in [('returned', 811, False), ('unknown', 814, True)]:

@@ -1,0 +1,816 @@
+{
+  "schema": 1,
+  "review_id": "cpython-3.13.15-rc4-notices-1",
+  "review_date": "2026-10-12",
+  "review_scope": "Pinned Windows AMD64 embedded runtime; integrity verification does not imply complete legal clearance.",
+  "runtime": {
+    "version": "3.13.15",
+    "source_revision": "4061bc4c35f7c26f25264666d4ba083b93d2f6f9",
+    "archive_url": "https://www.python.org/ftp/python/3.13.15/python-3.13.15-embed-amd64.zip",
+    "archive_sha256": "d1f04d990aee1253d8569e8e5104e30fa9f5fa830899f14843448872d936a2cf",
+    "files": {
+      "python.exe": "85b71d8c6ec1905935f74be0c9869aae198d00e98f39df699ec66f9c5a84cecd",
+      "pythonw.exe": "146c01e5448a084ff15d63113a790b9aa75250baf862d984c51dd695ac4775bc",
+      "python313.dll": "e820bf024efd2b56bb2b82791e6b6ddc7303f070f8e72cba7637482a8a906238",
+      "python3.dll": "76e7fd69a01081726308317d6e502721c2ba6792b48880dc1ef649c755788db7",
+      "vcruntime140.dll": "d1f4225df2cd877dbf130d5668a021dce3f94118455ff5ec952061c30afc9ce7",
+      "vcruntime140_1.dll": "a7146c08f89fe5b04541ab507cdb59ff7b44534d4ba3c668a426c6450a03434e",
+      "LICENSE.txt": "62bec384df47b0328307db41455ff6ea2559e5546b394ac69148561b21703120",
+      "pyexpat.pyd": "b9c9c5a9f52af559a7eb4e8ddfd60558185bfc7794f32840bed1747d1ec9026a",
+      "select.pyd": "024f955349fe46cf1bb2c22c6b57fcf38cf5755d46166fbf63e7e5b92433b111",
+      "unicodedata.pyd": "111e0fdfeef9887c04f6ebf1972ce1ccbec55b226012e4a288c2d4a0b17b216b",
+      "winsound.pyd": "b078b7f5c53efd3c4201b63fa34a17c6747142e37298293f52c3a9ad643e69e2",
+      "_asyncio.pyd": "6941e2aeed3aad1a4658774ecb60309170066a040c2118a5efd16458ac3bed00",
+      "_bz2.pyd": "261545bd24f15a783fc0c82568b766a4ab569dde14507a81701cccf5293e6e54",
+      "_ctypes.pyd": "9d6dccb4cd84a44a107f9b06b91c0a44e85766d9bf4debb6abbde8fda7494c2c",
+      "_decimal.pyd": "1e6a5707163d3c103e0eb4695eefedbea4b855fb227c61cc265b168970d6c6f0",
+      "_elementtree.pyd": "26c5c2f3f2b8dac1499f07a50d7afd14315c20a6a541abbe4e306bcd9df404f1",
+      "_hashlib.pyd": "79a26289aef0d92545a082507c7021f10e219621d137cb726c4d0fbbfd4b46ae",
+      "_lzma.pyd": "ee224aacf5cf9c9974a1b842aac8d89d5d9b7eeebbf4d76619ae0ce4da8ecd96",
+      "_multiprocessing.pyd": "db19972cf033b598f5826f8219bc2608412b84061d294f5972b43c2ab95f7af5",
+      "_overlapped.pyd": "9db08b5449e18088754ce57e315657d00b46575e0151cd379efef8847488a606",
+      "_queue.pyd": "4404c2569443ffb54e7cfffdca8ddf58c9a609175305970728ec12bc1c147b43",
+      "_socket.pyd": "ccbd0f83df3784da08147b8e8765e28c978de28b5c0eddcfba5567b59d43fef9",
+      "_sqlite3.pyd": "4c5fa9341a76ac525fd36e2cb23260934ad9b9f6825725ff139b26c8dc72436d",
+      "_ssl.pyd": "8d2f51fa1dc929073a2ad8d1c7c0c911e8f695870dcf4dda2846f4b75a7f77fb",
+      "_uuid.pyd": "b93832742a2348d6659fd62e8a8aff061594693fc537da74c7d2d1cdf83a8475",
+      "_wmi.pyd": "db45362354fd4965329cb14bd974e60b26525045d09fb4fdfb1674a93b79d60c",
+      "_zoneinfo.pyd": "6650db91accc05e625d3c5d8a40e15127a040ea1135e40e875fd78d8a7665a84",
+      "libcrypto-3.dll": "09499e186cf0e434ffa17ad153aa9a66d6048c54a2c03b823e2a06c49d9affe4",
+      "libffi-8.dll": "eff52743773eb550fcc6ce3efc37c85724502233b6b002a35496d828bd7b280a",
+      "libssl-3.dll": "28c395290279fa4f4f54a57b85cd66d853895f925fefb8f6fdebc0d8b1cdd07c",
+      "sqlite3.dll": "c6812eaf0f8605df273b9bf7e359b83fd65038ecc66455c3f7a933768cb92f3f",
+      "python313.zip": "1916abd946d2044ec8c04c3319f96c8415d5b6fce01e125622827f2b7756cbab",
+      "python313._pth": "35ddf94682ff9aa713a8d63557242ad00f3f28fdd39337f02c3bda4c0f791577",
+      "python.cat": "49eb507453b924ff70c19c8b8940b033ac5865f11cdd637447024725ed105bef"
+    }
+  },
+  "notices": {
+    "licenses/python-external/bzip2-LICENSE.txt": "c6dbbf828498be844a89eaa3b84adbab3199e342eb5cb2ed2f0d4ba7ec0f38a3",
+    "licenses/python-external/CPython-LICENSE.txt": "78b12c3a81360b357002334f0e70ea0e92eebf7a9b358805c03c48484945f3bb",
+    "licenses/python-external/libffi-LICENSE.txt": "2c9c2acb9743e6b007b91350475308aee44691d96aa20eacef8e199988c8c388",
+    "licenses/python-external/Microsoft-CRT.txt": "3c71b3ae243121f6f227374cd1ef7c59ed07b1969b330d0e947f91a3a1b3fd73",
+    "licenses/python-external/OpenSSL-AUTHORS.md": "5076ca441daef7fb35e904c2ac070880c7b3d58300a5a6aecac41e8f525f4412",
+    "licenses/python-external/OpenSSL-LICENSE.txt": "ed72ce2b51ee58f117e5a021e2e04af158857f40269fbc03491f0b2a99dbcc96",
+    "licenses/python-external/SQLite-NOTICE.txt": "a4073095982a84421da1a1e49bd26e97ba1a09c2de5dda5eac776cd4a420d41a",
+    "licenses/python-external/XZ-COPYING.txt": "bcb02973ef6e87ea73d331b3a80df7748407f17efdb784b61b47e0e610d3bb5c",
+    "licenses/python-incorporated/BLAKE2-source-notices.txt": "40a5f6c3309a1503fb27435f75e4b1a919e7b854122a0e43e0f769eb691e9670",
+    "licenses/python-incorporated/CC0-1.0.txt": "a2010f343487d3f7618affe54f789f5487602331c0a8d03f49e9a7c547cf0499",
+    "licenses/python-incorporated/CPython-3.13.15-license.rst": "952ac05720d7f1dcb63589b35eb0931b1442eb250230a4ad31198eddf0ad6abc",
+    "licenses/python-incorporated/Expat-2.8.2-COPYING.txt": "31b15de82aa19a845156169a17a5488bf597e561b2c318d159ed583139b25e87",
+    "licenses/python-incorporated/HACL-dist-LICENSE.txt": "998ce04fb8ad9dedb0bc1b44938f8c3dcf1089780fa105ce1c8c30fb5554d78c",
+    "licenses/python-incorporated/HACL-KaRaMeL-Apache-2.0.txt": "c5accbbd8546e94c34aed24afe689a617627d18eed5a6c48277e48db57c23851",
+    "licenses/python-incorporated/HACL-KaRaMeL-source-notices.txt": "c0abc4cc944b47649da520895f789d1366f6e7a7a9b6ab1f606926eb6309cbca",
+    "licenses/python-incorporated/mimalloc-2.1.2-LICENSE.txt": "19c99805e7a44a34b297a75d1edea9985e300066dfc024d5c99d4236d4573b5d",
+    "licenses/python-incorporated/mimalloc-vendored-copyright-headers.txt": "9323877f0c2c561fc7a03eab648cb90f4d0898e27d691c8e8d98230c44d31bc8",
+    "licenses/python-incorporated/mpdecimal-4.0.0-COPYRIGHT.txt": "2713324211652ce4a60e6e21e54f9dc3004299e591b0933a352f1a89c5fb53c2",
+    "licenses/python-incorporated/zlib-1.3.1-LICENSE.txt": "845efc77857d485d91fb3e0b884aaa929368c717ae8186b66fe1ed2495753243",
+    "licenses/README.md": "041a5bd20bb13bd1370577a4306aa34b2288e06a0cdf9010475d75d54320ac4d"
+  },
+  "notice_sources": [
+    {
+      "path": "licenses/python-incorporated/CPython-3.13.15-license.rst",
+      "sha256": "952ac05720d7f1dcb63589b35eb0931b1442eb250230a4ad31198eddf0ad6abc",
+      "source_url": "https://github.com/python/cpython/blob/4061bc4c35f7c26f25264666d4ba083b93d2f6f9/Doc/license.rst",
+      "source_revision": "4061bc4c35f7c26f25264666d4ba083b93d2f6f9"
+    },
+    {
+      "path": "licenses/python-incorporated/Expat-2.8.2-COPYING.txt",
+      "sha256": "31b15de82aa19a845156169a17a5488bf597e561b2c318d159ed583139b25e87",
+      "source_url": "https://github.com/python/cpython/blob/4061bc4c35f7c26f25264666d4ba083b93d2f6f9/Modules/expat/COPYING",
+      "source_revision": "4061bc4c35f7c26f25264666d4ba083b93d2f6f9"
+    },
+    {
+      "path": "licenses/python-incorporated/mpdecimal-4.0.0-COPYRIGHT.txt",
+      "sha256": "2713324211652ce4a60e6e21e54f9dc3004299e591b0933a352f1a89c5fb53c2",
+      "source_url": "https://github.com/python/cpython-source-deps/blob/48316ec025c1ebe500854c332be0a12c640c7301/COPYRIGHT.txt",
+      "source_revision": "48316ec025c1ebe500854c332be0a12c640c7301"
+    },
+    {
+      "path": "licenses/python-incorporated/zlib-1.3.1-LICENSE.txt",
+      "sha256": "845efc77857d485d91fb3e0b884aaa929368c717ae8186b66fe1ed2495753243",
+      "source_url": "https://github.com/python/cpython-source-deps/blob/4dc98e1909830e2bdc2a9cc2236e3c5d5037335b/LICENSE",
+      "source_revision": "4dc98e1909830e2bdc2a9cc2236e3c5d5037335b"
+    },
+    {
+      "path": "licenses/python-incorporated/mimalloc-2.1.2-LICENSE.txt",
+      "sha256": "19c99805e7a44a34b297a75d1edea9985e300066dfc024d5c99d4236d4573b5d",
+      "source_url": "https://github.com/microsoft/mimalloc/blob/43ce4bd7fd34bcc730c1c7471c99995597415488/LICENSE",
+      "source_revision": "43ce4bd7fd34bcc730c1c7471c99995597415488"
+    },
+    {
+      "path": "licenses/python-incorporated/mimalloc-vendored-copyright-headers.txt",
+      "sha256": "9323877f0c2c561fc7a03eab648cb90f4d0898e27d691c8e8d98230c44d31bc8",
+      "source_url": "https://github.com/python/cpython/blob/4061bc4c35f7c26f25264666d4ba083b93d2f6f9/Objects/mimalloc",
+      "source_revision": "4061bc4c35f7c26f25264666d4ba083b93d2f6f9",
+      "extraction": "Leading copyright comment blocks, verbatim, source URLs preceding each block"
+    },
+    {
+      "path": "licenses/python-incorporated/HACL-KaRaMeL-Apache-2.0.txt",
+      "sha256": "c5accbbd8546e94c34aed24afe689a617627d18eed5a6c48277e48db57c23851",
+      "source_url": "https://github.com/hacl-star/hacl-star/blob/bb3d0dc8d9d15a5cd51094d5b69e70aa09005ff0/LICENSE",
+      "source_revision": "bb3d0dc8d9d15a5cd51094d5b69e70aa09005ff0"
+    },
+    {
+      "path": "licenses/python-incorporated/HACL-dist-LICENSE.txt",
+      "sha256": "998ce04fb8ad9dedb0bc1b44938f8c3dcf1089780fa105ce1c8c30fb5554d78c",
+      "source_url": "https://github.com/hacl-star/hacl-star/blob/bb3d0dc8d9d15a5cd51094d5b69e70aa09005ff0/dist/LICENSE.txt",
+      "source_revision": "bb3d0dc8d9d15a5cd51094d5b69e70aa09005ff0"
+    },
+    {
+      "path": "licenses/python-incorporated/CC0-1.0.txt",
+      "sha256": "a2010f343487d3f7618affe54f789f5487602331c0a8d03f49e9a7c547cf0499",
+      "source_url": "https://creativecommons.org/publicdomain/zero/1.0/legalcode.txt",
+      "source_revision": "CC0-1.0"
+    },
+    {
+      "path": "licenses/python-incorporated/HACL-KaRaMeL-source-notices.txt",
+      "sha256": "c0abc4cc944b47649da520895f789d1366f6e7a7a9b6ab1f606926eb6309cbca",
+      "source_url": "https://github.com/python/cpython/blob/4061bc4c35f7c26f25264666d4ba083b93d2f6f9/Modules/_hacl",
+      "source_revision": "4061bc4c35f7c26f25264666d4ba083b93d2f6f9",
+      "extraction": "Leading license/comment blocks, verbatim, individually sourced"
+    },
+    {
+      "path": "licenses/python-incorporated/BLAKE2-source-notices.txt",
+      "sha256": "40a5f6c3309a1503fb27435f75e4b1a919e7b854122a0e43e0f769eb691e9670",
+      "source_url": "https://github.com/python/cpython/blob/4061bc4c35f7c26f25264666d4ba083b93d2f6f9/Modules/_blake2",
+      "source_revision": "4061bc4c35f7c26f25264666d4ba083b93d2f6f9",
+      "extraction": "Leading license/comment blocks, verbatim, individually sourced"
+    },
+    {
+      "path": "licenses/python-external/CPython-LICENSE.txt",
+      "url": "https://raw.githubusercontent.com/python/cpython/4061bc4c35f7c26f25264666d4ba083b93d2f6f9/LICENSE",
+      "revision": "4061bc4c35f7c26f25264666d4ba083b93d2f6f9",
+      "sha256": "78b12c3a81360b357002334f0e70ea0e92eebf7a9b358805c03c48484945f3bb"
+    },
+    {
+      "path": "licenses/python-external/OpenSSL-LICENSE.txt",
+      "url": "https://raw.githubusercontent.com/python/cpython-bin-deps/4c7747da0d1addd20c95c2f911f8d2e09254a3d2/amd64/LICENSE.txt",
+      "revision": "4c7747da0d1addd20c95c2f911f8d2e09254a3d2",
+      "sha256": "ed72ce2b51ee58f117e5a021e2e04af158857f40269fbc03491f0b2a99dbcc96"
+    },
+    {
+      "path": "licenses/python-external/OpenSSL-AUTHORS.md",
+      "url": "https://raw.githubusercontent.com/python/cpython-source-deps/460451a0bb19cdbf0ab1add4de1420d143995467/AUTHORS.md",
+      "revision": "460451a0bb19cdbf0ab1add4de1420d143995467",
+      "sha256": "5076ca441daef7fb35e904c2ac070880c7b3d58300a5a6aecac41e8f525f4412"
+    },
+    {
+      "path": "licenses/python-external/libffi-LICENSE.txt",
+      "url": "https://raw.githubusercontent.com/python/cpython-bin-deps/94cb9a1c7feb608adf2b9f8fe2dbd6925ffbf90d/LICENSE",
+      "revision": "94cb9a1c7feb608adf2b9f8fe2dbd6925ffbf90d",
+      "sha256": "2c9c2acb9743e6b007b91350475308aee44691d96aa20eacef8e199988c8c388"
+    },
+    {
+      "path": "licenses/python-external/bzip2-LICENSE.txt",
+      "url": "https://raw.githubusercontent.com/python/cpython-source-deps/05301997b2f9590f49c672cf3dfd3d3dfa7ad521/LICENSE",
+      "revision": "05301997b2f9590f49c672cf3dfd3d3dfa7ad521",
+      "sha256": "c6dbbf828498be844a89eaa3b84adbab3199e342eb5cb2ed2f0d4ba7ec0f38a3"
+    },
+    {
+      "path": "licenses/python-external/XZ-COPYING.txt",
+      "url": "https://raw.githubusercontent.com/python/cpython-source-deps/c6bc0c612605622aaef101a33a751f9de2ecc193/COPYING",
+      "revision": "c6bc0c612605622aaef101a33a751f9de2ecc193",
+      "sha256": "bcb02973ef6e87ea73d331b3a80df7748407f17efdb784b61b47e0e610d3bb5c"
+    },
+    {
+      "path": "licenses/python-external/SQLite-NOTICE.txt",
+      "url": "https://raw.githubusercontent.com/python/cpython-source-deps/ef547e549b49a2822214ef7880c0ca212b32929e/sqlite3.h",
+      "revision": "ef547e549b49a2822214ef7880c0ca212b32929e",
+      "sha256": "a4073095982a84421da1a1e49bd26e97ba1a09c2de5dda5eac776cd4a420d41a"
+    },
+    {
+      "path": "licenses/python-external/Microsoft-CRT.txt",
+      "url": "https://raw.githubusercontent.com/python/cpython/4061bc4c35f7c26f25264666d4ba083b93d2f6f9/PC/crtlicense.txt",
+      "revision": "4061bc4c35f7c26f25264666d4ba083b93d2f6f9",
+      "sha256": "3c71b3ae243121f6f227374cd1ef7c59ed07b1969b330d0e947f91a3a1b3fd73"
+    }
+  ],
+  "components": [
+    {
+      "id": "expat",
+      "version": "2.8.2",
+      "license": "MIT",
+      "source_revision": "4061bc4c35f7c26f25264666d4ba083b93d2f6f9",
+      "source_url": "https://github.com/python/cpython/blob/4061bc4c35f7c26f25264666d4ba083b93d2f6f9/Doc/license.rst",
+      "notice_paths": [
+        "licenses/python-incorporated/Expat-2.8.2-COPYING.txt"
+      ],
+      "verification_status": "verified-applicable",
+      "applicability_evidence": [
+        "PCbuild/pyexpat.vcxproj:94-107 compiles Modules/expat/xmlparse.c,xmlrole.c,xmltok.c with XML_STATIC; distributed pyexpat.pyd.",
+        "Modules/expat/expat.h:1095-1097 version macros; runtime probe expat_2.8.2."
+      ],
+      "notes": "",
+      "status": "verified-applicable",
+      "reviewed_version": "2.8.2",
+      "sdk_modifications": false,
+      "unresolved": []
+    },
+    {
+      "id": "mpdecimal",
+      "version": "4.0.0",
+      "license": "BSD-2-Clause",
+      "source_revision": "4061bc4c35f7c26f25264666d4ba083b93d2f6f9",
+      "source_url": "https://github.com/python/cpython/blob/4061bc4c35f7c26f25264666d4ba083b93d2f6f9/Doc/license.rst",
+      "notice_paths": [
+        "licenses/python-incorporated/mpdecimal-4.0.0-COPYRIGHT.txt"
+      ],
+      "verification_status": "verified-applicable",
+      "applicability_evidence": [
+        "PCbuild/python.props:78 mpdecimal-4.0.0; PCbuild/_decimal.vcxproj:127-141 compiles libmpdec into distributed _decimal.pyd.",
+        "Runtime decimal.__libmpdec_version__=4.0.0."
+      ],
+      "notes": "Exact external COPYRIGHT.txt has 2008-2024, newer than CPython Doc/license.rst historical 2008-2020; exact external notice included.",
+      "status": "verified-applicable",
+      "reviewed_version": "4.0.0",
+      "sdk_modifications": false,
+      "unresolved": []
+    },
+    {
+      "id": "mersenne-twister",
+      "version": "MT19937 CPython 3.13.15 variant",
+      "license": "BSD-3-Clause",
+      "source_revision": "4061bc4c35f7c26f25264666d4ba083b93d2f6f9",
+      "source_url": "https://github.com/python/cpython/blob/4061bc4c35f7c26f25264666d4ba083b93d2f6f9/Doc/license.rst",
+      "notice_paths": [
+        "licenses/python-incorporated/CPython-3.13.15-license.rst"
+      ],
+      "verification_status": "verified-applicable",
+      "applicability_evidence": [
+        "PCbuild/pythoncore.vcxproj:433 compiles Modules/_randommodule.c; _random built into python313.dll. Doc/license.rst:305-352 contains full original notice."
+      ],
+      "notes": "",
+      "status": "verified-applicable",
+      "reviewed_version": "MT19937 CPython 3.13.15 variant",
+      "sdk_modifications": false,
+      "unresolved": []
+    },
+    {
+      "id": "mimalloc",
+      "version": "2.1.2 CPython vendored variant",
+      "license": "MIT",
+      "source_revision": "4061bc4c35f7c26f25264666d4ba083b93d2f6f9",
+      "source_url": "https://github.com/python/cpython/blob/4061bc4c35f7c26f25264666d4ba083b93d2f6f9/Doc/license.rst",
+      "notice_paths": [
+        "licenses/python-incorporated/mimalloc-2.1.2-LICENSE.txt",
+        "licenses/python-incorporated/mimalloc-vendored-copyright-headers.txt"
+      ],
+      "verification_status": "verified-applicable",
+      "applicability_evidence": [
+        "Include/internal/mimalloc/mimalloc.h:11 MI_MALLOC_VERSION 212; PC/pyconfig.h.in:532 WITH_MIMALLOC 1.",
+        "PCbuild/pythoncore.vcxproj:522 compiles Objects/obmalloc.c; Objects/obmalloc.c:14-22 includes mimalloc/static.c."
+      ],
+      "notes": "Included even in ordinary GIL build; CPython modified vendored source is version-pinned, not claimed byte-identical to stock mimalloc. Source copyright headers retained alongside authentic MIT grant.",
+      "status": "verified-applicable",
+      "reviewed_version": "2.1.2 CPython vendored variant",
+      "sdk_modifications": false,
+      "unresolved": []
+    },
+    {
+      "id": "asyncio-uvloop-excerpts",
+      "version": "uvloop 0.16 excerpts in CPython 3.13.15",
+      "license": "MIT",
+      "source_revision": "4061bc4c35f7c26f25264666d4ba083b93d2f6f9",
+      "source_url": "https://github.com/python/cpython/blob/4061bc4c35f7c26f25264666d4ba083b93d2f6f9/Doc/license.rst",
+      "notice_paths": [
+        "licenses/python-incorporated/CPython-3.13.15-license.rst"
+      ],
+      "verification_status": "verified-applicable",
+      "applicability_evidence": [
+        "Lib/asyncio/constants.py:1-4,events.py:3-6,sslproto.py:1-4 identify uvloop v0.16.0 and MagicStack MIT.",
+        "asyncio/constants.pyc,events.pyc,sslproto.pyc present in actual python313.zip."
+      ],
+      "notes": "Not the full uvloop extension and not libuv redistribution.",
+      "status": "verified-applicable",
+      "reviewed_version": "uvloop 0.16 excerpts in CPython 3.13.15",
+      "sdk_modifications": false,
+      "unresolved": []
+    },
+    {
+      "id": "unicode-data",
+      "version": "15.1.0",
+      "license": "Unicode-3.0",
+      "source_revision": "4061bc4c35f7c26f25264666d4ba083b93d2f6f9",
+      "source_url": "https://github.com/python/cpython/blob/4061bc4c35f7c26f25264666d4ba083b93d2f6f9/Doc/license.rst",
+      "notice_paths": [
+        "licenses/python-incorporated/CPython-3.13.15-license.rst"
+      ],
+      "verification_status": "verified-applicable",
+      "applicability_evidence": [
+        "Modules/unicodedata_db.h:3 UNIDATA_VERSION 15.1.0; distributed unicodedata.pyd; runtime probe confirms15.1.0.",
+        "Doc/license.rst:1137-1186 explicitly grants Unicode License v3 for incorporated data."
+      ],
+      "notes": "Uses pinned CPython notice including its 1991-2026 copyright; no invented older notice.",
+      "status": "verified-applicable",
+      "reviewed_version": "15.1.0",
+      "sdk_modifications": false,
+      "unresolved": []
+    },
+    {
+      "id": "zlib",
+      "version": "1.3.1",
+      "license": "Zlib",
+      "source_revision": "4061bc4c35f7c26f25264666d4ba083b93d2f6f9",
+      "source_url": "https://github.com/python/cpython/blob/4061bc4c35f7c26f25264666d4ba083b93d2f6f9/Doc/license.rst",
+      "notice_paths": [
+        "licenses/python-incorporated/zlib-1.3.1-LICENSE.txt"
+      ],
+      "verification_status": "verified-applicable",
+      "applicability_evidence": [
+        "PCbuild/python.props:83 pins zlib-1.3.1; pythoncore.vcxproj:645-658 compiles zlib sources. Runtime ZLIB_RUNTIME_VERSION1.3.1."
+      ],
+      "notes": "",
+      "status": "verified-applicable",
+      "reviewed_version": "1.3.1",
+      "sdk_modifications": false,
+      "unresolved": []
+    },
+    {
+      "id": "cookie-management",
+      "version": "CPython 3.13.15 incorporated source",
+      "license": "HPND",
+      "source_revision": "4061bc4c35f7c26f25264666d4ba083b93d2f6f9",
+      "source_url": "https://github.com/python/cpython/blob/4061bc4c35f7c26f25264666d4ba083b93d2f6f9/Doc/license.rst",
+      "notice_paths": [
+        "licenses/python-incorporated/CPython-3.13.15-license.rst"
+      ],
+      "verification_status": "verified-applicable",
+      "applicability_evidence": [
+        "Lib/http/cookies.py; Doc/license.rst:418-443",
+        "http/cookies.pyc present in distributed python313.zip."
+      ],
+      "notes": "",
+      "status": "verified-applicable",
+      "reviewed_version": "CPython 3.13.15 incorporated source",
+      "sdk_modifications": false,
+      "unresolved": []
+    },
+    {
+      "id": "execution-tracing",
+      "version": "CPython 3.13.15 incorporated source",
+      "license": "Python-2.0 and historical permissive notice",
+      "source_revision": "4061bc4c35f7c26f25264666d4ba083b93d2f6f9",
+      "source_url": "https://github.com/python/cpython/blob/4061bc4c35f7c26f25264666d4ba083b93d2f6f9/Doc/license.rst",
+      "notice_paths": [
+        "licenses/python-incorporated/CPython-3.13.15-license.rst"
+      ],
+      "verification_status": "verified-applicable",
+      "applicability_evidence": [
+        "Lib/trace.py; Doc/license.rst:446-476",
+        "trace.pyc present in distributed python313.zip."
+      ],
+      "notes": "",
+      "status": "verified-applicable",
+      "reviewed_version": "CPython 3.13.15 incorporated source",
+      "sdk_modifications": false,
+      "unresolved": []
+    },
+    {
+      "id": "uu-codec",
+      "version": "CPython 3.13.15 incorporated source",
+      "license": "HPND",
+      "source_revision": "4061bc4c35f7c26f25264666d4ba083b93d2f6f9",
+      "source_url": "https://github.com/python/cpython/blob/4061bc4c35f7c26f25264666d4ba083b93d2f6f9/Doc/license.rst",
+      "notice_paths": [
+        "licenses/python-incorporated/CPython-3.13.15-license.rst"
+      ],
+      "verification_status": "verified-applicable",
+      "applicability_evidence": [
+        "Lib/encodings/uu_codec.py; Doc/license.rst:479-506",
+        "encodings/uu_codec.pyc present in distributed python313.zip."
+      ],
+      "notes": "",
+      "status": "verified-applicable",
+      "reviewed_version": "CPython 3.13.15 incorporated source",
+      "sdk_modifications": false,
+      "unresolved": []
+    },
+    {
+      "id": "xmlrpc-client",
+      "version": "CPython 3.13.15 incorporated source",
+      "license": "HPND",
+      "source_revision": "4061bc4c35f7c26f25264666d4ba083b93d2f6f9",
+      "source_url": "https://github.com/python/cpython/blob/4061bc4c35f7c26f25264666d4ba083b93d2f6f9/Doc/license.rst",
+      "notice_paths": [
+        "licenses/python-incorporated/CPython-3.13.15-license.rst"
+      ],
+      "verification_status": "verified-applicable",
+      "applicability_evidence": [
+        "Lib/xmlrpc/client.py; Doc/license.rst:509-539",
+        "xmlrpc/client.pyc present in distributed python313.zip."
+      ],
+      "notes": "",
+      "status": "verified-applicable",
+      "reviewed_version": "CPython 3.13.15 incorporated source",
+      "sdk_modifications": false,
+      "unresolved": []
+    },
+    {
+      "id": "siphash",
+      "version": "CPython SipHash13/24 variant",
+      "license": "MIT",
+      "source_revision": "4061bc4c35f7c26f25264666d4ba083b93d2f6f9",
+      "source_url": "https://github.com/python/cpython/blob/4061bc4c35f7c26f25264666d4ba083b93d2f6f9/Doc/license.rst",
+      "notice_paths": [
+        "licenses/python-incorporated/CPython-3.13.15-license.rst"
+      ],
+      "verification_status": "verified-applicable",
+      "applicability_evidence": [
+        "PCbuild/pythoncore.vcxproj:556 Python/pyhash.c; Include/pyhash.h:42-48 defaults SipHash13 on supported aligned targets.",
+        "Python/pyhash.c retains Marek Majkowski notice; Doc/license.rst:599-625."
+      ],
+      "notes": "Name of upstream notice says SipHash24; implementation also derives SipHash13 from same source.",
+      "status": "verified-applicable",
+      "reviewed_version": "CPython SipHash13/24 variant",
+      "sdk_modifications": false,
+      "unresolved": []
+    },
+    {
+      "id": "dtoa",
+      "version": "CPython 3.13.15 David Gay derived conversion",
+      "license": "LicenseRef-Lucent-dtoa",
+      "source_revision": "4061bc4c35f7c26f25264666d4ba083b93d2f6f9",
+      "source_url": "https://github.com/python/cpython/blob/4061bc4c35f7c26f25264666d4ba083b93d2f6f9/Doc/license.rst",
+      "notice_paths": [
+        "licenses/python-incorporated/CPython-3.13.15-license.rst"
+      ],
+      "verification_status": "verified-applicable",
+      "applicability_evidence": [
+        "PCbuild/pythoncore.vcxproj:629 compiles Python/dtoa.c; Doc/license.rst:628-655 preserves full notice."
+      ],
+      "notes": "",
+      "status": "verified-applicable",
+      "reviewed_version": "CPython 3.13.15 David Gay derived conversion",
+      "sdk_modifications": false,
+      "unresolved": []
+    },
+    {
+      "id": "cfuhash",
+      "version": "CPython 3.13.15 derived hashtable",
+      "license": "BSD-3-Clause",
+      "source_revision": "4061bc4c35f7c26f25264666d4ba083b93d2f6f9",
+      "source_url": "https://github.com/python/cpython/blob/4061bc4c35f7c26f25264666d4ba083b93d2f6f9/Doc/license.rst",
+      "notice_paths": [
+        "licenses/python-incorporated/CPython-3.13.15-license.rst"
+      ],
+      "verification_status": "verified-applicable",
+      "applicability_evidence": [
+        "PCbuild/pythoncore.vcxproj:594 compiles Python/hashtable.c; Doc/license.rst:937-975."
+      ],
+      "notes": "",
+      "status": "verified-applicable",
+      "reviewed_version": "CPython 3.13.15 derived hashtable",
+      "sdk_modifications": false,
+      "unresolved": []
+    },
+    {
+      "id": "gus-qsbr",
+      "version": "CPython 3.13.15 FreeBSD-derived",
+      "license": "BSD-2-Clause",
+      "source_revision": "4061bc4c35f7c26f25264666d4ba083b93d2f6f9",
+      "source_url": "https://github.com/python/cpython/blob/4061bc4c35f7c26f25264666d4ba083b93d2f6f9/Doc/license.rst",
+      "notice_paths": [
+        "licenses/python-incorporated/CPython-3.13.15-license.rst"
+      ],
+      "verification_status": "verified-applicable",
+      "applicability_evidence": [
+        "PCbuild/pythoncore.vcxproj:628 unconditionally compiles Python/qsbr.c; Python/qsbr.c:1-32 preserves Jeffrey Roberson notice."
+      ],
+      "notes": "Used for free-threaded support; build inclusion confirmed even though installed runtime is GIL-enabled. Retained conservatively independent of linker dead stripping.",
+      "status": "verified-applicable",
+      "reviewed_version": "CPython 3.13.15 FreeBSD-derived",
+      "sdk_modifications": false,
+      "unresolved": []
+    },
+    {
+      "id": "wide-socket-fallback",
+      "version": "CPython 3.13.15 WIDE fallback",
+      "license": "BSD-3-Clause",
+      "source_revision": "4061bc4c35f7c26f25264666d4ba083b93d2f6f9",
+      "source_url": "https://github.com/python/cpython/blob/4061bc4c35f7c26f25264666d4ba083b93d2f6f9/Doc/license.rst",
+      "notice_paths": [],
+      "verification_status": "not-applicable",
+      "applicability_evidence": [
+        "Modules/socketmodule.h:63-75 Windows SDK defines HAVE_GETADDRINFO/HAVE_GETNAMEINFO; socketmodule.c:450-461 compiles WIDE fallback only without them."
+      ],
+      "notes": "Windows uses Winsock functions; upstream full notice still present in inventory document.",
+      "status": "not-applicable",
+      "reviewed_version": "CPython 3.13.15 WIDE fallback",
+      "sdk_modifications": false,
+      "unresolved": []
+    },
+    {
+      "id": "asyncore-asynchat-tests",
+      "version": "CPython 3.13.15 test support",
+      "license": "HPND",
+      "source_revision": "4061bc4c35f7c26f25264666d4ba083b93d2f6f9",
+      "source_url": "https://github.com/python/cpython/blob/4061bc4c35f7c26f25264666d4ba083b93d2f6f9/Doc/license.rst",
+      "notice_paths": [],
+      "verification_status": "not-applicable",
+      "applicability_evidence": [
+        "Doc/license.rst:390-415 identifies Lib/test/support/asynchat.py and asyncore.py; test package absent from python313.zip."
+      ],
+      "notes": "",
+      "status": "not-applicable",
+      "reviewed_version": "CPython 3.13.15 test support",
+      "sdk_modifications": false,
+      "unresolved": []
+    },
+    {
+      "id": "test-epoll",
+      "version": "CPython 3.13.15 test suite",
+      "license": "MIT",
+      "source_revision": "4061bc4c35f7c26f25264666d4ba083b93d2f6f9",
+      "source_url": "https://github.com/python/cpython/blob/4061bc4c35f7c26f25264666d4ba083b93d2f6f9/Doc/license.rst",
+      "notice_paths": [],
+      "verification_status": "not-applicable",
+      "applicability_evidence": [
+        "Lib/test/test_epoll.py absent from actual python313.zip."
+      ],
+      "notes": "",
+      "status": "not-applicable",
+      "reviewed_version": "CPython 3.13.15 test suite",
+      "sdk_modifications": false,
+      "unresolved": []
+    },
+    {
+      "id": "select-kqueue",
+      "version": "CPython 3.13.15 BSD interface",
+      "license": "BSD-2-Clause",
+      "source_revision": "4061bc4c35f7c26f25264666d4ba083b93d2f6f9",
+      "source_url": "https://github.com/python/cpython/blob/4061bc4c35f7c26f25264666d4ba083b93d2f6f9/Doc/license.rst",
+      "notice_paths": [],
+      "verification_status": "not-applicable",
+      "applicability_evidence": [
+        "Modules/selectmodule.c:1728 guards kqueue implementation with HAVE_KQUEUE; Windows config does not define HAVE_KQUEUE."
+      ],
+      "notes": "",
+      "status": "not-applicable",
+      "reviewed_version": "CPython 3.13.15 BSD interface",
+      "sdk_modifications": false,
+      "unresolved": []
+    },
+    {
+      "id": "w3c-c14n-tests",
+      "version": "C14N 2.0 test suite",
+      "license": "BSD-3-Clause",
+      "source_revision": "4061bc4c35f7c26f25264666d4ba083b93d2f6f9",
+      "source_url": "https://github.com/python/cpython/blob/4061bc4c35f7c26f25264666d4ba083b93d2f6f9/Doc/license.rst",
+      "notice_paths": [],
+      "verification_status": "not-applicable",
+      "applicability_evidence": [
+        "Lib/test/xmltestdata/c14n-20 absent from embedded python313.zip."
+      ],
+      "notes": "",
+      "status": "not-applicable",
+      "reviewed_version": "C14N 2.0 test suite",
+      "sdk_modifications": false,
+      "unresolved": []
+    },
+    {
+      "id": "hacl-karamel",
+      "version": "HACL* bb3d0dc8d9d15a5cd51094d5b69e70aa09005ff0 CPython variant",
+      "license": "MIT AND Apache-2.0",
+      "source_revision": "4061bc4c35f7c26f25264666d4ba083b93d2f6f9",
+      "source_url": "https://github.com/python/cpython/blob/4061bc4c35f7c26f25264666d4ba083b93d2f6f9/Doc/license.rst",
+      "notice_paths": [
+        "licenses/python-incorporated/HACL-KaRaMeL-Apache-2.0.txt",
+        "licenses/python-incorporated/HACL-dist-LICENSE.txt",
+        "licenses/python-incorporated/HACL-KaRaMeL-source-notices.txt"
+      ],
+      "verification_status": "verified-applicable",
+      "applicability_evidence": [
+        "PCbuild/pythoncore.vcxproj:424-427 compiles Hacl_Hash_MD5/SHA1/SHA2/SHA3.c; Modules/_hacl/refresh.sh:25 pins HACL source.",
+        "Generated hash headers carry MIT; include/krml/internal/target.h carries Apache-2.0. Source headers retained verbatim."
+      ],
+      "notes": "Root pinned HACL repository recursive tree contains no NOTICE file; upstream source transforms/namespaces applied by CPython recorded in refresh.sh; redistributed CPython binaries unmodified.",
+      "status": "verified-applicable",
+      "reviewed_version": "HACL* bb3d0dc8d9d15a5cd51094d5b69e70aa09005ff0 CPython variant",
+      "sdk_modifications": false,
+      "unresolved": []
+    },
+    {
+      "id": "blake2",
+      "version": "CPython 3.13.15 incorporated reference",
+      "license": "CC0-1.0",
+      "source_revision": "4061bc4c35f7c26f25264666d4ba083b93d2f6f9",
+      "source_url": "https://github.com/python/cpython/blob/4061bc4c35f7c26f25264666d4ba083b93d2f6f9/Doc/license.rst",
+      "notice_paths": [
+        "licenses/python-incorporated/CC0-1.0.txt",
+        "licenses/python-incorporated/BLAKE2-source-notices.txt"
+      ],
+      "verification_status": "verified-applicable",
+      "applicability_evidence": [
+        "PCbuild/pythoncore.vcxproj:416-418 compiles _blake2 wrapper and implementations; blake2b_impl.c includes impl/blake2b-ref.c on default Windows build.",
+        "Modules/_blake2/impl/blake2b-ref.c:1-12 CC0 dedication; full legal text and source-specific dedications included."
+      ],
+      "notes": "",
+      "status": "verified-applicable",
+      "reviewed_version": "CPython 3.13.15 incorporated reference",
+      "sdk_modifications": false,
+      "unresolved": []
+    },
+    {
+      "id": "cpython",
+      "version": "3.13.15",
+      "license": "PSF-2.0 AND historical BeOpen/CNRI/CWI grants",
+      "status": "verified-notices",
+      "notice_paths": [
+        "licenses/python-external/CPython-LICENSE.txt"
+      ],
+      "sources": [
+        {
+          "path": "licenses/python-external/CPython-LICENSE.txt",
+          "url": "https://raw.githubusercontent.com/python/cpython/4061bc4c35f7c26f25264666d4ba083b93d2f6f9/LICENSE",
+          "revision": "4061bc4c35f7c26f25264666d4ba083b93d2f6f9",
+          "sha256": "78b12c3a81360b357002334f0e70ea0e92eebf7a9b358805c03c48484945f3bb"
+        }
+      ],
+      "applicability": "Official Windows embedded runtime; all 34 RC4 files previously byte-verified against upstream archive SHA256 d1f04d990aee1253d8569e8e5104e30fa9f5fa830899f14843448872d936a2cf. Core and stdlib; incorporated components have separate terms.",
+      "obligations": "Retain PSF and historical license notices. Runtime remains unmodified: no Python change summary required for SDK-authored code. Original SDK/runtime/LICENSE.txt remains unchanged.",
+      "unresolved": [],
+      "modified": false,
+      "redistributed": true,
+      "reviewed_version": "3.13.15",
+      "sdk_modifications": false
+    },
+    {
+      "id": "openssl",
+      "version": "3.0.21",
+      "license": "Apache-2.0",
+      "status": "verified-notices",
+      "notice_paths": [
+        "licenses/python-external/OpenSSL-LICENSE.txt",
+        "licenses/python-external/OpenSSL-AUTHORS.md"
+      ],
+      "sources": [
+        {
+          "path": "licenses/python-external/OpenSSL-LICENSE.txt",
+          "url": "https://raw.githubusercontent.com/python/cpython-bin-deps/4c7747da0d1addd20c95c2f911f8d2e09254a3d2/amd64/LICENSE.txt",
+          "revision": "4c7747da0d1addd20c95c2f911f8d2e09254a3d2",
+          "sha256": "ed72ce2b51ee58f117e5a021e2e04af158857f40269fbc03491f0b2a99dbcc96"
+        },
+        {
+          "path": "licenses/python-external/OpenSSL-AUTHORS.md",
+          "url": "https://raw.githubusercontent.com/python/cpython-source-deps/460451a0bb19cdbf0ab1add4de1420d143995467/AUTHORS.md",
+          "revision": "460451a0bb19cdbf0ab1add4de1420d143995467",
+          "sha256": "5076ca441daef7fb35e904c2ac070880c7b3d58300a5a6aecac41e8f525f4412"
+        }
+      ],
+      "applicability": "libcrypto-3.dll and libssl-3.dll imported by _ssl.pyd/_hashlib.pyd. PCbuild/python.props:79-81 and get_externals.bat select 3.0.21; parent runtime probe reports OpenSSL 3.0.21 9 Jun 2026.",
+      "obligations": "Include Apache-2.0 license. Preserve applicable attribution; AUTHORS copied as upstream attribution, not represented as a mandatory NOTICE. Mark modifications if made. No upstream NOTICE file exists in full non-truncated trees of openssl/openssl commit51ea949dc1436e865935b47874b21a3bb31a102e, CPython source-deps 460451a0bb19cdbf0ab1add4de1420d143995467, or binary-deps 4c7747da0d1addd20c95c2f911f8d2e09254a3d2. Apache section4(d) additional NOTICE-copy condition is therefore not triggered by an upstream NOTICE in these inputs.",
+      "unresolved": [],
+      "modified": false,
+      "redistributed": true,
+      "reviewed_version": "3.0.21",
+      "sdk_modifications": false
+    },
+    {
+      "id": "libffi",
+      "version": "3.4.4",
+      "license": "MIT",
+      "status": "verified-notices",
+      "notice_paths": [
+        "licenses/python-external/libffi-LICENSE.txt"
+      ],
+      "sources": [
+        {
+          "path": "licenses/python-external/libffi-LICENSE.txt",
+          "url": "https://raw.githubusercontent.com/python/cpython-bin-deps/94cb9a1c7feb608adf2b9f8fe2dbd6925ffbf90d/LICENSE",
+          "revision": "94cb9a1c7feb608adf2b9f8fe2dbd6925ffbf90d",
+          "sha256": "2c9c2acb9743e6b007b91350475308aee44691d96aa20eacef8e199988c8c388"
+        }
+      ],
+      "applicability": "libffi-8.dll via _ctypes.pyd. CPython python.props:75 and get_externals.bat select libffi-3.4.4. Binary-deps notice matches source-deps73b247f34ef3ae1859b8c2c34d321d34ebc5db15 notice after line-ending normalization.",
+      "obligations": "Retain copyright and permission/disclaimer text in copies or substantial portions.",
+      "unresolved": [],
+      "modified": false,
+      "redistributed": true,
+      "reviewed_version": "3.4.4",
+      "sdk_modifications": false
+    },
+    {
+      "id": "bzip2",
+      "version": "1.0.8",
+      "license": "bzip2-1.0.6",
+      "status": "verified-notices",
+      "notice_paths": [
+        "licenses/python-external/bzip2-LICENSE.txt"
+      ],
+      "sources": [
+        {
+          "path": "licenses/python-external/bzip2-LICENSE.txt",
+          "url": "https://raw.githubusercontent.com/python/cpython-source-deps/05301997b2f9590f49c672cf3dfd3d3dfa7ad521/LICENSE",
+          "revision": "05301997b2f9590f49c672cf3dfd3d3dfa7ad521",
+          "sha256": "c6dbbf828498be844a89eaa3b84adbab3199e342eb5cb2ed2f0d4ba7ec0f38a3"
+        }
+      ],
+      "applicability": "_bz2.pyd contains library; CPython python.props:73 and get_externals.bat select bzip2-1.0.8. License text itself states version1.0.8 dated13July2019; SPDX identifier describes license family, not component version.",
+      "obligations": "Retain source notices where source is redistributed; do not misrepresent origin, mark altered source, no author endorsement. Supplemental authentic text also documents binary provenance; no SDK modifications to runtime.",
+      "unresolved": [],
+      "modified": false,
+      "redistributed": true,
+      "reviewed_version": "1.0.8",
+      "sdk_modifications": false
+    },
+    {
+      "id": "liblzma",
+      "version": "5.2.5",
+      "license": "LicenseRef-XZ-Public-Domain",
+      "status": "verified-notices",
+      "notice_paths": [
+        "licenses/python-external/XZ-COPYING.txt"
+      ],
+      "sources": [
+        {
+          "path": "licenses/python-external/XZ-COPYING.txt",
+          "url": "https://raw.githubusercontent.com/python/cpython-source-deps/c6bc0c612605622aaef101a33a751f9de2ecc193/COPYING",
+          "revision": "c6bc0c612605622aaef101a33a751f9de2ecc193",
+          "sha256": "bcb02973ef6e87ea73d331b3a80df7748407f17efdb784b61b47e0e610d3bb5c"
+        }
+      ],
+      "applicability": "_lzma.pyd statically incorporates liblzma: pinned PCbuild/liblzma.vcxproj lists src/liblzma and two src/common/tuklib helpers; CLI getopt/GPL scripts are not compiled. COPYING distinguishes public-domain library and build/CLI licenses.",
+      "obligations": "Upstream declares liblzma public domain and gives broad alternative permission if public-domain treatment is problematic. Include authentic COPYING for scope clarity. Do not label shipped library LGPL/GPL merely due to unrelated CLI/build files. Compiler runtime conditions remain separate.",
+      "unresolved": [],
+      "modified": false,
+      "redistributed": true,
+      "reviewed_version": "5.2.5",
+      "sdk_modifications": false
+    },
+    {
+      "id": "sqlite",
+      "version": "3.50.4.0",
+      "license": "LicenseRef-SQLite-Public-Domain",
+      "status": "verified-notices",
+      "notice_paths": [
+        "licenses/python-external/SQLite-NOTICE.txt"
+      ],
+      "sources": [
+        {
+          "path": "licenses/python-external/SQLite-NOTICE.txt",
+          "url": "https://raw.githubusercontent.com/python/cpython-source-deps/ef547e549b49a2822214ef7880c0ca212b32929e/sqlite3.h",
+          "revision": "ef547e549b49a2822214ef7880c0ca212b32929e",
+          "sha256": "a4073095982a84421da1a1e49bd26e97ba1a09c2de5dda5eac776cd4a420d41a"
+        }
+      ],
+      "applicability": "sqlite3.dll via _sqlite3.pyd. CPython python.props:72 pins3.50.4.0; source tag dereferenced to ef547e549b49a2822214ef7880c0ca212b32929e. sqlite3.h lines1-11 contain copyright disclaimer. sqlite3.c beginning identifies library3.50.4 and Fossil check-in4d8adfb30e03f9cf27f800a2c1ba3c48fb4c; same disclaimer at lines33-44. Runtime probe reports3.50.4.",
+      "obligations": "Copyright disclaimer preserved voluntarily for provenance; no attribution condition in this upstream declaration. Header notice extracted verbatim lines1-11, not full-file hash; full source SHA256 recorded in evidence.json.",
+      "unresolved": [],
+      "modified": false,
+      "redistributed": true,
+      "reviewed_version": "3.50.4.0",
+      "sdk_modifications": false
+    },
+    {
+      "id": "microsoft-python-runtime",
+      "version": "14.51.36247.0",
+      "license": "LicenseRef-Microsoft-Distributable-Code",
+      "status": "partially-resolved",
+      "notice_paths": [
+        "licenses/python-external/Microsoft-CRT.txt"
+      ],
+      "sources": [
+        {
+          "path": "licenses/python-external/Microsoft-CRT.txt",
+          "url": "https://raw.githubusercontent.com/python/cpython/4061bc4c35f7c26f25264666d4ba083b93d2f6f9/PC/crtlicense.txt",
+          "revision": "4061bc4c35f7c26f25264666d4ba083b93d2f6f9",
+          "sha256": "3c71b3ae243121f6f227374cd1ef7c59ed07b1969b330d0e947f91a3a1b3fd73"
+        }
+      ],
+      "applicability": "Official Python archive includes vcruntime140.dll and vcruntime140_1.dll; both PE FileVersion/ProductVersion14.51.36247.0. CPython notice also addresses code embedded by linking its .exe/.dll/.pyd. This version is distinct from SDK local toolset14.44.35207.",
+      "obligations": "Preserve Microsoft notices; CPython PC/crtlicense.txt requires distributors and external end users to agree to protective terms and specifies Microsoft-platform, no misleading trademark use, no malicious/deceptive/unlawful-program restrictions. These terms apply only to Microsoft code, not MIT SDK source or Python generally.",
+      "unresolved": [
+        "Notice preserved; downstream agreement mechanism/legal sufficiency and distributor entitlement under applicable Microsoft terms not established. Adding this text alone is not proof of fulfillment. Review before public distribution."
+      ],
+      "modified": false,
+      "redistributed": true,
+      "reviewed_version": "14.51.36247.0",
+      "sdk_modifications": false
+    },
+    {
+      "id": "microsoft-sdk-static-runtime",
+      "version": "local MSVC14.44.35207; distributed binary build provenance not established",
+      "license": "LicenseRef-Microsoft-Distributable-Code",
+      "status": "unresolved",
+      "notice_paths": [
+        "licenses/python-external/Microsoft-CRT.txt"
+      ],
+      "sources": [],
+      "modified": false,
+      "redistributed": true,
+      "applicability": "scripts/build-bootstrap.cmd:4,10 selects local VSBuildTools and explicit /MT. Microsoft documentation identifies /MT static LIBCMT linking; lack of CRT DLL imports does not remove Microsoft code. Compiler/install tools are development-only; linked runtime is not.",
+      "obligations": "Review actual build-tool license, qualifying Visual Studio entitlement, permitted distribution and downstream flowdown. CPython CRT notice is provided for Python context and is NOT a substitute grant for SDK native binaries.",
+      "unresolved": [
+        "Local toolset existence does not prove license entitlement. Build Tools terms EULAID VS_2022_Tools_2024Mar_ENU.1033 require qualifying Visual Studio Product license except scoped third-party open-source dependency build use; cannot assume this SDK authoring qualifies for exception.",
+        "Exact historical toolchain/runtime binary-to-source provenance remains unverified."
+      ],
+      "reviewed_version": "local MSVC14.44.35207; distributed binary build provenance not established",
+      "sdk_modifications": false
+    }
+  ],
+  "unresolved": [
+    "Microsoft redistribution entitlement and downstream agreement mechanism require separate review.",
+    "Historical RC4 native binary-to-source provenance remains unverified; native build evidence for later candidates is recorded separately from this Python runtime notice review."
+  ]
+}

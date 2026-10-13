@@ -48,8 +48,10 @@ class NativeMenu:
         if self._state == 'unknown': raise MenuError('Menu outcome is unknown; do not retry', outcome='unknown')
         try:
             sent = wire.request(operation, self._owner, **kwargs)
+            if getattr(session._transport,'menu_input_protocol',0)==1 and len(sent)==wire.SIZE:
+                sent += bytes(2*wire.CALL_SIZE)
         except (ValueError, TypeError):
-            if operation == 'prepare':
+            if operation in ('prepare','open'):
                 self._state = 'closed'
                 session._menus.discard(self)
             raise
@@ -62,7 +64,7 @@ class NativeMenu:
                 state = response.get('button_reference_state')
                 if type(state) is not int or state not in range(5):
                     raise ValueError('Invalid button reference acknowledgement')
-                if not reply.error and state != (2 if operation in ('attach', 'focus') else 0):
+                if not reply.error and state != (2 if operation in ('attach', 'focus','open') else 0):
                     raise ValueError('Unexpected button reference ownership state')
                 self._button_reference_state = state
         except (RuntimeQueryError, ValueError, KeyError) as error:
@@ -74,10 +76,10 @@ class NativeMenu:
         if not reply.active:
             self._state = 'closed'
             session._menus.discard(self)
-        elif operation == 'close' or (operation == 'prepare' and reply.error):
+        elif operation == 'close' or (operation in ('prepare','open') and reply.error):
             self._state = 'close_pending'
         elif not reply.error:
-            self._state = {'prepare':'prepared', 'attach':'attached', 'focus':'focused'}[operation]
+            self._state = {'prepare':'prepared', 'attach':'attached', 'focus':'focused','open':'attached'}[operation]
         else:
             self._state = previous
         if reply.error == 813:
@@ -91,10 +93,12 @@ class NativeMenu:
         return True
 
     def attach(self):
+        if self._state in ('attached','focused'): return True
         if self._state != 'prepared': raise MenuError('Menu must be prepared before attachment', outcome='not_started')
         return self._send('attach')
 
     def focus(self):
+        if self._state == 'focused': return True
         if self._state != 'attached': raise MenuError('Menu must be attached before focus', outcome='not_started')
         return self._send('focus')
 
@@ -185,6 +189,22 @@ def prepare(session, widget, child, player, leases, *, z_order=1000, catalog=Non
              (widget,'CommonActivatableWidget','DeactivateWidget',{}),
              (widget,'Widget','RemoveFromParent',{}),
              (library,'WidgetBlueprintLibrary','SetFocusToGameViewport',{}))
+    ui_input = getattr(session._transport, 'menu_input_protocol', 0) == 1
+    if ui_input:
+        from .enums import describe_enums
+        enum=one(o for o in catalog.objects if o.class_name=='Enum' and o.name=='EMouseLockMode')
+        mode=describe_enums(catalog,(enum,))[enum.index].value('EMouseLockMode::DoNotLock')
+        specs=list(specs)
+        specs.append((library,'WidgetBlueprintLibrary','SetInputMode_UIOnlyEx',
+                  {'PlayerController':player,'InWidgetToFocus':child,'InMouseLockMode':mode,'bFlushInput':False}))
+        specs.append((library,'WidgetBlueprintLibrary','SetInputMode_GameOnly',{'PlayerController':player,'bFlushInput':False}))
+    def encode_menu_plan(obj,fn,args):
+        plan=prepare_call(catalog,obj,fn,args,enum_values=ui_input and fn.name=='SetInputMode_UIOnlyEx')
+        if plan.wire_version==4:
+            from ._enum_wire import encode_plan as encode_enum
+            from ._invocation_wire import SIZE
+            return encode_enum(plan)[:SIZE]
+        return encode_plan(plan)
     # Keep one bounded set of planning bytes per session. This is not native
     # ownership: every prepare captures a fresh focus baseline and the target
     # validates all identities and schemas again. A changed player/widget or
@@ -196,14 +216,14 @@ def prepare(session, widget, child, player, leases, *, z_order=1000, catalog=Non
     if cached is not None and cached[0] == key:
         plans = cached[1]
     else:
-        plans = tuple(encode_plan(prepare_call(catalog, obj, fn, args))
+        plans = tuple(encode_menu_plan(obj, fn, args)
                       for (obj, _, _, args), fn in zip(specs, functions))
         session._menu_plan_cache = (key, plans)
     if _plan_only:
         return
     menu = NativeMenu(session, selected)
     session._menus.add(menu)  # Durable Python owner exists before any native acquisition.
-    if not menu._send('prepare', leases=tuple(lease._token for lease in selected),
+    if not menu._send('open' if ui_input else 'prepare', leases=tuple(lease._token for lease in selected),
                       identities=(engine,widget,child,player,library), plans=plans):
         raise MenuError('Menu preparation cleanup deferred; poll the session', outcome='returned', native_error=813)
     return menu
