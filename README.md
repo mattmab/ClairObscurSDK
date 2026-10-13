@@ -15,6 +15,27 @@ and Cinematics. Each has its own release. See
 The checkout's `launch-sdk.cmd` delegates to the installed SDK using `SDK_GAME_DIR`
 or the local, untracked `settings/install-path.txt`.
 
+## Download optional mods
+
+Install [ClairObscurSDK RC5](https://www.nexusmods.com/clairobscurexpedition33/mods/940)
+first, then choose the mods you want. These are separate downloads, not bundled
+with the SDK; each Nexus listing declares the SDK requirement.
+
+| Mod | Features and limitations |
+| --- | --- |
+| [Continent Flight](https://www.nexusmods.com/clairobscurexpedition33/mods/941) | Exploration flight for supported human characters. Dismount Esquie first; experimental traversal support. |
+| [Picto Editor](https://www.nexusmods.com/clairobscurexpedition33/mods/942) | Edit supported Picto stats, levels, Lumina costs and mastery. Changes can affect saves. |
+| [Statistics](https://www.nexusmods.com/clairobscurexpedition33/mods/943) | View captured damage events and supported battle counters. Not full third-party Statistics DLL parity. |
+| [**Cinematics — EXPERIMENTAL**](https://www.nexusmods.com/clairobscurexpedition33/mods/944) | Browse and replay supported cinematics. Contains spoilers; native Travel and Play changes maps and can run story/save transitions, with no manual Stop on that path. Catalog entries are not all verified playable. |
+
+Close the game and controller, then extract each Nexus mod ZIP into the game root
+containing `Sandfall`. Leave the inner `SDK_Mods/NAME.sdkmod` archive intact.
+Launch the game, load a save, and enable your choices in **Pause → Mods**.
+Preserve `SDK/settings` when updating and back up saves before using editors or
+experimental replay. Read each mod's installation notes and limitations.
+SDKManagement, IntrospectionHarness and LiveObjectViewer are already bundled;
+the latter two are developer tools and do not need separate installation.
+
 ## Install and start
 
 1. Close the game and any old SDK controller.
@@ -141,8 +162,8 @@ retained for reproducibility; they are not the recommended integrated launcher.
 Historical archive results do not certify newer runtime modes.
 
 The Harness port preserves its upstream MIT license in
-`src/expedition33/introspection/LICENSE`. The repository and release artifacts must
-remain private. No public publication is authorized.
+`src/expedition33/introspection/LICENSE`. Public SDK and optional mod downloads
+are linked above; bundled runtime components retain their separate license notices.
 
 The current release combines Picto editing, Cinematics, Flight, Statistics,
 Introspection and SDK Management in one controller. Older numbered native build
