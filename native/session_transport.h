@@ -8,6 +8,9 @@ uint32_t backend_command(SessionPacket*);
 uint32_t backend_close();
 bool backend_shutting_down();
 void backend_message(MSG*);
+#ifdef E33_MESH_SESSION
+bool backend_mesh_wake_needed();
+#endif
 #ifdef E33_VIEWER_MENU_SESSION
 uint64_t backend_menu_frame();
 #endif
@@ -18,6 +21,11 @@ struct Watch {
     HANDLE owner = nullptr, stop = nullptr;
     DWORD target_thread = 0;
     volatile LONG refs = 1, disconnected = 0;
+#ifdef E33_MESH_SESSION
+    HANDLE animation_changed = nullptr;
+    volatile LONG animation_active = 0, wake_pending = 0;
+    WPARAM wake_nonce = 0;
+#endif
 };
 static SessionPacket* packet = nullptr;
 static HANDLE mapping = nullptr;
@@ -43,16 +51,40 @@ inline void release(Watch* value) {
     if (InterlockedDecrement(&value->refs) == 0) {
         if (value->owner) CloseHandle(value->owner);
         if (value->stop) CloseHandle(value->stop);
+#ifdef E33_MESH_SESSION
+        if (value->animation_changed) CloseHandle(value->animation_changed);
+#endif
         delete value;
     }
 }
 static DWORD WINAPI watch_owner(void* argument) {
     auto* value = static_cast<Watch*>(argument);
+#ifdef E33_MESH_SESSION
+    HANDLE waits[] = {value->stop, value->owner, value->animation_changed};
+    for (;;) {
+        const bool active=InterlockedCompareExchange(&value->animation_active,0,0)!=0;
+        const auto result=WaitForMultipleObjects(3,waits,FALSE,active?4:INFINITE);
+        if(result==WAIT_OBJECT_0 || result==WAIT_FAILED)break;
+        if(result==WAIT_OBJECT_0+1) {
+            InterlockedExchange(&value->disconnected,1);
+            PostThreadMessageW(value->target_thread,WM_NULL,0,0);break;
+        }
+        // This worker only wakes the existing GT dispatch. It never reads UE
+        // objects, evaluates a pose, or uploads geometry. At most one wake is
+        // queued; a stalled/loading game cannot accumulate a message backlog.
+        if(result==WAIT_TIMEOUT && InterlockedCompareExchange(&value->animation_active,0,0) &&
+           InterlockedCompareExchange(&value->wake_pending,1,0)==0) {
+            if(!PostThreadMessageW(value->target_thread,WM_NULL,value->wake_nonce,0))
+                InterlockedExchange(&value->wake_pending,0);
+        }
+    }
+#else
     HANDLE waits[] = {value->stop, value->owner};
     if (WaitForMultipleObjects(2, waits, FALSE, INFINITE) == WAIT_OBJECT_0 + 1) {
         InterlockedExchange(&value->disconnected, 1);
         PostThreadMessageW(value->target_thread, WM_NULL, 0, 0);
     }
+#endif
     release(value);
     return 0;
 }
@@ -134,6 +166,11 @@ static bool open(MSG* message) {
     watch->target_thread = target_thread;
     watch->owner = OpenProcess(SYNCHRONIZE, FALSE, controller);
     watch->stop = CreateEventW(nullptr, TRUE, FALSE, nullptr);
+#ifdef E33_MESH_SESSION
+    watch->animation_changed=CreateEventW(nullptr,FALSE,FALSE,nullptr);
+    watch->wake_nonce=static_cast<WPARAM>(nonce);
+    if(!watch->animation_changed){request.error=82;close(BackendFailure);return true;}
+#endif
     if (!watch->owner || !watch->stop) { request.error = 82; close(BackendFailure); return true; }
     InterlockedIncrement(&watch->refs);
     HANDLE worker = CreateThread(nullptr, 0, watch_owner, watch, 0, nullptr);
@@ -151,6 +188,10 @@ extern "C" __declspec(dllexport) LRESULT CALLBACK SessionScheduleHook(int code, 
     if (owner && static_cast<DWORD>(owner) != GetCurrentThreadId()) return CallNextHookEx(nullptr, code, removed, data);
     if (code == HC_ACTION && removed == PM_REMOVE && data) {
         auto* message = reinterpret_cast<MSG*>(data);
+#ifdef E33_MESH_SESSION
+        if(watch && message->message==WM_NULL && message->wParam==watch->wake_nonce && !message->lParam)
+            InterlockedExchange(&watch->wake_pending,0);
+#endif
         static const UINT request_message = RegisterWindowMessageW(kSessionMessage);
 #ifdef E33_LEASE_SESSION
         if(packet && pending_close_reason) close(pending_close_reason);
@@ -208,5 +249,11 @@ extern "C" __declspec(dllexport) LRESULT CALLBACK SessionScheduleHook(int code, 
             if (consumed) { message->message = WM_NULL; message->wParam = 0; message->lParam = 0; }
         }
     }
+#ifdef E33_MESH_SESSION
+    if(packet && watch) {
+        const LONG active=backend_mesh_wake_needed()?1:0;
+        if(InterlockedExchange(&watch->animation_active,active)!=active)SetEvent(watch->animation_changed);
+    }
+#endif
     return CallNextHookEx(nullptr, code, removed, data);
 }

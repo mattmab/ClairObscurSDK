@@ -53,6 +53,7 @@ def main():
     parser.add_argument('--game-pid', type=int)
     parser.add_argument('--commands', action='store_true', help='Enable authenticated structured local commands')
     parser.add_argument('--poll-diagnostics', action='store_true', help='Log bounded shared poll latency measurements')
+    parser.add_argument('--combat-model-test', action='store_true', help='Allow diagnostic startup with a verified active combat party target')
     args = parser.parse_args()
     if sys.version_info[:2] != (3, 13):
         raise RuntimeError('Use the bundled Python 3.13 runtime')
@@ -81,7 +82,12 @@ def main():
             if kernel.WaitForSingleObject(handle, 0) != 258:
                 return
             try:
-                if gameplay_ready(args.game_pid):
+                ready=gameplay_ready(args.game_pid)
+                if not ready and args.combat_model_test:
+                    from expedition33.procedural_mesh import combat_target
+                    combat_target(args.game_pid)
+                    ready=True
+                if ready:
                     break
                 # A valid title/menu state is not an error. Keep waiting while
                 # this process lives; only sustained read failures time out.
@@ -98,9 +104,9 @@ def main():
         from expedition33.settings import SettingsStore
         original_transport = sdk.SessionTransport
         def release_transport(*, _executable=None):
-            transport = original_transport(_executable=ROOT / 'build/research-probe-picto-v4/research_probe.exe')
+            transport = original_transport(_executable=ROOT / 'build/research-probe-mesh-v27/research_probe.exe')
             required = ('original_game_action_protocol', 'blueprint_trace_protocol', 'picto_edit_protocol', 'picto_progression_protocol', 'picto_class_load_protocol', 'picto_cost_protocol')
-            if any(getattr(transport, name, 0) != 1 for name in required):
+            if any(getattr(transport, name, 0) != 1 for name in required) or transport.mesh_protocol != 3:
                 transport.close()
                 raise RuntimeError('Combined release runtime is missing capabilities')
             return transport
@@ -124,7 +130,25 @@ def main():
             server = None
             if args.commands:
                 from expedition33.controller_commands import CommandServer, Command
-                server = CommandServer({'mods.status': Command('inspect', loader.registry.views), 'sdk.shutdown': Command('lifecycle', loader.request_stop)}, capabilities={'inspect', 'lifecycle'})
+                def catalog_model():
+                    loaded=loader._loaded.get('CatalogModels')
+                    if not loaded or loaded[1].session is None:
+                        raise RuntimeError('Enable Catalog Models first')
+                    return loaded[1]
+                server = CommandServer({'mods.status': Command('inspect', loader.registry.views), 'sdk.shutdown': Command('lifecycle', loader.request_stop),
+                    'catalog.replacement_preview':Command('models',lambda:catalog_model().replacement_preview()),
+                    'catalog.replacement_material':Command('models',lambda profile:catalog_model().replacement_material(profile)),
+                    'catalog.replacement_enable':Command('models',lambda:catalog_model().replacement_enable()),
+                    'catalog.replacement_select':Command('models',lambda model:catalog_model().select_replacement(model)),
+                    'catalog.bones':Command('inspect',lambda component_index,page=0:__import__('expedition33.procedural_mesh',fromlist=['capture_bones']).capture_bones(catalog_model().session,component_index,page)),
+                    'catalog.list':Command('inspect',lambda:catalog_model().entries),
+                    'catalog.status':Command('inspect',lambda:catalog_model().status()),
+                    'catalog.render_probe':Command('models',lambda freeze=None:catalog_model().model.render_probe(freeze)),
+                    'catalog.shaders':Command('models',lambda batch=1:catalog_model().shader_samples(batch)),
+                      'catalog.shader_nearest':Command('inspect',lambda:catalog_model().shader_nearest()),
+                    'catalog.open':Command('models',lambda:catalog_model().open()),
+                    'catalog.spawn':Command('models',lambda model_id:catalog_model().spawn(model_id)),
+                    'catalog.destroy':Command('models',lambda:catalog_model().destroy())}, capabilities={'inspect', 'lifecycle','models'})
                 server.write_connection(ROOT / 'settings/controller')
             try:
                 logging.info('SDK ready: pid=%s, mods=%s', session.pid, len(loader.discover()))

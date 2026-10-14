@@ -39,8 +39,9 @@ def build(destination, version):
         if source.is_file():
             copy(source.relative_to(ROOT), source.relative_to(ROOT))
     for directory in ('research-probe', 'readonly-worker', 'research-probe-picto-v4'):
-        copy('build/release/research-probe-viewer-v2/research_probe.exe', f'build/{directory}/research_probe.exe')
-    copy('build/release/runtime-session-viewer-v2/runtime_session_viewer_v2.dll', 'build/runtime-session-viewer-v2/runtime_session_viewer_v2.dll')
+        copy('build/release/research-probe-mesh-v27/research_probe.exe', f'build/{directory}/research_probe.exe')
+    copy('build/release/research-probe-mesh-v27/research_probe.exe', 'build/research-probe-mesh-v27/research_probe.exe')
+    copy('build/release/runtime-session-mesh-v27/runtime_session_mesh_v27.dll', 'build/runtime-session-mesh-v27/runtime_session_mesh_v27.dll')
     # Launchers inside SDK are install-relative and never search a dev checkout.
     (sdk / 'launch-sdk.cmd').write_text('@echo off\r\ncd /d "%~dp0"\r\n"%~dp0runtime\\python.exe" -I -S -B "%~dp0scripts\\run_release_sdk.py" %*\r\n', encoding='ascii')
     (sdk / 'launch-cinematics.cmd').write_text('@echo off\r\ncall "%~dp0launch-sdk.cmd" %*\r\n', encoding='ascii')

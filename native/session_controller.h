@@ -86,7 +86,9 @@ inline void run_runtime_session(DWORD pid, DWORD thread, int32_t object_index, i
     packet.request.function_index = function_index; packet.request.function_serial = function_serial;
     wchar_t executable[32768]; require(GetModuleFileNameW(nullptr, executable, 32768) != 0, "SESSION_SELF_PATH");
 #ifdef E33_KEYBIND_SESSION
-#if defined(E33_VIEWER_MENU_SESSION)
+#if defined(E33_MESH_SESSION)
+    auto path = std::filesystem::path(executable).parent_path().parent_path() / L"runtime-session-mesh-v27" / L"runtime_session_mesh_v27.dll";
+#elif defined(E33_VIEWER_MENU_SESSION)
     auto path = std::filesystem::path(executable).parent_path().parent_path() / L"runtime-session-viewer-v2" / L"runtime_session_viewer_v2.dll";
 #elif defined(E33_CATALOG_GAME_OWNED_SESSION)
     auto path = std::filesystem::path(executable).parent_path().parent_path() / L"runtime-session-picto-v4" / L"runtime_session_picto_v4.dll";
@@ -213,6 +215,9 @@ inline void run_runtime_session(DWORD pid, DWORD thread, int32_t object_index, i
     require(packet.request.observed_pid == pid && packet.request.observed_tid == thread, "SESSION_THREAD_MISMATCH");
     require(UnhookWindowsHookEx(connection.bootstrap), "SESSION_BOOTSTRAP_REMOVE_FAILED"); connection.bootstrap = nullptr;
     std::cout << "{\"event\":\"session_ready\",\"pid\":" << pid << ",\"game_thread_id\":" << thread
+#ifdef E33_MESH_SESSION
+              << ",\"mesh_protocol\":3"
+#endif
 #ifdef E33_CATALOG_GAME_OWNED_SESSION
               << ",\"picto_edit_protocol\":1,\"picto_progression_protocol\":1,\"picto_class_load_protocol\":1,\"picto_cost_protocol\":1,\"picto_startup_protocol\":1,\"picto_stat_clear_protocol\":1,\"picto_stat_remove_protocol\":1,\"picto_inventory_protocol\":1,\"picto_batch_protocol\":1,\"picto_level_batch_protocol\":1,\"picto_mastery_batch_protocol\":1"
 #endif
@@ -428,6 +433,17 @@ inline void run_runtime_session(DWORD pid, DWORD thread, int32_t object_index, i
             for(size_t i=0;i<sizeof(PictoBatchPacket);++i)destination[i]=static_cast<uint8_t>(digit(encoded[i*2])*16+digit(encoded[i*2+1]));
             command.resize(separator);separator=std::string::npos;
         }
+#ifdef E33_MESH_SESSION
+        bool mesh=command.substr(0,separator)=="mesh";
+        if(mesh) {
+            require(separator!=std::string::npos,"MESH_PAYLOAD_MISSING");auto encoded=command.substr(separator+1);
+            require(encoded.size()==sizeof(MeshPacket)*2,"MESH_PAYLOAD_SIZE");
+            auto* destination=reinterpret_cast<uint8_t*>(packet.console_text);
+            auto digit=[](char c)->unsigned {if(c>='0'&&c<='9')return c-'0';if(c>='a'&&c<='f')return c-'a'+10;throw std::runtime_error("MESH_ENCODING");};
+            for(size_t i=0;i<sizeof(MeshPacket);++i)destination[i]=static_cast<uint8_t>(digit(encoded[i*2])*16+digit(encoded[i*2+1]));
+            command.resize(separator);separator=std::string::npos;
+        }
+#endif
         bool picto_progress=command.substr(0,separator)=="picto-progression";
         if(picto_progress) {
             require(separator!=std::string::npos,"PICTO_PAYLOAD_MISSING");auto encoded=command.substr(separator+1);
@@ -700,6 +716,9 @@ inline void run_runtime_session(DWORD pid, DWORD thread, int32_t object_index, i
         if(sequence) action=SessionSequenceOwner;
 #endif
 #ifdef E33_AUDIO_ISOLATION_SESSION
+#ifdef E33_MESH_SESSION
+        if(mesh) action=SessionMesh;
+#endif
         if(picto_progress) action=SessionPictoProgression;
         if(picto_batch) action=SessionPictoBatch;
         if(scoped_assignment) action=SessionScopedAssignment;
@@ -777,6 +796,14 @@ inline void run_runtime_session(DWORD pid, DWORD thread, int32_t object_index, i
             for(size_t i=0;i<sizeof(PictoBatchPacket);++i){encoded[i*2]=digits[source[i]>>4];encoded[i*2+1]=digits[source[i]&15];}
             std::cout << ",\"picto_batch_packet\":" << quote(encoded);
         }
+#ifdef E33_MESH_SESSION
+        if(mesh) {
+            static const char digits[]="0123456789abcdef";const auto* source=reinterpret_cast<const uint8_t*>(packet.console_text);
+            std::string encoded(sizeof(MeshPacket)*2,'0');
+            for(size_t i=0;i<sizeof(MeshPacket);++i){encoded[i*2]=digits[source[i]>>4];encoded[i*2+1]=digits[source[i]&15];}
+            std::cout << ",\"mesh_packet\":" << quote(encoded);
+        }
+#endif
         if(picto_progress) {
             static const char digits[]="0123456789abcdef";const auto* source=reinterpret_cast<const uint8_t*>(packet.console_text);
             std::string encoded(sizeof(PictoProgressionPacket)*2,'0');

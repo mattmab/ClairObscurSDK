@@ -1,4 +1,7 @@
 #pragma once
+#ifdef E33_MESH_SESSION
+#include "mesh_protocol.h"
+#endif
 #include "picto_progression_protocol.h"
 #include "picto_batch_protocol.h"
 #ifdef E33_GROWING_LEASE_SESSION
@@ -103,7 +106,9 @@ constexpr uint32_t SessionMenu=107;
 #ifdef E33_BLUEPRINT_TRACE_SESSION
 #ifdef E33_BLUEPRINT_DIRECT_SESSION
 #if defined(E33_AUDIO_CLEANUP_DIAGNOSTICS_SESSION)
-#if defined(E33_COVERAGE_SESSION)
+#if defined(E33_MESH_SESSION)
+constexpr wchar_t kSessionMessage[] = L"E33SDK.Session.mesh27";
+#elif defined(E33_COVERAGE_SESSION)
 constexpr wchar_t kSessionMessage[] = L"E33SDK.Session.v58mediaaudio";
 #elif defined(E33_FRAME_TIME_SESSION)
 constexpr wchar_t kSessionMessage[] = L"E33SDK.Session.v54frametime";

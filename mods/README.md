@@ -32,3 +32,7 @@ Each mod can be released independently with `scripts/mod_archive.py build`.
 These are release candidates. Feature-specific limits and live evidence are in
 each mod's README and the repository research documents; publication does not
 imply every game state or cinematic has been validated.
+
+## Asset Creator/Main Character Replacer — EXPERIMENTAL
+
+Requires SDK RC6. [Download and conversion instructions](CatalogModels/README.txt). No Ayane or 2B assets are included. Animation is not 1:1, loading needs improvement, and meshes may lag. MIT applies to our code only. The archive retains `CatalogModels.sdkmod` for settings compatibility.

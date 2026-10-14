@@ -17,7 +17,7 @@ or the local, untracked `settings/install-path.txt`.
 
 ## Download optional mods
 
-Install [ClairObscurSDK RC5](https://www.nexusmods.com/clairobscurexpedition33/mods/940)
+Install [ClairObscurSDK RC6](https://www.nexusmods.com/clairobscurexpedition33/mods/940)
 first, then choose the mods you want. These are separate downloads, not bundled
 with the SDK; each Nexus listing declares the SDK requirement.
 
@@ -184,3 +184,7 @@ default to disabled. An explicit saved false overrides optional defaults.
 Automated tests cover fresh-loader restoration, explicit disable, archive refresh,
 missing folders and identity mismatch. RC3 also restored seven saved enabled mods
 in a new game process without manual controller startup.
+
+## Experimental custom models (RC6)
+
+[Asset Creator/Main Character Replacer](mods/CatalogModels/README.txt) offers a model browser, static spawning, and approximate current-character replacement. **Animation is not 1:1; model loading needs improvement and meshes may lag.** Ayane and 2B must be downloaded separately and converted locally. No model assets are bundled. Mod and converter code are MIT; source model rights are separate. [RC6 release notes](docs/RELEASE_0.1.0_RC6.md).

@@ -64,6 +64,11 @@ static uint64_t runtime_base = 0, target_object = 0, target_function = 0;
 #include "picto_batch.h"
 static PictoBatch session_picto_batch;
 #endif
+#ifdef E33_MESH_SESSION
+#include "mesh_owner.h"
+static e33_mesh::Owner session_mesh;
+#endif
+
 #ifdef E33_KEYBIND_SESSION
 static e33_keys::State session_keys;
 #endif
@@ -513,6 +518,12 @@ uint32_t backend_command(SessionPacket* packet) {
     if(!session_leases.set_owner(lease_session,packet->lease_owner)) return 404;
 #endif
     switch (packet->request.action) {
+#ifdef E33_MESH_SESSION
+    case SessionMesh: {
+        auto& p=*reinterpret_cast<MeshPacket*>(packet->console_text);
+        session_mesh.command(runtime_base,lease_session,session_leases,p);session_mesh.reply(p);return 0;
+    }
+#endif
 #ifdef E33_GROWING_LEASE_SESSION
     case SessionLeasePolicy: {
         auto& p=*reinterpret_cast<LeasePolicyPacket*>(packet->console_text);
@@ -882,7 +893,22 @@ static StrongLeaseResult guarded_lease_close() {
     } __except(EXCEPTION_EXECUTE_HANDLER) { return StrongLeaseResult::Quarantined; }
 }
 #endif
+#ifdef E33_MESH_SESSION
+static uint32_t guarded_mesh_close() {
+    __try {return session_mesh.close(runtime_base,lease_session,session_leases);}
+    __except(EXCEPTION_EXECUTE_HANDLER) {return 1808;}
+}
+static uint32_t guarded_mesh_poll() {
+    __try {return session_mesh.poll(runtime_base,lease_session,session_leases);}
+    __except(EXCEPTION_EXECUTE_HANDLER) {return 1808;}
+}
+#endif
 uint32_t backend_close() {
+#ifdef E33_MESH_SESSION
+    const auto mesh_cleanup=guarded_mesh_close();
+    if(mesh_cleanup==407 && !backend_shutting_down())return kSessionCloseDeferred;
+    if(mesh_cleanup)return mesh_cleanup;
+#endif
 #ifdef E33_AUDIO_ISOLATION_SESSION
     session_picto_batch.stop();
 #endif
@@ -958,7 +984,13 @@ uint32_t backend_close() {
     observing = false; runtime_base = target_object = target_function = 0;
     return result;
 }
+#ifdef E33_MESH_SESSION
+bool backend_mesh_wake_needed(){return session_mesh.animating();}
+#endif
 void backend_message(MSG* message) {
+#ifdef E33_MESH_SESSION
+    if(session_mesh.active())guarded_mesh_poll();
+#endif
 #ifdef E33_AUDIO_ISOLATION_SESSION
     if(session_picto_batch.active())session_picto_batch.tick(runtime_base,lifetime_valid() && !session_sequence.active());
 #endif

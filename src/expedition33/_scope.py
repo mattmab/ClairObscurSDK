@@ -381,6 +381,14 @@ class SessionScope:
             except BaseException as error:
                 errors.append('trace controller cleanup: ' + type(error).__name__)
         menus_closed = True
+        for model in reversed(tuple(getattr(self, '_mesh_models', ()))):
+            try:
+                model.close()
+            except BaseException as error:
+                menus_closed = False
+                errors.append('mesh cleanup: ' + type(error).__name__)
+        if hasattr(self, '_mesh_models'):
+            self._mesh_models.clear()
         for owner in reversed(self._sequence_owners):
             try:
                 if not owner.close():

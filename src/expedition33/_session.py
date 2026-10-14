@@ -62,6 +62,7 @@ class SessionTransport:
             self.start = self._read()
             self.objects = [self._read(), self._read()]
             ready = self._read()
+            self.mesh_protocol = ready.get('mesh_protocol', 0)
             self.reflected_protocol = ready.get('reflected_protocol', 0)
             self.lease_protocol = ready.get('lease_protocol', 0)
             self.lease_policy_protocol = ready.get('lease_policy_protocol', 0)
@@ -205,6 +206,9 @@ class SessionTransport:
         picto_batch = command == 'picto-batch'
         if picto_batch and getattr(self,'picto_batch_protocol',0)!=1:
             raise ValueError('Picto batch capability unavailable')
+        mesh = command == 'mesh'
+        if mesh and getattr(self,'mesh_protocol',0)!=3:
+            raise ValueError('Mesh candidate unavailable')
         picto_progress = command == 'picto-progression'
         if picto_progress and getattr(self,'picto_progression_protocol',0)!=1:
             raise ValueError('Picto progression capability unavailable')
@@ -264,7 +268,7 @@ class SessionTransport:
             raise ValueError('Native session does not support object leases')
         if reflected and getattr(self, 'reflected_protocol', 0) != 1:
             raise ValueError('Native session does not support reflected invocation')
-        if not picto_batch and not picto_progress and not lease_policy and not widget_hook and not sound_event and not music_audio and not override and not sequence and not media and not pause and not ui_batch and not keys and not trace and not reflected and not leased and not retained and not assignment and not text and not menu and not button_action and not multi_button and command not in ('enable', 'disable', 'invoke', 'drain', 'ping', 'close', 'console-attach', 'console-detach', 'console-status', 'console-poll', 'console-execute', 'console-print', 'console-names', 'console-key'):
+        if not mesh and not picto_batch and not picto_progress and not lease_policy and not widget_hook and not sound_event and not music_audio and not override and not sequence and not media and not pause and not ui_batch and not keys and not trace and not reflected and not leased and not retained and not assignment and not text and not menu and not button_action and not multi_button and command not in ('enable', 'disable', 'invoke', 'drain', 'ping', 'close', 'console-attach', 'console-detach', 'console-status', 'console-poll', 'console-execute', 'console-print', 'console-names', 'console-key'):
             raise ValueError('Unsupported native session command')
         suffix = ''
         if picto_batch:
@@ -275,6 +279,10 @@ class SessionTransport:
                 raise ValueError('Picto level batch capability unavailable')
             if HEADER.unpack_from(payload)[6]==3 and getattr(self,'picto_mastery_batch_protocol',0)!=1:
                 raise ValueError('Picto mastery batch capability unavailable')
+            suffix = ' ' + payload.hex()
+        elif mesh:
+            from .procedural_mesh import validate_request
+            validate_request(payload)
             suffix = ' ' + payload.hex()
         elif picto_progress:
             from .picto_progression import validate_request

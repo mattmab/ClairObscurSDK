@@ -136,8 +136,8 @@ class LicenseManifestTests(unittest.TestCase):
         for name in ('src/expedition33/__init__.py', 'scripts/run_release_sdk.py',
                      'scripts/sdk_command.py', 'docs/INSTALLABLE_RELEASE.md', 'LICENSE',
                      'THIRD_PARTY_NOTICES.md',
-                     'build/release/research-probe-viewer-v2/research_probe.exe',
-                     'build/release/runtime-session-viewer-v2/runtime_session_viewer_v2.dll',
+                     'build/release/research-probe-mesh-v27/research_probe.exe',
+                     'build/release/runtime-session-mesh-v27/runtime_session_mesh_v27.dll',
                      'build/bootstrap/version.dll', 'mods/SDKManagement/mod.py',
                      'mods/IntrospectionHarness/mod.py', 'mods/LiveObjectViewer/mod.py'):
             self.write(name, b'# fixture\n')
@@ -149,7 +149,7 @@ class LicenseManifestTests(unittest.TestCase):
         self.assertEqual(result['mods'], 3)
         with zipfile.ZipFile(result['archive']) as archive:
             self.assertIn('SDK_Mods/LiveObjectViewer.sdkmod', archive.namelist())
-            self.assertIn('SDK/build/runtime-session-viewer-v2/runtime_session_viewer_v2.dll', archive.namelist())
+            self.assertIn('SDK/build/runtime-session-mesh-v27/runtime_session_mesh_v27.dll', archive.namelist())
             self.assertEqual(archive.read('SDK/licenses/Expat/COPYING'),
                              b'copyright and permission fixture\n')
         self.write('runtime/new.dll', b'new')
