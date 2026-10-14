@@ -10,7 +10,7 @@ Extract its game-root ZIP beside `Sandfall`; normal game launch starts the SDK
 and restores saved mod choices after loading a save. SDK Management,
 Introspection Harness and LiveObjectViewer are bundled. Choose optional `.sdkmod` downloads from the
 [Mods catalog](mods/README.md), including ContinentFlight, Picto Editor, Statistics,
-and Cinematics. Each has its own release. See
+and Cinematics, plus Asset Creator/Main Character Replacer. Each has its own release. See
 [installation and restart instructions](docs/INSTALLABLE_RELEASE.md).
 The checkout's `launch-sdk.cmd` delegates to the installed SDK using `SDK_GAME_DIR`
 or the local, untracked `settings/install-path.txt`.
@@ -19,7 +19,8 @@ or the local, untracked `settings/install-path.txt`.
 
 Install [ClairObscurSDK RC6](https://www.nexusmods.com/clairobscurexpedition33/mods/940)
 first, then choose the mods you want. These are separate downloads, not bundled
-with the SDK; each Nexus listing declares the SDK requirement.
+with the SDK; each published Nexus listing declares the SDK requirement.
+RC6 is also [available on GitHub](https://github.com/mattmab/ClairObscurSDK/releases/tag/v0.1.0-rc6); its Nexus upload is awaiting manual approval.
 
 | Mod | Features and limitations |
 | --- | --- |
@@ -27,6 +28,13 @@ with the SDK; each Nexus listing declares the SDK requirement.
 | [Picto Editor](https://www.nexusmods.com/clairobscurexpedition33/mods/942) | Edit supported Picto stats, levels, Lumina costs and mastery. Changes can affect saves. |
 | [Statistics](https://www.nexusmods.com/clairobscurexpedition33/mods/943) | View captured damage events and supported battle counters. Not full third-party Statistics DLL parity. |
 | [**Cinematics — EXPERIMENTAL**](https://www.nexusmods.com/clairobscurexpedition33/mods/944) | Browse and replay supported cinematics. Contains spoilers; native Travel and Play changes maps and can run story/save transitions, with no manual Stop on that path. Catalog entries are not all verified playable. |
+| [**Asset Creator/Main Character Replacer — EXPERIMENTAL**](https://github.com/mattmab/ClairObscurSDK/releases/tag/asset-creator-v0.3.0) | Browse and spawn locally converted Ayane/2B models or replace the current character visually. Requires RC6. Animation is not 1:1; loading needs improvement and meshes may lag. No model assets included. Nexus publication is pending RC6 approval. |
+| [**AssetConverter 0.3.0**](https://github.com/mattmab/ClairObscurSDK/releases/download/asset-creator-v0.3.0/AssetConverter-0.3.0.zip) | One-pass local conversion of the documented Ayane FBX and 2B Blender sources. Requires Python 3.13 x64; first run installs pinned dependencies from PyPI. Download models separately. |
+
+The Asset Creator mod and converter are **MIT-licensed code**:
+[mod license](mods/CatalogModels/LICENSE), [converter license](tools/asset_converter/LICENSE).
+This does not license the separately downloaded models, textures or animations.
+See [model sources, conversion commands and installation instructions](mods/CatalogModels/README.txt).
 
 Close the game and controller, then extract each Nexus mod ZIP into the game root
 containing `Sandfall`. Leave the inner `SDK_Mods/NAME.sdkmod` archive intact.
