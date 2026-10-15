@@ -33,6 +33,7 @@
         return false;
     }
     bool ordinary(uint64_t b,CallIdentity actor,CallIdentity component) {
+        if(component.address&&component.address==gallery_floor_component_.address)return false;
         if(!call_identity(b,actor)||!call_identity(b,component))return false;
         if((local_read<uint32_t>(actor.address+8)&0x30)||
            call_derives(b,local_read<uint64_t>(actor.address+16),ids_[7].address)||

@@ -102,7 +102,7 @@ class Mod:
         self.booth_pending=False
 
     def management(self):
-        return ModDefinition('e33.world-builder', 'World Builder', version='0.27.0-experimental',
+        return ModDefinition('e33.world-builder', 'World Builder', version='0.28.0-experimental',
             description='F8 freecam. WASD fly, mouse look, Space/Ctrl up/down (E/Q also work), Shift faster. Hold left mouse to grab a world prop; release to place. Numpad 8/2 forward/back, 4/6 left/right, 9/3 up/down, 7/1 yaw; Alt precise; Alt+Z undo. F9 restores edits and clears spawned props. F7 opens folders, previews, spawning, galleries and saved maps.',
             actions=(Action('catalog', 'Open asset catalog', self.open_catalog),Action('toggle', 'Enter / leave builder camera', self.toggle),
                      Action('restore', 'Restore all edited geometry', self.restore),
@@ -145,7 +145,7 @@ class Mod:
         session.actions.register('world_builder.preview_motion',self.booth_motion,schema={'type':'object','properties':{'values':{'type':'array'}},'required':['values'],'additionalProperties':False})
         session.console.expose('world_builder', self)
 
-    def command(self, op, ids=(), values=(), automatic=False, transform=None, registry_offset=0,thumbnail_key=None,thumbnail_stage=0,asset_path=None):
+    def command(self, op, ids=(), values=(), automatic=False, transform=None, registry_offset=0,thumbnail_key=None,thumbnail_stage=0,asset_path=None,bulk=None):
         packet = bytearray(20984)
         struct.pack_into('<4IQ', packet, 0, 3, op, 0, 0, self.owner)
         if op == 28: struct.pack_into('<I',packet,20976,int(automatic))
@@ -160,15 +160,23 @@ class Mod:
             encoded=asset_path.encode('ascii')
             if not 1<=len(encoded)<512:raise ValueError('Invalid thumbnail asset path')
             packet[2000:2000+len(encoded)]=encoded
-        if op==35:struct.pack_into('<I',packet,2000,registry_offset)
+        if op in (35,51):struct.pack_into('<I',packet,2000,registry_offset)
+        if op==50:
+            if not bulk or len(bulk)>64:raise ValueError('Expected 1â€“64 spawn rows')
+            struct.pack_into('<I',packet,2000,len(bulk))
+            for i,(index,flags,pose) in enumerate(bulk):struct.pack_into('<II12d',packet,4096+192*i,index,flags,*pose)
+        if op==53:
+            if not bulk or len(bulk)>128:raise ValueError('Expected 1â€“128 deletion rows')
+            struct.pack_into('<I',packet,2000,len(bulk))
+            for i,identity in enumerate(bulk):struct.pack_into('<iiQ',packet,4096+16*i,*identity)
         if values:
-            if len(values) != 8 or any(type(x) not in (int, float) or not math.isfinite(x) or abs(x) > (1e7 if op==42 else 10000) for x in values):
+            if len(values) != 8 or any(type(x) not in (int, float) or not math.isfinite(x) or abs(x) > (1e7 if op in (42,52) else 10000) for x in values):
                 raise ValueError('Expected eight finite bounded motion values')
             struct.pack_into('<8d', packet, 2000, *values)
         with self.session._lease_context():
             reply = self.session._session._transport.command('mesh', bytes(packet))
         raw = bytes.fromhex(reply['mesh_packet'])
-        if len(raw) != len(packet) or raw[:8] != packet[:8] or raw[16:24] != packet[16:24] or raw[88:3000] != packet[88:3000] or raw[3356:3400] != packet[3356:3400] or (raw[3544:3560] != packet[3544:3560] or raw[3648:4096] != packet[3648:4096] or raw[20480:] != packet[20480:] or (op not in (29,35) and raw[4096:20480] != packet[4096:20480])):
+        if len(raw) != len(packet) or raw[:8] != packet[:8] or raw[16:24] != packet[16:24] or raw[88:3000] != packet[88:3000] or raw[3356:3400] != packet[3356:3400] or (raw[3544:3560] != packet[3544:3560] or raw[3648:4096] != packet[3648:4096] or raw[20480:] != packet[20480:] or (op not in (29,35,50,51,54) and raw[4096:20480] != packet[4096:20480])):
             raise RuntimeError('Builder acknowledgement mismatch; outcome uncertain')
         self.last_raw = raw
         _, _, error, state, _ = struct.unpack_from('<4IQ', raw)
@@ -221,9 +229,29 @@ class Mod:
         if reopen and self.catalog_menu and self.catalog_menu.state=='built':
             with ReadBatch(self.session.pid):self.catalog_menu.paint();self.catalog_menu.open()
         return self.status()
+    def refresh_menu_owner(self):
+        menu=self.catalog_menu
+        if menu is None:return
+        with ReadBatch(self.session.pid):
+            current=capture_matching(self.session.pid,classes=('PlayerController',))
+            player=next(o for o in current.select('PlayerController') if not o.object_flags&0x30)
+        identity=lambda o:(o.index,o.serial,o.address)
+        if identity(player)==identity(menu.player):return
+        # The leased widget tree survives travel, but its owning controller
+        # does not. Dispose only through the normal acknowledged cleanup path.
+        LOG.info('World Builder menu owner changed after travel; rebuilding')
+        if not menu.close():raise RuntimeError('Previous menu cleanup is still pending')
+        self.catalog_menu=None
+        self.library._catalog=None;self.library.rows=[];self.library.known={}
+        self.library.registry_names_ready=False;self.library.loader_metadata=[]
+        if not self.last.get('edits'):
+            self.library.owned.clear();self.library.selected=None;self.library.preview_key=None
+            self.library.active_map=None;self.library.world=None
+
     def open_catalog(self,_=None):
         if self.booth_pending:self.end_booth();return {'open':True}
         if not self.active:self.toggle()
+        self.refresh_menu_owner()
         from .catalog_menu import CatalogMenu
         if self.catalog_menu is None:
             self.catalog_menu=CatalogMenu(self)
@@ -249,7 +277,7 @@ class Mod:
         if type(index) is not int or not -1<=index<len(menu.buttons):raise ValueError('Invalid menu control index')
         with ReadBatch(self.session.pid):
             if index>=0:menu.click(index)
-        return dict(state=menu.state,workspace=menu.workspace,folder=menu.folder,rows=menu.rows,selected=menu.selected,message=self.library.message,thumbnails=len(menu.thumbnails),queued=len(menu.pending),gallery=dict(summary=menu.batch_gallery.summary(),owned=list(menu.batch_gallery.owned),queued=len(menu.batch_gallery.queue),paused=menu.batch_gallery.paused,failures=menu.batch_gallery.failures),library_assets=menu.library_assets,map_pending=menu.map_job is not None,capture_queued=len(menu.capture_queue),capture_paused=menu.capture_paused,cache_stats=dict(menu.cache_stats),background=menu.background.status())
+        return dict(state=menu.state,workspace=menu.workspace,folder=menu.folder,rows=menu.rows,selected=menu.selected,message=self.library.message,thumbnails=len(menu.thumbnails),queued=len(menu.pending),gallery=dict(summary=menu.batch_gallery.summary(),owned=list(menu.batch_gallery.owned[:128]),owned_count=len(menu.batch_gallery.owned),queued=len(menu.batch_gallery.queue),paused=menu.batch_gallery.paused,failures=menu.batch_gallery.failures[:64],failure_count=len(menu.batch_gallery.failures)),library_assets=menu.library_assets,map_pending=menu.map_job is not None,capture_queued=len(menu.capture_queue),capture_paused=menu.capture_paused,cache_stats=dict(menu.cache_stats),background=menu.background.status())
 
     def scene_command(self,op,objects=(),transform=None):
         self.command(op,ids=objects,transform=transform)
@@ -368,7 +396,7 @@ class Mod:
                 LOG.exception('Catalog prewarm failed')
         if not self.started or now < self.next_status:
             return
-        self.next_status = now + (self.catalog_menu.background.poll_interval() if self.active and self.catalog_menu and not self.booth_pending else .5)
+        self.next_status = now + (.02 if self.catalog_menu and self.catalog_menu.state=='open' and self.catalog_menu.batch_gallery.queue and not self.catalog_menu.batch_gallery.paused else self.catalog_menu.background.poll_interval() if self.active and self.catalog_menu and not self.booth_pending else .5)
         try:
             self.command(26)
             if self.booth_pending and not self.last.get('booth_active'):self.end_booth()

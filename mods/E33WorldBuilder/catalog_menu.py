@@ -14,7 +14,7 @@ LOG=logging.getLogger('expedition33.world_builder.preview')
 class CatalogMenu(OwnedMenuPanel):
     PAGE=18
     def __init__(self,mod):
-        super().__init__(mod.session,controls=50,cached_construction=True,selected_results=True)
+        super().__init__(mod.session,controls=51,cached_construction=True,selected_results=True)
         self.mod=mod;self.library=mod.library;self.browser=Browser(self.library.store.root.parent)
         self.offset=0;self.kind='mesh';self.query='';self.selected=None;self.workspace='Build'
         self.folder='/Game/';self.folders=True;self.favorites=False
@@ -102,6 +102,7 @@ class CatalogMenu(OwnedMenuPanel):
         for i in range(4):self.button(1360+i*134,75,128,48)
         for i in range(8):self.button(1360+(i%2)*270,825+(i//2)*59,260,50)
         for i in range(14):self.button(1360+(i%2)*270,340+(i//2)*55,260,48)
+        self.button(1730,16,160,40)
         self.field1=self._spawn('EditableTextBox');self._place(self.field1,1360,220,530,48)
         self.field2=self._spawn('EditableTextBox');self._place(self.field2,1360,278,530,48)
         self.search=self._spawn('EditableTextBox');self._place(self.search,24,120,1296,58)
@@ -152,6 +153,7 @@ class CatalogMenu(OwnedMenuPanel):
             if asset in self.thumbnails:self.show_texture(asset,False)
         with self.paint_batch():
             self.set_text(self.title,'WORLD BUILDER  /  '+self.workspace)
+            self.set_text(self.labels[50],'Close / F7')
             self.set_text(self.breadcrumb,f"{self.folder if self.folders else 'All assets'}  |  {count} entries  |  Page {1+self.offset//self.PAGE}/{max(1,math.ceil(count/self.PAGE))}")
             for i in range(self.PAGE):
                 valid=i<len(self.rows);self.set_enabled(i,valid);text=''
@@ -209,7 +211,7 @@ class CatalogMenu(OwnedMenuPanel):
             elif i==23:self.folder=self.folder.rstrip('/').rsplit('/',1)[0]+'/' if self.folder!='/Game/' else '/Game/';self.offset=0
             elif 24<=i<=27:
                 self.workspace=('Build','Gallery','Library','Maps')[i-24];self.offset=0;self.selected=None
-                for field,value in ((self.field1,'18' if self.workspace=='Gallery' else 'Props'),(self.field2,'600' if self.workspace=='Gallery' else '')):self._render_call(field,'EditableTextBox','SetText',InText=value)
+                for field,value in ((self.field1,'1000' if self.workspace=='Gallery' else 'Props'),(self.field2,'600' if self.workspace=='Gallery' else '')):self._render_call(field,'EditableTextBox','SetText',InText=value)
             elif i==28:
                 if self.workspace=='Gallery':self.start_gallery()
                 elif self.workspace=='Maps':self.load_map()
@@ -225,6 +227,7 @@ class CatalogMenu(OwnedMenuPanel):
             elif i==33:self.cancel_preview();self.batch_gallery.clear();self.gallery=[];self.library.clear()
             elif i==34:self.hide();return
             elif i==35:self.library.refresh();self.signature=None
+            elif i==50:self.hide();return
             elif i>=36:self.workspace_action(i-36)
         except Exception as e:self.library.message=str(e)
         self.paint()
@@ -420,7 +423,14 @@ class CatalogMenu(OwnedMenuPanel):
             return
         if self.state!='open':return
         if self.batch_gallery.queue and not self.batch_gallery.paused:
-            self.batch_gallery.tick();self.paint();return
+            deadline=time.monotonic()+.15
+            for _ in range(16):
+                self.batch_gallery.tick()
+                if not self.batch_gallery.queue or self.batch_gallery.paused or time.monotonic()>=deadline:break
+            if time.monotonic()-self.batch_gallery.last_paint>=.5 or not self.batch_gallery.queue:
+                self.set_text(self.detail,self.batch_gallery.summary()+'\nBatch size / spacing (cm)')
+                self.batch_gallery.last_paint=time.monotonic()
+            return
         if self.capture_queue and not self.capture_paused:
             asset=self.capture_queue.pop(0)
             try:self.preview(asset,False)

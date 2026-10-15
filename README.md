@@ -1,4 +1,4 @@
-# Clair Obscur: Expedition 33 — independent Python SDK
+# Clair Obscur: Expedition 33 â€” independent Python SDK
 
 MIT-licensed v0.1 release candidate for the verified Windows Steam build. Our native
 runtime independently identifies live Unreal objects and executes supported
@@ -20,7 +20,7 @@ or the local, untracked `settings/install-path.txt`.
 Install [ClairObscurSDK RC6](https://www.nexusmods.com/clairobscurexpedition33/mods/940)
 first, then choose the mods you want. These are separate downloads, not bundled
 with the SDK; each published Nexus listing declares the SDK requirement.
-RC7 is [available as a GitHub prerelease](https://github.com/mattmab/ClairObscurSDK/releases/tag/v0.1.0-rc7) with the native runtime required by **E33 World Builder**. The release provides separate SDK, World Builder mod, optional neutral thumbnail pack, and source downloads. Stock RC6 cannot run World Builder. See [RC7 release notes](docs/RELEASE_0.1.0_RC7.md).
+RC8 is [available as a GitHub prerelease](https://github.com/mattmab/ClairObscurSDK/releases/tag/v0.1.0-rc8) with the native runtime required by **E33 World Builder**. The release provides separate SDK, World Builder mod, optional neutral thumbnail pack, and source downloads. Stock RC6 cannot run World Builder. See [RC8 release notes](docs/RELEASE_0.1.0_RC8.md).
 
 RC6 remains [available on GitHub](https://github.com/mattmab/ClairObscurSDK/releases/tag/v0.1.0-rc6); its Nexus upload is awaiting manual approval.
 
@@ -29,8 +29,8 @@ RC6 remains [available on GitHub](https://github.com/mattmab/ClairObscurSDK/rele
 | [Continent Flight](https://www.nexusmods.com/clairobscurexpedition33/mods/941) | Exploration flight for supported human characters. Dismount Esquie first; experimental traversal support. |
 | [Picto Editor](https://www.nexusmods.com/clairobscurexpedition33/mods/942) | Edit supported Picto stats, levels, Lumina costs and mastery. Changes can affect saves. |
 | [Statistics](https://www.nexusmods.com/clairobscurexpedition33/mods/943) | View captured damage events and supported battle counters. Not full third-party Statistics DLL parity. |
-| [**Cinematics — EXPERIMENTAL**](https://www.nexusmods.com/clairobscurexpedition33/mods/944) | Browse and replay supported cinematics. Contains spoilers; native Travel and Play changes maps and can run story/save transitions, with no manual Stop on that path. Catalog entries are not all verified playable. |
-| [**Asset Creator/Main Character Replacer — EXPERIMENTAL**](https://github.com/mattmab/ClairObscurSDK/releases/tag/asset-creator-v0.3.0) | Browse and spawn locally converted Ayane/2B models or replace the current character visually. Requires RC6. Animation is not 1:1; loading needs improvement and meshes may lag. No model assets included. Nexus publication is pending RC6 approval. |
+| [**Cinematics â€” EXPERIMENTAL**](https://www.nexusmods.com/clairobscurexpedition33/mods/944) | Browse and replay supported cinematics. Contains spoilers; native Travel and Play changes maps and can run story/save transitions, with no manual Stop on that path. Catalog entries are not all verified playable. |
+| [**Asset Creator/Main Character Replacer â€” EXPERIMENTAL**](https://github.com/mattmab/ClairObscurSDK/releases/tag/asset-creator-v0.3.0) | Browse and spawn locally converted Ayane/2B models or replace the current character visually. Requires RC6. Animation is not 1:1; loading needs improvement and meshes may lag. No model assets included. Nexus publication is pending RC6 approval. |
 | [**AssetConverter 0.3.0**](https://github.com/mattmab/ClairObscurSDK/releases/download/asset-creator-v0.3.0/AssetConverter-0.3.0.zip) | One-pass local conversion of the documented Ayane FBX and 2B Blender sources. Requires Python 3.13 x64; first run installs pinned dependencies from PyPI. Download models separately. |
 
 The Asset Creator mod and converter are **MIT-licensed code**:
@@ -40,7 +40,7 @@ See [model sources, conversion commands and installation instructions](mods/Cata
 
 Close the game and controller, then extract each Nexus mod ZIP into the game root
 containing `Sandfall`. Leave the inner `SDK_Mods/NAME.sdkmod` archive intact.
-Launch the game, load a save, and enable your choices in **Pause → Mods**.
+Launch the game, load a save, and enable your choices in **Pause â†’ Mods**.
 Preserve `SDK/settings` when updating and back up saves before using editors or
 experimental replay. Read each mod's installation notes and limitations.
 SDKManagement, IntrospectionHarness and LiveObjectViewer are already bundled;

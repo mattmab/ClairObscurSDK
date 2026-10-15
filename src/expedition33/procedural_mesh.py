@@ -31,26 +31,33 @@ def validate_request(data):
     if type(data) is not bytes or len(data)!=SIZE:raise ValueError('Mesh packet size')
     version,op,error,state,owner=HEADER.unpack_from(data)
     # World Builder bounded adapter; independently checked again on game thread.
-    if 20 <= op <= 49:
+    if 20 <= op <= 54:
         if version != 3 or error or state or not owner or any(data[24:88]):
             raise ValueError('Builder header')
         if op == 20:
             if any(data[2136:]): raise ValueError('Builder initialization padding')
         elif op in (30,31):
             if any(data[120:2000]) or any(data[2096:]): raise ValueError('Builder scene mutation padding')
-        elif op in (33,34,40,45,46):
+        elif op in (33,34,40,45,46,54):
             if any(data[104:]): raise ValueError('Builder owned deletion padding')
         elif op in (37,38,48):
             if any(data[88:2000]) or any(data[2068:]) or struct.unpack_from('<I',data,2000)[0]>1 or any(c not in b'0123456789abcdef' for c in data[2004:2068]):raise ValueError('Builder thumbnail cache request')
         elif op == 47:
             path=data[2000:2512].split(b'\0',1)[0]
             if any(data[88:2000]) or any(data[2000+len(path):]) or not path.startswith(b'/Game/') or len(path)>=512:raise ValueError('Builder asset names request')
-        elif op == 35:
+        elif op in (35,51):
             if any(data[88:2000]) or any(data[2004:]) or struct.unpack_from('<I',data,2000)[0]>250000:raise ValueError('Builder registry page')
-        elif op in (21,24,42,44):
+        elif op in (21,24,42,44,52):
             if any(data[88:2000]) or any(data[2064:]): raise ValueError('Builder motion padding')
-            if any(not math.isfinite(v) or abs(v)>(1e7 if op==42 else 10000) for v in struct.unpack_from('<8d',data,2000)):
+            if any(not math.isfinite(v) or abs(v)>(1e7 if op in (42,52) else 10000) for v in struct.unpack_from('<8d',data,2000)):
                 raise ValueError('Builder motion bounds')
+        elif op in (50,53):
+            count=struct.unpack_from('<I',data,2000)[0];stride=192 if op==50 else 16
+            if not 1<=count<=(64 if op==50 else 128) or any(data[88:2000]) or any(data[2004:4096]) or any(data[4096+count*stride:]):raise ValueError('Builder bulk padding/count')
+            if op==50:
+                for i in range(count):
+                    at=4096+i*stride;values=struct.unpack_from('<12d',data,at+8)
+                    if struct.unpack_from('<I',data,at+4)[0]>1 or any(data[at+104:at+192]) or any(not math.isfinite(v) or abs(v)>1e8 for v in values):raise ValueError('Builder bulk row')
         elif op == 28:
             if any(data[88:20976]) or any(data[20980:]) or struct.unpack_from('<I',data,20976)[0]>1: raise ValueError('Builder automatic flag')
         elif any(data[88:]): raise ValueError('Builder empty command payload')

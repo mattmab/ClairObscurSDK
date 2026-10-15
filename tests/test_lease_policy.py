@@ -17,7 +17,7 @@ class LeasePolicyTests(unittest.TestCase):
         self.assertEqual(result['owners'][1]['peak'],132)
 
     def test_malformed_accounting(self):
-        for changes in (dict(limit=4097),dict(quota=0),dict(reserve=1024),dict(active=129),
+        for changes in (dict(limit=8193),dict(quota=0),dict(reserve=1024),dict(active=129),
                         dict(peak=129),dict(capacity=128),dict(count=65),dict(memory=0),dict(error=403)):
             with self.subTest(changes=changes),self.assertRaises(ValueError):
                 p.decode(p.request(2),self.reply(**changes))
@@ -25,7 +25,7 @@ class LeasePolicyTests(unittest.TestCase):
         with self.assertRaises(ValueError):p.decode(p.request(2),bytes(reply))
 
     def test_request_bounds(self):
-        for args in ((1,127,1,0),(1,4097,1,0),(1,128,129,0),(1,128,1,128),(2,128,0,0)):
+        for args in ((1,127,1,0),(1,8193,1,0),(1,128,129,0),(1,128,1,128),(2,128,0,0)):
             with self.subTest(args=args),self.assertRaises(ValueError):p.request(*args)
         p.validate_request(p.request(1,1024,256,64))
         with self.assertRaises(ValueError):p.validate_request(self.reply())

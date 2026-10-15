@@ -8,7 +8,7 @@
 // engine holder. This also preserves references across reentrant registration.
 template<class Entry,size_t Initial,size_t Maximum,size_t Block=64>
 class LeaseBlocks {
-    static_assert(Initial>0 && Initial<=Maximum && Maximum<=4096 && Block>0);
+    static_assert(Initial>0 && Initial<=Maximum && Maximum<=8192 && Block>0);
     std::array<Entry,Initial> initial_{};
     std::array<std::unique_ptr<Entry[]>,(Maximum-Initial+Block-1)/Block> extra_{};
     size_t capacity_=Initial,blocks_=0;

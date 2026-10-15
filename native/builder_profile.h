@@ -148,6 +148,8 @@ inline const MeshField fields_60[]={{"NewCastShadow","BoolProperty",0,1,0x180010
 inline const MeshField rotator_fields[]={{"Pitch","DoubleProperty",0,8,0x18001041000205ULL,0x6e11788ULL,"","",0,"",0U,""},
 {"Yaw","DoubleProperty",8,8,0x18001041000205ULL,0x6e11788ULL,"","",0,"",0U,""},
 {"Roll","DoubleProperty",16,8,0x18001041000205ULL,0x6e11788ULL,"","",0,"",0U,""}};
+inline const MeshField fields_61[]={{"Asset","SoftObjectProperty",0,40,7881299347898496ULL,0x6e128d8ULL,"","",0,"",0U,"Object"},
+{"ReturnValue","ObjectProperty",40,8,6755468160534400ULL,0x6e11d38ULL,"","",0,"",0U,"Object"}};
 inline const MeshFunction profiles[]={
 {"GameplayStatics","BeginDeferredActorSpawnFromClass",0x4c22403,144,144,136,0x37336c0,fields_0,7},
 {"GameplayStatics","FinishSpawningActor",0x4c22403,128,128,120,0x37372f0,fields_1,4},
@@ -210,6 +212,7 @@ inline const MeshFunction profiles[]={
 {"Actor","SetActorTickEnabled",0x4020402,1,1,65535,0x333fe80,fields_58,1},
 {"PrimitiveComponent","SetSimulatePhysics",0x4020402,1,1,65535,0x32ce3e0,fields_59,1},
 {"PrimitiveComponent","SetCastShadow",0x4020403,1,1,65535,0x32cbbe0,fields_60,1},
+{"KismetSystemLibrary","LoadAsset_Blocking",67249155,48,48,40,0x3860130,fields_61,2},
 };
-inline const char* packages[]={"/Script/Engine","/Script/Engine","/Script/Engine","/Script/Engine","/Script/Engine","/Script/Engine","/Script/Engine","/Script/Engine","/Script/Engine","/Script/Engine","/Script/Engine","/Script/Engine","/Script/Engine","/Script/Engine","/Script/Engine","/Script/Engine","/Script/Engine","/Script/Engine","/Script/Engine","/Script/Engine","/Script/Engine","/Script/Engine","/Script/Engine","/Script/Engine","/Script/Engine","/Script/Engine","/Script/UMG","/Script/UMG","/Script/UMG","/Script/UMG","/Script/UMG","/Script/UMG","/Script/Engine","/Script/UMG","/Script/Engine","/Script/Engine","/Script/Engine","/Script/Engine","/Script/Engine","/Script/Engine","/Script/Engine","/Script/Engine","/Script/Engine","/Script/Engine","/Script/Engine","/Script/Engine","/Script/Engine","/Script/Engine","/Script/Engine","/Script/Engine","/Script/Engine","/Script/Engine","/Script/Engine","/Script/Engine","/Script/Engine","/Script/Engine","/Script/Engine","/Script/Engine","/Script/Engine","/Script/Engine","/Script/Engine"};
+inline const char* packages[]={"/Script/Engine","/Script/Engine","/Script/Engine","/Script/Engine","/Script/Engine","/Script/Engine","/Script/Engine","/Script/Engine","/Script/Engine","/Script/Engine","/Script/Engine","/Script/Engine","/Script/Engine","/Script/Engine","/Script/Engine","/Script/Engine","/Script/Engine","/Script/Engine","/Script/Engine","/Script/Engine","/Script/Engine","/Script/Engine","/Script/Engine","/Script/Engine","/Script/Engine","/Script/Engine","/Script/UMG","/Script/UMG","/Script/UMG","/Script/UMG","/Script/UMG","/Script/UMG","/Script/Engine","/Script/UMG","/Script/Engine","/Script/Engine","/Script/Engine","/Script/Engine","/Script/Engine","/Script/Engine","/Script/Engine","/Script/Engine","/Script/Engine","/Script/Engine","/Script/Engine","/Script/Engine","/Script/Engine","/Script/Engine","/Script/Engine","/Script/Engine","/Script/Engine","/Script/Engine","/Script/Engine","/Script/Engine","/Script/Engine","/Script/Engine","/Script/Engine","/Script/Engine","/Script/Engine","/Script/Engine","/Script/Engine","/Script/Engine"};
 }

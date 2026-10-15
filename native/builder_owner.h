@@ -12,7 +12,7 @@ namespace e33_builder {
 // No pointer supplied by Python is used without a live slot/serial check.
 class Owner {
     CallIdentity ids_[128]{},camera_{},target_{},selected_{},hover_{},hover_actor_{},selected_actor_{};
-    bool schemas_[61]{},dragging_=false,left_was_=true,undo_was_=false,nudging_=false;
+    bool schemas_[62]{},dragging_=false,left_was_=true,undo_was_=false,nudging_=false;
     bool auto_tick_=true,want_grab_=false;
     uint64_t last_frame_=0,last_clock_=0,last_hover_=0,last_hud_=0,ticks_=0;
     double tick_ms_sum_=0,cost_ms_sum_=0,max_cost_ms_=0;
@@ -34,7 +34,7 @@ class Owner {
     template<class T> T get(size_t at=0){T v{};std::memcpy(&v,args_+at,sizeof(T));return v;}
     bool call(uint64_t b,CallIdentity recipient,size_t i) {
         step_=uint32_t(i+1);
-        if(i>=61 || !TargetPodSchemaOps{b}.context())return false;
+        if(i>=62 || !TargetPodSchemaOps{b}.context())return false;
         const auto fn=call_identity(b,ids_[i>=56?96+i-56:(i>=41?64+i-41:(i==40?62:8+i))]);const auto& p=profiles[i];
         if(i==46)step_=4701;if(!fn)return false;
         if(i==46)step_=4702;
@@ -139,7 +139,7 @@ class Owner {
         if(!checkpoint(b,component))return false;
         auto it=std::find_if(edits_.begin(),edits_.end(),[&](const Edit& e){return e.component.address==component.address&&e.component.serial==component.serial;});
         if(it==edits_.end()) {
-            if(edits_.size()>=128)return false;
+            if(edits_.size()>=scene_limit_)return false;
             Edit e{};e.component=component;
             if(!byte_property(b,component,"SceneComponent","Mobility",e.mobility)||e.mobility>2)return false;
             clear();if(!call(b,component,19))return false;std::memcpy(e.transform.data(),args_,96);edits_.push_back(e);
@@ -172,6 +172,7 @@ class Owner {
     }
 #include "builder_feedback.h"
 #include "builder_scene.h"
+#include "builder_bulk.h"
 #include "builder_preview.h"
 #include "builder_booth.h"
 public:
@@ -208,7 +209,7 @@ public:
     template<class Pool> void command(uint64_t b,uint64_t session,Pool& pool,MeshPacket& packet) {
         auto raw=reinterpret_cast<uint8_t*>(&packet);
         const auto op=packet.operation;
-        if(packet.version!=3||op<20||op>49||!packet.owner||packet.error||packet.state||!TargetPodSchemaOps{b}.context()){packet.error=1900;return;}
+        if(packet.version!=3||op<20||op>54||!packet.owner||packet.error||packet.state||!TargetPodSchemaOps{b}.context()){packet.error=1900;return;}
         if(owner_&&owner_!=packet.owner){packet.error=1901;return;}
         if(op==45) {
             CallIdentity widget{};std::memcpy(&widget,raw+88,sizeof(widget));
@@ -249,8 +250,19 @@ public:
             if(!undo(b))packet.error=1911;
         } else if(op==28) {
             auto_tick_=packet.section_id!=0;last_clock_=0;
-        } else if(op==29) {
-            if(!export_scene(b,raw))packet.error=1930;
+        } else if(op==29||op==51) {
+            uint32_t offset=0;if(op==51)std::memcpy(&offset,raw+2000,4);
+            if(!export_scene(b,raw,offset))packet.error=1930;
+        } else if(op==50) {
+            if(!active_||!current(b)||!bulk_spawn(b,session,pool,raw))packet.error=1950;
+        } else if(op==52) {
+            double settings[8];std::memcpy(settings,raw+2000,64);
+            if(!active_||!current(b)||!gallery_begin(b,session,pool,settings))packet.error=1955;
+            std::memcpy(raw+3568,&gallery_floor_,16);std::memcpy(raw+3584,&gallery_floor_component_,16);
+        } else if(op==54) {
+            if(!active_||!current(b)||!gallery_existing(b,raw))packet.error=1957;
+        } else if(op==53) {
+            if(!bulk_delete(b,session,pool,raw))packet.error=1956;
         } else if(op==30||op==31) {
             if(!active_||!current(b)){packet.error=1904;return;}
             CallIdentity object{},cls{};std::memcpy(&object,raw+88,16);std::memcpy(&cls,raw+104,16);

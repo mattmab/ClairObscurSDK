@@ -9,6 +9,11 @@ class Scenes(unittest.TestCase):
   with tempfile.TemporaryDirectory(dir=Path(__file__).resolve().parents[1]/'build') as folder:
    store=scene.MapStore(folder);data=self.sample();a=store.save(data);b=store.save(data)
    self.assertNotEqual(a,b);self.assertEqual(store.read(a),data);self.assertEqual(len(store.list()),2)
+ def test_large_scene_roundtrip_and_capacity(self):
+  data=self.sample();row=data['objects'][0];data['objects']=[dict(row,id=f'{i:032x}') for i in range(6000)]
+  self.assertEqual(len(scene.validate(data)['objects']),6000)
+  data['objects'].append(dict(row,id=f'{6000:032x}'))
+  with self.assertRaises(ValueError):scene.validate(data)
  def test_wrong_level(self):
   with self.assertRaises(ValueError):scene.validate(self.sample(),'/Game/Other.Other')
  def test_missing_manifest_dependency(self):

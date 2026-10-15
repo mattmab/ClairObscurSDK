@@ -28,6 +28,23 @@ class Controls(unittest.TestCase):
         self.assertEqual(events,['hide','images',22])
         self.assertFalse(builder.active)
 
+    def test_menu_rebuilt_only_when_controller_identity_changes(self):
+        from unittest.mock import patch
+        builder=mod.Mod();old=SimpleNamespace(index=10,serial=1,address=100)
+        fresh=SimpleNamespace(index=10,serial=2,address=200,object_flags=0)
+        menu=SimpleNamespace(player=old,close=Mock(return_value=True));builder.catalog_menu=menu
+        builder.session=SimpleNamespace(pid=1);builder.library=SimpleNamespace(owned={'old':{}},rows=[1],known={'old':1});builder.last={'edits':0}
+        with patch.object(mod,'ReadBatch'),patch.object(mod,'capture_matching',return_value=SimpleNamespace(select=lambda _: [fresh])):
+            builder.refresh_menu_owner()
+        menu.close.assert_called_once();self.assertIsNone(builder.catalog_menu);self.assertFalse(builder.library.owned)
+    def test_same_controller_keeps_warm_menu(self):
+        from unittest.mock import patch
+        builder=mod.Mod();player=SimpleNamespace(index=10,serial=1,address=100,object_flags=0)
+        menu=SimpleNamespace(player=player,close=Mock());builder.catalog_menu=menu;builder.session=SimpleNamespace(pid=1)
+        with patch.object(mod,'ReadBatch'),patch.object(mod,'capture_matching',return_value=SimpleNamespace(select=lambda _: [player])):
+            builder.refresh_menu_owner()
+        menu.close.assert_not_called();self.assertIs(builder.catalog_menu,menu)
+
     def test_space_ctrl_vertical_aliases(self):
         self.assertEqual(mod.input_motion({32}, .05),mod.input_motion({69}, .05))
         self.assertEqual(mod.input_motion({17}, .05),mod.input_motion({81}, .05))

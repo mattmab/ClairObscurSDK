@@ -18,11 +18,11 @@ def path(value):
 
 def validate(data,world=None):
     if type(data) is not dict or data.get('format')!=FORMAT or data.get('version')!=1:raise ValueError('Unsupported scene format')
-    if type(data.get('name')) is not str or not 1<=len(data['name'])<=80 or any(ord(c)<32 for c in data['name']):raise ValueError('Map name must be 1–80 characters')
+    if type(data.get('name')) is not str or not 1<=len(data['name'])<=80 or any(ord(c)<32 for c in data['name']):raise ValueError('Map name must be 1â€“80 characters')
     path(data['world'])
     if world is not None and data['world']!=world:raise ValueError('Load the same game level before loading this builder map')
     rows=data.get('objects')
-    if type(rows) is not list or len(rows)>128:raise ValueError('A map supports at most 128 tracked objects')
+    if type(rows) is not list or len(rows)>6000:raise ValueError('A map supports at most 6000 tracked objects')
     ids=set();assets=set()
     for row in rows:
         if type(row) is not dict or row.get('kind') not in ('mesh','actor','world_edit'):raise ValueError('Invalid tracked object')
@@ -50,7 +50,7 @@ class MapStore:
         tmp.write_text(json.dumps(data,indent=2,allow_nan=False),encoding='utf8');tmp.replace(dst);return key
     def read(self,key):
         p=self.file(key)
-        if p.stat().st_size>4*1024*1024:raise ValueError('Scene file is too large')
+        if p.stat().st_size>32*1024*1024:raise ValueError('Scene file is too large')
         return validate(json.loads(p.read_text(encoding='utf8')))
     def list(self):
         result=[]

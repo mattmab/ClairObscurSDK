@@ -10,7 +10,7 @@
     }
     bool track_component(uint64_t b,CallIdentity component) {
         if(std::any_of(edits_.begin(),edits_.end(),[&](const Edit& e){return e.component.address==component.address&&e.component.serial==component.serial;}))return true;
-        if(edits_.size()>=128)return false;
+        if(edits_.size()>=scene_limit_)return false;
         Edit e{};e.component=component;
         if(!byte_property(b,component,"SceneComponent","Mobility",e.mobility)||e.mobility>2)return false;
         clear();if(!call(b,component,19))return false;std::memcpy(e.transform.data(),args_,96);edits_.push_back(e);return true;
@@ -26,12 +26,13 @@
             if(selected_.address==component.address){selected_={};selected_actor_={};dragging_=false;}
             TargetStrongReferenceOps ops{b,{-1,0,0}};if(row.lease&&pool.release(ops,session,row.lease)!=StrongLeaseResult::Ok)return false;
             if(row.actor.address==thumbnail_prop_.address)thumbnail_prop_={};
+            if(row.actor.address==gallery_floor_.address){gallery_floor_={};gallery_floor_component_={};}
             spawned_.erase(spawned_.begin()+i-1);
         }
         gpu_ready_component_={};return true;
     }
     template<class Pool> bool spawn_asset(uint64_t b,uint64_t session,Pool& pool,CallIdentity asset,CallIdentity cls,const uint8_t* pose,CallIdentity& resultActor,CallIdentity& resultComponent) {
-        if(!valid_pose(pose)||edits_.size()>=128||spawned_.size()>=128||!call_identity(b,cls)||!call_is_class(b,cls.address)||!call_derives(b,cls.address,ids_[86].address)||call_derives(b,cls.address,ids_[7].address))return false;
+        if(!valid_pose(pose)||edits_.size()>=scene_limit_||spawned_.size()>=scene_limit_||!call_identity(b,cls)||!call_is_class(b,cls.address)||!call_derives(b,cls.address,ids_[86].address)||call_derives(b,cls.address,ids_[7].address))return false;
         if(asset.address&&(!call_identity(b,asset)||!call_derives(b,local_read<uint64_t>(asset.address+16),ids_[85].address)||cls.address!=ids_[84].address))return false;
         clear();put(0,ids_[0].address);put(8,cls.address);std::memcpy(args_+16,pose,96);args_[112]=1;
         if(!call(b,ids_[4],0))return false;const auto actor=call_capture(b,get<uint64_t>(136));if(!actor.address)return false;
@@ -59,9 +60,9 @@
         clear();args_[0]=2;if(!call(b,component,16)||!component_pose(b,component,pose))return false;
         refresh_candidate(b,component);gpu_ready_component_={};return true;
     }
-    bool export_scene(uint64_t b,uint8_t* raw) {
-        uint32_t count=0;
-        for(const auto& e:edits_) {
+    bool export_scene(uint64_t b,uint8_t* raw,uint32_t offset=0) {
+        uint32_t count=0,index=offset;const auto total=uint32_t(edits_.size());if(offset>total)return false;
+        for(;index<total&&count<128;++index) {const auto& e=edits_[index];
             if(!call_identity(b,e.component))continue;
             if(thumbnail_prop_.address&&std::any_of(spawned_.begin(),spawned_.end(),[&](const Spawned& row){return row.actor.address==thumbnail_prop_.address&&row.component.address==e.component.address;}))continue;
             if(booth_active_){const auto excluded=std::any_of(spawned_.begin(),spawned_.end(),[&](const Spawned& row){return row.component.address==e.component.address&&(row.actor.address==booth_prop_.address||std::any_of(booth_owned_.begin(),booth_owned_.end(),[&](const CallIdentity& a){return a.address==row.actor.address;}));});if(excluded)continue;}
@@ -70,5 +71,5 @@
             const uint32_t owned=std::any_of(spawned_.begin(),spawned_.end(),[&](const Spawned& s){return s.component.address==e.component.address&&s.component.serial==e.component.serial;})?1:0;
             std::memcpy(row+112,&owned,4);row[116]=e.mobility;++count;
         }
-        std::memcpy(raw+3560,&count,4);return true;
+        std::memcpy(raw+3560,&count,4);std::memcpy(raw+3564,&total,4);std::memcpy(raw+3568,&index,4);return true;
     }

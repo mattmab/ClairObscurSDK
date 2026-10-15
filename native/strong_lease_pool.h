@@ -27,7 +27,7 @@ inline StrongLeaseResult lease_result(StrongReferenceResult result) {
 // Owned by the pinned runtime, used only on its game thread. Tokens are opaque,
 // monotonic across sessions and never recycled even if a creation fails.
 #ifdef E33_GROWING_LEASE_SESSION
-constexpr size_t kDefaultLeaseMaximum=4096;
+constexpr size_t kDefaultLeaseMaximum=8192;
 #elif defined(E33_WIDGET_CAPACITY_SESSION)
 constexpr size_t kDefaultLeaseMaximum=256;
 #else

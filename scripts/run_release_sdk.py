@@ -104,7 +104,7 @@ def main():
         from expedition33.settings import SettingsStore
         original_transport = sdk.SessionTransport
         def release_transport(*, _executable=None):
-            transport = original_transport(_executable=ROOT / 'build/research-probe-worldbuilder-v39/research_probe.exe')
+            transport = original_transport(_executable=ROOT / 'build/research-probe-worldbuilder-v42/research_probe.exe')
             required = ('original_game_action_protocol', 'blueprint_trace_protocol', 'picto_edit_protocol', 'picto_progression_protocol', 'picto_class_load_protocol', 'picto_cost_protocol')
             if any(getattr(transport, name, 0) != 1 for name in required) or transport.mesh_protocol != 3:
                 transport.close()
@@ -114,7 +114,7 @@ def main():
         settings = SettingsStore(ROOT / 'settings/management.json')
         with sdk.Session(multiple_pause_entries=True) as session, ModLoader(mod_root, settings=settings, session=session, poll_diagnostics=args.poll_diagnostics) as loader:
             from expedition33.lease_policy import configure
-            configure(session, hard_limit=2048, owner_quota=768, cleanup_reserve=128)
+            configure(session, hard_limit=8192, owner_quota=7000, cleanup_reserve=512)
             session.console.enable()
             # Only core/default UI mods start automatically on a fresh install.
             # Explicit saved false always wins for optional mods.
