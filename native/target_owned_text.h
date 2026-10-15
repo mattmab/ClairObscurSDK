@@ -18,8 +18,10 @@ struct TargetOwnedTextOps {
     }
     bool known_text(const TargetTextValue& text) const {
         // Exact base text data only: default text uses flags0; FromString sets2.
+        // Live EditableTextBox editing sets 0x10 as well (flags 0x12), while
+        // retaining this exact vtable, display-string layout and release path.
         // Other localized/history implementations remain unverified.
-        if(!text.data || (text.flags&~uint32_t(2)) || text.padding) return false;
+        if(!text.data || (text.flags&~uint32_t(0x12)) || text.padding) return false;
         auto table=local_read<uint64_t>(text.data);
         return table==base+0x6da8c78 && local_read<int32_t>(text.data+8)>0 &&
             local_read<uint64_t>(table)==base+0x10abe30 &&

@@ -111,6 +111,12 @@ inline const MeshField mesh_fields_27[]={{"ReturnValue","BoolProperty",0,1,0x180
 inline const MeshField mesh_fields_28[]={{"ReturnValue","ObjectProperty",0,8,0x18001000000780ULL,0x6e11d38ULL,"","",0,"",0U,"Actor"}};
 inline const MeshField mesh_fields_29[]={{"BoneName","NameProperty",0,8,0x18001040000280ULL,0x6e13040ULL,"","",0,"",0U,""},
 {"ReturnValue","IntProperty",8,4,0x18001040000780ULL,0x6e10a98ULL,"","",0,"",0U,""}};
+inline const MeshField hair_location_fields[]={{"NewLocation","StructProperty",0,24,0x18001040000280ULL,0x6e136a0ULL,"Vector","",0,"",0U,""},{"bSweep","BoolProperty",24,1,0x18001040000280ULL,0x6e119b0ULL,"","",0,"",0xff010001U,""},{"SweepHitResult","StructProperty",32,248,0x10009040000180ULL,0x6e136a0ULL,"HitResult","",0,"",0U,""},{"bTeleport","BoolProperty",280,1,0x18001040000280ULL,0x6e119b0ULL,"","",0,"",0xff010001U,""}};
+inline const MeshField hair_transform_fields_0[]={{"NewTransform","StructProperty",0,96,0x18001048000182ULL,0x6e136a0ULL,"Transform","",0,"",0U,""},{"bSweep","BoolProperty",96,1,0x18001040000280ULL,0x6e119b0ULL,"","",0,"",0xff010001U,""},{"SweepHitResult","StructProperty",104,248,0x10009040000180ULL,0x6e136a0ULL,"HitResult","",0,"",0U,""},{"bTeleport","BoolProperty",352,1,0x18001040000280ULL,0x6e119b0ULL,"","",0,"",0xff010001U,""}};
+inline const MeshField hair_transform_fields_1[]={{"ReturnValue","StructProperty",0,96,0x18001040000580ULL,0x6e136a0ULL,"Transform","",0,"",0U,""}};
+inline const MeshField hair_world_fields_0[]={{"ReturnValue","StructProperty",0,96,0x18001040000580ULL,0x6e136a0ULL,"Transform","",0,"",0U,""}};
+inline const MeshField hair_world_fields_1[]={{"NewTransform","StructProperty",0,96,0x18001048000182ULL,0x6e136a0ULL,"Transform","",0,"",0U,""},{"bSweep","BoolProperty",96,1,0x18001040000280ULL,0x6e119b0ULL,"","",0,"",0xff010001U,""},{"SweepHitResult","StructProperty",104,248,0x10009040000180ULL,0x6e136a0ULL,"HitResult","",0,"",0U,""},{"bTeleport","BoolProperty",352,1,0x18001040000280ULL,0x6e119b0ULL,"","",0,"",0xff010001U,""}};
+inline const MeshField hair_world_fields_2[]={{"bNewAbsoluteLocation","BoolProperty",0,1,0x18001040000280ULL,0x6e119b0ULL,"","",0,"",0xff010001U,""},{"bNewAbsoluteRotation","BoolProperty",1,1,0x18001040000280ULL,0x6e119b0ULL,"","",0,"",0xff010001U,""},{"bNewAbsoluteScale","BoolProperty",2,1,0x18001040000280ULL,0x6e119b0ULL,"","",0,"",0xff010001U,""}};
 struct MeshFunction {const char* owner;const char* name;uint32_t flags,params,extent,returned;uint64_t entry;const MeshField* fields;size_t count;};
 inline const MeshFunction mesh_functions[]={
 {"GameplayStatics","BeginDeferredActorSpawnFromClass",0x4c22403,144,144,136,0x37336c0,mesh_fields_0,7},
@@ -143,6 +149,12 @@ inline const MeshFunction mesh_functions[]={
 {"Pawn","IsPlayerControlled",0x54020402,1,1,0,0x3a9c1a0,mesh_fields_27,1},
 {"ActorComponent","GetOwner",0x54020403,8,8,0,0x3539df0,mesh_fields_28,1},
 {"SkinnedMeshComponent","GetBoneIndex",0x54020403,12,12,8,0x32dd9b0,mesh_fields_29,2},
+{"SceneComponent","K2_SetRelativeLocation",0x4c20403,281,288,65535,0x32d8a90,hair_location_fields,4},
+{"SceneComponent","K2_SetRelativeTransform",0x4c20403,353,368,65535,0x32d90b0,hair_transform_fields_0,4},
+{"SceneComponent","GetRelativeTransform",0x54820403,96,96,0,0x32d6c70,hair_transform_fields_1,1},
+{"SceneComponent","K2_GetComponentToWorld",0x54820403,96,96,0,0x32d8a00,hair_world_fields_0,1},
+{"SceneComponent","K2_SetWorldTransform",0x4c20403,353,368,65535,0x32d9930,hair_world_fields_1,4},
+{"SceneComponent","SetAbsolute",0x4020403,3,3,65535,0x32d9e20,hair_world_fields_2,3},
 };
 inline const MeshField mesh_Transform[]={{"Rotation","StructProperty",0,32,0x18001041000005ULL,0x6e136a0ULL,"Quat","",0,"",0U,""},
 {"Translation","StructProperty",32,24,0x18001041000205ULL,0x6e136a0ULL,"Vector","",0,"",0U,""},

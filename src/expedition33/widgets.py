@@ -18,8 +18,8 @@ class OwnedMenuPanel:
         session._check()
         if not session.supports_multi_controls:
             raise ValueError('Owned menu panels require v17 multi-control support')
-        if type(controls) is not int or not 1 <= controls <= 16:
-            raise ValueError('A panel requires between1 and16 controls')
+        if type(controls) is not int or not 1 <= controls <= 64:
+            raise ValueError('A panel requires between1 and64 controls')
         if type(cached_construction) is not bool:
             raise ValueError('cached_construction must be bool')
         if type(selected_results) is not bool or (selected_results and not cached_construction):

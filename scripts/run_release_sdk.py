@@ -104,7 +104,7 @@ def main():
         from expedition33.settings import SettingsStore
         original_transport = sdk.SessionTransport
         def release_transport(*, _executable=None):
-            transport = original_transport(_executable=ROOT / 'build/research-probe-mesh-v27/research_probe.exe')
+            transport = original_transport(_executable=ROOT / 'build/research-probe-worldbuilder-v39/research_probe.exe')
             required = ('original_game_action_protocol', 'blueprint_trace_protocol', 'picto_edit_protocol', 'picto_progression_protocol', 'picto_class_load_protocol', 'picto_cost_protocol')
             if any(getattr(transport, name, 0) != 1 for name in required) or transport.mesh_protocol != 3:
                 transport.close()
@@ -114,7 +114,7 @@ def main():
         settings = SettingsStore(ROOT / 'settings/management.json')
         with sdk.Session(multiple_pause_entries=True) as session, ModLoader(mod_root, settings=settings, session=session, poll_diagnostics=args.poll_diagnostics) as loader:
             from expedition33.lease_policy import configure
-            configure(session, hard_limit=1024, owner_quota=256, cleanup_reserve=64)
+            configure(session, hard_limit=2048, owner_quota=768, cleanup_reserve=128)
             session.console.enable()
             # Only core/default UI mods start automatically on a fresh install.
             # Explicit saved false always wins for optional mods.
@@ -139,7 +139,7 @@ def main():
                     'catalog.replacement_preview':Command('models',lambda:catalog_model().replacement_preview()),
                     'catalog.replacement_material':Command('models',lambda profile:catalog_model().replacement_material(profile)),
                     'catalog.replacement_enable':Command('models',lambda:catalog_model().replacement_enable()),
-                    'catalog.replacement_select':Command('models',lambda model:catalog_model().select_replacement(model)),
+                    'catalog.replacement_select':Command('models',lambda model,native_hairstyle=False:catalog_model().select_replacement(model,native_hairstyle)),
                     'catalog.bones':Command('inspect',lambda component_index,page=0:__import__('expedition33.procedural_mesh',fromlist=['capture_bones']).capture_bones(catalog_model().session,component_index,page)),
                     'catalog.list':Command('inspect',lambda:catalog_model().entries),
                     'catalog.status':Command('inspect',lambda:catalog_model().status()),

@@ -87,7 +87,7 @@ inline void run_runtime_session(DWORD pid, DWORD thread, int32_t object_index, i
     wchar_t executable[32768]; require(GetModuleFileNameW(nullptr, executable, 32768) != 0, "SESSION_SELF_PATH");
 #ifdef E33_KEYBIND_SESSION
 #if defined(E33_MESH_SESSION)
-    auto path = std::filesystem::path(executable).parent_path().parent_path() / L"runtime-session-mesh-v27" / L"runtime_session_mesh_v27.dll";
+    auto path = std::filesystem::path(executable).parent_path().parent_path() / L"runtime-session-worldbuilder-v39" / L"runtime_session_worldbuilder_v39.dll";
 #elif defined(E33_VIEWER_MENU_SESSION)
     auto path = std::filesystem::path(executable).parent_path().parent_path() / L"runtime-session-viewer-v2" / L"runtime_session_viewer_v2.dll";
 #elif defined(E33_CATALOG_GAME_OWNED_SESSION)
@@ -137,25 +137,25 @@ inline void run_runtime_session(DWORD pid, DWORD thread, int32_t object_index, i
 #elif defined(E33_CINEMATIC_SOUND_EVENT_SESSION)
     auto path = std::filesystem::path(executable).parent_path().parent_path() / L"runtime-session-v40-cinematicsoundevent" / L"runtime_session_v40_cinematicsoundevent.dll";
 #elif defined(E33_OWNED_SOUND_SESSION)
-    auto path = std::filesystem::path(executable).parent_path().parent_path() / L"runtime-session-v39-ownedsound" / L"runtime_session_v39_ownedsound.dll";
+    auto path = std::filesystem::path(executable).parent_path().parent_path() / L"runtime-session-v40-ownedsound" / L"runtime_session_v40_ownedsound.dll";
 #elif defined(E33_MUSIC_AUDIO_GUARD_SESSION)
-    auto path = std::filesystem::path(executable).parent_path().parent_path() / L"runtime-session-v38-musicaudioguard" / L"runtime_session_v38_musicaudioguard.dll";
+    auto path = std::filesystem::path(executable).parent_path().parent_path() / L"runtime-session-v40-musicaudioguard" / L"runtime_session_v40_musicaudioguard.dll";
 #elif defined(E33_MUSIC_AUDIO_SESSION)
-    auto path = std::filesystem::path(executable).parent_path().parent_path() / L"runtime-session-v37-musicaudio" / L"runtime_session_v37_musicaudio.dll";
+    auto path = std::filesystem::path(executable).parent_path().parent_path() / L"runtime-session-v40-musicaudio" / L"runtime_session_v40_musicaudio.dll";
 #elif defined(E33_AUDIO_ISOLATION_SESSION)
-    auto path = std::filesystem::path(executable).parent_path().parent_path() / L"runtime-session-v36-audioisolation" / L"runtime_session_v36_audioisolation.dll";
+    auto path = std::filesystem::path(executable).parent_path().parent_path() / L"runtime-session-v40-audioisolation" / L"runtime_session_v40_audioisolation.dll";
 #elif defined(E33_SEQUENCE_PLAYER_SESSION)
-    auto path = std::filesystem::path(executable).parent_path().parent_path() / L"runtime-session-v35-sequenceplayer" / L"runtime_session_v35_sequenceplayer.dll";
+    auto path = std::filesystem::path(executable).parent_path().parent_path() / L"runtime-session-v40-sequenceplayer" / L"runtime_session_v40_sequenceplayer.dll";
 #elif defined(E33_SEQUENCE_SESSION)
-    auto path = std::filesystem::path(executable).parent_path().parent_path() / L"runtime-session-v34-sequence" / L"runtime_session_v34_sequence.dll";
+    auto path = std::filesystem::path(executable).parent_path().parent_path() / L"runtime-session-v40-sequence" / L"runtime_session_v40_sequence.dll";
 #elif defined(E33_MEDIA_SESSION)
-    auto path = std::filesystem::path(executable).parent_path().parent_path() / L"runtime-session-v33-media" / L"runtime_session_v33_media.dll";
+    auto path = std::filesystem::path(executable).parent_path().parent_path() / L"runtime-session-v40-media" / L"runtime_session_v40_media.dll";
 #elif defined(E33_STRING_SESSION)
-    auto path = std::filesystem::path(executable).parent_path().parent_path() / L"runtime-session-v31-string" / L"runtime_session_v31_string.dll";
+    auto path = std::filesystem::path(executable).parent_path().parent_path() / L"runtime-session-v40-string" / L"runtime_session_v40_string.dll";
 #elif defined(E33_MENU_ESCAPE_SESSION)
-    auto path = std::filesystem::path(executable).parent_path().parent_path() / L"runtime-session-v30-menuescape" / L"runtime_session_v30_menuescape.dll";
+    auto path = std::filesystem::path(executable).parent_path().parent_path() / L"runtime-session-v40-menuescape" / L"runtime_session_v40_menuescape.dll";
 #elif defined(E33_MENU_DIAGNOSTIC_SESSION)
-    auto path = std::filesystem::path(executable).parent_path().parent_path() / L"runtime-session-v29-menudiag" / L"runtime_session_v29_menudiag.dll";
+    auto path = std::filesystem::path(executable).parent_path().parent_path() / L"runtime-session-v40-menudiag" / L"runtime_session_v40_menudiag.dll";
 #elif defined(E33_BLUEPRINT_DIRECT_SESSION)
     auto path = std::filesystem::path(executable).parent_path().parent_path() / L"runtime-session-v26-statistics" / L"runtime_session_v26_statistics.dll";
 #elif defined(E33_BLUEPRINT_TRACE_SESSION)
@@ -264,7 +264,7 @@ inline void run_runtime_session(DWORD pid, DWORD thread, int32_t object_index, i
               << ",\"button_action_protocol\":1,\"button_action_session\":" << packet.request.nonce
 #endif
 #ifdef E33_MULTI_BUTTON_SESSION
-              << ",\"multi_button_protocol\":1,\"multi_button_capacity\":16"
+              << ",\"multi_button_protocol\":1,\"multi_button_capacity\":64"
 #endif
 #ifdef E33_TRACE_SESSION
               << ",\"trace_protocol\":1,\"trace_capacity\":16"

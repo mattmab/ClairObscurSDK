@@ -91,7 +91,7 @@ class MenuControls:
                   (child.pid, child.index, child.serial, child.address)]
         if len(leases) != 1: raise ValueError('Control requires exactly one owned child lease')
         lease = leases[0]
-        if self.protects(lease) or len(self.controls) >= 16:
+        if self.protects(lease) or len(self.controls) >= 64:
             raise MenuError('Control already bound or menu capacity reached', outcome='not_started')
         control = ControlAction(self, lease, callback)
         self.controls.append(control)  # Protect the lease before native acquisition.
@@ -121,7 +121,7 @@ class MenuControls:
             return [self.bind(child, callback) for child, callback in bindings]
         if not session.supports_multi_controls or self.menu._state not in ('attached', 'focused'):
             raise MenuError('Controls require an attached menu', outcome='not_started')
-        if len(self.controls) + len(bindings) > 16:
+        if len(self.controls) + len(bindings) > 64:
             raise ValueError('Menu control capacity exceeded')
         controls, requests = [], []
         for child, callback in bindings:

@@ -43,5 +43,5 @@ inline bool validate_target_asset(uint64_t base,uint64_t property,const CallIden
     if(!asset_name(base,p,package,sizeof(package)) || !asset_name(base,a,asset,sizeof(asset)) ||
        std::strncmp(package,"/Game/",6) || std::strstr(package,"//") || std::strchr(asset,'/')) return false;
     const auto tail=std::strrchr(package,'/');
-    return tail && (class_load ? (std::strlen(asset)==std::strlen(tail+1)+2 && !std::strncmp(tail+1,asset,std::strlen(tail+1)) && !std::strcmp(asset+std::strlen(tail+1),"_C")) : !std::strcmp(tail+1,asset));
+    return tail && (class_load ? (std::strlen(asset)==std::strlen(tail+1)+2 && !std::strncmp(tail+1,asset,std::strlen(tail+1)) && !std::strcmp(asset+std::strlen(tail+1),"_C")) : !_stricmp(tail+1,asset));
 }

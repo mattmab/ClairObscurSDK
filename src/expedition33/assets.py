@@ -23,7 +23,7 @@ def load_asset(scope,path):
     session=scope._session
     if getattr(session._transport,'asset_load_protocol',0)!=1:
         raise UnsupportedInvocation('Verified asset loading requires the sequence candidate runtime')
-    if type(path) is not str or not re.fullmatch(r'/Game/(?:[A-Za-z0-9_]+/)*([A-Za-z0-9_]+)\.\1',path):
+    if type(path) is not str or not re.fullmatch(r'/Game/(?:[A-Za-z0-9_]+/)*([A-Za-z0-9_]+)\.(?i:\1)',path):
         raise ValueError('Expected a canonical top-level /Game/Package.Asset path')
     query=subprocess.run([str(session._transport._executable),'--resolve-asset-names',str(scope.pid),path],
         capture_output=True,text=True,encoding='utf8',timeout=30,creationflags=subprocess.CREATE_NO_WINDOW)

@@ -30,13 +30,41 @@ FUNCTIONS=(('GameplayStatics','BeginDeferredActorSpawnFromClass'),('GameplayStat
 def validate_request(data):
     if type(data) is not bytes or len(data)!=SIZE:raise ValueError('Mesh packet size')
     version,op,error,state,owner=HEADER.unpack_from(data)
+    # World Builder bounded adapter; independently checked again on game thread.
+    if 20 <= op <= 49:
+        if version != 3 or error or state or not owner or any(data[24:88]):
+            raise ValueError('Builder header')
+        if op == 20:
+            if any(data[2136:]): raise ValueError('Builder initialization padding')
+        elif op in (30,31):
+            if any(data[120:2000]) or any(data[2096:]): raise ValueError('Builder scene mutation padding')
+        elif op in (33,34,40,45,46):
+            if any(data[104:]): raise ValueError('Builder owned deletion padding')
+        elif op in (37,38,48):
+            if any(data[88:2000]) or any(data[2068:]) or struct.unpack_from('<I',data,2000)[0]>1 or any(c not in b'0123456789abcdef' for c in data[2004:2068]):raise ValueError('Builder thumbnail cache request')
+        elif op == 47:
+            path=data[2000:2512].split(b'\0',1)[0]
+            if any(data[88:2000]) or any(data[2000+len(path):]) or not path.startswith(b'/Game/') or len(path)>=512:raise ValueError('Builder asset names request')
+        elif op == 35:
+            if any(data[88:2000]) or any(data[2004:]) or struct.unpack_from('<I',data,2000)[0]>250000:raise ValueError('Builder registry page')
+        elif op in (21,24,42,44):
+            if any(data[88:2000]) or any(data[2064:]): raise ValueError('Builder motion padding')
+            if any(not math.isfinite(v) or abs(v)>(1e7 if op==42 else 10000) for v in struct.unpack_from('<8d',data,2000)):
+                raise ValueError('Builder motion bounds')
+        elif op == 28:
+            if any(data[88:20976]) or any(data[20980:]) or struct.unpack_from('<I',data,20976)[0]>1: raise ValueError('Builder automatic flag')
+        elif any(data[88:]): raise ValueError('Builder empty command payload')
+        return
+
     if version!=3 or op not in (1,2,3,4,5,6,7,8,9,10,11,12,13) or error or state or not owner or any(data[24:88]):
         raise ValueError('Mesh request header/output fields')
     if op in (12,13):
         if any(data[88:20976]) or struct.unpack_from('<I',data,20976)[0]>(1 if op==12 else 0) or any(data[20980:]):raise ValueError('Render diagnostic payload')
         return
     if op==9:
-        if any(data[344:19952]) or any(data[20976:]):raise ValueError('Skin bind payload')
+        if any(data[344:19808]) or any(data[19904:19952]) or struct.unpack_from('<I',data,20976)[0]>4 or any(data[20980:]):raise ValueError('Skin bind payload')
+        index,serial,address=IDENTITY.unpack_from(data,19808)
+        if index<0 or serial<0 or not address:raise ValueError('Native hair setter identity required')
         return
     if op==8:
         if any(data[184:20976]):raise ValueError('Bone capture accepts only six identities and page')
@@ -160,10 +188,14 @@ class Tetrahedron:
         if op==3:self.last.update(driver=identity(88),driver_asset=identity(104),switch_ms=struct.unpack_from('<I',raw,344)[0],switch_count=struct.unpack_from('<I',raw,348)[0])
         if op==13:
             count,total=struct.unpack_from('<II',raw,344);frozen=struct.unpack_from('<I',raw,20976)[0]
-            if count>128 or count>total or frozen>1 or any(raw[352+count*120:19808]):raise RuntimeError('Render sample bounds')
+            if count>128 or count>total or frozen>1 or any(raw[352+count*120:16736]):raise RuntimeError('Render sample bounds')
             samples=[struct.unpack_from('<Q14d',raw,352+i*120) for i in range(count)]
             if any(not math.isfinite(v) for row in samples for v in row):raise RuntimeError('Nonfinite render sample')
-            self.last.update(samples=samples,total=total,frozen=bool(frozen))
+            hc,ht=struct.unpack_from('<II',raw,16736)
+            if hc>20 or hc>ht or any(raw[16744+hc*136:19808]):raise RuntimeError('Hair sample bounds')
+            hair_samples=[struct.unpack_from('<Q16d',raw,16744+i*136) for i in range(hc)]
+            if any(not math.isfinite(v) for row in hair_samples for v in row):raise RuntimeError('Hair nonfinite sample')
+            self.last.update(samples=samples,total=total,frozen=bool(frozen),hair_samples=hair_samples,hair_total=ht)
         if error:raise RuntimeError('Mesh operation rejected: '+str(self.last))
         return self.last
 
@@ -189,7 +221,8 @@ class Tetrahedron:
             if self.last and self.last['state']==0:self.created=False
             raise
 
-    def bind_skin(self,path,driver_index,visual_indices=None,combat_manager=None):
+    def bind_skin(self,path,driver_index,visual_indices=None,combat_manager=None,hair_profile=0,wardrobe_menu=None):
+        if type(hair_profile) is not int or not 0<=hair_profile<=4:raise ValueError("Unsupported native hair profile")
         names=('GetBoneName','GetBoneTransform','UpdateMeshSection_LinearColor','SetHiddenInGame','IsPlayerControlled','GetOwner','GetRefPoseTransform','GetBoneIndex','GetParentBone')
         owners=('SkinnedMeshComponent','SkinnedMeshComponent','ProceduralMeshComponent','SceneComponent','Pawn','ActorComponent')
         c=capture_matching(self.pid,names=names,classes=('SkinnedMeshComponent',))
@@ -212,7 +245,11 @@ class Tetrahedron:
             if len(rows)!=1:raise ValueError('Retarget function missing')
             ids+=rows
         if combat_manager is not None:ids.append(combat_manager)
-        return self._command(9,ids,texture_path=path)
+        hc=capture_matching(self.pid,names=('K2_SetRelativeTransform','GetRelativeTransform','K2_GetComponentToWorld','K2_SetWorldTransform','SetAbsolute'))
+        setter=[o for n in ('K2_SetRelativeTransform','GetRelativeTransform','K2_GetComponentToWorld','K2_SetWorldTransform','SetAbsolute') for o in hc.objects if o.name==n and o.class_name=='Function' and o.outer_index==c.find_class('SceneComponent').index]
+        if len(setter)!=5:raise ValueError('Native hair fitting setter missing')
+        if wardrobe_menu is not None:setter.append(wardrobe_menu)
+        return self._command(9,ids,texture_path=path,material_ids=setter,section_id=hair_profile)
 
     def hide_driver(self):return self._command(10)
 

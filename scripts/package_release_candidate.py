@@ -33,15 +33,18 @@ def build(destination, version):
     copy('scripts/run_release_sdk.py', 'scripts/run_release_sdk.py')
     copy('scripts/sdk_command.py', 'scripts/sdk_command.py')
     copy('docs/INSTALLABLE_RELEASE.md', 'README.md')
+    copy('docs/RELEASE_0.1.0_RC7.md', 'WORLD_BUILDER_RC7.md')
     copy('LICENSE', 'LICENSE')
     copy('THIRD_PARTY_NOTICES.md', 'THIRD_PARTY_NOTICES.md')
     for source in sorted((ROOT / 'licenses').rglob('*')):
         if source.is_file():
             copy(source.relative_to(ROOT), source.relative_to(ROOT))
     for directory in ('research-probe', 'readonly-worker', 'research-probe-picto-v4'):
-        copy('build/release/research-probe-mesh-v27/research_probe.exe', f'build/{directory}/research_probe.exe')
-    copy('build/release/research-probe-mesh-v27/research_probe.exe', 'build/research-probe-mesh-v27/research_probe.exe')
-    copy('build/release/runtime-session-mesh-v27/runtime_session_mesh_v27.dll', 'build/runtime-session-mesh-v27/runtime_session_mesh_v27.dll')
+        copy('build/release/research-probe-worldbuilder-v39/research_probe.exe', f'build/{directory}/research_probe.exe')
+    for relative in ('research-probe-worldbuilder-v39/research_probe.exe',
+                     'runtime-session-worldbuilder-v39/runtime_session_worldbuilder_v39.dll',
+                     'thumbnail-worker-v2/thumbnail_worker.dll'):
+        copy('build/release/' + relative, 'build/' + relative)
     # Launchers inside SDK are install-relative and never search a dev checkout.
     (sdk / 'launch-sdk.cmd').write_text('@echo off\r\ncd /d "%~dp0"\r\n"%~dp0runtime\\python.exe" -I -S -B "%~dp0scripts\\run_release_sdk.py" %*\r\n', encoding='ascii')
     (sdk / 'launch-cinematics.cmd').write_text('@echo off\r\ncall "%~dp0launch-sdk.cmd" %*\r\n', encoding='ascii')
@@ -72,7 +75,7 @@ def build(destination, version):
 if __name__ == '__main__':
     parser = argparse.ArgumentParser(description=__doc__)
     parser.add_argument('destination', type=Path, help='New staging directory')
-    parser.add_argument('--version', default='0.1.0-rc1')
+    parser.add_argument('--version', default='0.1.0-rc7')
     args = parser.parse_args()
     if not args.version or any(c not in 'abcdefghijklmnopqrstuvwxyzABCDEFGHIJKLMNOPQRSTUVWXYZ0123456789.-' for c in args.version):
         parser.error('Version must be a portable filename component')

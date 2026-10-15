@@ -40,7 +40,7 @@ struct TargetMenuStorage {
     MenuSession menu;
 #ifdef E33_MULTI_BUTTON_SESSION
     TargetMultiButtonActions multi_actions;
-    MenuFocusControls<> control_focus;
+    MenuFocusControls<64> control_focus;
 #endif
 };
 template<class Pool>

@@ -19,7 +19,7 @@ def supports_multi_controls(transport):
     capacity = getattr(transport, 'multi_button_capacity', 0)
     return (all(type(getattr(transport, name, 0)) is int and getattr(transport, name, 0) == 1
                 for name in protocols) and type(nonce) is int and 0 < nonce < 2**64 and
-            type(capacity) is int and capacity == 16)
+            type(capacity) is int and capacity in (16,64))
 
 
 def supports_traces(transport):
