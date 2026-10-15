@@ -12,7 +12,13 @@ class Library:
         self.mod=mod;self._catalog=None;self.rows=[];self.known={};self.owned={};self.world=None
         self.store=MapStore(Path(__file__).resolve().parents[2]/'settings'/'E33WorldBuilder'/'maps')
         self.registry_paths=cache.read_catalog();self.registry_complete=self.registry_paths is not None
+        self.actors_indexed=False
+        self.seed_cached_catalog()
         self.registry_names_ready=False;self.loader_metadata=[];self.profile={};self.preview_key=None;self.selected=None;self.message='Browse game assets or refresh the catalog.'
+    def seed_cached_catalog(self):
+        if self.registry_paths and not self.rows:
+            self.rows=sorted((dict(path=p,name=p.rsplit('.',1)[-1],kind='mesh',source='asset_registry') for p in self.registry_paths),key=lambda r:(r['name'].casefold(),r['path']))
+            self.known={r['path']:r for r in self.rows}
     def refresh(self,force=True,observed=None):
         with reads(self.mod.session.pid):
             c=observed if observed is not None else capture();rows=[]
@@ -53,6 +59,7 @@ class Library:
                 rows.extend(dict(path=p,name=p.rsplit('.',1)[-1],kind='mesh',source='asset_registry') for p in self.registry_paths if p not in loaded)
             self.rows=sorted(rows,key=lambda r:(r['kind'],r['name'].casefold(),r['path']))
             self.known={r['path']:r for r in self.rows}
+            self.actors_indexed=True
             self.message=f'{len(self.rows)} game-enumerated meshes and actor classes'
         return dict(count=len(self.rows),source='asset registry and loaded game objects',message=self.message)
     def catalog(self,query='',kind='',offset=0,limit=8):
@@ -133,6 +140,7 @@ class Library:
         if not self.rows:self.refresh(force=False)
         # Complete identity/availability preflight before the first mutation.
         c=capture()
+        if any(row['kind']!='world_edit' and row['asset'] not in self.known for row in data['objects']):self.refresh(force=False,observed=c)
         plans=[]
         for row in data['objects']:
             if row['kind']=='world_edit':

@@ -32,6 +32,7 @@ class BuilderHUD(OwnedMenuPanel):
         self.invisible = descriptor.value(next(m.name for m in descriptor.members if m.name.endswith('::HitTestInvisible')))
         self.collapsed = descriptor.value(next(m.name for m in descriptor.members if m.name.endswith('::Collapsed')))
         self._planner = self.scope.invocation_planner(selected_results=True,catalog=self.catalog)
+        self._layout_queue=[]
         self.widget = self._construction_call(self._default('WidgetBlueprintLibrary'),
             self._function('WidgetBlueprintLibrary','Create'), WorldContextObject=self.player,
             WidgetType=self._class('CommonActivatableWidget'), OwningPlayer=self.player).return_value
@@ -59,16 +60,15 @@ class BuilderHUD(OwnedMenuPanel):
         self._call(slot,'CanvasPanelSlot','SetAnchors',InAnchors={'Minimum':{'X':.5,'Y':0.},'Maximum':{'X':.5,'Y':0.}})
         self._call(self.title,'TextLayoutWidget','SetJustification',InJustification=1)
         self._call(self.widget,'Widget','SetVisibility',InVisibility=self.invisible)
+        self._flush_layout()
         self._mutate(self.scope.assign_object,self.tree,self._class('WidgetTree'),'RootWidget',self.canvas,
                      expected=None,allow_mutation=True,catalog=self._planner._catalog)
         self.assigned=True
         self.state='built'
         self.set_text(self.title,'WORLD BUILDER | Aim at a prop')
-        self._render_call(self.widget,'UserWidget','AddToViewport',ZOrder=10000)
         return self
 
     def close(self):
         if self.widget is not None and self.state != 'closed':
             self._render_call(self.widget,'Widget','RemoveFromParent')
         return super().close()
-

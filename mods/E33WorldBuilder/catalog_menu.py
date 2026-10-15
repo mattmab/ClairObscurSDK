@@ -2,14 +2,25 @@
 from datetime import datetime
 import math, textwrap, time, logging, json, hashlib
 from concurrent.futures import ThreadPoolExecutor
-from expedition33.catalog import capture_selected
+from contextlib import nullcontext
+from expedition33.catalog import capture_selected, capture_matching
 import struct
 from . import thumbnail_cache as cache
 from expedition33.widgets import OwnedMenuPanel
 from expedition33.catalog import capture
 from expedition33.values import read_object_reference
 from .browser import Browser
+from .menu_profile import measured
 LOG=logging.getLogger('expedition33.world_builder.preview')
+MENU_NAMES=frozenset(('Widget UserWidget CommonActivatableWidget WidgetTree CanvasPanel CanvasPanelSlot '
+    'Button TextBlock Border CommonTextBlock CTS_B1_SmallLine_Outline_C SetStyle '
+    'WidgetBlueprintLibrary GameplayStatics Default__WidgetBlueprintLibrary Default__GameplayStatics '
+    'ESlateVisibility Vector2D LinearColor Margin Anchors Create SpawnObject AddChildToCanvas '
+    'SetPosition SetSize SetAnchors SetIsEnabled SetVisibility SetBackgroundColor SetBrushColor '
+    'SetText AddToViewport IsInViewport ActivateWidget IsActivated SetUserFocus HasKeyboardFocus '
+    'HasUserFocus DeactivateWidget RemoveFromParent SetFocusToGameViewport SetInputMode_UIOnlyEx '
+    'SetInputMode_GameOnly EMouseLockMode EditableTextBox Image SetRenderScale SetRenderTransformPivot '
+    'SetForegroundColor GetText SetBrushResourceObject Actor GetActorBounds Vector').split())
 
 class CatalogMenu(OwnedMenuPanel):
     PAGE=18
@@ -20,7 +31,7 @@ class CatalogMenu(OwnedMenuPanel):
         self.folder='/Game/';self.folders=True;self.favorites=False
         self.bindings=[];self.rows=[];self.images=[];self.thumbnails={};self.pending=[];self.gallery=[];self.signature=None
         self.preview_failures={};self.preview_job=None;self.processing=[];self.preview_worker=ThreadPoolExecutor(max_workers=1,thread_name_prefix="builder-thumbnails")
-        self.displayed={};self.cache_stats=dict(imported=0,page_load_ms=0.)
+        self.displayed={};self.image_queue=[];self.search_at=0.;self.cache_stats=dict(imported=0,page_load_ms=0.)
         from .background_cache import BackgroundCache
         self.background=BackgroundCache(self.library.store.root.parent);self.background_rows=-1;self.background_paint_at=0.
         cache.ROOT.mkdir(parents=True,exist_ok=True)
@@ -47,6 +58,7 @@ class CatalogMenu(OwnedMenuPanel):
         if self.preview_job and self.preview_job.get('background'):self.background.interrupted(self.preview_job['asset'])
         self.thumbnails.clear();self.pending=[];self.signature=None
         self.displayed.clear()
+        self.image_queue=[]
         self.map_job=None
         if self.preview_job and self.preview_job.get('future'):
             self.preview_job['future'].cancel()
@@ -58,7 +70,7 @@ class CatalogMenu(OwnedMenuPanel):
             with (self.library.store.root.parent/'menu-error.log').open('a',encoding='utf8') as log:log.write(repr((obj,owner,name,arguments))+'\n')
             raise
     def _call(self,obj,owner,name,**arguments):
-        if self.state=='building' and (owner=='EditableTextBox' or name in ('SetRenderScale','SetRenderTransformPivot')):
+        if self.state=='building' and owner=='EditableTextBox':
             with self._construction_call(obj,self._function(owner,name),**arguments):pass
             return
         return super()._call(obj,owner,name,**arguments)
@@ -72,13 +84,21 @@ class CatalogMenu(OwnedMenuPanel):
         self._call(button,'Button','SetBackgroundColor',InBackgroundColor={'R':.07,'G':.14,'B':.18,'A':1.})
         label=self.label(x+10,y+8,w-20,h-16);self.labels.append(label)
         i=len(self.buttons)-1;self._visible[i]=True;self._enabled[i]=True
+    @measured('menu_build')
     def build(self):
         from expedition33.enums import describe_enums
-        self.state='building';observed=capture()
+        self.state='building';started=time.perf_counter()
+        observed=capture_matching(self.mod.session.pid,names=sorted(MENU_NAMES),classes=('PlayerController','GameEngine')) if self.library.registry_complete else capture()
+        self.library.mark('menu_discovery',started)
         self.player=self._one(o for o in observed.select('PlayerController') if not o.object_flags&0x30)
-        self.library.refresh(force=False,observed=observed)
+        if not self.library.registry_complete:self.library.refresh(force=False,observed=observed)
+        else:self.library.seed_cached_catalog();self.library._catalog=observed
         engines={o.index for o in observed.select('GameEngine')}
-        self.catalog=observed.subset(o for o in observed.objects if o.index in observed.classes or o.class_name in ('Function','ScriptStruct','Enum') or o.name in ('Default__GameplayStatics','Default__WidgetBlueprintLibrary') or o.index==self.player.index or o.index in engines)
+        # Only UI planning dependencies. Copying every game's Function and class
+        # on each of hundreds of leased widget returns dominated controller CPU.
+        self.catalog=observed.subset(o for o in observed.objects if
+            (o.name in MENU_NAMES and (o.index in observed.classes or o.class_name in ('Function','ScriptStruct','Enum') or o.name.startswith('Default__')))
+            or o.index==self.player.index or o.index in engines)
         enum=self.catalog.find_path('/Script/UMG.ESlateVisibility','Enum');descriptor=describe_enums(self.catalog,[enum])[enum.index]
         def visibility(name):return descriptor.value(next(m.name for m in descriptor.members if m.name.endswith('::'+name)))
         self.invisible=visibility('HitTestInvisible');self.visible=visibility('Visible');self.collapsed=visibility('Collapsed')
@@ -94,7 +114,7 @@ class CatalogMenu(OwnedMenuPanel):
         for i in range(self.PAGE):
             x=24+(i%6)*218;y=205+(i//6)*250
             self.button(x,y,210,238)
-            slot,c=read_object_reference(self._planner._catalog,self.labels[-1],self._class('Widget'),'Slot');self._planner.refresh_from(c)
+            slot=self._slots[self.labels[-1].index]
             self._call(slot,'CanvasPanelSlot','SetPosition',InPosition={'X':float(x+10),'Y':float(y+170)})
             self._call(slot,'CanvasPanelSlot','SetSize',InSize={'X':310.,'Y':100.})
             art=self._spawn('Image');self._place(art,x+8,y+8,194,150);self._call(art,'Widget','SetVisibility',InVisibility=self.collapsed);self.images.append(art)
@@ -119,6 +139,11 @@ class CatalogMenu(OwnedMenuPanel):
         self._flush_layout()
         self._mutate(self.scope.assign_object,self.tree,self._class('WidgetTree'),'RootWidget',self.canvas,expected=None,allow_mutation=True,catalog=self._planner._catalog)
         self.assigned=True;self.state='built';return self
+    def _place(self,child,*args):
+        slot=super()._place(child,*args)
+        if not hasattr(self,'_slots'):self._slots={}
+        self._slots[child.index]=slot
+        return slot
     def set_text(self,label,text):
         if label in (self.breadcrumb,self.footer,*getattr(self,'camera_labels',())):
             if self._text.get(label.index)!=text:
@@ -128,10 +153,16 @@ class CatalogMenu(OwnedMenuPanel):
     def text(self,widget):
         with self._planner.prepare(widget,self._function('EditableTextBox','GetText')).invoke() as result:return str(result.return_value)
     def clear_images(self,purge=False):
-        for image in [*self.images,*([self.image] if hasattr(self,'image') else [])]:
-            self._render_call(image,'Image','SetBrushResourceObject',ResourceObject=None)
-            self._render_call(image,'Widget','SetVisibility',InVisibility=self.collapsed)
+        # Navigation only hides brushes. Keep their owned textures for revisits;
+        # clearing each brush separately used two round trips per tile.
+        images=[*self.images,*([self.image] if hasattr(self,'image') else [])]
+        with self.paint_batch():
+            for image in images:self._render_call(image,'Widget','SetVisibility',InVisibility=self.collapsed)
+        if purge:
+            with self.image_batch():
+                for image in images:self._render_call(image,'Image','SetBrushResourceObject',ResourceObject=None)
         self.pending=[]
+        self.image_queue=[]
         self.displayed.clear()
         if purge:
             self.cancel_preview()
@@ -159,6 +190,7 @@ class CatalogMenu(OwnedMenuPanel):
         if self.workspace=='Maps':return [dict(r,kind='map') for r in self.library.store.list() if self.query.casefold() in r['name'].casefold()]
         if not self.library.registry_complete:self.library.refresh(force=False)
         return self.browser.rows(self.library.rows,self.query,self.kind,self.folder,self.folders,self.favorites)
+    @measured('menu_paint')
     def paint(self):
         rows=self.all_rows();count=len(rows)
         self.offset=min(self.offset,max(0,((count-1)//self.PAGE)*self.PAGE));self.rows=rows[self.offset:self.offset+self.PAGE]
@@ -168,11 +200,15 @@ class CatalogMenu(OwnedMenuPanel):
         assets=list(dict.fromkeys(r.get('cover',r.get('path')) for r in self.rows if r['kind']!='map'))
         cached=[(asset,cache.thumbnail_key(asset)) for asset in assets if asset and asset not in self.thumbnails and asset not in self.preview_failures]
         cached += [('map:'+row['id'],self.map_key(row['id'])) for row in self.rows if row['kind']=='map' and 'map:'+row['id'] not in self.thumbnails]
-        self.import_textures([(asset,key) for asset,key in cached if cache.cached_png(key)])
-        self.pending=[asset for asset in assets if asset and asset not in self.thumbnails and asset not in self.preview_failures and (not self.preview_job or asset!=self.preview_job['asset'])]
-        for row in self.rows:
-            asset='map:'+row['id'] if row['kind']=='map' else row.get('cover',row.get('path'))
-            if asset in self.thumbnails:self.show_texture(asset,False)
+        # Publish navigation first. Import only visible page images on later
+        # polls, replacing the queue when the user changes folders again.
+        disk={asset:key for asset,key in cached if cache.cached_png(key)}
+        visible=[('map:'+r['id'] if r['kind']=='map' else r.get('cover',r.get('path'))) for r in self.rows]
+        self.image_queue=list(disk)
+        with self.image_batch():
+            for asset in dict.fromkeys(visible):
+                if asset in self.thumbnails:self.show_texture(asset,False)
+        self.pending=[asset for asset in assets if asset and asset not in disk and asset not in self.thumbnails and asset not in self.preview_failures and asset not in self.background.failures and (not self.preview_job or asset!=self.preview_job['asset'])]
         with self.paint_batch():
             self.set_text(self.title,'WORLD BUILDER  /  '+self.workspace)
             self.set_text(self.labels[50],'Close / F7')
@@ -215,6 +251,7 @@ class CatalogMenu(OwnedMenuPanel):
             tracked=len(self.library.owned)-int(self.library.preview_key in self.library.owned)
             bg=self.background.status()
             self.set_text(self.footer,self.library.message if self.workspace=='Camera' else f"{len(self.library.rows)} assets | {tracked} tracked | Cache {bg['cached']}/{bg['total']} | {bg['failed']} skipped | Background {('AFK fast' if bg['mode']=='afk' else 'idle-time') if bg['enabled'] else 'paused'}")
+    @measured('menu_open')
     def open(self):
         self.mod.scene_command(45,objects=(self.widget,))
         self.mod.automatic(False)
@@ -232,7 +269,10 @@ class CatalogMenu(OwnedMenuPanel):
         self.mod.hud._render_call(self.mod.hud.widget,'Widget','SetVisibility',InVisibility=self.mod.hud.collapsed)
         self.bindings=[]
         for start in range(0,len(self.buttons),24):self.bindings.extend(self.menu.bind_controls([(b,lambda event,i=i:self.click(i)) for i,b in enumerate(self.buttons) if start<=i<start+24]))
+    @measured('menu_click')
     def click(self,i):
+        with self.mod.menu_reads():return self._click(i)
+    def _click(self,i):
         try:
             if 18<=i<=23:self.selected=None
             if i<self.PAGE:
@@ -250,7 +290,9 @@ class CatalogMenu(OwnedMenuPanel):
                 if len(self.rows)==self.PAGE:self.offset+=self.PAGE
             elif i==20:self.favorites=not self.favorites;self.offset=0
             elif i==21:self.folders=not self.folders;self.offset=0
-            elif i==22:self.kind='actor' if self.kind=='mesh' else 'mesh';self.offset=0
+            elif i==22:
+                self.kind='actor' if self.kind=='mesh' else 'mesh';self.offset=0
+                if self.kind=='actor' and not self.library.actors_indexed:self.library.refresh(force=False)
             elif i==23:self.folder=self.folder.rstrip('/').rsplit('/',1)[0]+'/' if self.folder!='/Game/' else '/Game/';self.offset=0
             elif 24<=i<=27:
                 self.workspace=('Build','Gallery','Library','Maps')[i-24];self.offset=0;self.selected=None
@@ -368,6 +410,7 @@ class CatalogMenu(OwnedMenuPanel):
         self.mod.command(42,values=row['pose']);self.hide()
     def import_texture(self,asset,key):
         self.import_textures([(asset,key)])
+    @measured('menu_import_textures')
     def import_textures(self,entries):
         entries=list(dict((asset,key) for asset,key in entries if asset not in self.thumbnails).items())
         if not entries:return
@@ -431,9 +474,22 @@ class CatalogMenu(OwnedMenuPanel):
                 LOG.exception('Map thumbnail failed');self.library.message='Map thumbnail failed: '+str(error)[:160]
             finally:self.map_job=None;self.mod.scene_command(36)
             self.paint();return
-        if self.state=='open' and not (self.background.mode=='afk' and idle):
+        if self.state=='open' and time.monotonic()>=self.search_at and not (self.background.mode=='afk' and idle):
+            self.search_at=time.monotonic()+.2
             query=self.text(self.search)
             if query!=self.query:self.query=query;self.offset=0;self.selected=None;self.paint();return
+        if self.state=='open' and self.image_queue:
+            if len(self.thumbnails)>=120:
+                self.clear_images(purge=True);self.signature=None;self.paint();return
+            deadline=time.monotonic()+.04
+            for _ in range(2):
+                asset=self.image_queue.pop(0)
+                key=self.map_key(asset[4:]) if asset.startswith('map:') else cache.thumbnail_key(asset)
+                if asset not in self.thumbnails:self.import_texture(asset,key)
+                if asset in self.thumbnails:
+                    with self.image_batch():self.show_texture(asset,False)
+                if not self.image_queue or time.monotonic()>=deadline:break
+            return
         if self.preview_job is not None:
             job=self.preview_job
             started=time.perf_counter()
@@ -522,6 +578,9 @@ class CatalogMenu(OwnedMenuPanel):
         LOG.exception('Preview failed for %s',asset)
         if self.selected and self.selected.get('path')==asset:
             self.library.message='Preview failed: '+str(error)[:180]+'; click Preview to retry'
+    def image_batch(self):
+        # Older SDKs retain the individually validated setter path.
+        return self.paint_batch() if getattr(self.scope._session._transport,'layout_batch_protocol',0)==3 else nullcontext()
     def show_texture(self,asset,select):
         texture=self.thumbnails[asset]
         for i,row in enumerate(self.rows):

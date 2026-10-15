@@ -7,9 +7,10 @@ from pathlib import Path
 import secrets
 import struct
 import time
+from contextlib import contextmanager
 from expedition33.catalog import capture_matching
 from expedition33.values import read_values_with_references
-from expedition33._reader import ReadBatch
+from expedition33._reader import ReadBatch, active_reader
 from expedition33.management import Action, Keybind, ModDefinition
 
 LOG = logging.getLogger('expedition33.world_builder')
@@ -102,9 +103,23 @@ class Mod:
         self.booth_pending=False
         self._catalog_selection=None
         self.pending_catalog_asset=None
+        self._menu_reader=None
+
+    @contextmanager
+    def menu_reads(self):
+        current=active_reader()
+        if current is not None:
+            current._check()
+            if current.pid!=self.session.pid:raise RuntimeError('Menu reader belongs to another process')
+            yield current
+        else:
+            if self._menu_reader is None:self._menu_reader=ReadBatch(self.session.pid,share=True)
+            # bind() leaves no active context between operations. A failed
+            # worker remains failed; no automatic restart or stale-read fallback.
+            with self._menu_reader.bind() as reader:yield reader
 
     def management(self):
-        return ModDefinition('e33.world-builder', 'World Builder', version='0.29.0-experimental',
+        return ModDefinition('e33.world-builder', 'World Builder', version='0.30.0-experimental',
             description='F8 freecam. WASD fly, mouse look, Space/Ctrl up/down (E/Q also work), Shift faster. Hold left mouse to grab a world prop; release to place. Numpad 8/2 forward/back, 4/6 left/right, 9/3 up/down, 7/1 yaw; Alt precise; Alt+Z undo. F9 restores edits and clears spawned props. F7 opens folders, previews, spawning, galleries and saved maps.',
             actions=(Action('catalog', 'Open asset catalog', self.open_catalog),Action('toggle', 'Enter / leave builder camera', self.toggle),
                      Action('restore', 'Restore all edited geometry', self.restore),
@@ -226,7 +241,7 @@ class Mod:
         pos=self.last['position'];result=self.library.spawn(asset,[0.,0.,0.,1.,pos[0],pos[1],pos[2]+100000.,0.,1.,1.,1.,0.])
         self.library.preview_key=result['id'];self.booth_pending=True
         try:
-            with ReadBatch(self.session.pid):
+            with self.menu_reads():
                 from expedition33.catalog import capture_selected
                 row=self.library.owned[result['id']];c=capture_selected(self.session.pid,[tuple(row['actor'])]);actor=c.by_index[row['actor'][0]]
             self.scene_command(40,objects=(actor,))
@@ -240,7 +255,7 @@ class Mod:
         if self.started:self.command(41)
         self.library.clear_preview();self.booth_pending=False
         if reopen and self.catalog_menu and self.catalog_menu.state=='built':
-            with ReadBatch(self.session.pid):self.catalog_menu.paint();self.catalog_menu.open()
+            with self.menu_reads():self.catalog_menu.paint();self.catalog_menu.open()
         return self.status()
     def play_from_camera(self,_=None):
         if self.booth_pending:raise ValueError('Exit the asset preview first')
@@ -325,7 +340,7 @@ class Mod:
     def refresh_menu_owner(self):
         menu=self.catalog_menu
         if menu is None:return
-        with ReadBatch(self.session.pid):
+        with self.menu_reads():
             current=capture_matching(self.session.pid,classes=('PlayerController',))
             player=next(o for o in current.select('PlayerController') if not o.object_flags&0x30)
         identity=lambda o:(o.index,o.serial,o.address)
@@ -337,6 +352,7 @@ class Mod:
         self.catalog_menu=None
         self.library._catalog=None;self.library.rows=[];self.library.known={}
         self.library.registry_names_ready=False;self.library.loader_metadata=[]
+        self.library.actors_indexed=False
         if not self.last.get('edits'):
             self.library.owned.clear();self.library.selected=None;self.library.preview_key=None
             self.library.active_map=None;self.library.world=None
@@ -348,11 +364,11 @@ class Mod:
         from .catalog_menu import CatalogMenu
         if self.catalog_menu is None:
             self.catalog_menu=CatalogMenu(self)
-            with ReadBatch(self.session.pid):self.catalog_menu.build()
+            with self.menu_reads():self.catalog_menu.build()
         if self.catalog_menu.state=='open':self.catalog_menu.hide()
         else:
             self.command(26);self.sync_catalog_selection()
-            with ReadBatch(self.session.pid):
+            with self.menu_reads():
                 if self.pending_catalog_asset:
                     self.catalog_menu.focus_asset(self.pending_catalog_asset);self.pending_catalog_asset=None
                 self.catalog_menu.paint();self.catalog_menu.open()
@@ -361,7 +377,7 @@ class Mod:
     def menu_fields(self,first=None,second=None,search=None,map_name=None):
         menu=self.catalog_menu
         if menu is None or menu.state!='open':raise ValueError('Open the catalog first')
-        with ReadBatch(self.session.pid):
+        with self.menu_reads():
             for widget,value in ((menu.field1,first),(menu.field2,second),(menu.search,search),(menu.map_name,map_name)):
                 if value is not None:
                     if len(value)>512:raise ValueError('Field is too long')
@@ -372,7 +388,7 @@ class Mod:
         menu=self.catalog_menu
         if menu is None or menu.state!='open':raise ValueError('Open the asset catalog first')
         if type(index) is not int or not -1<=index<len(menu.buttons):raise ValueError('Invalid menu control index')
-        with ReadBatch(self.session.pid):
+        with self.menu_reads():
             if index>=0:menu.click(index)
         return dict(state=menu.state,workspace=menu.workspace,folder=menu.folder,rows=menu.rows,selected=menu.selected,message=self.library.message,thumbnails=len(menu.thumbnails),queued=len(menu.pending),gallery=dict(summary=menu.batch_gallery.summary(),owned=list(menu.batch_gallery.owned[:128]),owned_count=len(menu.batch_gallery.owned),queued=len(menu.batch_gallery.queue),paused=menu.batch_gallery.paused,failures=menu.batch_gallery.failures[:64],failure_count=len(menu.batch_gallery.failures)),library_assets=menu.library_assets,map_pending=menu.map_job is not None,capture_queued=len(menu.capture_queue),capture_paused=menu.capture_paused,cache_stats=dict(menu.cache_stats),background=menu.background.status())
 
@@ -384,13 +400,14 @@ class Mod:
         if self.active:
             return self.stop()
         if self.catalog_menu is not None:self.catalog_menu.invalidate_native_images()
-        ids = discover(self.session.pid)
+        with self.menu_reads():ids = discover(self.session.pid)
         from .hud import BuilderHUD
-        if self.hud is not None:
-            self.hud.close()
-        self.hud = BuilderHUD(self.session)
-        with ReadBatch(self.session.pid):
-            self.hud.build()
+        same_player=self.hud is not None and self.hud.state=='built' and all(getattr(self.hud.player,k)==getattr(ids[0],k) for k in ('index','serial','address'))
+        if not same_player:
+            if self.hud is not None:self.hud.close()
+            self.hud = BuilderHUD(self.session)
+            with self.menu_reads():self.hud.build()
+        self.hud._render_call(self.hud.widget,'UserWidget','AddToViewport',ZOrder=10000)
         ids[48:58] = [self.hud.widget,self.hud.title,*self.hud.slots,*self.hud.lines]
         ids[60:62] = self.hud.crosshair
         self.started = True
@@ -486,7 +503,7 @@ class Mod:
     def recapture_thumbnail(self,asset):
         if not self.active or not self.catalog_menu or self.booth_pending:raise ValueError('Open the builder catalog first')
         menu=self.catalog_menu;menu.cancel_preview();menu.collect_processing(wait=True)
-        with ReadBatch(self.session.pid):self.library.thumbnail_preview(asset)
+        with self.menu_reads():self.library.thumbnail_preview(asset)
         menu.background.set_enabled(True);menu.background.current=asset
         from . import thumbnail_cache as cache
         menu.preview_job=dict(asset=asset,key=cache.thumbnail_key(asset),stage=0,ready=time.monotonic()+.05,background=True,created=time.monotonic())
@@ -526,12 +543,19 @@ class Mod:
             try:
                 from .catalog_menu import CatalogMenu
                 self.catalog_menu=CatalogMenu(self)
-                with ReadBatch(self.session.pid):self.catalog_menu.build()
+                with self.menu_reads():
+                    self.catalog_menu.build()
+                    self.catalog_menu.prime_menu_plan()
+                if self.hud is None:
+                    from .hud import BuilderHUD
+                    self.hud=BuilderHUD(self.session)
+                    with self.menu_reads():self.hud.build()
             except Exception:
                 LOG.exception('Catalog prewarm failed')
         if not self.started or now < self.next_status:
             return
         self.next_status = now + (.02 if self.catalog_menu and self.catalog_menu.state=='open' and self.catalog_menu.batch_gallery.queue and not self.catalog_menu.batch_gallery.paused else self.catalog_menu.background.poll_interval() if self.active and self.catalog_menu and not self.booth_pending else .5)
+        if self.catalog_menu and self.catalog_menu.state=='open' and self.catalog_menu.image_queue:self.next_status=min(self.next_status,now+.02)
         if self.active and self.camera_settings.values.get('duplicate_click',False):self.next_status=min(self.next_status,now+.05)
         try:
             self.command(26)
@@ -540,7 +564,7 @@ class Mod:
             self.sync_catalog_selection()
             if self.booth_pending and not self.last.get('booth_active'):self.end_booth()
             if self.catalog_menu is not None:
-                with ReadBatch(self.session.pid):
+                with self.menu_reads():
                     self.catalog_menu.poll()
                     # AFK-only bounded burst avoids waiting through all SDK/menu
                     # polling between every capture stage. Game ticks continue.
@@ -574,6 +598,8 @@ class Mod:
             except Exception as exc:failures.append(str(exc))
             self.hud=None
         self.session=None
+        if self._menu_reader is not None:
+            self._menu_reader.close();self._menu_reader=None
         if failures:raise RuntimeError('; '.join(failures))
 
 

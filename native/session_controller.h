@@ -87,7 +87,7 @@ inline void run_runtime_session(DWORD pid, DWORD thread, int32_t object_index, i
     wchar_t executable[32768]; require(GetModuleFileNameW(nullptr, executable, 32768) != 0, "SESSION_SELF_PATH");
 #ifdef E33_KEYBIND_SESSION
 #if defined(E33_MESH_SESSION)
-    auto path = std::filesystem::path(executable).parent_path().parent_path() / L"runtime-session-worldbuilder-v52" / L"runtime_session_worldbuilder_v52.dll";
+    auto path = std::filesystem::path(executable).parent_path().parent_path() / L"runtime-session-worldbuilder-v53" / L"runtime_session_worldbuilder_v53.dll";
 #elif defined(E33_VIEWER_MENU_SESSION)
     auto path = std::filesystem::path(executable).parent_path().parent_path() / L"runtime-session-viewer-v2" / L"runtime_session_viewer_v2.dll";
 #elif defined(E33_CATALOG_GAME_OWNED_SESSION)
@@ -278,7 +278,7 @@ inline void run_runtime_session(DWORD pid, DWORD thread, int32_t object_index, i
 #ifdef E33_UI_BATCH_SESSION
               << ",\"ui_batch_protocol\":1"
 #ifdef E33_LAYOUT_BATCH_SESSION
-              << ",\"layout_batch_protocol\":2"
+              << ",\"layout_batch_protocol\":3"
 #endif
 #endif
 #ifdef E33_VECTOR_SESSION
