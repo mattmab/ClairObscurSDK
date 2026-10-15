@@ -12,8 +12,11 @@ namespace e33_builder {
 // No pointer supplied by Python is used without a live slot/serial check.
 class Owner {
     CallIdentity ids_[128]{},camera_{},target_{},selected_{},hover_{},hover_actor_{},selected_actor_{};
-    bool schemas_[62]{},dragging_=false,left_was_=true,undo_was_=false,nudging_=false;
-    bool auto_tick_=true,want_grab_=false;
+    bool schemas_[64]{},dragging_=false,left_was_=true,nudging_=false;
+    bool auto_tick_=true,want_grab_=false,carrying_=false;
+    unsigned highlight_mode_=1;
+    bool duplicate_click_=false,duplicate_requested_=false;
+    double mouse_sensitivity_=1.25,fly_speed_=1600.;
     uint64_t last_frame_=0,last_clock_=0,last_hover_=0,last_hud_=0,ticks_=0;
     double tick_ms_sum_=0,cost_ms_sum_=0,max_cost_ms_=0;
     uint32_t tick_error_=0;
@@ -25,8 +28,12 @@ class Owner {
     bool active_=false,ignored_=false,frozen_=false;
     uint8_t mode_=0,custom_=0;
     double position_[3]{},rotation_[3]{},original_rotation_[3]{},offset_[3]{},depth_=0;
-    struct Edit {CallIdentity component;uint8_t mobility;std::array<uint8_t,96> transform;};
-    std::vector<Edit> edits_,undo_;
+    struct Edit {CallIdentity component;uint8_t mobility;std::array<uint8_t,96> transform;CallIdentity created_actor{},asset{},actor_class{};};
+    std::vector<Edit> edits_,undo_,redo_;
+    struct HistoryEvent {uint64_t revision;CallIdentity before,actor,component;};
+    std::vector<HistoryEvent> history_events_;
+    unsigned history_request_=0;
+    uint32_t undo_revision_=0;
     alignas(16) uint8_t args_[512]{};
     uint32_t step_=0;
     void clear(){std::memset(args_,0,sizeof(args_));}
@@ -34,7 +41,7 @@ class Owner {
     template<class T> T get(size_t at=0){T v{};std::memcpy(&v,args_+at,sizeof(T));return v;}
     bool call(uint64_t b,CallIdentity recipient,size_t i) {
         step_=uint32_t(i+1);
-        if(i>=62 || !TargetPodSchemaOps{b}.context())return false;
+        if(i>=64 || !TargetPodSchemaOps{b}.context())return false;
         const auto fn=call_identity(b,ids_[i>=56?96+i-56:(i>=41?64+i-41:(i==40?62:8+i))]);const auto& p=profiles[i];
         if(i==46)step_=4701;if(!fn)return false;
         if(i==46)step_=4702;
@@ -89,7 +96,7 @@ class Owner {
             }
             edits_.pop_back();
         }
-        selected_={};selected_actor_={};undo_.clear();dragging_=false;return true;
+        selected_={};selected_actor_={};undo_.clear();redo_.clear();dragging_=false;return true;
     }
     #include "builder_selection.h"
     #include "builder_gpu.h"
@@ -153,7 +160,6 @@ class Owner {
         selected_=component;selected_actor_=actor;return true;
     }
     bool move(uint64_t b,const double* v) {
-                clear();if(!call(b,ids_[0],8)){return false;}std::memcpy(rotation_,args_,24);
                 const double rad=3.141592653589793/180.,cp=std::cos(rotation_[0]*rad),sp=std::sin(rotation_[0]*rad),cy=std::cos(rotation_[1]*rad),sy=std::sin(rotation_[1]*rad);
                 const double dir[]={cp*cy,cp*sy,sp};
                 position_[0]+=v[0]*dir[0]-v[1]*sy;position_[1]+=v[0]*dir[1]+v[1]*cy;position_[2]+=v[0]*dir[2]+v[2];
@@ -173,6 +179,7 @@ class Owner {
 #include "builder_feedback.h"
 #include "builder_scene.h"
 #include "builder_bulk.h"
+#include "builder_carry.h"
 #include "builder_preview.h"
 #include "builder_booth.h"
 public:
@@ -182,10 +189,11 @@ public:
             menu_widget_.index==widget.index && menu_widget_.serial==widget.serial;
     }
     bool active()const{return active_;}
+    void request_history(bool redo){if(active_&&!booth_active_)history_request_=redo?2:1;}
     uint32_t step()const{return step_;}
     template<class Pool> uint32_t stop(uint64_t b,uint64_t session,Pool& pool,bool restore) {
         if(!TargetPodSchemaOps{b}.context())return 407;
-        dragging_=false;nudging_=false;
+        dragging_=false;carrying_=false;duplicate_requested_=false;nudging_=false;
         if(!booth_end(b,session,pool))return 1940;
         if(!preview_stop(b,session,pool)||!thumbnail_clear(b,session,pool))return 1934;
         if(!gpu_stop(b,session,pool))return 1920;
@@ -209,7 +217,7 @@ public:
     template<class Pool> void command(uint64_t b,uint64_t session,Pool& pool,MeshPacket& packet) {
         auto raw=reinterpret_cast<uint8_t*>(&packet);
         const auto op=packet.operation;
-        if(packet.version!=3||op<20||op>54||!packet.owner||packet.error||packet.state||!TargetPodSchemaOps{b}.context()){packet.error=1900;return;}
+        if(packet.version!=3||op<20||op>61||!packet.owner||packet.error||packet.state||!TargetPodSchemaOps{b}.context()){packet.error=1900;return;}
         if(owner_&&owner_!=packet.owner){packet.error=1901;return;}
         if(op==45) {
             CallIdentity widget{};std::memcpy(&widget,raw+88,sizeof(widget));
@@ -219,7 +227,7 @@ public:
             if(active_||camera_.address||token_){packet.error=1901;return;}
             candidates_.clear();scan_index_=0;
             owner_=packet.owner;std::memcpy(ids_,raw+88,sizeof(ids_));std::fill(std::begin(schemas_),std::end(schemas_),false);
-            tick_error_=0;ticks_=0;tick_ms_sum_=cost_ms_sum_=max_cost_ms_=0;label_.clear();last_frame_=last_clock_=last_hover_=last_hud_=0;left_was_=true;dragging_=false;auto_tick_=true;
+            tick_error_=0;ticks_=0;tick_ms_sum_=cost_ms_sum_=max_cost_ms_=0;label_.clear();last_frame_=last_clock_=last_hover_=last_hud_=0;left_was_=true;dragging_=false;carrying_=false;duplicate_requested_=false;auto_tick_=true;
             for(int j=0;j<8;++j)if(!call_identity(b,ids_[j])){packet.error=1902;return;}
             if(!named(b,ids_[6].address,"CameraActor","/Script/Engine")||!call_is_class(b,ids_[6].address)||!current(b)){packet.error=1902;return;}
             clear();if(!call(b,ids_[1],11)||!args_[0]){packet.error=1902;return;}
@@ -229,7 +237,7 @@ public:
             clear();if(!call(b,ids_[0],7)){packet.error=1902;return;}target_=call_capture(b,get<uint64_t>());
             clear();if(!call(b,ids_[0],8)){packet.error=1902;return;}std::memcpy(original_rotation_,args_,24);
             clear();if(!call(b,ids_[3],12)){packet.error=1902;return;}std::memcpy(position_,args_,24);
-            clear();if(!call(b,ids_[3],13)){packet.error=1902;return;}std::memcpy(rotation_,args_,24);
+            clear();if(!call(b,ids_[3],13)){packet.error=1902;return;}std::memcpy(rotation_,args_,24);rotation_[0]=std::clamp(std::remainder(rotation_[0],360.),-89.,89.);
             clear();put(0,ids_[0].address);put(8,ids_[6].address);transform(args_+16,position_);args_[112]=1;
             if(!call(b,ids_[4],0)){packet.error=1903;return;}camera_=call_capture(b,get<uint64_t>(136));
             if(!camera_.address){packet.error=1903;return;}
@@ -247,7 +255,7 @@ public:
             packet.error=op==22?stop(b,session,pool,false):((restore_edits(b)&&clear_spawned(b,session,pool))?0:1908);
             if(op==25&&!active_&&!packet.error)owner_=0;
         } else if(op==27) {
-            if(!undo(b))packet.error=1911;
+            if(!undo(b,session,pool))packet.error=1911;
         } else if(op==28) {
             auto_tick_=packet.section_id!=0;last_clock_=0;
         } else if(op==29||op==51) {
@@ -259,6 +267,29 @@ public:
             double settings[8];std::memcpy(settings,raw+2000,64);
             if(!active_||!current(b)||!gallery_begin(b,session,pool,settings))packet.error=1955;
             std::memcpy(raw+3568,&gallery_floor_,16);std::memcpy(raw+3584,&gallery_floor_component_,16);
+        } else if(op==57||op==58) {
+            CallIdentity source{},actor{},component{};std::memcpy(&source,raw+88,16);
+            if(!active_||booth_active_||carrying_||!current(b)){packet.error=1963;return;}
+            if(op==57){if(!duplicate_hand(b,session,pool,source,actor,component))packet.error=1964;}
+            else if(!carry_owned(b,source))packet.error=1964;
+            std::memcpy(raw+3568,&actor,16);std::memcpy(raw+3584,&component,16);
+        } else if(op==61) {
+            if(!active_||booth_active_||carrying_||!current(b)||!redo(b,session,pool))packet.error=1965;
+        } else if(op==60) {
+            const auto count=uint32_t(history_events_.size());std::memcpy(raw+3560,&count,4);
+            for(size_t i=0;i<history_events_.size();++i)std::memcpy(raw+4096+56*i,&history_events_[i],56);
+        } else if(op==59) {
+            duplicate_requested_=false;want_grab_=false;
+        } else if(op==56) {
+            double v[8];std::memcpy(v,raw+2000,64);
+            if(!active_||!std::isfinite(v[0])||v[0]<.05||v[0]>10.||!std::isfinite(v[1])||v[1]<100.||v[1]>10000.||(v[2]!=0.&&v[2]!=1.&&v[2]!=2.)||(v[3]!=0.&&v[3]!=1.)||v[4]||v[5]||v[6]||v[7]){packet.error=1962;return;}
+            if(!glow(b,session,pool,{})){packet.error=1913;return;}
+            mouse_sensitivity_=v[0];fly_speed_=v[1];highlight_mode_=unsigned(v[2]);duplicate_click_=v[3]!=0.;duplicate_requested_=false;
+        } else if(op==55) {
+            if(!active_||booth_active_||!current(b)){packet.error=1958;return;}
+            clear();std::memcpy(args_,position_,24);put(32,rotation_[1]);
+            if(!call(b,ids_[1],63)||!args_[48])packet.error=1959;
+            else {std::memcpy(original_rotation_,rotation_,24);packet.error=stop(b,session,pool,false);}
         } else if(op==54) {
             if(!active_||!current(b)||!gallery_existing(b,raw))packet.error=1957;
         } else if(op==53) {
@@ -341,6 +372,7 @@ public:
         uint64_t gpuDiag[12];gpu_bridge_.diagnostics(gpuDiag);std::memcpy(raw+3400,gpuDiag,96);
         const double gpuProof[]={gpu_last_depth_,gpu_last_latency_,double(gpu_surface_hits_),double(gpu_ready_component_.index),double(gpu_candidates_.size()),double(gpu_next_)};std::memcpy(raw+3496,gpuProof,48);
         const uint32_t gpuReady=gpu_bridge_.ready()?1:0;std::memcpy(raw+3096,&gpuReady,4);
+        std::memcpy(raw+3356,rotation_,24);const uint32_t carryFlag=carrying_?1:0;std::memcpy(raw+3380,&carryFlag,4);const uint32_t requestFlag=duplicate_requested_?1:0;std::memcpy(raw+3384,&requestFlag,4);std::memcpy(raw+3388,&undo_revision_,4);
         const auto text=label_.substr(0,255);std::memcpy(raw+3100,text.c_str(),text.size()+1);
         const double boothStats[]={booth_active_?1.:0.,booth_distance_,booth_rotation_[0],booth_rotation_[1],booth_rotation_[2],double(booth_lighting_)};std::memcpy(raw+3600,boothStats,sizeof(boothStats));
         packet.actor=camera_;packet.component=selected_;packet.step=step_;packet.sections=uint32_t(edits_.size());std::memcpy(packet.position,position_,24);

@@ -18,7 +18,7 @@ def path(value):
 
 def validate(data,world=None):
     if type(data) is not dict or data.get('format')!=FORMAT or data.get('version')!=1:raise ValueError('Unsupported scene format')
-    if type(data.get('name')) is not str or not 1<=len(data['name'])<=80 or any(ord(c)<32 for c in data['name']):raise ValueError('Map name must be 1â€“80 characters')
+    if type(data.get('name')) is not str or not 1<=len(data['name'])<=80 or any(ord(c)<32 for c in data['name']):raise ValueError('Map name must be 1–80 characters')
     path(data['world'])
     if world is not None and data['world']!=world:raise ValueError('Load the same game level before loading this builder map')
     rows=data.get('objects')

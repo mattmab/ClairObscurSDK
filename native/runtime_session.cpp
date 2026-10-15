@@ -1034,6 +1034,19 @@ void backend_message(MSG* message) {
 #ifdef E33_MENU_ESCAPE_SESSION
     // Route only this builder's visible panel. Keep ordinary SDK menus and
     // text-entry keys untouched, and swallow the release after async close.
+    static bool builder_blocked_z=false,builder_blocked_y=false;
+    const bool key_down=message->message==WM_KEYDOWN||message->message==WM_SYSKEYDOWN;
+    const bool key_up=message->message==WM_KEYUP||message->message==WM_SYSKEYUP;
+    if(message->wParam=='Z'||message->wParam=='Y') {
+        auto& held=message->wParam=='Z'?builder_blocked_z:builder_blocked_y;
+        const bool alt=(message->lParam&(LPARAM(1)<<29))||(GetKeyState(VK_MENU)&0x8000);
+        if(key_up&&held){held=false;message->message=WM_NULL;return;}
+        if(key_down&&session_builder.active()&&!session_menu.menu.active()&&lifetime_valid()&&attachment_valid(runtime_base)&&local_read<uint64_t>(attached_console+0xd8)==0&&
+           (message->wParam=='Z'||alt)) {
+            if(alt&&!(message->lParam&(LPARAM(1)<<30)))session_builder.request_history(message->wParam=='Y');
+            held=true;message->message=WM_NULL;return;
+        }
+    }
     static bool builder_menu_key_down[3]{};
     const unsigned builder_key=message->wParam==VK_ESCAPE?0:message->wParam==VK_F7?1:message->wParam==VK_F8?2:3;
     if(builder_key<3) {
@@ -1070,7 +1083,11 @@ void backend_message(MSG* message) {
         menu_escape_down=true; message->message=WM_NULL; return;
     }
 #endif
-    if(message->message==WM_KEYDOWN && session_keys.contains(static_cast<uint32_t>(message->wParam))) {
+    // Windows delivers F10 as a system key. Route this builder shortcut
+    // without activating the window menu, including its paired release.
+    static bool builder_f10_down=false;
+    if(message->wParam==VK_F10&&message->message==WM_SYSKEYUP&&builder_f10_down){builder_f10_down=false;message->message=WM_NULL;return;}
+    if((message->message==WM_KEYDOWN || (message->message==WM_SYSKEYDOWN&&message->wParam==VK_F10&&session_builder.active())) && session_keys.contains(static_cast<uint32_t>(message->wParam))) {
         DWORD foreground_pid=0;
         GetWindowThreadProcessId(GetForegroundWindow(), &foreground_pid);
         const bool eligible=foreground_pid==GetCurrentProcessId() && lifetime_valid() &&
@@ -1080,6 +1097,7 @@ void backend_message(MSG* message) {
             !(GetKeyState(VK_SHIFT)&0x8000) && !(GetKeyState(VK_LWIN)&0x8000) && !(GetKeyState(VK_RWIN)&0x8000);
         session_keys.press(static_cast<uint32_t>(message->wParam),
             (message->lParam & (LPARAM(1)<<30))!=0, eligible);
+        if(eligible&&message->wParam==VK_F10&&session_builder.active()){builder_f10_down=true;message->message=WM_NULL;return;}
         // Observe ordinary game input without consuming or rewriting it.
     }
 #endif

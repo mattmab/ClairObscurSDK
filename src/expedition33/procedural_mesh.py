@@ -31,14 +31,14 @@ def validate_request(data):
     if type(data) is not bytes or len(data)!=SIZE:raise ValueError('Mesh packet size')
     version,op,error,state,owner=HEADER.unpack_from(data)
     # World Builder bounded adapter; independently checked again on game thread.
-    if 20 <= op <= 54:
+    if 20 <= op <= 61:
         if version != 3 or error or state or not owner or any(data[24:88]):
             raise ValueError('Builder header')
         if op == 20:
             if any(data[2136:]): raise ValueError('Builder initialization padding')
         elif op in (30,31):
             if any(data[120:2000]) or any(data[2096:]): raise ValueError('Builder scene mutation padding')
-        elif op in (33,34,40,45,46,54):
+        elif op in (33,34,40,45,46,54,57,58):
             if any(data[104:]): raise ValueError('Builder owned deletion padding')
         elif op in (37,38,48):
             if any(data[88:2000]) or any(data[2068:]) or struct.unpack_from('<I',data,2000)[0]>1 or any(c not in b'0123456789abcdef' for c in data[2004:2068]):raise ValueError('Builder thumbnail cache request')
@@ -47,7 +47,7 @@ def validate_request(data):
             if any(data[88:2000]) or any(data[2000+len(path):]) or not path.startswith(b'/Game/') or len(path)>=512:raise ValueError('Builder asset names request')
         elif op in (35,51):
             if any(data[88:2000]) or any(data[2004:]) or struct.unpack_from('<I',data,2000)[0]>250000:raise ValueError('Builder registry page')
-        elif op in (21,24,42,44,52):
+        elif op in (21,24,42,44,52,56):
             if any(data[88:2000]) or any(data[2064:]): raise ValueError('Builder motion padding')
             if any(not math.isfinite(v) or abs(v)>(1e7 if op in (42,52) else 10000) for v in struct.unpack_from('<8d',data,2000)):
                 raise ValueError('Builder motion bounds')

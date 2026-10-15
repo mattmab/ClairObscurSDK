@@ -23,7 +23,7 @@
             const auto component=row.component;
             auto matches=[&](const Edit& e){return e.component.address==component.address&&e.component.serial==component.serial;};
             edits_.erase(std::remove_if(edits_.begin(),edits_.end(),matches),edits_.end());undo_.erase(std::remove_if(undo_.begin(),undo_.end(),matches),undo_.end());
-            if(selected_.address==component.address){selected_={};selected_actor_={};dragging_=false;}
+            if(selected_.address==component.address){selected_={};selected_actor_={};dragging_=false;carrying_=false;}
             TargetStrongReferenceOps ops{b,{-1,0,0}};if(row.lease&&pool.release(ops,session,row.lease)!=StrongLeaseResult::Ok)return false;
             if(row.actor.address==thumbnail_prop_.address)thumbnail_prop_={};
             if(row.actor.address==gallery_floor_.address){gallery_floor_={};gallery_floor_component_={};}

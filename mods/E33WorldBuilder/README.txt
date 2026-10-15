@@ -1,5 +1,6 @@
-E33 World Builder 0.28.0 experimental
-Requires SDK 0.1.0-rc8 with the worldbuilder-v42 native adapter.
+E33 World Builder 0.29.0 experimental
+Requires SDK 0.1.0-rc9 with the worldbuilder-v52 native adapter.
+RC8 does not include these newer camera and duplication controls.
 Stock RC6/RC7 cannot run this version.
 
 F8: enter/leave builder camera. Mouse look; WASD fly.
@@ -12,7 +13,16 @@ when aim moves away, the game loses focus, or builder mode exits.
 With Num Lock on:
   Numpad 8/2 forward/back; 4/6 left/right; 9/3 up/down; 7/1 yaw.
   Alt makes these adjustments ten times finer.
-Alt+Z: undo the last drag or continuous nudge gesture (64 history entries).
+Alt+Z: undo the last drag, nudge gesture, or duplicate creation (64 history entries).
+Undoing duplicate creation deletes only the copy and removes its map record.
+Later edits undo first; the original gallery prop is preserved.
+Alt+Y: redo undone moves or duplicate creation at the saved transform.
+Restored copies retain their map ID. New edits clear redo history.
+Z is blocked from gameplay while the builder camera is active.
+History belongs to the current session and is not restored from saved maps.
+F10 / Duplicate: copy the selected spawned prop into your hand.
+Click copies ON: clicking a spawned prop carries a copy; click again to place.
+The menu toggle is saved. OFF restores click-and-hold movement of originals.
 F9: restore all edited transforms and mobility.
 Escape: close the current preview/menu/camera layer without game pause.
 
@@ -97,3 +107,11 @@ indexing and cleanup retry. Category/tags are searchable and persist on disk.
 Maps: save/load a tracked scene, select its map card, then Take map thumbnail.
 The captured world view and camera pose persist. Visit saved view returns to
 that pose in the same game level. Map thumbnails retain the level lighting.
+
+Camera update (native v44): independent mouse-look avoids the continent pawn horizon limit. Mouse sensitivity is 1.25 degrees per input unit; pitch ranges from -89 to +89 degrees. Play from camera (top menu) teleports the character using collision checks and returns character control. A blocked destination keeps freecam active.
+
+Native v45: Camera settings button opens sensitivity and fly-speed fields with Apply and save, Reset defaults, and a saved automatic prop highlighting switch. Preferences are stored in SDK/settings/E33WorldBuilder/camera-settings.json. Grabbing a spawned scene/gallery prop selects its source asset when F7 next opens the catalog; Favorite / unfavorite saves it.
+
+Native v46: Prop highlight cycles Auto / On click / Off and saves immediately. On click highlights only the grabbed prop while holding the left mouse button, restoring its materials on release. Existing on/off preferences are preserved.
+
+Native v47: F10 / Duplicate to hand clones the selected spawned scene or gallery prop. The source stays untouched; fly the tracked copy and click once to place it. Copy rotation and scale are retained. Numpad fine movement remains available. Copies are included in map saves. Place the current copy before duplicating again.

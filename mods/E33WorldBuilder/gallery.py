@@ -14,7 +14,7 @@ class Gallery:
         self.positions=[];self.views=[];self.cursor=0
     def start(self,assets,size=18,spacing=600.):
         size=int(size);spacing=float(spacing)
-        if not 1<=size<=5000 or not math.isfinite(spacing) or not 50<=spacing<=10000:raise ValueError('Batch size 1â€“100; spacing 50â€“100000 cm')
+        if not 1<=size<=5000 or not math.isfinite(spacing) or not 50<=spacing<=10000:raise ValueError('Batch size 1–100; spacing 50–100000 cm')
         if size+len(self.library.owned)-len(self.owned)>bulk.SCENE_LIMIT-17:raise ValueError('Save or clear scene objects before adding this gallery batch')
         self.assets=list(dict.fromkeys(assets));self.size=size;self.spacing=spacing;self.index=0
         self.origin=list(self.menu.mod.last['position']);self.origin[0]+=1200.;self.request(0)

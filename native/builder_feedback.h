@@ -2,14 +2,52 @@
         clear();if(!call(b,component,19))return false;
         Edit e{};e.component=component;std::memcpy(e.transform.data(),args_,96);
         if(undo_.size()>=64)undo_.erase(undo_.begin());
-        undo_.push_back(e);return true;
+        redo_.clear();undo_.push_back(e);return true;
     }
-    bool undo(uint64_t b) {
-        dragging_=false;nudging_=false;left_was_=true;
+    void history_event(CallIdentity before,CallIdentity actor={},CallIdentity component={}) {
+        if(history_events_.size()>=64)history_events_.erase(history_events_.begin());
+        history_events_.push_back({++undo_revision_,before,actor,component});
+    }
+    template<class Pool> bool redo(uint64_t b,uint64_t session,Pool& pool) {
+        if(redo_.empty())return true;
+        const auto e=redo_.back();Edit reverse=e;
+        if(e.created_actor.address) {
+            if(!call_identity(b,e.actor_class)||(e.asset.address&&!call_identity(b,e.asset)))return false;
+            CallIdentity actor{},component{};
+            if(!spawn_asset(b,session,pool,e.asset,e.actor_class,e.transform.data(),actor,component))return false;
+            reverse.created_actor=actor;reverse.component=component;
+            history_event(e.created_actor,actor,component);
+            // Subsequent transform redos refer to the newly spawned identity.
+            for(auto& pending:redo_)if(pending.component.index==e.component.index&&pending.component.serial==e.component.serial&&pending.component.address==e.component.address)pending.component=component;
+            selected_=component;selected_actor_=actor;
+        } else {
+            if(!call_identity(b,e.component))return false;
+            clear();if(!call(b,e.component,19))return false;std::memcpy(reverse.transform.data(),args_,96);
+            if(!component_pose(b,e.component,e.transform.data()))return false;
+            refresh_candidate(b,e.component);
+        }
+        redo_.pop_back();if(undo_.size()>=64)undo_.erase(undo_.begin());undo_.push_back(reverse);
+        dragging_=false;carrying_=false;want_grab_=false;nudging_=false;left_was_=true;return true;
+    }
+    template<class Pool> bool undo(uint64_t b,uint64_t session,Pool& pool) {
+        dragging_=false;carrying_=false;duplicate_requested_=false;want_grab_=false;nudging_=false;left_was_=true;
         while(!undo_.empty()) {
             const auto e=undo_.back();
+            if(e.created_actor.address) {
+                // Only the full identity of a duplicate owned by this session can be removed.
+                const auto owned=std::find_if(spawned_.begin(),spawned_.end(),[&](const auto& row){return row.actor.index==e.created_actor.index&&row.actor.serial==e.created_actor.serial&&row.actor.address==e.created_actor.address&&row.component.index==e.component.index&&row.component.serial==e.component.serial&&row.component.address==e.component.address;});
+                if(owned==spawned_.end()){undo_.pop_back();continue;}
+                if(!call_identity(b,owned->actor))return false;
+                Edit saved=e;saved.asset=owned->asset;saved.actor_class=call_capture(b,local_read<uint64_t>(owned->actor.address+16));
+                clear();if(!call(b,e.component,19))return false;std::memcpy(saved.transform.data(),args_,96);
+                if(!clear_spawned(b,session,pool,e.created_actor))return false;
+                // clear_spawned also removes this copy's history; don't pop the previous edit.
+                redo_.push_back(saved);history_event(e.created_actor);return true;
+            }
             if(call_identity(b,e.component)) {
+                Edit saved=e;clear();if(!call(b,e.component,19))return false;std::memcpy(saved.transform.data(),args_,96);
                 if(!component_pose(b,e.component,e.transform.data()))return false;
+                redo_.push_back(saved);
                 refresh_candidate(b,e.component);undo_.pop_back();return true;
             }
             undo_.pop_back();
@@ -53,7 +91,7 @@
         const auto actor=dragging_?selected_actor_:hover_actor_;
         const bool valid=call_identity(b,component)&&call_identity(b,actor);
         const std::string name=valid?object_name(b,component):std::string();
-        if(!label(b,valid?(dragging_?"MOVING: ":"AIM: ")+name+(dragging_?"  |  Release to place":"  |  Hold LMB to grab"):
+        if(!label(b,valid?(dragging_?"MOVING: ":"AIM: ")+name+(carrying_?"  |  Click to place":dragging_?"  |  Release to place":duplicate_click_?"  |  Click to copy":"  |  Hold LMB to grab"):
             "WORLD BUILDER  |  Aim at a prop  |  Alt+Z undo"))return false;
         const float color[]={dragging_?0.1f:1.f,dragging_?0.95f:0.8f,dragging_?1.f:0.15f,1.f};
         for(int j=0;j<2;++j){clear();const float white[]={1,1,1,.95f};std::memcpy(args_,valid?color:white,16);if(!call(b,ids_[60+j],33))return false;}
@@ -70,7 +108,7 @@ public:
         const auto now=GetTickCount64();const auto elapsed=last_clock_?now-last_clock_:0;last_clock_=now;
         DWORD pid=0;GetWindowThreadProcessId(GetForegroundWindow(),&pid);
         if(!eligible||pid!=GetCurrentProcessId()) {
-            dragging_=false;nudging_=false;left_was_=true;
+            history_request_=0;dragging_=false;nudging_=false;left_was_=true;
             glow(b,session,pool,{});if(ids_[48].address)visibility(b,ids_[48],false);
             return;
         }
@@ -81,36 +119,53 @@ public:
         // Escape is edge-triggered and consumed by the native message router.
         // Polling its held state here would close the next layer on another frame.
         auto key=[](int k){return (GetAsyncKeyState(k)&0x8000)!=0;};
+        clear();if(!call(b,ids_[0],62)){tick_error_=1960;return;}
+        const double mouse_x=get<float>(),mouse_y=get<float>(4);
+        if(!std::isfinite(mouse_x)||!std::isfinite(mouse_y)){tick_error_=1960;return;}
+        const double look_yaw=elapsed?std::clamp(mouse_x,-4096.,4096.)*mouse_sensitivity_:0;
+        const double look_pitch=elapsed?std::clamp(mouse_y,-4096.,4096.)*mouse_sensitivity_:0;
         if(booth_active_){
             const double dt=std::min(.05,double(elapsed)*.001);
-            clear();if(!call(b,ids_[0],8)){tick_error_=1944;return;}
-            const double pitch=get<double>(),yaw=get<double>(8);
             const bool lamp=key('L');
-            if(!booth_motion(b,std::remainder(yaw-rotation_[1],360.),std::remainder(pitch-rotation_[0],360.),(int(key('S'))-int(key('W')))*dt,
+            if(!booth_motion(b,look_yaw,look_pitch,(int(key('S'))-int(key('W')))*dt,
                 (int(key(VK_NUMPAD8))-int(key(VK_NUMPAD2)))*60*dt,(int(key(VK_NUMPAD7))-int(key(VK_NUMPAD1)))*60*dt,(int(key(VK_NUMPAD9))-int(key(VK_NUMPAD3)))*60*dt,lamp&&!booth_lamp_was_))tick_error_=1944;
             booth_lamp_was_=lamp;return;
         }
         if(!current(b)){tick_error_=1904;stop(b,session,pool,false);return;}
         scan_candidates(b);
-        const bool undo_pressed=key(VK_MENU)&&key('Z');
-        if(undo_pressed&&!undo_was_){if(!undo(b))tick_error_=1911;}
-        undo_was_=undo_pressed;
+        const auto history_request=history_request_;history_request_=0;
+        const bool undo_pressed=history_request==1;
+        const bool redo_pressed=history_request==2;
+        if(undo_pressed&&!undo(b,session,pool))tick_error_=1911;
+        if(redo_pressed&&!carrying_&&!redo(b,session,pool))tick_error_=1965;
         const bool left=key(VK_LBUTTON);
         const double dt=std::min(.05,double(elapsed)*.001);
         const double forward=int(key('W'))-int(key('S')),right=int(key('D'))-int(key('A'));
         const double up=int(key(VK_SPACE)||key('E'))-int(key(VK_CONTROL)||key('Q'));
-        const double speed=1600.*dt*(key(VK_SHIFT)?4.:1.)/std::max(1.,std::sqrt(forward*forward+right*right+up*up));
+        const double speed=fly_speed_*dt*(key(VK_SHIFT)?4.:1.)/std::max(1.,std::sqrt(forward*forward+right*right+up*up));
         const double fine=150.*dt*(key(VK_MENU)?.1:1.);
         double v[]={forward*speed,right*speed,up*speed,0,
             (int(key(VK_NUMPAD8))-int(key(VK_NUMPAD2)))*fine,
             (int(key(VK_NUMPAD6))-int(key(VK_NUMPAD4)))*fine,
             (int(key(VK_NUMPAD9))-int(key(VK_NUMPAD3)))*fine,
             (int(key(VK_NUMPAD7))-int(key(VK_NUMPAD1)))*fine*.1};
-        if(undo_pressed)std::fill(std::begin(v),std::end(v),0.);
+        if(undo_pressed||redo_pressed)std::fill(std::begin(v),std::end(v),0.);
         // Sample view before ray selection; hovering never changes mobility or history.
-        clear();if(!call(b,ids_[0],8)){tick_error_=1906;return;}std::memcpy(rotation_,args_,24);
-        if(left&&(!left_was_||want_grab_)&&!undo_pressed) {if(!pick(b))tick_error_=1905;dragging_=selected_.address!=0;want_grab_=!dragging_;}
-        if(!left){dragging_=false;want_grab_=false;}left_was_=left;
+        rotation_[0]=std::clamp(std::remainder(rotation_[0],360.)+look_pitch,-89.,89.);
+        rotation_[1]=std::remainder(rotation_[1]+look_yaw,360.);rotation_[2]=0;
+        const bool placing=carrying_&&left&&!left_was_;
+        if(placing){carrying_=false;dragging_=false;}
+        if(!carrying_&&!placing&&!duplicate_requested_&&left&&(!left_was_||want_grab_)&&!undo_pressed) {
+            if(duplicate_click_) {
+                if(!pick(b,false))tick_error_=1905;
+                const auto owned=std::find_if(spawned_.begin(),spawned_.end(),[&](const auto& row){return row.component.index==hover_.index&&row.component.serial==hover_.serial&&row.component.address==hover_.address;});
+                if(hover_.address&&owned!=spawned_.end()){selected_=hover_;selected_actor_=hover_actor_;duplicate_requested_=true;}
+                dragging_=false;want_grab_=false;
+            } else {if(!pick(b))tick_error_=1905;dragging_=selected_.address!=0;want_grab_=!dragging_;}
+        }
+        if(duplicate_requested_)for(int j=3;j<8;++j)v[j]=0;
+        if(!left){dragging_=carrying_;want_grab_=false;}
+        if(carrying_)dragging_=true;left_was_=left;
         const bool nudge=v[4]||v[5]||v[6]||v[7];
         if(nudge&&!nudging_&&!dragging_&&selected_.address)if(!checkpoint(b,selected_))tick_error_=1911;
         nudging_=nudge;v[3]=dragging_?1.:0.;
@@ -118,7 +173,7 @@ public:
         if(!dragging_){last_hover_=now;if(!pick(b,false))tick_error_=1905;}
         if(true) {
             last_hud_=now;
-            if(!glow(b,session,pool,dragging_?selected_:hover_))tick_error_=1913;
+            if(!glow(b,session,pool,highlight_mode_==1?(dragging_?selected_:hover_):(highlight_mode_==2&&dragging_?selected_:CallIdentity{})))tick_error_=1913;
             if(ids_[48].address&&(!visibility(b,ids_[48],true)||!feedback(b)))tick_error_=1910;
         }
         QueryPerformanceCounter(&end);const double cost=double(end.QuadPart-begin.QuadPart)*1000./double(frequency.QuadPart);

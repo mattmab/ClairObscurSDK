@@ -45,6 +45,27 @@ class Controls(unittest.TestCase):
             builder.refresh_menu_owner()
         menu.close.assert_not_called();self.assertIs(builder.catalog_menu,menu)
 
+    def test_play_requires_active_camera_and_no_preview(self):
+        builder=mod.Mod();builder.command=Mock()
+        with self.assertRaisesRegex(ValueError,'Start the builder'):builder.play_from_camera()
+        builder.active=True;builder.booth_pending=True
+        with self.assertRaisesRegex(ValueError,'Exit the asset preview'):builder.play_from_camera()
+        builder.command.assert_not_called()
+
+    def test_play_closes_menu_then_teleports_and_releases_drag(self):
+        builder=mod.Mod();builder.active=True;builder.held={1};builder.dragging=True
+        events=[];builder.catalog_menu=SimpleNamespace(state='open',hide=lambda:events.append('hide'))
+        builder.library=SimpleNamespace(message='');builder.status=Mock(return_value={})
+        builder.command=lambda op:events.append(op)
+        builder.play_from_camera()
+        self.assertEqual(events,['hide',55]);self.assertFalse(builder.held);self.assertFalse(builder.dragging)
+
+    def test_blocked_play_preserves_active_camera(self):
+        builder=mod.Mod();builder.active=True;builder.last={'native_error':1959}
+        builder.command=Mock(side_effect=RuntimeError('native'))
+        with self.assertRaisesRegex(ValueError,'cannot fit'):builder.play_from_camera()
+        self.assertTrue(builder.active)
+
     def test_space_ctrl_vertical_aliases(self):
         self.assertEqual(mod.input_motion({32}, .05),mod.input_motion({69}, .05))
         self.assertEqual(mod.input_motion({17}, .05),mod.input_motion({81}, .05))

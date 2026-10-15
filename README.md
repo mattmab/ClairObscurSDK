@@ -20,7 +20,7 @@ or the local, untracked `settings/install-path.txt`.
 Install [ClairObscurSDK RC6](https://www.nexusmods.com/clairobscurexpedition33/mods/940)
 first, then choose the mods you want. These are separate downloads, not bundled
 with the SDK; each published Nexus listing declares the SDK requirement.
-RC8 is [available as a GitHub prerelease](https://github.com/mattmab/ClairObscurSDK/releases/tag/v0.1.0-rc8) with the native runtime required by **E33 World Builder**. The release provides separate SDK, World Builder mod, optional neutral thumbnail pack, and source downloads. Stock RC6 cannot run World Builder. See [RC8 release notes](docs/RELEASE_0.1.0_RC8.md).
+RC9 is [available as a GitHub prerelease](https://github.com/mattmab/ClairObscurSDK/releases/tag/v0.1.0-rc9) with the native runtime required by **E33 World Builder**. The release provides separate SDK, World Builder mod, optional neutral thumbnail pack, and source downloads. Stock RC6 cannot run World Builder. See [RC9 release notes](docs/RELEASE_0.1.0_RC9.md).
 
 RC6 remains [available on GitHub](https://github.com/mattmab/ClairObscurSDK/releases/tag/v0.1.0-rc6); its Nexus upload is awaiting manual approval.
 

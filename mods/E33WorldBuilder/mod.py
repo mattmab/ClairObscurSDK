@@ -100,21 +100,26 @@ class Mod:
         self.catalog_menu = None
         self.prewarm_at = time.monotonic()+3
         self.booth_pending=False
+        self._catalog_selection=None
+        self.pending_catalog_asset=None
 
     def management(self):
-        return ModDefinition('e33.world-builder', 'World Builder', version='0.28.0-experimental',
+        return ModDefinition('e33.world-builder', 'World Builder', version='0.29.0-experimental',
             description='F8 freecam. WASD fly, mouse look, Space/Ctrl up/down (E/Q also work), Shift faster. Hold left mouse to grab a world prop; release to place. Numpad 8/2 forward/back, 4/6 left/right, 9/3 up/down, 7/1 yaw; Alt precise; Alt+Z undo. F9 restores edits and clears spawned props. F7 opens folders, previews, spawning, galleries and saved maps.',
             actions=(Action('catalog', 'Open asset catalog', self.open_catalog),Action('toggle', 'Enter / leave builder camera', self.toggle),
                      Action('restore', 'Restore all edited geometry', self.restore),
                      Action('undo', 'Undo last prop edit', self.undo),
                      Action('status', 'Builder status', self.status)),
             keybinds=(Keybind('catalog', 'Open asset catalog', 'F7', self.open_catalog),Keybind('toggle', 'Toggle builder camera', 'F8', self.toggle),
-                      Keybind('restore', 'Restore all geometry edits', 'F9', self.restore)))
+                      Keybind('restore', 'Restore all geometry edits', 'F9', self.restore),
+                      Keybind('duplicate_to_hand','Duplicate selected prop to hand','F10',self.duplicate_to_hand)))
 
     def enable(self, session):
         self.session = session
         from .library import Library
         self.library = Library(self)
+        from .camera_settings import CameraSettings
+        self.camera_settings=CameraSettings(self.library.store.root.parent)
         self.user32 = ctypes.WinDLL('user32', use_last_error=True)
         self.user32.GetAsyncKeyState.argtypes = [ctypes.c_int]
         self.user32.GetAsyncKeyState.restype = ctypes.c_short
@@ -123,8 +128,11 @@ class Mod:
         session.actions.register('world_builder.toggle', self.toggle)
         session.actions.register('world_builder.stop', self.stop)
         session.actions.register('world_builder.restore', self.restore)
+        session.actions.register('world_builder.play_from_camera',self.play_from_camera)
+        session.actions.register('world_builder.duplicate_to_hand',self.duplicate_to_hand)
         session.actions.register('world_builder.pick', self.pick)
         session.actions.register('world_builder.undo', self.undo)
+        session.actions.register('world_builder.redo', self.redo)
         session.actions.register('world_builder.automatic', self.automatic, schema={'type':'object','properties':{'enabled':{'type':'boolean'}},'required':['enabled'],'additionalProperties':False})
         session.actions.register('world_builder.status', self.status, mutates=False)
         session.actions.register('world_builder.step', self.step,
@@ -162,11 +170,11 @@ class Mod:
             packet[2000:2000+len(encoded)]=encoded
         if op in (35,51):struct.pack_into('<I',packet,2000,registry_offset)
         if op==50:
-            if not bulk or len(bulk)>64:raise ValueError('Expected 1â€“64 spawn rows')
+            if not bulk or len(bulk)>64:raise ValueError('Expected 1–64 spawn rows')
             struct.pack_into('<I',packet,2000,len(bulk))
             for i,(index,flags,pose) in enumerate(bulk):struct.pack_into('<II12d',packet,4096+192*i,index,flags,*pose)
         if op==53:
-            if not bulk or len(bulk)>128:raise ValueError('Expected 1â€“128 deletion rows')
+            if not bulk or len(bulk)>128:raise ValueError('Expected 1–128 deletion rows')
             struct.pack_into('<I',packet,2000,len(bulk))
             for i,identity in enumerate(bulk):struct.pack_into('<iiQ',packet,4096+16*i,*identity)
         if values:
@@ -176,7 +184,7 @@ class Mod:
         with self.session._lease_context():
             reply = self.session._session._transport.command('mesh', bytes(packet))
         raw = bytes.fromhex(reply['mesh_packet'])
-        if len(raw) != len(packet) or raw[:8] != packet[:8] or raw[16:24] != packet[16:24] or raw[88:3000] != packet[88:3000] or raw[3356:3400] != packet[3356:3400] or (raw[3544:3560] != packet[3544:3560] or raw[3648:4096] != packet[3648:4096] or raw[20480:] != packet[20480:] or (op not in (29,35,50,51,54) and raw[4096:20480] != packet[4096:20480])):
+        if len(raw) != len(packet) or raw[:8] != packet[:8] or raw[16:24] != packet[16:24] or raw[88:3000] != packet[88:3000] or raw[3392:3400] != packet[3392:3400] or (raw[3544:3560] != packet[3544:3560] or raw[3648:4096] != packet[3648:4096] or raw[20480:] != packet[20480:] or (op not in (29,35,50,51,54,60) and raw[4096:20480] != packet[4096:20480])):
             raise RuntimeError('Builder acknowledgement mismatch; outcome uncertain')
         self.last_raw = raw
         _, _, error, state, _ = struct.unpack_from('<4IQ', raw)
@@ -187,6 +195,11 @@ class Mod:
                          selected_component_index=selected[0] if selected[2] else None,
                          position=list(struct.unpack_from('<3d', raw, 56)), edits=edits,
                          native_error=error, native_step=step)
+        self.selected_identity=selected
+        self.last['undo_revision']=struct.unpack_from('<I',raw,3388)[0]
+        self.last['duplicate_requested']=bool(struct.unpack_from('<I',raw,3384)[0])
+        self.last['carrying']=bool(struct.unpack_from('<I',raw,3380)[0])
+        self.last['rotation']=list(struct.unpack_from('<3d',raw,3356))
         stats = struct.unpack_from('<8d',raw,3000)
         self.last.update(native_ticks=int(stats[0]), mean_tick_ms=stats[1], mean_work_ms=stats[2], max_work_ms=stats[3], tick_error=int(stats[4]), undo_count=int(stats[5]), hovered_component_index=int(stats[6]), dragging=bool(stats[7]), label=raw[3100:3356].split(b'\0')[0].decode('utf8',errors='replace'))
         self.last["ray_center_error_px"] = struct.unpack_from("<d",raw,3064)[0]
@@ -229,6 +242,86 @@ class Mod:
         if reopen and self.catalog_menu and self.catalog_menu.state=='built':
             with ReadBatch(self.session.pid):self.catalog_menu.paint();self.catalog_menu.open()
         return self.status()
+    def play_from_camera(self,_=None):
+        if self.booth_pending:raise ValueError('Exit the asset preview first')
+        if not self.active:raise ValueError('Start the builder camera first')
+        if self.catalog_menu and self.catalog_menu.state=='open':self.catalog_menu.hide()
+        try:self.command(55)
+        except RuntimeError:
+            if self.last.get('native_error')==1959:raise ValueError('Character cannot fit here. Move the camera into open space and retry.') from None
+            raise
+        self.held.clear();self.dragging=False
+        self.library.message='Playing from camera; character controls restored.'
+        return self.status()
+
+    def apply_camera_settings(self, values):
+        from .camera_settings import validate
+        values=validate(values)
+        if self.active:self.command(56,values=[values['sensitivity'],values['fly_speed'],(2 if values['highlight']=='click' else int(values['highlight'])),int(values['duplicate_click']),0,0,0,0])
+        return values
+
+    def save_camera_settings(self, sensitivity, fly_speed, highlight, duplicate_click=None):
+        if duplicate_click is None:duplicate_click=self.camera_settings.values.get('duplicate_click',False)
+        values=self.apply_camera_settings(dict(sensitivity=sensitivity,fly_speed=fly_speed,highlight=highlight,duplicate_click=duplicate_click))
+        self.camera_settings.save(values)
+        self.library.message='Camera settings saved'
+        return values
+
+    def toggle_duplicate_click(self):
+        values=dict(self.camera_settings.values)
+        values['duplicate_click']=not values.get('duplicate_click',False)
+        return self.save_camera_settings(**values)
+
+    def sync_undone_copies(self):
+        revision=self.last.get('undo_revision',0)
+        if revision==getattr(self,'_undo_revision',0):return
+        self.command(60)
+        count=struct.unpack_from('<I',self.last_raw,3560)[0]
+        if count>64:raise RuntimeError('Invalid duplicate undo history')
+        if not hasattr(self,'_undone_records'):self._undone_records={}
+        removed=set()
+        for i in range(count):
+            at=4096+i*56;event=struct.unpack_from('<Q',self.last_raw,at)[0]
+            if event<=getattr(self,'_undo_revision',0):continue
+            before=struct.unpack_from('<iiQ',self.last_raw,at+8)
+            actor=struct.unpack_from('<iiQ',self.last_raw,at+24)
+            component=struct.unpack_from('<iiQ',self.last_raw,at+40)
+            if not actor[2]:
+                for key,row in list(self.library.owned.items()):
+                    if tuple(row['actor'])==before:
+                        self._undone_records[before]=self.library.owned.pop(key);removed.add(key)
+            else:
+                row=self._undone_records.pop(before,None)
+                if row is None:raise RuntimeError('Restored duplicate has no tracking record')
+                row=dict(row,actor=actor,component=component)
+                self.library.owned[row['id']]=row
+                removed.discard(row['id'])
+            self._undo_revision=event
+        if self.library.selected in removed:self.library.selected=None
+        menu=self.catalog_menu
+        if menu:
+            if menu.selected and menu.selected.get('id') in removed:menu.selected=None
+            menu.signature=None
+        # Match the bounded native history, retaining only recently undone records.
+        while len(self._undone_records)>64:self._undone_records.pop(next(iter(self._undone_records)))
+
+    def process_duplicate_click(self):
+        if not self.last.get('duplicate_requested'):return
+        try:self.duplicate_to_hand()
+        except Exception as exc:
+            self.library.message='Could not duplicate: '+str(exc)
+            LOG.exception('Click duplication failed')
+        finally:self.command(59)
+
+    def sync_catalog_selection(self):
+        identity=getattr(self,'selected_identity',None)
+        if not identity or not identity[2] or identity==self._catalog_selection:return
+        self._catalog_selection=identity
+        from .camera_settings import selected_owned
+        row=selected_owned(self.library.owned,identity)
+        if row and row['id']!=self.library.preview_key:
+            self.library.selected=row['id'];self.pending_catalog_asset=row['asset']
+
     def refresh_menu_owner(self):
         menu=self.catalog_menu
         if menu is None:return
@@ -258,7 +351,11 @@ class Mod:
             with ReadBatch(self.session.pid):self.catalog_menu.build()
         if self.catalog_menu.state=='open':self.catalog_menu.hide()
         else:
-            with ReadBatch(self.session.pid):self.catalog_menu.paint();self.catalog_menu.open()
+            self.command(26);self.sync_catalog_selection()
+            with ReadBatch(self.session.pid):
+                if self.pending_catalog_asset:
+                    self.catalog_menu.focus_asset(self.pending_catalog_asset);self.pending_catalog_asset=None
+                self.catalog_menu.paint();self.catalog_menu.open()
         return {'open':self.catalog_menu.state=='open'}
 
     def menu_fields(self,first=None,second=None,search=None,map_name=None):
@@ -299,6 +396,7 @@ class Mod:
         self.started = True
         try:
             result = self.command(20, ids=ids)
+            self.apply_camera_settings(self.camera_settings.values)
         except Exception:
             # Adapter records each completed mutation for bounded cleanup.
             self.command(22)
@@ -333,6 +431,36 @@ class Mod:
             return result
         return self.status()
 
+    def duplicate_to_hand(self,_=None):
+        if not self.active or self.booth_pending:raise ValueError('Use the builder camera outside the asset preview')
+        self.command(26)
+        if self.last.get('carrying'):raise ValueError('Click to place the current copy first')
+        from .camera_settings import selected_owned
+        row=selected_owned(self.library.owned,getattr(self,'selected_identity',()))
+        menu=self.catalog_menu
+        if menu and menu.state=='open' and menu.workspace=='Library' and menu.selected:
+            row=self.library.owned.get(menu.selected.get('id'))
+        if not row or row['id']==self.library.preview_key:raise ValueError('Select a spawned scene or gallery prop first')
+        from expedition33.catalog import capture_selected
+        if row['kind']=='mesh':
+            c=capture_selected(self.session.pid,[tuple(row['component'])]);source=c.by_index[row['component'][0]]
+            raw=self.scene_command(57,objects=(source,))
+            actor=struct.unpack_from('<iiQ',raw,3568);component=struct.unpack_from('<iiQ',raw,3584)
+            if not actor[2] or not component[2]:raise RuntimeError('Duplicate identity missing; outcome uncertain')
+            from .bulk import register
+            result=register(self.library,row['asset'],actor,component)
+        else:
+            result=self.library.duplicate(row['id'])
+            try:
+                record=self.library.owned[result['id']]
+                c=capture_selected(self.session.pid,[tuple(record['component'])])
+                self.scene_command(58,objects=(c.by_index[record['component'][0]],))
+            except Exception:
+                self.library.delete(result['id']);raise
+        if menu and menu.state=='open':menu.hide()
+        self.library.message='Copy in hand. Fly to position, then click to place. F10 duplicates again.'
+        return dict(result,carrying=True)
+
     def pick(self, _=None):
         return self.command(23)
 
@@ -340,7 +468,14 @@ class Mod:
         return self.command(21, values=values)
 
     def undo(self, _=None):
-        return self.command(27)
+        self.command(27)
+        self.sync_undone_copies()
+        return self.status()
+
+    def redo(self, _=None):
+        self.command(61)
+        self.sync_undone_copies()
+        return self.status()
 
     def automatic(self, enabled):
         return self.command(28, automatic=enabled)
@@ -397,8 +532,12 @@ class Mod:
         if not self.started or now < self.next_status:
             return
         self.next_status = now + (.02 if self.catalog_menu and self.catalog_menu.state=='open' and self.catalog_menu.batch_gallery.queue and not self.catalog_menu.batch_gallery.paused else self.catalog_menu.background.poll_interval() if self.active and self.catalog_menu and not self.booth_pending else .5)
+        if self.active and self.camera_settings.values.get('duplicate_click',False):self.next_status=min(self.next_status,now+.05)
         try:
             self.command(26)
+            self.sync_undone_copies()
+            self.process_duplicate_click()
+            self.sync_catalog_selection()
             if self.booth_pending and not self.last.get('booth_active'):self.end_booth()
             if self.catalog_menu is not None:
                 with ReadBatch(self.session.pid):

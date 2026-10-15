@@ -14,7 +14,7 @@ LOG=logging.getLogger('expedition33.world_builder.preview')
 class CatalogMenu(OwnedMenuPanel):
     PAGE=18
     def __init__(self,mod):
-        super().__init__(mod.session,controls=51,cached_construction=True,selected_results=True)
+        super().__init__(mod.session,controls=55,cached_construction=True,selected_results=True)
         self.mod=mod;self.library=mod.library;self.browser=Browser(self.library.store.root.parent)
         self.offset=0;self.kind='mesh';self.query='';self.selected=None;self.workspace='Build'
         self.folder='/Game/';self.folders=True;self.favorites=False
@@ -103,8 +103,13 @@ class CatalogMenu(OwnedMenuPanel):
         for i in range(8):self.button(1360+(i%2)*270,825+(i//2)*59,260,50)
         for i in range(14):self.button(1360+(i%2)*270,340+(i//2)*55,260,48)
         self.button(1730,16,160,40)
+        self.button(1450,16,260,40)
+        self.button(1200,16,230,40)
+        self.button(950,16,230,40)
+        self.button(650,16,280,40)
         self.field1=self._spawn('EditableTextBox');self._place(self.field1,1360,220,530,48)
         self.field2=self._spawn('EditableTextBox');self._place(self.field2,1360,278,530,48)
+        self.camera_labels=[self.label(1360,195,530,22,.5),self.label(1360,256,530,22,.5)]
         self.search=self._spawn('EditableTextBox');self._place(self.search,24,120,1296,58)
         self.map_name=self._spawn('EditableTextBox');self._place(self.map_name,1360,750,530,55)
         for widget,text in ((self.field1,'18'),(self.field2,'600'),(self.search,''),(self.map_name,'Builder '+datetime.now().strftime('%Y-%m-%d %H-%M'))):
@@ -115,7 +120,7 @@ class CatalogMenu(OwnedMenuPanel):
         self._mutate(self.scope.assign_object,self.tree,self._class('WidgetTree'),'RootWidget',self.canvas,expected=None,allow_mutation=True,catalog=self._planner._catalog)
         self.assigned=True;self.state='built';return self
     def set_text(self,label,text):
-        if label in (self.breadcrumb,self.footer):
+        if label in (self.breadcrumb,self.footer,*getattr(self,'camera_labels',())):
             if self._text.get(label.index)!=text:
                 self._render_call(label,'TextBlock','SetText',InText=text);self._text[label.index]=text
             return
@@ -132,7 +137,24 @@ class CatalogMenu(OwnedMenuPanel):
             self.cancel_preview()
             if self.mod.started:self.mod.scene_command(39)
             self.thumbnails.clear()
+    def focus_asset(self, asset):
+        row=self.library.known.get(asset)
+        if not row:return
+        self.workspace='Build';self.kind=row['kind'];self.favorites=False;self.folders=True
+        self.folder=asset.rsplit('/',1)[0]+'/'
+        self.query='';self._render_call(self.search,'EditableTextBox','SetText',InText='')
+        rows=self.all_rows()
+        index=next((i for i,r in enumerate(rows) if r.get('path')==asset),0)
+        self.offset=index//self.PAGE*self.PAGE;self.selected=dict(row);self.signature=None
+        self.library.message='Selected scene prop - Favorite / unfavorite to save it'
+
+    def camera_fields(self):
+        settings=self.mod.camera_settings.values
+        for field,value in ((self.field1,settings['sensitivity']),(self.field2,settings['fly_speed'])):
+            self._render_call(field,'EditableTextBox','SetText',InText=f'{value:g}')
+
     def all_rows(self):
+        if self.workspace=='Camera':return []
         if self.workspace=='Library' and not self.library_assets:return [dict(path=r['asset'],name=r['asset'].rsplit('.',1)[-1],kind=r['kind'],id=r['id']) for r in self.library.owned.values() if r['id']!=self.library.preview_key and self.query.casefold() in r['asset'].casefold()]
         if self.workspace=='Maps':return [dict(r,kind='map') for r in self.library.store.list() if self.query.casefold() in r['name'].casefold()]
         if not self.library.registry_complete:self.library.refresh(force=False)
@@ -154,6 +176,14 @@ class CatalogMenu(OwnedMenuPanel):
         with self.paint_batch():
             self.set_text(self.title,'WORLD BUILDER  /  '+self.workspace)
             self.set_text(self.labels[50],'Close / F7')
+            self.set_text(self.labels[51],'Play from camera')
+            self.set_text(self.labels[52],'Camera settings')
+            self.set_text(self.labels[53],'Duplicate / F10')
+            self.set_text(self.labels[54],'Click copies: '+('ON' if self.mod.camera_settings.values.get('duplicate_click',False) else 'OFF'))
+            for i in (*range(24),*range(28,36)):self.set_visible(i,self.workspace!='Camera')
+            for widget in (self.search,self.map_name,self.breadcrumb):self._render_call(widget,'Widget','SetVisibility',InVisibility=self.collapsed if self.workspace=='Camera' else self.visible)
+            for widget,caption in zip(self.camera_labels,('Mouse sensitivity (0.05 to 10)','Fly speed (100 to 10000 cm/s)')):
+                self.set_text(widget,caption);self._render_call(widget,'Widget','SetVisibility',InVisibility=self.invisible if self.workspace=='Camera' else self.collapsed)
             self.set_text(self.breadcrumb,f"{self.folder if self.folders else 'All assets'}  |  {count} entries  |  Page {1+self.offset//self.PAGE}/{max(1,math.ceil(count/self.PAGE))}")
             for i in range(self.PAGE):
                 valid=i<len(self.rows);self.set_enabled(i,valid);text=''
@@ -166,7 +196,8 @@ class CatalogMenu(OwnedMenuPanel):
             labels=['Previous','Next','Favorites ON' if self.favorites else 'Favorites','Folders ON' if self.folders else 'All assets',self.kind.title(),'Up folder','Build','Gallery','Library','Maps','Load map' if self.workspace=='Maps' else 'Spawn page' if self.workspace=='Gallery' else 'Spawn selected','Preview','Favorite / unfavorite','Save map','Load selected map','Clear scene','Resume camera','Refresh catalog']
             for i,label in enumerate(labels,self.PAGE):self.set_text(self.labels[i],label)
             extra=[]
-            if self.workspace=='Gallery':extra=['Packing: '+('Tight' if self.batch_gallery.tight else 'Spaced'),'Spawn first batch','Previous batch','Next batch','Clear gallery','Pause / resume','Visit next','Resume camera','Save galleries','Rebuild saved','Free camera','Retry failed']
+            if self.workspace=='Camera':extra=['Apply and save','Reset defaults','Prop highlight: '+('On click' if self.mod.camera_settings.values['highlight']=='click' else 'Auto' if self.mod.camera_settings.values['highlight'] else 'Off')]
+            elif self.workspace=='Gallery':extra=['Packing: '+('Tight' if self.batch_gallery.tight else 'Spaced'),'Spawn first batch','Previous batch','Next batch','Clear gallery','Pause / resume','Visit next','Resume camera','Save galleries','Rebuild saved','Free camera','Retry failed']
             elif self.workspace=='Library':extra=['Favorite / unfavorite','Save category/tags','Quick icons','Resume capture','Pause capture','Cancel capture','Index loaded meshes','All registered meshes','Retry cleanup','Scene objects' if self.library_assets else 'Asset tools','Visit selected','Duplicate selected','Delete selected','AFK cache: '+('ON' if self.background.mode=='afk' else 'OFF')]
             for j in range(14):
                 self.set_visible(36+j,j<len(extra));self.set_text(self.labels[36+j],extra[j] if j<len(extra) else '')
@@ -175,6 +206,7 @@ class CatalogMenu(OwnedMenuPanel):
             if self.workspace=='Maps':
                 self.set_text(self.labels[29],'Take map thumbnail');self.set_text(self.labels[30],'Visit saved view')
             detail=self.batch_gallery.summary()+'\nBatch size / spacing (cm)' if self.workspace=='Gallery' else self.library.message
+            if self.workspace=='Camera':detail='Apply saves both fields. Shift flies 4x faster.'
             if self.workspace=='Library':detail+='\nCategory / tags fields'+(f'\nIcons: {len(self.capture_queue)} queued / '+('paused' if self.capture_paused else 'running') if self.library_assets else '')
 
             if self.selected:detail+=('\n'+self.selected['name'][:42]) if extra else ('\n\n'+self.selected['name'][:75]+'\n'+self.selected.get('path',self.selected.get('world',''))[:110])
@@ -182,10 +214,21 @@ class CatalogMenu(OwnedMenuPanel):
             self.set_text(self.detail,detail)
             tracked=len(self.library.owned)-int(self.library.preview_key in self.library.owned)
             bg=self.background.status()
-            self.set_text(self.footer,f"{len(self.library.rows)} assets | {tracked} tracked | Cache {bg['cached']}/{bg['total']} | {bg['failed']} skipped | Background {('AFK fast' if bg['mode']=='afk' else 'idle-time') if bg['enabled'] else 'paused'}")
+            self.set_text(self.footer,self.library.message if self.workspace=='Camera' else f"{len(self.library.rows)} assets | {tracked} tracked | Cache {bg['cached']}/{bg['total']} | {bg['failed']} skipped | Background {('AFK fast' if bg['mode']=='afk' else 'idle-time') if bg['enabled'] else 'paused'}")
     def open(self):
         self.mod.scene_command(45,objects=(self.widget,))
-        self.mod.automatic(False);super().open()
+        self.mod.automatic(False)
+        # The base panel uses button zero as its initial Slate focus target.
+        # Camera settings hides the catalog grid, so focus its visible tab.
+        first=self.buttons[0]
+        if self.workspace=='Camera':self.buttons[0]=self.buttons[52]
+        try:super().open()
+        except Exception:
+            if self.menu is None and not self.uncertain:
+                self.mod.automatic(True)
+                self.mod.hud._render_call(self.mod.hud.widget,'Widget','SetVisibility',InVisibility=self.mod.hud.invisible)
+            raise
+        finally:self.buttons[0]=first
         self.mod.hud._render_call(self.mod.hud.widget,'Widget','SetVisibility',InVisibility=self.mod.hud.collapsed)
         self.bindings=[]
         for start in range(0,len(self.buttons),24):self.bindings.extend(self.menu.bind_controls([(b,lambda event,i=i:self.click(i)) for i,b in enumerate(self.buttons) if start<=i<start+24]))
@@ -228,6 +271,10 @@ class CatalogMenu(OwnedMenuPanel):
             elif i==34:self.hide();return
             elif i==35:self.library.refresh();self.signature=None
             elif i==50:self.hide();return
+            elif i==51:self.mod.play_from_camera();return
+            elif i==52:self.workspace='Camera';self.selected=None;self.offset=0;self.camera_fields()
+            elif i==53:self.mod.duplicate_to_hand();return
+            elif i==54:self.mod.toggle_duplicate_click()
             elif i>=36:self.workspace_action(i-36)
         except Exception as e:self.library.message=str(e)
         self.paint()
@@ -254,7 +301,14 @@ class CatalogMenu(OwnedMenuPanel):
             return ([result.outputs['Origin'][x] for x in ('X','Y','Z')],[result.outputs['BoxExtent'][x] for x in ('X','Y','Z')])
     def workspace_action(self,i):
         g=self.batch_gallery
-        if self.workspace=='Gallery':
+        if self.workspace=='Camera':
+            current=self.mod.camera_settings.values
+            if i==0:self.mod.save_camera_settings(float(self.text(self.field1)),float(self.text(self.field2)),current['highlight'])
+            elif i==1:
+                from .camera_settings import DEFAULTS
+                self.mod.save_camera_settings(**DEFAULTS);self.camera_fields()
+            elif i==2:self.mod.save_camera_settings(current['sensitivity'],current['fly_speed'],('click' if current['highlight'] is True else False if current['highlight']=='click' else True))
+        elif self.workspace=='Gallery':
             if i==0:
                 g.tight=not g.tight
                 if g.assets:g.request(0)
@@ -502,7 +556,7 @@ class CatalogMenu(OwnedMenuPanel):
     def hide(self):
         self.gallery=[];self.batch_gallery.paused=True;self.capture_paused=True
         if self.map_job:self.map_job=None;self.mod.scene_command(36)
-        if self.state=='open':self._render_call(self.buttons[0],'Widget','SetUserFocus',PlayerController=self.player)
+        if self.state=='open':self._render_call(self.buttons[52 if self.workspace=='Camera' else 0],'Widget','SetUserFocus',PlayerController=self.player)
         self.cancel_preview()
         if self.bindings:
             while self.bindings:

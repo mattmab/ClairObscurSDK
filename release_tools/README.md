@@ -1,10 +1,10 @@
-# E33 World Builder 0.28.0 â€” RC8 prerelease
+# E33 World Builder 0.29.0 — RC9 prerelease
 
-Requires **Expedition33 SDK 0.1.0-rc8**, including the World Builder v42 native
+Requires **Expedition33 SDK 0.1.0-rc9**, including the World Builder v52 native
 adapter. Stock RC6 rejects the required commands and cannot run this mod.
 Windows Steam build 23765773 is the supported target. Other builds are unverified.
 
-Close the game and SDK controller. Install the RC8 SDK into the game folder,
+Close the game and SDK controller. Install the RC9 SDK into the game folder,
 preserving your settings, SDK_Assets and optional SDK_Mods. Do not overwrite an
 unrelated version.dll loader. Put E33WorldBuilder.sdkmod in SDK_Mods. Start the
 game, load an exploration save, and enable E33 World Builder in SDK Management.
@@ -33,18 +33,31 @@ instances; Maps saves/loads tracked scene assets and preview images. No enemy
 controls are included. Landscapes, foliage instances and some translucent
 surfaces are not selectable. Asset loading can still cause occasional stalls.
 
-RC8 includes asynchronous GPU picking and background full-image readback,
+RC9 includes asynchronous GPU picking and background full-image readback,
 neutral thumbnail processing, and the larger menu/resource capacities. It
 retains the development native runtime's model/hair code, but this release's
 packaging checks do not establish full model/hair gameplay regression coverage.
 
-RC8 adds registry-indexed native mesh spawn batches, a 6,000-object scene
+RC9 adds registry-indexed native mesh spawn batches, a 6,000-object scene
 capacity, paginated map saves, and galleries of up to 5,000 static meshes.
 Gallery batches have an owned floor; clearing or replacing a gallery removes
 its floor and exhibits while preserving other scene objects. Oversized exhibits
-are scaled to the spacing value (50–10,000 cm); saved map objects keep their
+are scaled to the spacing value (50-10,000 cm); saved map objects keep their
 original transforms. Invalid or unloadable assets are reported and skipped.
 
 Each native spawn command yields after approximately 4 ms of work. A single
 cold Unreal asset load cannot be interrupted and can exceed that budget.
 The menu processes short bursts and updates only progress text during spawning.
+
+RC9 adds saved mouse sensitivity and flight speed, upward mouse look and stable
+preview camera rotation, plus Play from camera. Highlighting supports Auto,
+Click-only and Off. Selecting a gallery prop follows its asset in the catalog
+for quick favoriting. F10 duplicates a spawned prop into your hand; the saved
+Click copies toggle makes clicking gallery props create copies automatically.
+Click again to place. Copies remain tracked for map saving.
+
+Alt+Z undoes moves and duplicate placements. Alt+Y restores them with the same
+transform and map tracking ID. New edits clear redo; history is limited to the
+current session (64 entries), not stored in map files. Z is blocked from gameplay
+while the builder camera is active so it cannot mount Esquie. Menu text entry
+remains available. The shortcuts use queued key events to catch brief presses.
