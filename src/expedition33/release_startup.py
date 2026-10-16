@@ -6,6 +6,21 @@ from .values import read_values, read_object_reference
 from .cinematics.original_game_action import controller_context
 
 
+def menu_ready(pid):
+    """The core UI needs the live controller's pause widget, not a pawn."""
+    with ReadBatch(pid, share=True):
+        context = controller_context(SimpleNamespace(pid=pid))
+        catalog = capture_selected(pid, (context['controller'][1:],))
+        controller = catalog.by_index[context['controller'][1]]
+        values = read_values(catalog, controller)
+        owners = [owner for owner, name in values.types if name == 'PauseMenuWidget']
+        if len(owners) != 1:
+            return False
+        pause, _ = read_object_reference(catalog, controller,
+            catalog.by_index[owners[0]], 'PauseMenuWidget', project=True)
+        return pause is not None and pause.class_name == 'WBP_PauseMenu_C'
+
+
 def gameplay_ready(pid):
     with ReadBatch(pid, share=True):
         context = controller_context(SimpleNamespace(pid=pid))

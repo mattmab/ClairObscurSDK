@@ -3,9 +3,21 @@ from types import SimpleNamespace as NS
 from unittest.mock import Mock, patch
 
 from expedition33.pause_menu import PauseMenuEntry
+from expedition33 import RuntimeQueryError
 
 
 class PauseBuildTests(unittest.TestCase):
+    def test_gc_discovery_race_retries_only_before_any_mutation(self):
+        for state, expected in (('new', 'new'), ('building', 'failed')):
+            entry = PauseMenuEntry(NS(_session=NS(_transport=NS(
+                pause_attachment_protocol=2, trace_renew_protocol=1))), NS())
+            def fail():
+                entry.state = state
+                raise RuntimeQueryError('DESCRIPTOR_IDENTITY_CHANGED')
+            entry.install = fail
+            entry.poll()
+            self.assertEqual(entry.state, expected)
+
     def entry(self, version=2):
         session = NS(_transport=NS(ui_batch_protocol=1, layout_batch_protocol=version))
         entry = PauseMenuEntry(NS(_session=session), NS())

@@ -69,6 +69,16 @@ class ManagementTests(unittest.TestCase):
         self.assertFalse(self.registry.view(self.registry.select('specimen'))['enabled'])
         self.assertTrue(self.store.get('missing')['enabled'])
 
+    def test_stepped_restore_yields_and_respects_intervening_disable(self):
+        self.store.save('missing', {'enabled': True, 'folder': 'Missing'})
+        self.store.save('specimen', {'enabled': True, 'folder': 'Specimen'})
+        steps = self.registry.restore_enabled_steps()
+        self.assertEqual(next(steps)[0], 'missing')
+        self.assertFalse(self.registry.view(self.registry.select('specimen'))['enabled'])
+        self.store.save('specimen', {'enabled': False, 'folder': 'Specimen'})
+        self.assertEqual(list(steps), [])
+        self.assertFalse(self.registry.view(self.registry.select('specimen'))['enabled'])
+
     def test_saved_options_apply_on_enable_and_views_are_copies(self):
         selection = self.registry.select('specimen')
         self.registry.set_option(selection, 'count', 7)

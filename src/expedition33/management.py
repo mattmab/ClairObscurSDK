@@ -272,15 +272,25 @@ class Registry:
 
     def restore_enabled(self):
         """Restore explicit saved choices once at host startup; isolate failures."""
+        return {mod_id: error for mod_id, error in self.restore_enabled_steps() if error}
+
+    def restore_enabled_steps(self):
+        """Restore at most one saved mod per step, on the controller thread.
+
+        Hosts can service UI between steps. Recheck the current preference so a
+        user disabling a pending mod in that UI wins over the startup snapshot.
+        """
         self._check()
-        failures = {}
         if self._settings is None:
-            return failures
+            return
         installed = set(self.installed())
         for mod_id, preference in self._settings.records().items():
+            self._check()
+            preference = self._settings.get(mod_id)
             if preference.get('enabled') is not True:
                 continue
             folder = preference.get('folder')
+            failure = None
             try:
                 if folder not in installed:
                     raise ManagementError('Saved mod folder is missing')
@@ -291,10 +301,10 @@ class Registry:
                 if not self._enabled(entry):
                     self._loader.enable(folder)
             except Exception as error:
-                failures[mod_id] = f'{type(error).__name__}: {error}'
+                failure = f'{type(error).__name__}: {error}'
                 if mod_id in self._entries:
-                    self._entries[mod_id].error = failures[mod_id]
-        return failures
+                    self._entries[mod_id].error = failure
+            yield mod_id, failure
 
     def unload(self, selection):
         entry = self._entry(selection)

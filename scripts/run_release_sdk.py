@@ -75,25 +75,25 @@ def main():
         logging.basicConfig(level=logging.INFO, format='%(asctime)s %(levelname)s %(name)s: %(message)s', handlers=[logging.FileHandler(ROOT / 'logs/controller.log', encoding='utf8')])
         from expedition33.release_mods import materialize
         mod_root = materialize(ROOT.parent / 'SDK_Mods', ROOT)
-        from expedition33.release_startup import gameplay_ready
+        from expedition33.release_startup import gameplay_ready, menu_ready
         deadline = time.monotonic() + 600
-        logging.info('Waiting for loaded exploration gameplay before restoring saved mods: pid=%s', args.game_pid)
+        logging.info('Waiting for the native pause UI before attaching core SDK: pid=%s', args.game_pid)
         while True:
             if kernel.WaitForSingleObject(handle, 0) != 258:
                 return
             try:
-                ready=gameplay_ready(args.game_pid)
+                ready=menu_ready(args.game_pid)
                 if not ready and args.combat_model_test:
                     from expedition33.procedural_mesh import combat_target
                     combat_target(args.game_pid)
                     ready=True
                 if ready:
-                    logging.info('Gameplay ready; attaching core SDK and pause entry: pid=%s', args.game_pid)
+                    logging.info('Pause UI ready; attaching core SDK and pause entry: pid=%s', args.game_pid)
                     break
                 # A valid title/menu state is not an error. Keep waiting while
                 # this process lives; only sustained read failures time out.
                 deadline = time.monotonic() + 600
-                time.sleep(1)
+                time.sleep(.25)
             except Exception as error:
                 if time.monotonic() >= deadline:
                     raise RuntimeError('Game was not ready within ten minutes') from error
@@ -127,11 +127,11 @@ def main():
                 if view['protected'] or settings.get(view['id']).get('enabled') is not False:
                     loader.registry.set_enabled(selection, True)
                 if name == 'SDKManagement':
-                    # Publish the pause entry before optional mods do expensive
-                    # restoration/prewarming. Full menu construction stays lazy.
-                    loader._loaded[name][1].pause.poll()
-            for mod_id, failure in loader.registry.restore_enabled().items():
-                logging.error('Saved enable failed for %s: %s', mod_id, failure)
+                    # Prepare the usable menu before optional gameplay work.
+                    loader._loaded[name][1].prepare()
+            restoration = loader.registry.restore_enabled_steps()
+            next_restore = time.monotonic() + .25
+            gameplay_confirmed = False
             server = None
             if args.commands:
                 from expedition33.controller_commands import CommandServer, Command
@@ -161,6 +161,32 @@ def main():
                     if server:
                         server.poll()
                     loader.poll()
+                    if restoration is not None and not loader.stop_requested and time.monotonic() >= next_restore:
+                        management = loader._loaded['SDKManagement'][1]
+                        menu = management.native.menu
+                        # Do not begin a synchronous mod enable while the user
+                        # is in either menu. Poll commands between each enable.
+                        busy = menu is not None and menu.panel.state == 'open'
+                        if not busy and management.pause.state == 'attached':
+                            busy = management.pause.invoke(management.pause._active_call)
+                        if not busy:
+                            if not gameplay_confirmed:
+                                try:
+                                    gameplay_confirmed = gameplay_ready(args.game_pid)
+                                    if not gameplay_confirmed and args.combat_model_test:
+                                        from expedition33.procedural_mesh import combat_target
+                                        combat_target(args.game_pid)
+                                        gameplay_confirmed = True
+                                except Exception:
+                                    gameplay_confirmed = False
+                            if gameplay_confirmed:
+                                result = next(restoration, None)
+                                if result is None:
+                                    restoration = None
+                                    logging.info('Saved mod restoration complete')
+                                elif result[1]:
+                                    logging.error('Saved enable failed for %s: %s', *result)
+                        next_restore = time.monotonic() + .25
                     time.sleep(.005)
                 if loader.stop_requested:
                     time.sleep(.3)  # Let the requesting client receive acknowledgement.

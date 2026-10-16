@@ -15,6 +15,7 @@ from ._scope import SessionScope
 from ._reader import ReadBatch, active_reader
 from ._pause_attachment import PauseAttachment
 from ._pause_clicks import PauseClicks
+from . import RuntimeQueryError
 
 log = logging.getLogger(__name__)
 
@@ -331,6 +332,13 @@ class PauseMenuEntry:
                 if self.invoke(self._active_call): self.invoke(self._button_focus)
                 log.info('SDK menu closed; focus returned to native Mods entry')
         except BaseException as error:
+            # Discovery may race GC during startup or an SDK restart. Nothing
+            # has been borrowed or mutated while state is still new. Discard
+            # that observation and let the next bounded scan start afresh.
+            if (self.state == 'new' and isinstance(error, RuntimeQueryError)
+                    and 'DESCRIPTOR_IDENTITY_CHANGED' in str(error)):
+                log.info('Pause discovery changed during GC; waiting for the next scan')
+                return
             self.state, self.error = 'failed', f'{type(error).__name__}: {error}'
             log.exception('Pause entry suspended; owner retained for cleanup')
 

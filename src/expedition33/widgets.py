@@ -248,7 +248,7 @@ class OwnedMenuPanel:
             OwningPlayer=self.player).return_value
         if self._selected_results:
             self.tree, current = read_object_reference(self._planner._catalog,
-                self.widget, self._class('UserWidget'), 'WidgetTree')
+                self.widget, self._class('UserWidget'), 'WidgetTree', project=True)
         else:
             current = capture()
             self.tree = read_values(current, current.resolve(self.widget)).values[
@@ -257,7 +257,10 @@ class OwnedMenuPanel:
             # Create also initializes WidgetTree, which is a child and therefore
             # outside the returned widget's outer/class dependency closure.
             # Adopt the verified property-reference closure (or full observation).
-            self._planner.refresh_from(current)
+            if self._selected_results:
+                self._planner.adopt_observations(current)
+            else:
+                self._planner.refresh_from(current)
         if self.tree is None or self.tree.outer_index != self.widget.index or self._root() is not None:
             raise RuntimeError('New widget does not have the expected empty owned tree')
         self.canvas = self._spawn('CanvasPanel')
