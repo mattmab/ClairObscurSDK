@@ -9,7 +9,7 @@ SIZE = HEADER.size + BINDING.size * CAPACITY
 
 
 def request(operation, session, generation, bindings=()):
-    if operation not in ('replace', 'drain') or any(
+    if operation not in ('replace', 'drain', 'capture') or any(
             type(n) is not int or not 0 < n < 2**64 for n in (session, generation)):
         raise ValueError('Invalid key operation/session/generation')
     bindings = tuple(bindings)
@@ -17,7 +17,7 @@ def request(operation, session, generation, bindings=()):
         raise ValueError('Invalid key map length')
     tokens, keys = set(), set()
     packet = bytearray(SIZE)
-    HEADER.pack_into(packet, 0, 1, 1 if operation == 'replace' else 2,
+    HEADER.pack_into(packet, 0, 1, {'replace':1,'drain':2,'capture':3}[operation],
                      session, generation, len(bindings), 0, 0, 0)
     for index, binding in enumerate(bindings):
         if type(binding) is not tuple or len(binding) != 2:
@@ -35,10 +35,10 @@ def validate_request(packet):
     if type(packet) is not bytes or len(packet) != SIZE:
         raise ValueError('Invalid key packet')
     version, operation, session, generation, count, *_ = HEADER.unpack_from(packet)
-    if version != 1 or operation not in (1, 2) or count > CAPACITY:
+    if version != 1 or operation not in (1, 2, 3) or count > CAPACITY:
         raise ValueError('Invalid key request header')
     bindings = tuple(BINDING.unpack_from(packet, HEADER.size + i * BINDING.size) for i in range(count))
-    if request('replace' if operation == 1 else 'drain', session, generation, bindings) != packet:
+    if request({1:'replace',2:'drain',3:'capture'}[operation], session, generation, bindings) != packet:
         raise ValueError('Key request contains unexpected fields')
     return operation
 
@@ -53,7 +53,7 @@ def decode(sent, encoded):
     _, _, _, _, count, dropped, error, reserved = HEADER.unpack_from(received)
     if reserved or error not in (0, 1, 2, 3) or count > CAPACITY:
         raise ValueError('Invalid key acknowledgement header')
-    if error or operation == 1:
+    if error or operation in (1, 3):
         expected = bytearray(sent)
         struct.pack_into('<I', expected, 32, error)
         if received != expected:

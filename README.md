@@ -17,13 +17,14 @@ or the local, untracked `settings/install-path.txt`.
 
 ## Download optional mods
 
-Install [ClairObscurSDK RC6](https://www.nexusmods.com/clairobscurexpedition33/mods/940)
+Install [ClairObscurSDK RC11](https://github.com/mattmab/ClairObscurSDK/releases/tag/v0.1.0-rc11)
 first, then choose the mods you want. These are separate downloads, not bundled
 with the SDK; each published Nexus listing declares the SDK requirement.
-RC6 is also [available on GitHub](https://github.com/mattmab/ClairObscurSDK/releases/tag/v0.1.0-rc6); its Nexus upload is awaiting manual approval.
+Older Nexus releases remain available; World Builder requires RC11.
 
 | Mod | Features and limitations |
 | --- | --- |
+| [**World Builder — EXPERIMENTAL**](https://github.com/mattmab/ClairObscurSDK/releases/tag/world-builder-v0.30.0) | Standalone optional mod for free camera, prop placement, maps, catalog browsing and thumbnails. Requires RC11. |
 | [Continent Flight](https://www.nexusmods.com/clairobscurexpedition33/mods/941) | Exploration flight for supported human characters. Dismount Esquie first; experimental traversal support. |
 | [Picto Editor](https://www.nexusmods.com/clairobscurexpedition33/mods/942) | Edit supported Picto stats, levels, Lumina costs and mastery. Changes can affect saves. |
 | [Statistics](https://www.nexusmods.com/clairobscurexpedition33/mods/943) | View captured damage events and supported battle counters. Not full third-party Statistics DLL parity. |
@@ -90,8 +91,8 @@ mods unload
 ```
 
 `stat fps` toggles the native FPS display. The example counts physical key presses
-in the SDK log; its default is F6. The native menu's Keybinds page provides a key
-selector. Conflicting active bindings are reported and suppressed. Key callbacks
+in the SDK log; its default is F6. The native menu's Keybinds page provides a press-a-key
+capture prompt: click a binding and press the desired key. Conflicting active bindings are reported and suppressed. Key callbacks
 are suppressed while the console or SDK menu owns input; they do not consume the
 ordinary game key. Single keys are supported, not chords or controller buttons.
 

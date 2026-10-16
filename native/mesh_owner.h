@@ -71,6 +71,12 @@ inline bool structure(uint64_t b,uint64_t s,const char* name,int width) {
     // to verified BreakHitResult; no caller bytes or internal offsets accepted.
     if(!std::strcmp(name,"HitResult"))return width==248 && named(b,s,name,"/Script/Engine") && local_read<int32_t>(s+0x58)==248;
     if(!named(b,s,name,"/Script/CoreUObject") || local_read<int32_t>(s+0x58)!=width)return false;
+    if(!std::strcmp(name,"Rotator")) {
+        static const MeshField r[]={{"Pitch","DoubleProperty",0,8,0x18001041000205ULL,0x6e11788ULL,"","",0,"",0U,""},
+{"Yaw","DoubleProperty",8,8,0x18001041000205ULL,0x6e11788ULL,"","",0,"",0U,""},
+{"Roll","DoubleProperty",16,8,0x18001041000205ULL,0x6e11788ULL,"","",0,"",0U,""}};
+        return fields(b,s,r,3);
+    }
     if(!std::strcmp(name,"Transform"))return fields(b,s,mesh_Transform,3);
     if(!std::strcmp(name,"Quat"))return fields(b,s,mesh_Quat,4);
     TargetPodSchemaOps ops{b};
@@ -139,7 +145,7 @@ public:
         return retiring?close(b,session,pool):0;
     }
     void reply(MeshPacket& p)const {
-        p.state=state_;p.actor=actor_;p.component=component_;if(!p.step)p.step=step_;
+        p.state=state_;p.actor=actor_;p.component=component_;if(!p.step)p.step=skin_.restore_step()?1000+skin_.restore_step():step_;
         p.sections=state_==1?section_count_:0;std::memcpy(p.position,position_,24);
         if(p.operation==3){p.inputs[0]=skin_.driver();p.inputs[1]=skin_.asset();p.vertex_count=skin_.switch_ms();p.index_count=skin_.switch_count();}
     }
@@ -221,7 +227,7 @@ public:
                 p.error=skin_.start(b,p,pawn_,section_count_,section_vertices_);if(p.error)return;
             }
             if(p.operation==10 && !skin_.hide(b)){p.error=1833;return;}
-            if(p.operation==11 && !skin_.restore(b)){p.error=1833;return;}
+            if(p.operation==11 && !skin_.suspend(b,component_)){p.error=1833;return;}
             if(p.operation==6) {
                 if(state_!=1 || p.section_id>section_count_ || section_loaded_[p.section_id]){p.error=1813;return;}
                 const auto length=wcsnlen(p.texture_path,512);

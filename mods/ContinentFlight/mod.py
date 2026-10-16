@@ -13,6 +13,7 @@ from expedition33._reader import ReadBatch, active_reader
 from expedition33.management import Action, Keybind, ModDefinition
 from expedition33.values import read_values
 from expedition33.invocation import InvocationError
+from expedition33.keys import VIRTUAL_KEYS
 
 LOG = logging.getLogger('expedition33.continent_flight')
 HORIZONTAL_SPEED = 1200.0
@@ -96,6 +97,7 @@ class Mod:
         self.tap = DoubleTap()
         self.error = None
         self.direction = 0
+        self.direction_key = None
         self.calls = {}
         self.last_poll = time.monotonic()
         self.input_state = {}
@@ -154,7 +156,7 @@ class Mod:
 
     def management(self):
         return ModDefinition('continent-flight', 'Continent Flight', version='0.4-experimental',
-            description='F6 toggles flight on the current exploration character. Space remains jump. E/Q ascend/descend. Travel resets flight.',
+            description='Toggle flight on the current exploration character, then hold the configured ascend or descend key. Space remains jump. Travel resets flight. Bindings can be changed in Mod keybinds.',
             actions=(Action('status', 'Flight status', self.status),
                      Action('refresh', 'Find current exploration character', self.refresh),
                      Action('land', 'Leave flight', self.land)),
@@ -303,12 +305,29 @@ class Mod:
             self.toggle(None)
 
     def rise(self, _):
-        if self.flying:
-            self.direction = 1
+        self._begin_vertical('rise', 1)
 
     def descend(self, _):
+        self._begin_vertical('descend', -1)
+
+    def _vertical_key(self, binding):
+        registry = self.session.mods
+        selection = registry.select('continent-flight')
+        key = registry.keybind(selection, binding)
+        return None if key in registry.key_conflicts() else key
+
+    def _begin_vertical(self, binding, direction):
         if self.flying:
-            self.direction = -1
+            self.direction_key = self._vertical_key(binding)
+            self.direction = direction if self.direction_key else 0
+
+    def _vertical_held(self):
+        binding = 'rise' if self.direction > 0 else 'descend'
+        key = self._vertical_key(binding)
+        # Remapping/unbinding revokes an already-held action; a fresh keydown
+        # must start the new binding. Never fall back to hard-coded E/Q.
+        return (key is not None and key == self.direction_key and
+                bool(self.user32.GetAsyncKeyState(VIRTUAL_KEYS[key]) & 0x8000))
 
     def poll(self):
         now = time.monotonic()
@@ -361,8 +380,7 @@ class Mod:
             self.direction = 0
             return
         if self.direction:
-            key = 69 if self.direction > 0 else 81
-            if not self.user32.GetAsyncKeyState(key) & 0x8000:
+            if not self._vertical_held():
                 self.direction = 0
         try:
             if not self.invoke('controlled'):

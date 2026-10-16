@@ -307,6 +307,15 @@ class Registry:
         return self._loader.reload(entry.name, expected_sha256=expected_sha256,
                                    changed_only=changed_only, expected_package_sha256=expected_package_sha256)
 
+    def reload_current(self, selection):
+        """Reload the currently installed package after capturing its exact digest."""
+        entry = self._entry(selection)
+        if entry.definition.protected:
+            raise ManagementError('This core mod cannot be reloaded')
+        snapshot = self._loader._read_source(entry.name)
+        return self.reload(selection, expected_sha256=snapshot[2],
+                           expected_package_sha256=snapshot[3].sha256)
+
     def install_staged(self, selection, *, expected_sha256):
         entry = self._entry(selection)
         return self._loader.install_staged(entry.name, expected_sha256=expected_sha256)

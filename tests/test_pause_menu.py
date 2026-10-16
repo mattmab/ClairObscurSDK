@@ -35,7 +35,7 @@ class PauseMenuLifecycleTests(unittest.TestCase):
     def test_management_restores_pause_before_warmup_after_travel(self):
         mod_type = runpy.run_path(str(Path(__file__).resolve().parents[1] / 'mods/SDKManagement/mod.py'))['Mod']
         mod = mod_type(); events = []
-        mod.native = SimpleNamespace(travel_recovery_pending=False,
+        mod.native = SimpleNamespace(travel_recovery_pending=False, menu=None,
                                      poll=Mock(side_effect=lambda: events.append('warmup')))
         mod.pause = SimpleNamespace(available=True, state='attached')
         def travel():

@@ -1,8 +1,10 @@
 """Unified console and native management with optional v19 key delivery."""
-from expedition33.management import ModDefinition, Action, Keybind
+from expedition33.management import ModDefinition, Action, Keybind, Option
 from expedition33.management_console import ConsoleMenu
 from expedition33.management_service import NativeMenuService
 from expedition33.pause_menu import PauseMenuEntry
+from expedition33.mods_workspace import ModsWorkspaceMenu, ModsWorkspaceView, THEMES
+from expedition33.mods_workspace_scroll import ScrollWorkspaceMenu, ScrollWorkspaceView
 
 
 class Mod:
@@ -14,13 +16,16 @@ class Mod:
 
     def management(self):
         return ModDefinition('sdk.management', 'SDK Management', protected=True,
+            options=(Option('theme', 'Menu theme', 'choice', 'World Builder', choices=tuple(THEMES)),
+                     Option('text_scale', 'Menu text size', 'float', 1.35, minimum=.75, maximum=2.75)),
             description='Shared registry, console fallback, native UMG menu and configurable keys. Key delivery requires --keybinds.',
             keybinds=(Keybind('closemenu', 'Close Mods menu', 'Escape', self.close_menu),),
             actions=(Action('shutdown', 'Stop the SDK controller cleanly', self.shutdown),))
 
     def enable(self, session):
         self.registry = session.mods
-        self.native = NativeMenuService(session, session.mods)
+        self.native = NativeMenuService(session, session.mods,
+            view_factory=ScrollWorkspaceView, menu_factory=ScrollWorkspaceMenu)
         session._session._native_menu_service = self.native
         self.pause = PauseMenuEntry(session,self.native)
         self.menu = ConsoleMenu(session.mods, session.console, native=self.native)
@@ -31,6 +36,12 @@ class Mod:
 
     def close_menu(self, argument):
         if self.native is not None and self.native.menu is not None and self.native.menu.panel.state == 'open':
+            if getattr(self.native.menu.view, 'editing', None):
+                menu=self.native.menu
+                cancel=next((token for token,(op,_arg,enabled) in menu.view._commands.items()
+                             if op=='cancel' and enabled),None)
+                if cancel is not None:
+                    return menu.submit(menu.frame.revision,cancel)
             return self.native.close_menu()
 
     def shutdown(self, argument):
@@ -50,6 +61,8 @@ class Mod:
             if self.pause is not None and self.pause.available and self.pause.state == 'new':
                 return
             self.native.poll()
+            if self.native.menu is not None and hasattr(self.native.menu, 'poll_scroll'):
+                self.native.menu.poll_scroll()
 
     def disable(self):
         try:

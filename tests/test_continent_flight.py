@@ -80,6 +80,29 @@ class FlightCleanupTests(unittest.TestCase):
     def test_flight_binding_is_separate_from_jump(self):
         self.assertEqual(flight.Mod().management().keybinds[0].default, 'F6')
 
+    def test_held_vertical_binding_tracks_remap_release_unbind_and_conflict(self):
+        mod=flight.Mod();mod.flying=True
+        registry=Mock();registry.keybind.return_value='R';registry.key_conflicts.return_value={}
+        mod.session=SimpleNamespace(mods=registry)
+        mod.user32=Mock();mod.user32.GetAsyncKeyState.return_value=0x8000
+        mod.descend(None)
+        self.assertEqual(mod.direction,-1)
+        self.assertTrue(mod._vertical_held())
+        mod.user32.GetAsyncKeyState.assert_called_with(82)
+        mod.user32.GetAsyncKeyState.return_value=0
+        self.assertFalse(mod._vertical_held())
+        mod.user32.GetAsyncKeyState.return_value=0x8000
+        registry.keybind.return_value='Q'
+        self.assertFalse(mod._vertical_held())
+        registry.keybind.return_value=None
+        self.assertFalse(mod._vertical_held())
+        registry.keybind.return_value='R';registry.key_conflicts.return_value={'R':('one','two')}
+        self.assertFalse(mod._vertical_held())
+        registry.key_conflicts.return_value={};registry.keybind.return_value='T'
+        mod.rise(None)
+        self.assertTrue(mod._vertical_held())
+        mod.user32.GetAsyncKeyState.assert_called_with(84)
+
     def test_rediscovery_does_not_resume_flight(self):
         mod = flight.Mod()
         mod.session = SimpleNamespace(pid=123)

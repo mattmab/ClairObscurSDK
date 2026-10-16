@@ -226,8 +226,11 @@ int run_query(int argc, char** argv) {
             require(dot!=std::string::npos && path.find('.',dot+1)==std::string::npos && path.size()<1024,
                     "ASSET_PATH_INVALID");
             asset_package=path.substr(0,dot); asset_name=path.substr(dot+1);
+            auto fold_asset=[](std::string value){for(char& ch:value)if(ch>='A'&&ch<='Z')ch=char(ch-'A'+'a');return value;};
             require(asset_package.rfind("/Game/",0)==0 && !asset_name.empty() &&
-                    (asset_package.substr(asset_package.rfind('/')+1)==asset_name || asset_package.substr(asset_package.rfind('/')+1)+"_C"==asset_name),"ASSET_PATH_INVALID");
+                    (fold_asset(asset_package.substr(asset_package.rfind('/')+1))==fold_asset(asset_name) || fold_asset(asset_package.substr(asset_package.rfind('/')+1)+"_C")==fold_asset(asset_name)),"ASSET_PATH_INVALID");
+            for(char ch:asset_name) require((ch>='a'&&ch<='z') || (ch>='A'&&ch<='Z') ||
+                (ch>='0'&&ch<='9') || ch=='_',"ASSET_PATH_INVALID");
             for(char ch:asset_package) require((ch>='a'&&ch<='z') || (ch>='A'&&ch<='Z') ||
                 (ch>='0'&&ch<='9') || ch=='_' || ch=='/',"ASSET_PATH_INVALID");
         }

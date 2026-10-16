@@ -7,7 +7,8 @@ from .management_native import NativeManagementMenu
 
 
 class NativeMenuService:
-    def __init__(self, scope, registry, *, view_factory=None):
+    def __init__(self, scope, registry, *, view_factory=None, menu_factory=None):
+        self._menu_factory = menu_factory or NativeManagementMenu
         self._view_options = {} if view_factory is None else {'view_factory': view_factory}
         self.scope = scope
         self.registry = registry
@@ -33,7 +34,7 @@ class NativeMenuService:
         if self._warmup_attempted or self.menu is not None or not self.scope.supports_multi_controls:
             return
         self._warmup_attempted = True
-        self.menu = NativeManagementMenu(self.scope, self.registry,
+        self.menu = self._menu_factory(self.scope, self.registry,
             cached_construction=True, selected_results=True, read_batches=True, reusable=True, **self._view_options)
         try:
             started = time.perf_counter()
@@ -44,7 +45,7 @@ class NativeMenuService:
                                             time.perf_counter() - started)
         except BaseException as error:
             self._failure = f'{type(error).__name__}: {error}'
-            logging.getLogger(__name__).error('Native menu warmup failed; owner retained: %s', self._failure)
+            logging.getLogger(__name__).exception('Native menu warmup failed; owner retained: %s', self._failure)
 
     def _check(self):
         if self._closed:
@@ -61,7 +62,9 @@ class NativeMenuService:
                 'error': self._failure,
                 'cached_widgets': self.menu is not None and self.menu.panel.state == 'built',
                 'experimental': True,
-                'limitations': 'Native numeric, text and JSON editors are unavailable; use console management. Dispose the cached menu before map travel with mods ui dispose. Key delivery requires --keybinds.'}
+                'limitations': ('Dispose the cached menu before map travel with mods ui dispose. Key delivery requires --keybinds.'
+                    if getattr(self._menu_factory, 'supports_typed_editors', False) else
+                    'Native numeric, text and JSON editors are unavailable; use console management. Dispose the cached menu before map travel with mods ui dispose. Key delivery requires --keybinds.')}
 
     def for_view(self, view_factory):
         """Share the cached native panel with another independently owned view."""
@@ -80,7 +83,7 @@ class NativeMenuService:
                 raise ManagementError('Previous native menu still owns resources; close it before reopening')
         # Assign before construction: failures must not discard the cleanup owner.
         if self.menu is None or self.menu.panel.state == 'closed':
-            self.menu = NativeManagementMenu(self.scope, self.registry,
+            self.menu = self._menu_factory(self.scope, self.registry,
                 cached_construction=True, selected_results=True, read_batches=True, reusable=True, **self._view_options)
         try:
             if view_factory is None:

@@ -88,6 +88,7 @@ def main():
                     combat_target(args.game_pid)
                     ready=True
                 if ready:
+                    logging.info('Gameplay ready; attaching core SDK and pause entry: pid=%s', args.game_pid)
                     break
                 # A valid title/menu state is not an error. Keep waiting while
                 # this process lives; only sustained read failures time out.
@@ -104,7 +105,7 @@ def main():
         from expedition33.settings import SettingsStore
         original_transport = sdk.SessionTransport
         def release_transport(*, _executable=None):
-            transport = original_transport(_executable=ROOT / 'build/research-probe-mesh-v27/research_probe.exe')
+            transport = original_transport(_executable=ROOT / 'build/research-probe-worldbuilder-v54-menu/research_probe.exe')
             required = ('original_game_action_protocol', 'blueprint_trace_protocol', 'picto_edit_protocol', 'picto_progression_protocol', 'picto_class_load_protocol', 'picto_cost_protocol')
             if any(getattr(transport, name, 0) != 1 for name in required) or transport.mesh_protocol != 3:
                 transport.close()
@@ -114,7 +115,7 @@ def main():
         settings = SettingsStore(ROOT / 'settings/management.json')
         with sdk.Session(multiple_pause_entries=True) as session, ModLoader(mod_root, settings=settings, session=session, poll_diagnostics=args.poll_diagnostics) as loader:
             from expedition33.lease_policy import configure
-            configure(session, hard_limit=1024, owner_quota=256, cleanup_reserve=64)
+            configure(session, hard_limit=8192, owner_quota=7000, cleanup_reserve=512)
             session.console.enable()
             # Only core/default UI mods start automatically on a fresh install.
             # Explicit saved false always wins for optional mods.
@@ -125,6 +126,10 @@ def main():
                 view = next(v for v in loader.registry.views() if v['folder'] == name)
                 if view['protected'] or settings.get(view['id']).get('enabled') is not False:
                     loader.registry.set_enabled(selection, True)
+                if name == 'SDKManagement':
+                    # Publish the pause entry before optional mods do expensive
+                    # restoration/prewarming. Full menu construction stays lazy.
+                    loader._loaded[name][1].pause.poll()
             for mod_id, failure in loader.registry.restore_enabled().items():
                 logging.error('Saved enable failed for %s: %s', mod_id, failure)
             server = None

@@ -26,7 +26,12 @@ int main() {
     for(uint32_t i=0;i<70;++i) s.press(118,false,true);
     drain=request(Drain,2); s.command(drain,0); assert(drain.count==64 && drain.dropped==6);
     for(uint32_t i=0;i<64;++i) assert(drain.bindings[i].token==2 && drain.bindings[i].key==118);
-    s.close(); s.press(118,false,true); drain=request(Drain,2); s.command(drain,0); assert(drain.error);
+    auto capture=request(Capture,3);capture.count=1;capture.bindings[0]={3,65};
+    s.command(capture,0);assert(!capture.error && s.capturing());
+    s.press(65,true,true);drain=request(Drain,3);s.command(drain,0);assert(!drain.count);
+    s.press(65,false,true);drain=request(Drain,3);s.command(drain,0);assert(drain.count==1);
+    auto restored=request(Replace,4);s.command(restored,0);assert(!s.capturing());
+    s.close(); s.press(118,false,true); drain=request(Drain,4); s.command(drain,0); assert(drain.error);
     s.begin(999); wrong=request(Replace,4); s.command(wrong,0); assert(wrong.error);
     assert(!supported_key(192)); assert(!supported_key(0)); // Console tilde / invalid.
     std::puts("keybind ABI, filtering, generations, overflow and cleanup: PASS");

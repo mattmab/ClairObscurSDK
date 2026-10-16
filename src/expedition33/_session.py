@@ -19,14 +19,14 @@ def supports_multi_controls(transport):
     capacity = getattr(transport, 'multi_button_capacity', 0)
     return (all(type(getattr(transport, name, 0)) is int and getattr(transport, name, 0) == 1
                 for name in protocols) and type(nonce) is int and 0 < nonce < 2**64 and
-            type(capacity) is int and capacity == 16)
+            type(capacity) is int and capacity in (16,64))
 
 
 def supports_traces(transport):
     protocol = getattr(transport, 'trace_protocol', 0)
     capacity = getattr(transport, 'trace_capacity', 0)
     return (supports_multi_controls(transport) and
-            type(protocol) is int and protocol == 1 and type(capacity) is int and capacity == 16)
+            type(protocol) is int and protocol == 1 and type(capacity) is int and capacity in (16,64))
 
 
 def supports_keys(transport):
@@ -123,6 +123,7 @@ class SessionTransport:
             self.blueprint_trace_protocol = ready.get('blueprint_trace_protocol', 0)
             self.trace_capacity = ready.get('trace_capacity', 0)
             self.keybind_protocol = ready.get('keybind_protocol', 0)
+            self.key_capture_protocol = ready.get('key_capture_protocol', 0)
             self.keybind_capacity = ready.get('keybind_capacity', 0)
             if (self.start.get('event') != 'snapshot_start' or
                 any(row.get('event') != 'object' for row in self.objects) or

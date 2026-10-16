@@ -222,6 +222,29 @@ class Controls(unittest.TestCase):
         self.assertEqual(targets['Cheater'],{'level':33})
         self.assertEqual(set(targets['Other']),{'multipliers','stat_keys','multiplier_keys'})
 
+    def test_disable_with_cached_panel_does_not_dispatch_ui_refresh(self):
+        e=self.editor();e.pid=1;e.scope=object();e.panel=object();e.restore_queue=['pending']
+        e.operation=nullcontext;e.progression_catalog=Mock(return_value='catalog')
+        e.preferences=SimpleNamespace(profiles={'Cheater':{'level':20}})
+        e.baselines=Mock();e.baselines.targets.return_value={'Cheater':{'level':33}}
+        e.reference=Mock(side_effect=AssertionError('closed panel must not be read'))
+        with patch('expedition33.picto_restore.restore',return_value={'missing':[],'applied':[['Cheater','level']]}) as restore, \
+             patch('expedition33.picto_inventory.PictoOwnership') as inventory:
+            e.restore_originals()
+        restore.assert_called_once_with(e.scope,{'Cheater':{'level':33}},catalog='catalog')
+        inventory.assert_not_called();e.reference.assert_not_called()
+        self.assertEqual(e.restore_queue,[])
+
+    def test_disable_missing_restore_still_fails_with_cached_panel(self):
+        e=self.editor();e.pid=1;e.scope=object();e.panel=object();e.restore_queue=['pending']
+        e.operation=nullcontext;e.progression_catalog=Mock(return_value='catalog')
+        e.preferences=SimpleNamespace(profiles={'Cheater':{'level':20}})
+        e.baselines=Mock();e.baselines.targets.return_value={'Cheater':{'level':33}}
+        with patch('expedition33.picto_restore.restore',return_value={'missing':['Cheater'],'applied':[]}), \
+             self.assertRaisesRegex(RuntimeError,'Disable restoration incomplete: Cheater'):
+            e.restore_originals()
+        self.assertEqual(e.restore_queue,['pending'])
+
     def test_removal_is_staged_until_apply_and_preserves_property_drafts(self):
         e=self.editor();e.activate(4);draft=e.drafts['Cheater']
         e.catalog_page='normal';e.catalog_selection='Cheater';e.paint_value=Mock()

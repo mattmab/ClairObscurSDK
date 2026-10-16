@@ -33,7 +33,7 @@ class LeaseReply:
 
 
 def decode(command, sent, encoded, *, capacity=128):
-    if type(capacity) is not int or not 1<=capacity<=4096:
+    if type(capacity) is not int or not 1<=capacity<=8192:
         raise ValueError('Invalid negotiated lease bound')
     if type(sent) is not bytes or len(sent) != SIZE or not isinstance(encoded, str) or len(encoded) != SIZE * 2:
         raise ValueError('Invalid lease packet size; operation outcome unknown')

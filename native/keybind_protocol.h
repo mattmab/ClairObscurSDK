@@ -4,7 +4,7 @@
 
 namespace e33_keys {
 constexpr uint32_t capacity = 64;
-enum : uint32_t { Replace = 1, Drain = 2 };
+enum : uint32_t { Replace = 1, Drain = 2, Capture = 3 };
 struct Binding { uint32_t token, key; };
 struct Packet {
     uint32_t version = 1, operation = 0;
@@ -20,7 +20,7 @@ inline bool supported_key(uint32_t key) {
 }
 inline bool valid_request(const Packet& p) {
     if(p.version != 1 || !p.session || !p.generation || p.count > capacity ||
-       p.dropped || p.error || p.reserved || (p.operation != Replace && p.operation != Drain)) return false;
+       p.dropped || p.error || p.reserved || (p.operation != Replace && p.operation != Drain && p.operation != Capture)) return false;
     if(p.operation == Drain && p.count) return false;
     for(uint32_t i=0;i<capacity;++i) {
         const auto& b=p.bindings[i];
@@ -36,9 +36,11 @@ class State {
     uint64_t session_=0, generation_=0;
     Binding bindings_[capacity]{}, events_[capacity]{};
     uint32_t count_=0, queued_=0, dropped_=0;
+    bool capturing_=false;
 public:
+    bool capturing() const { return capturing_; }
     void begin(uint64_t session) { close(); session_=session; }
-    void close() { session_=generation_=0; count_=queued_=dropped_=0;
+    void close() { session_=generation_=0; count_=queued_=dropped_=0; capturing_=false;
         std::memset(bindings_,0,sizeof(bindings_)); std::memset(events_,0,sizeof(events_)); }
     bool contains(uint32_t key) const {
         for(uint32_t i=0;i<count_;++i) if(bindings_[i].key==key) return true;
@@ -46,11 +48,11 @@ public:
     }
     void command(Packet& p, uint32_t reserved_key) {
         if(!valid_request(p) || !session_ || p.session!=session_) { p.error=1; return; }
-        if(p.operation==Replace) {
+        if(p.operation==Replace || p.operation==Capture) {
             if(p.generation<=generation_) { p.error=2; return; }
             for(uint32_t i=0;i<p.count;++i)
                 if(p.bindings[i].key==reserved_key) { p.error=3; return; }
-            generation_=p.generation; count_=p.count; queued_=dropped_=0;
+            generation_=p.generation; count_=p.count; queued_=dropped_=0; capturing_=p.operation==Capture;
             std::memcpy(bindings_,p.bindings,sizeof(bindings_));
             std::memset(events_,0,sizeof(events_));
         } else {

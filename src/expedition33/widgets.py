@@ -5,6 +5,7 @@ mode resets, research-script imports or independent controller are used here.
 Construction is explicit so callers retain the owner even if a mutation fails.
 """
 import logging
+import time
 from contextlib import contextmanager
 
 from .catalog import capture, capture_selected, capture_matching
@@ -14,12 +15,14 @@ from ._scope import SessionScope
 
 
 class OwnedMenuPanel:
+    EXTRA_NAMES = ()
+
     def __init__(self, session, *, controls=12, cached_construction=False, selected_results=False):
         session._check()
         if not session.supports_multi_controls:
             raise ValueError('Owned menu panels require v17 multi-control support')
-        if type(controls) is not int or not 1 <= controls <= 16:
-            raise ValueError('A panel requires between1 and16 controls')
+        if type(controls) is not int or not 1 <= controls <= 64:
+            raise ValueError('A panel requires between1 and64 controls')
         if type(cached_construction) is not bool:
             raise ValueError('cached_construction must be bool')
         if type(selected_results) is not bool or (selected_results and not cached_construction):
@@ -43,6 +46,7 @@ class OwnedMenuPanel:
         self._defaults = {}
         self._paint_queue = None
         self._layout_queue = None
+        self.timings = {}
 
     @contextmanager
     def paint_batch(self):
@@ -188,6 +192,7 @@ class OwnedMenuPanel:
         if self.state != 'new':
             raise RuntimeError('Construct each panel once; close it before making another')
         self.state = 'building'
+        started = time.perf_counter()
         log = logging.getLogger(__name__)
         log.info('Building owned native menu panel with %d reusable controls', self.count)
         self.catalog = capture_matching(self.scope.pid, names=(
@@ -205,7 +210,7 @@ class OwnedMenuPanel:
             'SetText', 'AddToViewport', 'IsInViewport', 'ActivateWidget',
             'IsActivated', 'SetUserFocus', 'HasKeyboardFocus', 'HasUserFocus',
             'DeactivateWidget', 'RemoveFromParent', 'SetFocusToGameViewport',
-            'SetInputMode_UIOnlyEx','SetInputMode_GameOnly','EMouseLockMode'),
+            'SetInputMode_UIOnlyEx','SetInputMode_GameOnly','EMouseLockMode') + self.EXTRA_NAMES,
             classes=('PlayerController', 'GameEngine')) if self._selected_results else capture()
         if self.catalog.pid != self.scope.pid:
             raise ValueError('Widget catalog belongs to another process')
@@ -236,6 +241,7 @@ class OwnedMenuPanel:
             from . import _ui_batch
             if _ui_batch.layout_available(self.scope._session):
                 self._layout_queue = []
+        self.timings['discovery_ms'] = (time.perf_counter() - started) * 1000
         self.widget = self._construction_call(
             self._default('WidgetBlueprintLibrary'), self._function('WidgetBlueprintLibrary', 'Create'),
             WorldContextObject=self.player, WidgetType=self._class('CommonActivatableWidget'),
@@ -263,6 +269,22 @@ class OwnedMenuPanel:
             InAnchors={'Minimum': {'X': 0., 'Y': 0.}, 'Maximum': {'X': 1., 'Y': 1.}})
         self._call(backdrop, 'Border', 'SetBrushColor',
             InBrushColor={'R': .015, 'G': .02, 'B': .03, 'A': .55})
+        self._build_contents()
+        self._flush_layout()
+        self._mutate(self.scope.assign_object, self.tree, self._class('WidgetTree'),
+            'RootWidget', self.canvas, expected=None, allow_mutation=True,
+            catalog=self._planner._catalog if self._planner is not None else None)
+        self.assigned = True
+        root = self._root()
+        if root is None or (root.index, root.serial) != (self.canvas.index, self.canvas.serial):
+            raise RuntimeError('Widget root assignment readback failed')
+        self.state = 'built'
+        self.timings['total_ms'] = (time.perf_counter() - started) * 1000
+        log.info('Native menu build timings: %s', self.timings)
+        log.info('Owned native menu tree built; awaiting paint and attachment')
+        return self
+
+    def _build_contents(self):
         self.title = self._label(90, 65, 1700, 70)
         self.detail = self._label(1120, 155, 760, 760)
         for index in range(self.count):
@@ -282,18 +304,6 @@ class OwnedMenuPanel:
             self.labels.append(self._label(80, 155 + index * 64, 980, 56, centered=True))
             self._visible[index] = True
             self._enabled[index] = True
-            log.info('Native menu construction: control %d/%d retained', index + 1, self.count)
-        self._flush_layout()
-        self._mutate(self.scope.assign_object, self.tree, self._class('WidgetTree'),
-            'RootWidget', self.canvas, expected=None, allow_mutation=True,
-            catalog=self._planner._catalog if self._planner is not None else None)
-        self.assigned = True
-        root = self._root()
-        if root is None or (root.index, root.serial) != (self.canvas.index, self.canvas.serial):
-            raise RuntimeError('Widget root assignment readback failed')
-        self.state = 'built'
-        log.info('Owned native menu tree built; awaiting paint and attachment')
-        return self
 
     def enable_cached_planning(self):
         """Opt in after construction; all rendered widget identities now exist.

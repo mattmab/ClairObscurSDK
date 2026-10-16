@@ -50,6 +50,8 @@ class SkinMathTests(unittest.TestCase):
         with self.assertRaises(ValueError):validate_request(bytes(p))
     def test_bind_rejects_geometry_injection(self):
         p=bytearray(SIZE);HEADER.pack_into(p,0,3,9,0,0,1)
+        with self.assertRaisesRegex(ValueError,'hair setter'):validate_request(bytes(p))
+        struct.pack_into('<iiQ',p,19808,1,1,0x10000)
         validate_request(bytes(p));p[352]=1
         with self.assertRaises(ValueError):validate_request(bytes(p))
     def test_hide_cannot_supply_identities(self):

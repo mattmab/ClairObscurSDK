@@ -7,7 +7,7 @@
 // quarantine(). Module-static storage and retained UObject leases outlive all
 // entries, including failed acquisition/release. No v16 integration.
 class TargetMultiButtonActions {
-    static constexpr size_t Capacity=16;
+    static constexpr size_t Capacity=64;
     using Pool=ButtonDelegatePool<Capacity>;
     using Forward=ButtonDelegateForward<Pool::Binding,TargetButtonDelegateOps>;
     struct Control { uint64_t lease=0; TargetButtonReference retained; };

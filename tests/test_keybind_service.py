@@ -13,6 +13,7 @@ class Transport:
         self.button_action_session = 123
         self.multi_button_capacity = self.trace_capacity = 16
         self.keybind_capacity = 64
+        self.key_capture_protocol = 1
         self.events = []
         self.dropped = 0
         self.sent = []
@@ -25,7 +26,7 @@ class Transport:
         if self.fail:
             return {'key_packet': 'malformed'}
         reply = bytearray(sent)
-        if operation == 1:
+        if operation in (1,3):
             self.events = []
         else:
             wire.HEADER.pack_into(reply, 0, 1, 2, 123, wire.HEADER.unpack_from(sent)[3],
@@ -59,6 +60,38 @@ class KeyServiceTests(unittest.TestCase):
         self.transport.events = [(1, 118)]
         self.assertEqual(self.service.poll(), 1)
         self.assertEqual(self.instance.calls, 1)
+
+    def test_capture_is_one_shot_and_never_dispatches_gameplay(self):
+        from expedition33.keys import VIRTUAL_KEYS
+        captured=[];owner=object()
+        self.transport.events=[(1,117)]
+        self.service.begin_capture(owner,captured.append)
+        token=list(VIRTUAL_KEYS).index('F6')+1
+        self.transport.events=[(token,117),(token,117)]
+        self.assertEqual(self.service.poll(),1)
+        self.assertEqual(captured,['F6'])
+        self.assertEqual(self.instance.calls,0)
+        self.assertIsNone(self.service._capture)
+        self.transport.events=[(1,117)]
+        self.service.poll()
+        self.assertEqual(self.instance.calls,1)
+
+    def test_cancel_owns_capture_and_discards_pending_press(self):
+        captured=[];owner=object()
+        self.service.begin_capture(owner,captured.append)
+        self.assertFalse(self.service.cancel_capture(object()))
+        self.transport.events=[(1,65)]
+        self.assertTrue(self.service.cancel_capture(owner))
+        self.service.poll()
+        self.assertEqual(captured,[])
+        self.assertIsNone(self.service._capture)
+
+    def test_capture_requires_capability_and_rejects_second_owner(self):
+        self.transport.key_capture_protocol=0
+        with self.assertRaisesRegex(Exception,'does not support'):self.service.begin_capture(self,lambda k:None)
+        self.transport.key_capture_protocol=1
+        self.service.begin_capture(self,lambda k:None)
+        with self.assertRaisesRegex(Exception,'already active'):self.service.begin_capture(object(),lambda k:None)
 
     def test_disabled_mod_replaces_map_with_empty(self):
         self.transport.events = [(1, 117)]

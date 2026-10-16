@@ -1402,11 +1402,10 @@ class StockEditor(PauseMenuEntry):
         with self.operation():
             result=restore(self.scope,targets,catalog=self.progression_catalog()) if targets else {'missing':[],'applied':[]}
             if result['missing']:raise RuntimeError('Disable restoration incomplete: '+', '.join(result['missing']))
-            if self.panel is not None:
-                from expedition33.picto_inventory import PictoOwnership
-                inventory=PictoOwnership(self.scope)
-                character=self.reference(self.panel,'WBP_Panel_Pictos_C','CurrentCharacterData')
-                if character is not None:inventory.refresh_panel(self.panel,character)
+            # Disable can run from Pause after the stock Pictos panel closes.
+            # Restoration refreshes gameplay data independently of that panel;
+            # LoadCharacter requires an active panel and must not be dispatched
+            # during teardown. The stock menu refreshes on its next activation.
         self.restore_queue.clear()
         log.info('Picto disable restoration: %s',result)
         return result

@@ -40,7 +40,8 @@ struct TargetMenuStorage {
     MenuSession menu;
 #ifdef E33_MULTI_BUTTON_SESSION
     TargetMultiButtonActions multi_actions;
-    MenuFocusControls<> control_focus;
+    // Focus references live until menu detach, across recycled tab bindings.
+    MenuFocusControls<128> control_focus;
 #endif
 };
 template<class Pool>

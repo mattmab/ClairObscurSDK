@@ -7,6 +7,7 @@ They use the SDK runtime; do not install separate controllers.
 
 | Mod | Download / release | Purpose |
 | --- | --- | --- |
+| World Builder — EXPERIMENTAL | [0.30.0](https://github.com/mattmab/ClairObscurSDK/releases/tag/world-builder-v0.30.0) | RC11 required. Free camera, prop catalog, placement and saved maps. |
 | ContinentFlight | [0.1.0-rc1](https://github.com/mattmab/ClairObscurSDK/releases/tag/mod-continentflight-v0.1.0-rc1) | Exploration flight |
 | Picto Editor | [0.1.0-rc1](https://github.com/mattmab/ClairObscurSDK/releases/tag/mod-pictoeditor-v0.1.0-rc1) | Stock-menu Picto editing and saved overrides |
 | Statistics | [0.1.0-rc1](https://github.com/mattmab/ClairObscurSDK/releases/tag/mod-statistics-v0.1.0-rc1) | Combat records and verified summary counters |
@@ -15,7 +16,7 @@ They use the SDK runtime; do not install separate controllers.
 
 ## Install
 
-1. Install SDK **0.1.0-rc4 or newer** for the supported game build; Asset Creator requires **RC6**.
+1. Install SDK **0.1.0-rc4 or newer** for the supported game build; Asset Creator requires **RC6**; World Builder requires **RC11**.
 2. Close the game/controller. Download the mod's `.sdkmod` release asset and copy
    it directly into the game's `SDK_Mods` folder. Do not extract the archive.
 3. Launch normally, load your save, then open **Pause â†’ Mods** and enable the mod.

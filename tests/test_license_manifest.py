@@ -136,9 +136,9 @@ class LicenseManifestTests(unittest.TestCase):
         for name in ('src/expedition33/__init__.py', 'scripts/run_release_sdk.py',
                      'scripts/sdk_command.py', 'docs/INSTALLABLE_RELEASE.md', 'LICENSE',
                      'THIRD_PARTY_NOTICES.md',
-                     'build/release/research-probe-mesh-v27/research_probe.exe',
-                     'build/release/runtime-session-mesh-v27/runtime_session_mesh_v27.dll',
-                     'build/bootstrap/version.dll', 'mods/SDKManagement/mod.py',
+                     'build/release/research-probe-worldbuilder-v54-menu/research_probe.exe',
+                     'build/release/runtime-session-worldbuilder-v54-menu/runtime_session_worldbuilder_v54_menu.dll',
+                     'build/release/thumbnail-worker-v2/thumbnail_worker.dll', 'build/bootstrap/version.dll', 'mods/SDKManagement/mod.py',
                      'mods/IntrospectionHarness/mod.py', 'mods/LiveObjectViewer/mod.py'):
             self.write(name, b'# fixture\n')
         original = package_release_candidate.ROOT
@@ -149,7 +149,9 @@ class LicenseManifestTests(unittest.TestCase):
         self.assertEqual(result['mods'], 3)
         with zipfile.ZipFile(result['archive']) as archive:
             self.assertIn('SDK_Mods/LiveObjectViewer.sdkmod', archive.namelist())
-            self.assertIn('SDK/build/runtime-session-mesh-v27/runtime_session_mesh_v27.dll', archive.namelist())
+            self.assertNotIn('SDK_Mods/E33WorldBuilder.sdkmod', archive.namelist())
+            self.assertFalse(any('/settings/' in name or '/logs/' in name for name in archive.namelist()))
+            self.assertIn('SDK/build/runtime-session-worldbuilder-v54-menu/runtime_session_worldbuilder_v54_menu.dll', archive.namelist())
             self.assertEqual(archive.read('SDK/licenses/Expat/COPYING'),
                              b'copyright and permission fixture\n')
         self.write('runtime/new.dll', b'new')

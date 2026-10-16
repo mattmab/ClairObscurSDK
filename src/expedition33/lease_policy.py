@@ -4,7 +4,7 @@ import struct
 HEADER=struct.Struct('<10IQ')
 OWNER=struct.Struct('<QII')
 SIZE=HEADER.size+64*OWNER.size
-MAXIMUM=4096
+MAXIMUM=8192
 
 class LeasePolicyRejected(RuntimeError):
     """A verified non-mutating policy rejection; existing ownership is intact."""

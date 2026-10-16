@@ -66,6 +66,9 @@ static PictoBatch session_picto_batch;
 #endif
 #ifdef E33_MESH_SESSION
 #include "mesh_owner.h"
+#include <array>
+#include "builder_owner.h"
+static e33_builder::Owner session_builder;
 static e33_mesh::Owner session_mesh;
 #endif
 
@@ -521,6 +524,7 @@ uint32_t backend_command(SessionPacket* packet) {
 #ifdef E33_MESH_SESSION
     case SessionMesh: {
         auto& p=*reinterpret_cast<MeshPacket*>(packet->console_text);
+        if(p.operation>=20) {session_builder.command(runtime_base,lease_session,session_leases,p);p.step=session_builder.step();return 0;}
         session_mesh.command(runtime_base,lease_session,session_leases,p);session_mesh.reply(p);return 0;
     }
 #endif
@@ -895,7 +899,7 @@ static StrongLeaseResult guarded_lease_close() {
 #endif
 #ifdef E33_MESH_SESSION
 static uint32_t guarded_mesh_close() {
-    __try {return session_mesh.close(runtime_base,lease_session,session_leases);}
+    __try {const auto e=session_builder.stop(runtime_base,lease_session,session_leases,true);if(e)return e;return session_mesh.close(runtime_base,lease_session,session_leases);}
     __except(EXCEPTION_EXECUTE_HANDLER) {return 1808;}
 }
 static uint32_t guarded_mesh_poll() {
@@ -985,10 +989,12 @@ uint32_t backend_close() {
     return result;
 }
 #ifdef E33_MESH_SESSION
-bool backend_mesh_wake_needed(){return session_mesh.animating();}
+bool backend_mesh_wake_needed(){return session_mesh.animating() || session_builder.active();}
 #endif
 void backend_message(MSG* message) {
 #ifdef E33_MESH_SESSION
+    if(session_builder.active())session_builder.poll(runtime_base,lease_session,session_leases,
+        !session_menu.menu.active() && attachment_valid(runtime_base) && local_read<uint64_t>(attached_console+0xd8)==0);
     if(session_mesh.active())guarded_mesh_poll();
 #endif
 #ifdef E33_AUDIO_ISOLATION_SESSION
@@ -1025,7 +1031,66 @@ void backend_message(MSG* message) {
     session_traces.maintain();
 #endif
 #ifdef E33_KEYBIND_SESSION
+#ifdef E33_KEY_CAPTURE_SESSION
+    // Capture belongs exclusively to the active SDK menu. Consume the paired
+    // release even after the Python owner restores normal routes.
+    static bool capture_down[256]{};
+    const auto capture_key=static_cast<uint32_t>(message->wParam);
+    const bool capture_press=message->message==WM_KEYDOWN || message->message==WM_SYSKEYDOWN;
+    const bool capture_release=message->message==WM_KEYUP || message->message==WM_SYSKEYUP;
+    if(capture_key<256 && capture_release && capture_down[capture_key]) {
+        capture_down[capture_key]=false; message->message=WM_NULL; return;
+    }
+    if(session_keys.capturing() && session_menu.menu.active() && capture_key<256 && capture_press) {
+        DWORD capture_pid=0;
+        GetWindowThreadProcessId(GetForegroundWindow(), &capture_pid);
+        const bool eligible=capture_pid==GetCurrentProcessId() && lifetime_valid() &&
+            attachment_valid(runtime_base) && local_read<uint64_t>(attached_console+0xd8)==0;
+        if(eligible) {
+            const bool modifiers=(GetKeyState(VK_CONTROL)&0x8000)||(GetKeyState(VK_MENU)&0x8000)||
+                (GetKeyState(VK_SHIFT)&0x8000)||(GetKeyState(VK_LWIN)&0x8000)||(GetKeyState(VK_RWIN)&0x8000);
+            session_keys.press(capture_key,(message->lParam & (LPARAM(1)<<30))!=0,!modifiers);
+            capture_down[capture_key]=true; message->message=WM_NULL; return;
+        }
+    }
+#endif
 #ifdef E33_MENU_ESCAPE_SESSION
+    // Route only this builder's visible panel. Keep ordinary SDK menus and
+    // text-entry keys untouched, and swallow the release after async close.
+    static bool builder_blocked_z=false,builder_blocked_y=false;
+    const bool key_down=message->message==WM_KEYDOWN||message->message==WM_SYSKEYDOWN;
+    const bool key_up=message->message==WM_KEYUP||message->message==WM_SYSKEYUP;
+    if(message->wParam=='Z'||message->wParam=='Y') {
+        auto& held=message->wParam=='Z'?builder_blocked_z:builder_blocked_y;
+        const bool alt=(message->lParam&(LPARAM(1)<<29))||(GetKeyState(VK_MENU)&0x8000);
+        if(key_up&&held){held=false;message->message=WM_NULL;return;}
+        if(key_down&&session_builder.active()&&!session_menu.menu.active()&&lifetime_valid()&&attachment_valid(runtime_base)&&local_read<uint64_t>(attached_console+0xd8)==0&&
+           (message->wParam=='Z'||alt)) {
+            if(alt&&!(message->lParam&(LPARAM(1)<<30)))session_builder.request_history(message->wParam=='Y');
+            held=true;message->message=WM_NULL;return;
+        }
+    }
+    static bool builder_menu_key_down[3]{};
+    const unsigned builder_key=message->wParam==VK_ESCAPE?0:message->wParam==VK_F7?1:message->wParam==VK_F8?2:3;
+    if(builder_key<3) {
+        if(message->message==WM_KEYUP && builder_menu_key_down[builder_key]) {
+            builder_menu_key_down[builder_key]=false;message->message=WM_NULL;return;
+        }
+        if(message->message==WM_KEYDOWN && builder_menu_key_down[builder_key]) {
+            message->message=WM_NULL;return;
+        }
+        DWORD builder_foreground_pid=0;GetWindowThreadProcessId(GetForegroundWindow(),&builder_foreground_pid);
+        const bool builder_panel=session_menu.menu.accepts_actions() && session_builder.owns_menu(session_menu.widget);
+        const bool builder_escape=builder_key==0 && session_builder.active() && !session_menu.menu.active();
+        const auto routed_key=(builder_key==2 || (builder_escape&&!session_builder.preview_active()))?VK_F8:VK_F7;
+        if(message->message==WM_KEYDOWN && builder_foreground_pid==GetCurrentProcessId() &&
+           lifetime_valid() && attachment_valid(runtime_base) && local_read<uint64_t>(attached_console+0xd8)==0 &&
+           (builder_panel || builder_escape) &&
+           session_keys.contains(routed_key)) {
+            session_keys.press(routed_key,(message->lParam & (LPARAM(1)<<30))!=0,true);
+            builder_menu_key_down[builder_key]=true;message->message=WM_NULL;return;
+        }
+    }
     // Escape belongs to the visible SDK menu; consume repeats and the paired
     // release so the same press cannot dismiss the game's underlying Pause.
     static bool menu_escape_down=false;
@@ -1041,7 +1106,11 @@ void backend_message(MSG* message) {
         menu_escape_down=true; message->message=WM_NULL; return;
     }
 #endif
-    if(message->message==WM_KEYDOWN && session_keys.contains(static_cast<uint32_t>(message->wParam))) {
+    // Windows delivers F10 as a system key. Route this builder shortcut
+    // without activating the window menu, including its paired release.
+    static bool builder_f10_down=false;
+    if(message->wParam==VK_F10&&message->message==WM_SYSKEYUP&&builder_f10_down){builder_f10_down=false;message->message=WM_NULL;return;}
+    if((message->message==WM_KEYDOWN || (message->message==WM_SYSKEYDOWN&&message->wParam==VK_F10&&session_builder.active())) && session_keys.contains(static_cast<uint32_t>(message->wParam))) {
         DWORD foreground_pid=0;
         GetWindowThreadProcessId(GetForegroundWindow(), &foreground_pid);
         const bool eligible=foreground_pid==GetCurrentProcessId() && lifetime_valid() &&
@@ -1051,6 +1120,7 @@ void backend_message(MSG* message) {
             !(GetKeyState(VK_SHIFT)&0x8000) && !(GetKeyState(VK_LWIN)&0x8000) && !(GetKeyState(VK_RWIN)&0x8000);
         session_keys.press(static_cast<uint32_t>(message->wParam),
             (message->lParam & (LPARAM(1)<<30))!=0, eligible);
+        if(eligible&&message->wParam==VK_F10&&session_builder.active()){builder_f10_down=true;message->message=WM_NULL;return;}
         // Observe ordinary game input without consuming or rewriting it.
     }
 #endif

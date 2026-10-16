@@ -8,7 +8,8 @@ import time
 from dataclasses import replace
 from contextlib import contextmanager
 from .catalog import capture_matching, capture_selected
-from .values import read_values, read_object_reference
+from .values import read_values, read_values_many, read_object_reference
+from . import _ui_batch
 from .invocation import prepare_call
 from ._scope import SessionScope
 from ._reader import ReadBatch, active_reader
@@ -33,6 +34,8 @@ class PauseMenuEntry:
         self._functions = {}
         self._next_world_check = 0.
         self._world_reader = None
+        self._layout_calls = []
+        self.timings = {}
 
     @staticmethod
     def current_entry(catalog):
@@ -82,9 +85,25 @@ class PauseMenuEntry:
         return self._functions[key]
 
     def reference(self, obj, owner, name):
-        found, catalog = read_object_reference(self.planner._catalog, obj, self.cls(owner), name)
-        self.planner.refresh_from(catalog)
+        found, catalog = read_object_reference(self.planner._catalog, obj, self.cls(owner), name, project=True)
+        self.planner.adopt_observations(catalog)
         return found
+
+    def layout(self, obj, owner, name, **args):
+        if (not _ui_batch.layout_available(self.scope._session) or
+                ((owner == 'GridSlot' or name in _ui_batch.EXTENDED_LAYOUT_SETTERS) and
+                 not _ui_batch.extended_layout_available(self.scope._session))):
+            return self.call(obj, owner, name, **args)
+        self._layout_calls.append((obj, owner, name, args))
+
+    def flush_layout(self):
+        # Prepare only after creation/reference reads have revoked old plans.
+        # Clear before dispatch: partial failure must never replay setters.
+        calls, self._layout_calls = self._layout_calls, []
+        for start in range(0, len(calls), _ui_batch.LIMIT):
+            _ui_batch.invoke_setters(self.scope, [
+                self.planner.prepare(obj, self.fn(owner, name), **args)
+                for obj, owner, name, args in calls[start:start + _ui_batch.LIMIT]])
 
     def call(self, obj, owner, name, **args):
         with self.planner.prepare(obj, self.fn(owner, name), **args).invoke(refresh_from_result=True) as result:
@@ -123,13 +142,15 @@ class PauseMenuEntry:
             self.state = 'building'
             self.planner = self.scope.invocation_planner(selected_results=True,catalog=catalog)
             self.local_player = self.reference(self.player,'PlayerController','Player')
-            local_values = read_values(self.planner._catalog, self.local_player)
+            local_values = read_values_many(self.planner._catalog, (self.local_player,),
+                fields=('PlayerController',))[self.local_player.index]
             owner = self.one(k[0] for k in local_values.types if k[1] == 'PlayerController')
             self._local_player_owner = self.planner._catalog.by_index[owner]
             self.library = self.one(o for o in catalog.objects if o.name=='Default__WidgetBlueprintLibrary')
             gameplay = self.one(o for o in catalog.objects if o.name=='Default__GameplayStatics')
             resume = self.reference(self.pause,'WBP_PauseMenu_C','ResumeButton')
-            resume_values = read_values(self.planner._catalog,resume).values
+            resume_values = read_values_many(self.planner._catalog, (resume,),
+                fields=('MinWidth', 'MinHeight'))[resume.index].values
             source_slot = self.reference(resume,'Widget','Slot')
             self.grid = self.reference(source_slot,'PanelSlot','Parent')
             if self.grid.class_name != 'GridPanel': raise RuntimeError('Pause button parent changed')
@@ -149,10 +170,12 @@ class PauseMenuEntry:
                 if slot is None or slot.class_name != 'GridSlot' or slot.outer_index != self.grid.index:
                     raise RuntimeError('Pause child slot changed during discovery')
                 slots.append(slot)
-            rows = [read_values(self.planner._catalog, o).values[self.cls('GridSlot').index,'Row'] for o in slots]
+            slot_values = read_values_many(self.planner._catalog, slots, fields=('Row', 'Padding'))
+            rows = [slot_values[o.index].values[self.cls('GridSlot').index,'Row'] for o in slots]
             self.row = max(rows) + 1
             if not 1 <= self.row <= 16: raise RuntimeError('Unexpected pause grid row count')
-            padding = read_values(self.planner._catalog, source_slot).values[self.cls('GridSlot').index,'Padding']
+            padding = slot_values[source_slot.index].values[self.cls('GridSlot').index,'Padding']
+            self.timings['discovery_ms'] = (time.perf_counter() - started) * 1000
             self.button = self.create(self.library,'WidgetBlueprintLibrary','Create',
                 WorldContextObject=self.player, WidgetType=self.cls('WBP_BaseButton_C'), OwningPlayer=self.player)
             self.attachment = PauseAttachment(self.scope) # Publish before arming native cleanup.
@@ -162,19 +185,19 @@ class PauseMenuEntry:
             button_tree = self.reference(self.button,'UserWidget','WidgetTree')
             content = self.reference(self.button,'WBP_BaseButton_C','ButtonContent')
             label = self.create(gameplay,'GameplayStatics','SpawnObject',ObjectClass=self.cls('CommonTextBlock'),Outer=button_tree)
-            self.call(label,'CommonTextBlock','SetStyle',InStyle=style)
-            self.call(label,'TextBlock','SetText',InText=self.label)
-            self.call(label,'TextLayoutWidget','SetJustification',InJustification=1)
+            self.layout(label,'CommonTextBlock','SetStyle',InStyle=style)
+            self.layout(label,'TextBlock','SetText',InText=self.label)
+            self.layout(label,'TextLayoutWidget','SetJustification',InJustification=1)
             frame = self.create(gameplay,'GameplayStatics','SpawnObject',ObjectClass=self.cls('Overlay'),Outer=button_tree)
             label_slot = self.create(frame,'Overlay','AddChildToOverlay',Content=label)
-            self.call(label_slot,'OverlaySlot','SetHorizontalAlignment',InHorizontalAlignment=2)
-            self.call(label_slot,'OverlaySlot','SetVerticalAlignment',InVerticalAlignment=2)
+            self.layout(label_slot,'OverlaySlot','SetHorizontalAlignment',InHorizontalAlignment=2)
+            self.layout(label_slot,'OverlaySlot','SetVerticalAlignment',InVerticalAlignment=2)
             self.call(content,'ContentWidget','SetContent',Content=frame)
-            self.call(self.button,'CommonButtonBase','SetMinDimensions',
+            self.layout(self.button,'CommonButtonBase','SetMinDimensions',
                 InMinWidth=resume_values[self.cls('CommonButtonBase').index,'MinWidth'],
                 InMinHeight=resume_values[self.cls('CommonButtonBase').index,'MinHeight'])
-            self.call(self.button,'CommonButtonBase','SetIsSelectable',bInIsSelectable=False)
-            self.call(self.button,'CommonButtonBase','SetIsToggleable',bInIsToggleable=False)
+            self.layout(self.button,'CommonButtonBase','SetIsSelectable',bInIsSelectable=False)
+            self.layout(self.button,'CommonButtonBase','SetIsToggleable',bInIsToggleable=False)
             pause_panel = self.reference(self.pause,'WBP_PauseMenu_C','PausePanel')
             panel_lease = self.scope.retain(pause_panel)
             original_opacity = self.call(pause_panel,'Widget','GetRenderOpacity')
@@ -189,14 +212,17 @@ class PauseMenuEntry:
             self.observer = PauseClicks(self.scope._session,self.fn('CommonButtonBase','HandleButtonClicked'),
                 self.button,self.planner._catalog)
             self._renew_at = time.monotonic() + 120
+            self.flush_layout()
             slot = self.create(self.grid,'GridPanel','AddChildToGrid',Content=self.button,InRow=self.row,InColumn=0)
-            self.call(slot,'GridSlot','SetPadding',InPadding=dict(padding.fields))
-            self.call(slot,'GridSlot','SetHorizontalAlignment',InHorizontalAlignment=0)
-            self.call(slot,'GridSlot','SetVerticalAlignment',InVerticalAlignment=0)
+            self.layout(slot,'GridSlot','SetPadding',InPadding=dict(padding.fields))
+            self.layout(slot,'GridSlot','SetHorizontalAlignment',InHorizontalAlignment=0)
+            self.layout(slot,'GridSlot','SetVerticalAlignment',InVerticalAlignment=0)
+            self.flush_layout()
             self._active_call = self.planner.prepare(self.pause,self.fn('CommonActivatableWidget','IsActivated'))
             self._viewport_focus = self.planner.prepare(self.library,self.fn('WidgetBlueprintLibrary','SetFocusToGameViewport'))
             self._button_focus = self.planner.prepare(self.button,self.fn('Widget','SetUserFocus'),PlayerController=self.player)
             self.state = 'attached'
+            self.timings['total_ms'] = (time.perf_counter() - started) * 1000
             log.info('Native Mods pause entry attached: pause=%s button=%s row=%d style=%s (attach %.3fs)',
                 self.pause.index,self.button.index,self.row,style.name,time.perf_counter()-started)
         return True

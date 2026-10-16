@@ -16,11 +16,11 @@ EXTENDED_LAYOUT_SETTERS = frozenset(('SetMinDimensions', 'SetIsSelectable', 'Set
     'SetRenderScale', 'SetRenderTransformPivot', 'SetPadding', 'SetLayer'))
 
 def extended_layout_available(session):
-    return available(session) and getattr(session._transport, 'layout_batch_protocol', 0) == 2
+    return available(session) and getattr(session._transport, 'layout_batch_protocol', 0) in (2, 3)
 
 def layout_available(session):
     version = getattr(session._transport, 'layout_batch_protocol', 0)
-    return available(session) and type(version) is int and version in (1, 2)
+    return available(session) and type(version) is int and version in (1, 2, 3)
 
 def pack_sparse(data):
     chunks, start = [], 0
@@ -109,7 +109,7 @@ def invoke_setters(scope, prepared):
         planner, session = call._check()
         plan = call._plan
         if plan.function.name not in ('SetText', 'SetIsEnabled', 'SetVisibility'):
-            allowed = LAYOUT_SETTERS | (EXTENDED_LAYOUT_SETTERS if extended_layout_available(session) else frozenset())
+            allowed = (frozenset(('SetBrushResourceObject',)) if getattr(session._transport, 'layout_batch_protocol', 0) == 3 else frozenset()) | LAYOUT_SETTERS | (EXTENDED_LAYOUT_SETTERS if extended_layout_available(session) else frozenset())
             if not layout_available(session) or plan.function.name not in allowed:
                 raise ValueError('Only supported menu setters can be batched')
         if any(parameter.flags & 0x500 for parameter in plan.parameters):

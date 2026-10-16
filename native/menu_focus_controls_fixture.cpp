@@ -18,8 +18,22 @@ struct References {
     }
     bool release_reference(uint64_t c) { --counts[c-1]; ++releases; return true; }
 };
+struct WorkspaceReferences {
+    int acquisitions=0,releases=0;
+    bool known_reference(uint64_t w,uint64_t c)const{return c>0 && c<=105 && w==c+1000;}
+    bool can_acquire(uint64_t w,uint64_t c)const{return known_reference(w,c);}
+    bool can_release()const{return true;}
+    bool add_reference(uint64_t){++acquisitions;return true;}
+    bool release_reference(uint64_t){++releases;return true;}
+};
 int main() {
     using R=SlateReferenceResult;
+    WorkspaceReferences workspace; MenuFocusControls<128> workspace_focus;
+    for(uint64_t tab=0;tab<5;++tab)
+        for(uint64_t c=1;c<=105;++c)
+            check(workspace_focus.retain(workspace,c+1000,c)==R::Ok,"tab switches retain all workspace controls");
+    check(workspace.acquisitions==105,"tab switches deduplicate retained focus");
+    check(workspace_focus.release(workspace)==R::Ok && workspace.releases==105,"detach releases every workspace reference");
     References refs; MenuFocusControls<2> controls; bool owned=false;
     check(controls.retain(refs,17,1)==R::Ok && controls.retain(refs,18,2)==R::Ok,"capture both controls");
     check(controls.retain(refs,18,2)==R::Ok && refs.acquisitions==2,"deduplicate independent owner");

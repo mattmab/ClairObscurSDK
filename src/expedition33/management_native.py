@@ -35,7 +35,7 @@ def display_detail(text, *, width=42, height=18):
 
 
 class NativeManagementMenu:
-    def __init__(self, session, registry, *, cached_planning=False, cached_construction=False, selected_results=False, read_batches=False, reusable=False, view_factory=ManagementView):
+    def __init__(self, session, registry, *, cached_planning=False, cached_construction=False, selected_results=False, read_batches=False, reusable=False, view_factory=ManagementView, panel_factory=None):
         if type(cached_planning) is not bool or type(cached_construction) is not bool:
             raise ValueError('Planning options must be bool')
         self._cached_planning = cached_planning
@@ -45,7 +45,7 @@ class NativeManagementMenu:
         self._reusable = reusable
         self._view_factory = view_factory
         self.view = view_factory(registry)
-        self.panel = OwnedMenuPanel(session, cached_construction=cached_construction,
+        self.panel = (panel_factory or OwnedMenuPanel)(session, cached_construction=cached_construction,
                                     selected_results=selected_results)
         self.frame = None
         self.actions = []

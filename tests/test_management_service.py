@@ -194,7 +194,8 @@ class NativeServiceTests(unittest.TestCase):
         self.loader.load('SDKManagement'); self.loader.enable('SDKManagement', console=True)
         instance = self.loader._loaded['SDKManagement'][1]
         dispatch = self.loader._session.console.dispatcher
-        with patch('expedition33.management_native.OwnedMenuPanel', test_management_native.FakePanel):
+        from test_mods_workspace_scroll import ScrollFakePanel
+        with patch('expedition33.mods_workspace_scroll.ScrollWorkspacePanel', ScrollFakePanel):
             self.assertFalse(dispatch.execute('mods ui').failed)
         panel = instance.native.menu.panel
         self.loader.disable('SDKManagement')
