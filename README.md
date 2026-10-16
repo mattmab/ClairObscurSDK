@@ -1,6 +1,6 @@
 # Clair Obscur: Expedition 33 — independent Python SDK
 
-MIT-licensed v0.1 release candidate for the verified Windows Steam build. Our native
+MIT-licensed SDK **0.1.0-rc11** for the verified Windows Steam build. Our native
 runtime independently identifies live Unreal objects and executes supported
 engine operations on the game thread. Python runs in a persistent external
 controller. No Borderlands offsets or layouts are used as Expedition 33 facts.
@@ -15,6 +15,28 @@ and Cinematics, plus Asset Creator/Main Character Replacer. Each has its own rel
 The checkout's `launch-sdk.cmd` delegates to the installed SDK using `SDK_GAME_DIR`
 or the local, untracked `settings/install-path.txt`.
 
+## RC11: Mods menu and standalone World Builder
+
+[RC11 release notes](docs/RELEASE_0.1.0_RC11.md) describe the BL4-inspired Mods
+layout with E33/World Builder styling: inline enable/disable toggles, search and
+filters, bulk actions, a persisted text-size slider, separate settings and keybind
+scroll panels, and press-a-key rebinding with conflict reporting. Open it through
+**Pause → Mods**. During capture, Escape unbinds; Cancel keeps the existing key.
+Text size ranges from 0.75 to 2.75; Reset restores 1.35.
+
+World Builder **0.30.0** is a separate optional mod requiring RC11 or later.
+It shares the SDK controller and native runtime. Its maps, camera preferences and
+thumbnail cache stay under `SDK/settings/E33WorldBuilder`.
+
+The current `main` branch includes startup fixes after the published RC11 ZIP:
+bounded widget-construction batches, attachment gated on gameplay and pause UI,
+and menu preparation before saved optional mods restore. A fresh-game check measured
+widget construction at **2.17 s** (previously 10.60 s) and SDK readiness at **9.06 s**
+after the readiness check (previously 17.42 s). The starting gate changed; these
+are individual observations, not a guarantee or an instant-start claim.
+See [startup validation](docs/STARTUP_MENU_VALIDATION.md). These follow-up source
+fixes do not replace the existing RC11 release ZIP.
+
 ## Download optional mods
 
 Install [ClairObscurSDK RC11](https://github.com/mattmab/ClairObscurSDK/releases/tag/v0.1.0-rc11)
@@ -24,7 +46,7 @@ Older Nexus releases remain available; World Builder requires RC11.
 
 | Mod | Features and limitations |
 | --- | --- |
-| [**World Builder � EXPERIMENTAL**](https://github.com/mattmab/ClairObscurSDK/releases/tag/world-builder-v0.30.0) | Standalone optional mod for free camera, prop placement, maps, catalog browsing and thumbnails. Requires RC11. |
+| [**World Builder — EXPERIMENTAL**](https://github.com/mattmab/ClairObscurSDK/releases/tag/world-builder-v0.30.0) | Standalone optional mod for free camera, prop placement, maps, catalog browsing and thumbnails. Requires RC11. |
 | [Continent Flight](https://www.nexusmods.com/clairobscurexpedition33/mods/941) | Exploration flight for supported human characters. Dismount Esquie first; experimental traversal support. |
 | [Picto Editor](https://www.nexusmods.com/clairobscurexpedition33/mods/942) | Edit supported Picto stats, levels, Lumina costs and mastery. Changes can affect saves. |
 | [Statistics](https://www.nexusmods.com/clairobscurexpedition33/mods/943) | View captured damage events and supported battle counters. Not full third-party Statistics DLL parity. |
@@ -129,32 +151,30 @@ No generic execute-code endpoint is exposed through that file protocol.
 
 ## What is verified
 
-Installable RC3 passed a normal Steam launch with automatic controller startup,
-restored all seven previously enabled mods without activation errors, and attached
-the native Mods pause entry. Eleven archives passed independent relocation and
-integrity checks using the bundled Python. The final visual Pause/Picto check was
-stopped by the user's Escape key and remains pending; no visual pass is claimed.
+RC11 clean-install acceptance covered automatic startup, standalone World Builder
+installation, menu navigation, text sizing, independent scrolling with a temporary
+20-option/25-keybind fixture, rebinding, catalog thumbnails, prop spawning and
+cleanup. See [original RC11 package validation](docs/RC11_VALIDATION.md), including
+its archive hashes and limits.
 
-The following table records **earlier v0.1 acceptance**, not exhaustive RC3 coverage.
-The representative integrated acceptance ran from a portable S: extraction in two
-fresh game processes, not just the development checkout:
+The subsequent startup/construction fixes on `main` passed **1,097 SDK tests and
+79 standalone World Builder tests**, plus native fixtures and the release build.
+A fresh automatic game launch passed pause → Mods using the held-Escape AutoHotkey
+workaround, text resizing, Keybinds navigation/scrolling and console execution.
+Press-a-key capture retained Flight's R descend binding. All nine saved enabled
+mods restored. See [follow-up measurements and checks](docs/STARTUP_MENU_VALIDATION.md).
 
-| Capability | Evidence and boundary |
-| --- | --- |
-| Independent objects/reflection/invocation | Live objects, verified metadata and supported schema/identity-checked calls; arbitrary ABI marshalling is unsupported. |
-| Native console and persistent Python | Backtick, native `stat fps`, variables/imports, mod calls, output and contained errors passed. Native Python Up/Tab integration is unavailable. |
-| UMG management | Discovery/details/actions/navigation/close passed; first open 4.94s, navigation execution 0.49s on the test machine. First-open margin is narrow. |
-| Configurable keys | Physical dispatch, API/UI remapping, conflicts, unbind/unload cleanup, error containment and preference persistence across relaunch passed. |
-| Harness | Native-menu live roots action and file-transport PlayerController property inspection passed in the fresh package; broader supported operations have earlier recorded live evidence. |
-| Lifecycle | Reload into a fresh mod instance, alias/resource removal, cooperative shutdown, normal game exit and relaunch passed. |
-| Portable runtime | Bundled interpreter ran from outside checkout. Game-exit cleanup regression suite: 418 passing tests. |
+The original ZIP and follow-up installed source were tested separately; newer
+source results do not recertify the original archive. The latest run did not
+repeat the overflowing-options fixture. Other resolutions, controller input,
+combat/map-travel coverage and exhaustive BL4 parity remain outside this pass.
+Earlier loading-time GPU crashes were not conclusively diagnosed; the fresh
+launch with the gameplay readiness gate completed successfully.
 
-All integrated live acceptance above was at the **main menu**. Gameplay and map
-transitions, arbitrary third-party mods, additional builds, controller input,
-native text/numeric/JSON editors, advanced Blueprint traces and exhaustive BL4
-feature parity remain unverified or deferred. Trusted mods share a Python process;
-lifecycle ownership is not a security sandbox. Do not treat object observations
-as GC-pinned engine handles. Use scoped SDK resources and explicit cleanup.
+Trusted mods share a Python process; lifecycle ownership is not a security
+sandbox. Object observations are not GC-pinned engine handles. Use scoped SDK
+resources and explicit cleanup. Historical v0.1 evidence remains in
+[release convergence](research/RELEASE_CONVERGENCE.md).
 
 Verified target: UE 5.4.4, Steam app1903340/build23765773,
 `SandFall-Win64-Shipping.exe` SHA256:
@@ -186,13 +206,13 @@ Enabling or disabling a mod saves its stable identity and desired state in
 context before restoring saved choices. Mounted startup leaves Flight enabled but
 waiting for a supported dismounted character. Shutdown and temporary unload do not
 erase saved choices; use Disable to stop automatic activation. Activation failures
-are logged and retain their preference. Management is protected; Introspection,
-Cinematics and Picto Editor default to enabled on a fresh install, while other mods
-default to disabled. An explicit saved false overrides optional defaults.
+are logged and retain their preference. Management is protected. Only SDK Management and Introspection Harness start
+by default on a fresh installation. LiveObjectViewer is bundled but optional;
+separately installed mods require an explicit enable choice. An explicit saved false overrides optional defaults.
 
 Automated tests cover fresh-loader restoration, explicit disable, archive refresh,
-missing folders and identity mismatch. RC3 also restored seven saved enabled mods
-in a new game process without manual controller startup.
+missing folders and identity mismatch. The latest follow-up restored nine saved enabled mods
+in a fresh game process without manual controller startup.
 
 ## Experimental custom models (RC6)
 

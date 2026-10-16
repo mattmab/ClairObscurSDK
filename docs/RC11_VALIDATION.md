@@ -1,5 +1,12 @@
 # RC11 and standalone World Builder validation
 
+This report describes the **original published RC11 archives** identified below.
+Later source changes `569e15e` and `03ccb88` have separate
+[startup/menu validation](STARTUP_MENU_VALIDATION.md): 1,097 SDK + 79 World Builder
+tests, faster construction, a gameplay attachment gate, actual pause-button access
+using AutoHotkey, and console checks after Keybinds. Those follow-up results do
+not change the archive hashes or historical measurements in this report.
+
 Tested on Windows, 2026-10-15, with the supported Steam executable and a loaded
 Continent save. The existing SDK, mod archives and preferences were backed up
 before testing. The release ZIP was extracted with no inherited SDK settings;

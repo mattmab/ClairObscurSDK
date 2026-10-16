@@ -1,5 +1,11 @@
 # Matt's E33 Mods Menu
 
+This is the chronological port record. For current installation and release
+scope, read the [RC11 notes](RELEASE_0.1.0_RC11.md). The latest source startup
+measurements and pause-button/console checks are in
+[startup validation](STARTUP_MENU_VALIDATION.md); they supersede the older
+12-second construction figures and unconfirmed pause-input checks below.
+
 The SDKManagement native frontend now uses `ScrollWorkspaceMenu` and
 `ScrollWorkspaceView`. Both the development checkout and the installed game SDK
 have the replacement. Start the existing `Launch Native Mods.cmd` and use the

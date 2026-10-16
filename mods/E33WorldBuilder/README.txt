@@ -4,6 +4,23 @@ Install E33WorldBuilder.sdkmod in the game-root SDK_Mods folder, then enable
 World Builder in Pause > Mods. It is an optional mod, not bundled with the SDK.
 Maps and settings remain in SDK/settings/E33WorldBuilder when disabled.
 
+Downloads:
+  SDK RC11: https://github.com/mattmab/ClairObscurSDK/releases/tag/v0.1.0-rc11
+  World Builder: https://github.com/mattmab/ClairObscurSDK/releases/tag/world-builder-v0.30.0
+Close the game and SDK before updating. Extract E33WorldBuilder-0.30.0.zip
+beside Sandfall; leave its inner .sdkmod archive intact. Preserve SDK/settings.
+No separate Python, controller or native DLL is needed for World Builder.
+Use the SDK Mods menu's Keybinds tab to rebind F7/F8/F9/F10: choose Rebind and
+press a key. Escape unbinds; Cancel preserves the old binding. Resolve conflicts
+before using a binding. Builder camera settings remain in its own Camera settings UI.
+Catalog prewarming waits while another SDK menu owns focus.
+
+RC11 clean-install acceptance covered catalog navigation/thumbnails, one prop
+spawn/clear, camera access, rebinding and console access. Some assets cannot load
+in a given world, and not every asset or operation has been tested in game.
+See docs/RC11_VALIDATION.md and docs/STARTUP_MENU_VALIDATION.md in the repository
+for original package results and later SDK source follow-ups, respectively.
+
 F8: enter/leave builder camera. Mouse look; WASD fly.
 Space: up. Ctrl: down. E/Q also work. Shift: four times faster.
 Hold left mouse to grab the prop under the crosshair; fly to carry it.
