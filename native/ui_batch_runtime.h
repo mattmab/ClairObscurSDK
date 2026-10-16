@@ -1,8 +1,8 @@
 #pragma once
 #include "ui_batch_protocol.h"
 
-// Only existing menu setters and owned-control bind/unbind operations. No
-// object creation, arbitrary functions, output values or new dispatch paths.
+// Existing menu setters, owned controls, and capability-gated construction.
+// All operations reuse validated dispatchers; no arbitrary function batches.
 inline bool ui_setter(uint64_t base,const CallPacket& call) {
     if(call.return_offset!=65535 || !call.field_count || call.field_count>2) return false;
     for(uint32_t i=0;i<call.field_count;++i) if(call.fields[i].flags&0x500) return false;
@@ -48,12 +48,30 @@ inline void* ui_item(SessionPacket* packet,uint32_t action,uint32_t& size) {
     default: size=0; return nullptr;
     }
 }
+inline bool ui_creation(uint64_t base,const CallPacket& call) {
+#ifdef E33_UI_CONSTRUCTION_SESSION
+    if(validate_call_packet(call,true) || retained_call_slots(call)!=1) return false;
+    const auto function=call_identity(base,call.function);
+    if(!function) return false;
+    const auto owner=local_read<uint64_t>(function+0x20);
+    // No dependent addresses on the wire: each input is an already observed
+    // identity. Existing retained dispatch validates schemas and owns outputs.
+    return (exact_name(base,owner+0x18,"GameplayStatics") && exact_name(base,function+0x18,"SpawnObject")) ||
+        (exact_name(base,owner+0x18,"CanvasPanel") && exact_name(base,function+0x18,"AddChildToCanvas")) ||
+        (exact_name(base,owner+0x18,"Overlay") && exact_name(base,function+0x18,"AddChildToOverlay")) ||
+        (exact_name(base,owner+0x18,"PanelWidget") && exact_name(base,function+0x18,"AddChild")) ||
+        (exact_name(base,owner+0x18,"ContentWidget") && exact_name(base,function+0x18,"SetContent"));
+#else
+    (void)base; (void)call; return false;
+#endif
+}
 inline bool ui_item_valid(uint64_t base,SessionPacket* packet,uint32_t action) {
     if(action==SessionMultiButton) return valid_multi_button_request(packet->multi_button) &&
         (packet->multi_button.action.operation==1 || packet->multi_button.action.operation==3);
     if(action==SessionTextInvoke) return !validate_text_call(packet->text) &&
         ui_setter(base,packet->text.retained.call);
-    return retained_call_empty(packet->retained) && ui_setter(base,packet->retained.call);
+    return retained_call_empty(packet->retained) &&
+        (ui_setter(base,packet->retained.call) || ui_creation(base,packet->retained.call));
 }
 inline bool ui_item_ok(SessionPacket* packet,uint32_t action) {
     if(action==SessionMultiButton) return !packet->multi_button.action.error &&

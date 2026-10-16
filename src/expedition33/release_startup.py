@@ -6,6 +6,11 @@ from .values import read_values, read_object_reference
 from .cinematics.original_game_action import controller_context
 
 
+def attachment_ready(pid):
+    """A pause widget alone can exist during map loading; do not attach then."""
+    return gameplay_ready(pid) and menu_ready(pid)
+
+
 def menu_ready(pid):
     """The core UI needs the live controller's pause widget, not a pawn."""
     with ReadBatch(pid, share=True):

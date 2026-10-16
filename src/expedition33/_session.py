@@ -98,6 +98,7 @@ class SessionTransport:
                                'picto_class_load_protocol', 'picto_cost_protocol', 'picto_startup_protocol', 'picto_stat_clear_protocol', 'picto_stat_remove_protocol', 'picto_inventory_protocol', 'picto_batch_protocol', 'picto_level_batch_protocol', 'picto_mastery_batch_protocol'):
                 setattr(self, capability, ready.get(capability, 0))
             self.ui_batch_protocol = ready.get('ui_batch_protocol', 0)
+            self.ui_construction_protocol = ready.get('ui_construction_protocol', 0)
             self.layout_batch_protocol = ready.get('layout_batch_protocol', 0)
             self.timespan_values_protocol = ready.get('timespan_values_protocol', 0)
             self.frame_time_values_protocol = ready.get('frame_time_values_protocol', 0)

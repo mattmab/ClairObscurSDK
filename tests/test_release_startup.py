@@ -5,6 +5,13 @@ from expedition33 import release_startup as m
 
 
 class StartupTests(unittest.TestCase):
+    def test_attachment_waits_for_gameplay_even_if_pause_widget_exists(self):
+        with patch.object(m,'gameplay_ready',return_value=False), patch.object(m,'menu_ready',return_value=True) as menu:
+            self.assertFalse(m.attachment_ready(7))
+            menu.assert_not_called()
+        with patch.object(m,'gameplay_ready',return_value=True), patch.object(m,'menu_ready',return_value=True):
+            self.assertTrue(m.attachment_ready(7))
+
     def test_core_menu_waits_for_current_pause_widget_not_gameplay_pawn(self):
         for pause, expected in ((None, False), (N(class_name='OtherWidget'), False),
                                 (N(class_name='WBP_PauseMenu_C'), True)):

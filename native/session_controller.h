@@ -277,6 +277,9 @@ inline void run_runtime_session(DWORD pid, DWORD thread, int32_t object_index, i
 #endif
 #ifdef E33_UI_BATCH_SESSION
               << ",\"ui_batch_protocol\":1"
+#ifdef E33_UI_CONSTRUCTION_SESSION
+              << ",\"ui_construction_protocol\":1"
+#endif
 #ifdef E33_LAYOUT_BATCH_SESSION
               << ",\"layout_batch_protocol\":3"
 #endif

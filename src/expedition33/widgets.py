@@ -16,6 +16,7 @@ from ._scope import SessionScope
 
 class OwnedMenuPanel:
     EXTRA_NAMES = ()
+    BATCH_CONSTRUCTION = False
 
     def __init__(self, session, *, controls=12, cached_construction=False, selected_results=False):
         session._check()
@@ -47,6 +48,7 @@ class OwnedMenuPanel:
         self._paint_queue = None
         self._layout_queue = None
         self.timings = {}
+        self._construction = None
 
     @contextmanager
     def paint_batch(self):
@@ -121,6 +123,8 @@ class OwnedMenuPanel:
         return self._mutate(self.scope.invoke, obj, self._function(owner, name), **args)
 
     def _construction_call(self, obj, function, **arguments):
+        if self._construction is not None:
+            return self._construction.record(obj, function, arguments)
         if self._planner is None:
             return self._mutate(self.scope.invoke_retained, obj, function, **arguments)
         prepared = self._planner.prepare(obj, function, **arguments)
@@ -165,6 +169,9 @@ class OwnedMenuPanel:
 
     def _flush_layout(self):
         from . import _ui_batch
+        if self._construction is not None:
+            construction, self._construction = self._construction, None
+            construction.flush(self)
         if self._layout_queue is None:
             return
         queued, self._layout_queue = self._layout_queue, None
@@ -263,6 +270,10 @@ class OwnedMenuPanel:
                 self._planner.refresh_from(current)
         if self.tree is None or self.tree.outer_index != self.widget.index or self._root() is not None:
             raise RuntimeError('New widget does not have the expected empty owned tree')
+        from . import _ui_construction
+        if (self.BATCH_CONSTRUCTION and self._selected_results and self._layout_queue is not None and
+                _ui_construction.available(self.scope._session)):
+            self._construction = _ui_construction.Construction()
         self.canvas = self._spawn('CanvasPanel')
         # A native, hit-testable backdrop prevents clicks reaching the paused
         # game's controls through gaps in the SDK menu. It shares tree cleanup.

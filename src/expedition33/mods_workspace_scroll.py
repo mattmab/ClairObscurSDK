@@ -338,6 +338,7 @@ class ScrollWorkspaceView(ModsWorkspaceView):
 
 
 class ScrollWorkspacePanel(ModsWorkspacePanel):
+    BATCH_CONSTRUCTION = True
     EXTRA_NAMES = ModsWorkspacePanel.EXTRA_NAMES + ('ScrollBox','SizeBox','PanelWidget','ContentWidget',
         'AddChild','SetContent','SetHeightOverride','SetWidthOverride','GetScrollOffset','SetScrollOffset',
         'SetAlwaysShowScrollbar','SetWheelScrollMultiplier','Slider','GetValue','SetValue','SetStepSize')

@@ -13,6 +13,24 @@ inline bool exact_name(uint64_t,uint64_t address,const char* name) {
 #include "ui_batch_runtime.h"
 
 int main() {
+#ifdef E33_UI_CONSTRUCTION_SESSION
+    CallPacket creation{};
+    creation.version=1;creation.parameter_size=8;creation.allocation_extent=8;
+    creation.target={1,1,0x100};creation.function={2,1,0x200};creation.field_count=1;
+    auto& field=creation.fields[0];field.kind=CallObject;field.width=8;field.dimension=1;
+    field.flags=0x480;field.constraint={3,1,0x300};strcpy_s(field.name,"ReturnValue");
+    fixture_owner="GameplayStatics";fixture_function="SpawnObject";
+    if(!ui_creation(0,creation)) return 30;
+    fixture_function="OpenLevel";
+    if(ui_creation(0,creation)) return 31;
+    fixture_owner="Actor";fixture_function="SpawnObject";
+    if(ui_creation(0,creation)) return 32;
+    fixture_owner="CanvasPanel";fixture_function="AddChildToCanvas";
+    if(!ui_creation(0,creation)) return 33;
+    creation.data[0]=1;
+    if(ui_creation(0,creation)) return 34;
+    fixture_owner="CanvasPanelSlot";fixture_function="SetPosition";
+#endif
 #ifdef E33_LAYOUT_BATCH_SESSION
     CallPacket call{}; call.return_offset=65535; call.field_count=1;
     if(!ui_setter(0,call)) return 20;

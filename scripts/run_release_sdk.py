@@ -75,14 +75,14 @@ def main():
         logging.basicConfig(level=logging.INFO, format='%(asctime)s %(levelname)s %(name)s: %(message)s', handlers=[logging.FileHandler(ROOT / 'logs/controller.log', encoding='utf8')])
         from expedition33.release_mods import materialize
         mod_root = materialize(ROOT.parent / 'SDK_Mods', ROOT)
-        from expedition33.release_startup import gameplay_ready, menu_ready
+        from expedition33.release_startup import gameplay_ready, attachment_ready
         deadline = time.monotonic() + 600
-        logging.info('Waiting for the native pause UI before attaching core SDK: pid=%s', args.game_pid)
+        logging.info('Waiting for gameplay and native pause UI before attaching core SDK: pid=%s', args.game_pid)
         while True:
             if kernel.WaitForSingleObject(handle, 0) != 258:
                 return
             try:
-                ready=menu_ready(args.game_pid)
+                ready=attachment_ready(args.game_pid)
                 if not ready and args.combat_model_test:
                     from expedition33.procedural_mesh import combat_target
                     combat_target(args.game_pid)
