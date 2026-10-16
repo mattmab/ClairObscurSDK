@@ -2,7 +2,7 @@
 #SingleInstance Off
 ; Development-only one-shot input helper. MIT. No SDK installation changes.
 ; AutoHotkey64.exe e33-held-key.ahk T 180
-; Allowed keys: T, Esc, Tab. Duration: 50..500 ms. No persistent hotkeys.
+; Allowed keys: T, Esc, Tab, Enter, Space. Duration: 50..500 ms. No persistent hotkeys.
 held := ""
 OnExit(ReleaseHeld)
 ReleaseHeld(*) {
@@ -18,11 +18,11 @@ try {
         ExitApp(0)
     }
     if A_Args.Length < 1 || A_Args.Length > 2
-        throw Error("Usage: e33-held-key.ahk T|Esc|Tab [50..500 milliseconds]")
-    keys := Map("t", "sc014", "esc", "sc001", "escape", "sc001", "tab", "sc00F")
+        throw Error("Usage: e33-held-key.ahk T|Esc|Tab|Enter|Space [50..500 milliseconds]")
+    keys := Map("t", "sc014", "esc", "sc001", "escape", "sc001", "tab", "sc00F", "enter", "sc01C", "space", "sc039")
     key := StrLower(A_Args[1])
     if !keys.Has(key)
-        throw Error("Only T, Esc and Tab are permitted")
+        throw Error("Only T, Esc, Tab, Enter and Space are permitted")
     duration := A_Args.Length = 2 ? Integer(A_Args[2]) : 180
     if duration < 50 || duration > 500
         throw Error("Hold duration must be 50..500 ms")

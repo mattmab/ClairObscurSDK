@@ -113,13 +113,29 @@ class Mod:
             if current.pid!=self.session.pid:raise RuntimeError('Menu reader belongs to another process')
             yield current
         else:
+            # A failed batch remains terminal, but must not poison every later
+            # hotkey. Replace it only at an operation boundary, never replaying
+            # the failed body (which may already have changed widgets).
+            if self._menu_reader is not None and self._menu_reader._closed:
+                self._menu_reader=None
+                self._reader_recovery_pending=True
             if self._menu_reader is None:self._menu_reader=ReadBatch(self.session.pid,share=True)
-            # bind() leaves no active context between operations. A failed
-            # worker remains failed; no automatic restart or stale-read fallback.
-            with self._menu_reader.bind() as reader:yield reader
+            worker=self._menu_reader
+            try:
+                with worker.bind() as reader:yield reader
+            except BaseException:
+                if worker._closed:
+                    self._menu_reader=None
+                    self._reader_recovery_pending=True
+                raise
+            else:
+                if getattr(self,'_reader_recovery_pending',False):
+                    self._reader_recovery_pending=False
+                    self.next_status=0.
+                    if self.error and ('Read worker' in self.error or 'Read batch' in self.error):self.error=None
 
     def management(self):
-        return ModDefinition('e33.world-builder', 'World Builder', version='0.30.0-experimental',
+        return ModDefinition('e33.world-builder', 'World Builder', version='0.30.1-experimental',
             description='F8 freecam. WASD fly, mouse look, Space/Ctrl up/down (E/Q also work), Shift faster. Hold left mouse to grab a world prop; release to place. Numpad 8/2 forward/back, 4/6 left/right, 9/3 up/down, 7/1 yaw; Alt precise; Alt+Z undo. F9 restores edits and clears spawned props. F7 opens folders, previews, spawning, galleries and saved maps.',
             actions=(Action('catalog', 'Open asset catalog', self.open_catalog),Action('toggle', 'Enter / leave builder camera', self.toggle),
                      Action('restore', 'Restore all edited geometry', self.restore),

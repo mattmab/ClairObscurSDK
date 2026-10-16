@@ -1,6 +1,6 @@
 # Clair Obscur: Expedition 33 — independent Python SDK
 
-MIT-licensed SDK **0.1.0-rc11** for the verified Windows Steam build. Our native
+MIT-licensed SDK **0.1.0-rc12** (release candidate) for the verified Windows Steam build. Our native
 runtime independently identifies live Unreal objects and executes supported
 engine operations on the game thread. Python runs in a persistent external
 controller. No Borderlands offsets or layouts are used as Expedition 33 facts.
@@ -15,38 +15,43 @@ and Cinematics, plus Asset Creator/Main Character Replacer. Each has its own rel
 The checkout's `launch-sdk.cmd` delegates to the installed SDK using `SDK_GAME_DIR`
 or the local, untracked `settings/install-path.txt`.
 
-## RC11: Mods menu and standalone World Builder
+## RC12: startup improvements and World Builder recovery
 
-[RC11 release notes](docs/RELEASE_0.1.0_RC11.md) describe the BL4-inspired Mods
+[RC12 release notes](docs/RELEASE_0.1.0_RC12.md) describe the BL4-inspired Mods
 layout with E33/World Builder styling: inline enable/disable toggles, search and
 filters, bulk actions, a persisted text-size slider, separate settings and keybind
 scroll panels, and press-a-key rebinding with conflict reporting. Open it through
 **Pause → Mods**. During capture, Escape unbinds; Cancel keeps the existing key.
 Text size ranges from 0.75 to 2.75; Reset restores 1.35.
 
-World Builder **0.30.0** is a separate optional mod requiring RC11 or later.
+World Builder **0.30.1** is a separate optional mod requiring RC12 or later.
 It shares the SDK controller and native runtime. Its maps, camera preferences and
 thumbnail cache stay under `SDK/settings/E33WorldBuilder`.
 
-The current `main` branch includes startup fixes after the published RC11 ZIP:
+RC12 packages the startup fixes made after the published RC11 ZIP:
 bounded widget-construction batches, attachment gated on gameplay and pause UI,
 and menu preparation before saved optional mods restore. A fresh-game check measured
 widget construction at **2.17 s** (previously 10.60 s) and SDK readiness at **9.06 s**
 after the readiness check (previously 17.42 s). The starting gate changed; these
 are individual observations, not a guarantee or an instant-start claim.
-See [startup validation](docs/STARTUP_MENU_VALIDATION.md). These follow-up source
-fixes do not replace the existing RC11 release ZIP.
+See [startup validation](docs/STARTUP_MENU_VALIDATION.md). The original RC11 archive remains unchanged. RC12 also improves surface
+targeting; World Builder 0.30.1 recovers closed readers so F7/F8 remain usable.
+
+Final RC12 clean-install checks passed for Pause → Mods, text size/reset, Keybinds,
+press-a-key rebinding, F7/F8, foreground/rear targeting, drag and console access.
+This run measured **2.27 s** construction and **9.29 s** readiness from the gameplay
+gate. See [RC12 validation and limitations](docs/RC12_VALIDATION.md).
 
 ## Download optional mods
 
-Install [ClairObscurSDK RC11](https://github.com/mattmab/ClairObscurSDK/releases/tag/v0.1.0-rc11)
+Install [SDK RC12](https://github.com/mattmab/ClairObscurSDK/releases/tag/v0.1.0-rc12)
 first, then choose the mods you want. These are separate downloads, not bundled
 with the SDK; each published Nexus listing declares the SDK requirement.
-Older Nexus releases remain available; World Builder requires RC11.
+Older Nexus releases remain available; World Builder requires RC12.
 
 | Mod | Features and limitations |
 | --- | --- |
-| [**World Builder — EXPERIMENTAL**](https://github.com/mattmab/ClairObscurSDK/releases/tag/world-builder-v0.30.0) | Standalone optional mod for free camera, prop placement, maps, catalog browsing and thumbnails. Requires RC11. |
+| [**World Builder — EXPERIMENTAL**](https://github.com/mattmab/ClairObscurSDK/releases/tag/world-builder-v0.30.1) | Standalone optional mod for free camera, prop placement, maps, catalog browsing and thumbnails. Requires RC12. |
 | [Continent Flight](https://www.nexusmods.com/clairobscurexpedition33/mods/941) | Exploration flight for supported human characters. Dismount Esquie first; experimental traversal support. |
 | [Picto Editor](https://www.nexusmods.com/clairobscurexpedition33/mods/942) | Edit supported Picto stats, levels, Lumina costs and mastery. Changes can affect saves. |
 | [Statistics](https://www.nexusmods.com/clairobscurexpedition33/mods/943) | View captured damage events and supported battle counters. Not full third-party Statistics DLL parity. |

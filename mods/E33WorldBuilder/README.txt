@@ -1,13 +1,13 @@
-E33 World Builder 0.30.0 experimental
-Requires SDK 0.1.0-rc11 or later with the World Builder native API.
+E33 World Builder 0.30.1 experimental
+Requires SDK 0.1.0-rc12 or later with the World Builder native API.
 Install E33WorldBuilder.sdkmod in the game-root SDK_Mods folder, then enable
 World Builder in Pause > Mods. It is an optional mod, not bundled with the SDK.
 Maps and settings remain in SDK/settings/E33WorldBuilder when disabled.
 
 Downloads:
-  SDK RC11: https://github.com/mattmab/ClairObscurSDK/releases/tag/v0.1.0-rc11
-  World Builder: https://github.com/mattmab/ClairObscurSDK/releases/tag/world-builder-v0.30.0
-Close the game and SDK before updating. Extract E33WorldBuilder-0.30.0.zip
+  SDK RC12: https://github.com/mattmab/ClairObscurSDK/releases/tag/v0.1.0-rc12
+  World Builder: https://github.com/mattmab/ClairObscurSDK/releases/tag/world-builder-v0.30.1
+Close the game and SDK before updating. Extract E33WorldBuilder-0.30.1.zip
 beside Sandfall; leave its inner .sdkmod archive intact. Preserve SDK/settings.
 No separate Python, controller or native DLL is needed for World Builder.
 Use the SDK Mods menu's Keybinds tab to rebind F7/F8/F9/F10: choose Rebind and
@@ -15,11 +15,12 @@ press a key. Escape unbinds; Cancel preserves the old binding. Resolve conflicts
 before using a binding. Builder camera settings remain in its own Camera settings UI.
 Catalog prewarming waits while another SDK menu owns focus.
 
-RC11 clean-install acceptance covered catalog navigation/thumbnails, one prop
-spawn/clear, camera access, rebinding and console access. Some assets cannot load
-in a given world, and not every asset or operation has been tested in game.
-See docs/RC11_VALIDATION.md and docs/STARTUP_MENU_VALIDATION.md in the repository
-for original package results and later SDK source follow-ups, respectively.
+RC12 / 0.30.1 clean-install checks passed on 2026-10-15: Pause > Mods,
+text sizing/reset, Keybinds and rebinding, F7 catalog open/close, F8 camera
+off/on, foreground/rear cube targeting, drag and subsequent console execution.
+Unavailable temporary catalog assets logged skipped-thumbnail errors. Not every
+asset or operation was tested. Streamed map restoration remains a known limit.
+See docs/RC12_VALIDATION.md in the repository for the full scope.
 
 F8: enter/leave builder camera. Mouse look; WASD fly.
 Space: up. Ctrl: down. E/Q also work. Shift: four times faster.
@@ -47,8 +48,13 @@ Escape: close the current preview/menu/camera layer without game pause.
 GPU scene-depth captures select actual rendered surfaces of ordinary static-mesh
 props, including Blueprint-owned components and props without collision.
 Rotated bounds only shortlist candidates; they never count as a surface hit.
-Three fence-gated readback slots pipeline candidate checks, with at most one
-small capture submitted per frame. No synchronous pixel reads or GPU waits.
+SDK RC12 checks full-scene depth before individual candidates,
+so foreground scenery blocks selection of props behind it. Every overlapping
+candidate remains eligible; searches no longer stop at 32 bounds. Each search
+revalidates its hit and owns the capture target until its readback completes.
+Install SDK RC12 as well as this mod; replacing the .sdkmod alone does not
+update native targeting.
+No synchronous pixel reads or GPU waits are used.
 Overlapping candidates can add targeting latency. Results are rejected when
 stale or no longer aligned with the crosshair. Discovery takes several seconds
 after entry and updates incrementally for streamed scenery.
@@ -133,3 +139,7 @@ Native v45: Camera settings button opens sensitivity and fly-speed fields with A
 Native v46: Prop highlight cycles Auto / On click / Off and saves immediately. On click highlights only the grabbed prop while holding the left mouse button, restoring its materials on release. Existing on/off preferences are preserved.
 
 Native v47: F10 / Duplicate to hand clones the selected spawned scene or gallery prop. The source stays untouched; fly the tracked copy and click once to place it. Copy rotation and scale are retained. Numpad fine movement remains available. Copies are included in map saves. Place the current copy before duplicating again.
+
+Reader recovery: a failed menu read is reported once and its closed worker is
+retired. The next operation creates a fresh reader; it does not repeat a failed
+widget mutation or clear scene edits. Successful recovery resumes status polls.

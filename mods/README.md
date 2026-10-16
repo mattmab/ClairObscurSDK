@@ -5,16 +5,15 @@ The SDK installer includes **SDK Management**, **Introspection Harness** and
 Mods below are separate downloads with independent release tags and MIT licenses.
 They use the SDK runtime; do not install separate controllers.
 
-The latest published SDK is [RC11](https://github.com/mattmab/ClairObscurSDK/releases/tag/v0.1.0-rc11).
+The SDK release is **RC12**; see [release notes](../docs/RELEASE_0.1.0_RC12.md).
 Its Mods menu provides enable toggles, text sizing, separate settings/keybind
-panels and press-a-key rebinding. World Builder is a standalone **0.30.0**
+panels and press-a-key rebinding. World Builder is a standalone **0.30.1**
 download, with [installation, controls and limitations](E33WorldBuilder/README.txt).
-See the [RC11 notes](../docs/RELEASE_0.1.0_RC11.md) for the distinction between
-the published ZIP and subsequent startup fixes on `main`.
+RC12 includes startup and targeting fixes; World Builder 0.30.1 adds reader recovery.
 
 | Mod | Download / release | Purpose |
 | --- | --- | --- |
-| World Builder — EXPERIMENTAL | [0.30.0](https://github.com/mattmab/ClairObscurSDK/releases/tag/world-builder-v0.30.0) | RC11 required. Free camera, prop catalog, placement and saved maps. |
+| World Builder — EXPERIMENTAL | [0.30.1](https://github.com/mattmab/ClairObscurSDK/releases/tag/world-builder-v0.30.1) | RC12 required. Free camera, prop catalog, placement and saved maps. |
 | ContinentFlight | [0.1.0-rc1](https://github.com/mattmab/ClairObscurSDK/releases/tag/mod-continentflight-v0.1.0-rc1) | Exploration flight |
 | Picto Editor | [0.1.0-rc1](https://github.com/mattmab/ClairObscurSDK/releases/tag/mod-pictoeditor-v0.1.0-rc1) | Stock-menu Picto editing and saved overrides |
 | Statistics | [0.1.0-rc1](https://github.com/mattmab/ClairObscurSDK/releases/tag/mod-statistics-v0.1.0-rc1) | Combat records and verified summary counters |

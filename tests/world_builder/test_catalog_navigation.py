@@ -7,18 +7,44 @@ from camera_test_builder.library import Library
 from camera_test_builder.mod import Mod
 
 class CatalogNavigationTests(unittest.TestCase):
-    def test_menu_worker_is_reused_and_failed_worker_is_not_restarted(self):
+    def test_menu_worker_recovers_at_next_operation_without_replaying_body(self):
         mod=Mod();mod.session=SimpleNamespace(pid=123)
-        worker=Mock();worker.bind.side_effect=lambda:nullcontext(worker)
-        with patch('camera_test_builder.mod.active_reader',return_value=None),patch('camera_test_builder.mod.ReadBatch',return_value=worker) as factory:
+        worker=Mock(_closed=False);worker.bind.side_effect=lambda:nullcontext(worker)
+        fresh=Mock(_closed=False);fresh.bind.side_effect=lambda:nullcontext(fresh)
+        body=Mock()
+        with patch('camera_test_builder.mod.active_reader',return_value=None),patch('camera_test_builder.mod.ReadBatch',side_effect=[worker,fresh]) as factory:
             with mod.menu_reads() as first:self.assertIs(first,worker)
             with mod.menu_reads() as second:self.assertIs(second,worker)
-            factory.assert_called_once_with(123,share=True)
-            worker.bind.side_effect=RuntimeError('reader closed')
-            for _ in range(2):
-                with self.assertRaisesRegex(RuntimeError,'reader closed'):
-                    with mod.menu_reads():pass
+            with self.assertRaisesRegex(RuntimeError,'query failed'):
+                with mod.menu_reads():
+                    body();worker._closed=True
+                    raise RuntimeError('query failed')
+            body.assert_called_once()
+            self.assertIsNone(mod._menu_reader)
             self.assertEqual(factory.call_count,1)
+            mod.next_status=float('inf');mod.error='Read batch is closed after completion or failure'
+            with mod.menu_reads() as recovered:self.assertIs(recovered,fresh)
+            self.assertEqual(factory.call_count,2)
+            self.assertEqual(mod.next_status,0.)
+            self.assertIsNone(mod.error)
+
+    def test_already_closed_worker_is_replaced_without_touching_scene(self):
+        mod=Mod();mod.session=SimpleNamespace(pid=123)
+        mod._menu_reader=Mock(_closed=True);mod.last={'edits':28}
+        mod.library=SimpleNamespace(owned={'existing':object()})
+        fresh=Mock(_closed=False);fresh.bind.side_effect=lambda:nullcontext(fresh)
+        with patch('camera_test_builder.mod.active_reader',return_value=None),patch('camera_test_builder.mod.ReadBatch',return_value=fresh):
+            with mod.menu_reads() as reader:self.assertIs(reader,fresh)
+        self.assertEqual(mod.last,{'edits':28})
+        self.assertIn('existing',mod.library.owned)
+
+    def test_unrelated_error_keeps_healthy_reader(self):
+        mod=Mod();mod.session=SimpleNamespace(pid=123)
+        worker=Mock(_closed=False);worker.bind.side_effect=lambda:nullcontext(worker)
+        with patch('camera_test_builder.mod.active_reader',return_value=None),patch('camera_test_builder.mod.ReadBatch',return_value=worker):
+            with self.assertRaises(ValueError):
+                with mod.menu_reads():raise ValueError('bad field')
+        self.assertIs(mod._menu_reader,worker)
 
     def test_menu_worker_borrows_existing_context_only_for_same_process(self):
         mod=Mod();mod.session=SimpleNamespace(pid=123)
