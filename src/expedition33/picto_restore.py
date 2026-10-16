@@ -51,12 +51,20 @@ def restore(scope, profiles, *, catalog=None):
         needs_change=any((fields['owned']!=(identity in owned)) for identity,fields in profiles.items() if 'owned' in fields)
         if needs_change:
             ownership = PictoOwnership(scope)
-        for identity, fields in profiles.items():
-            # The initial inventory snapshot already confirms unchanged rows.
-            # Bulk ownership profiles must not rediscover all inventory once
-            # per Picto on every SDK reload.
-            if ownership is not None and fields.get('owned') is True and identity not in ownership.owned and ownership.set_owned(identity, True):
-                ownership_applied.append([identity, 'owned'])
+        def restore_ownership(desired):
+            if ownership is None:
+                return []
+            ids = [identity for identity, fields in profiles.items()
+                   if fields.get('owned') is desired and (identity in ownership.owned) != desired]
+            if not ids:
+                return []
+            if getattr(scope._session._transport, 'picto_batch_protocol', 0) == 1:
+                from .picto_startup_batch import run
+                # One guarded frame queue and final inventory readback. Never
+                # fall back after dispatch: an uncertain mutation must not repeat.
+                return run(ownership, ids, desired=desired)
+            return [identity for identity in ids if ownership.set_owned(identity, desired)]
+        ownership_applied.extend([identity, 'owned'] for identity in restore_ownership(True))
         if ownership is not None:
             catalog = catalog.with_observations(ownership.catalog)
             catalog, owned = owned_pictos(scope.pid, catalog=catalog)
@@ -194,9 +202,7 @@ def restore(scope, profiles, *, catalog=None):
         for character in characters:
             call(character, 'BP_CharacterData_C', 'UpdateEquipmentStats')
     if ownership is not None:
-        for identity, fields in profiles.items():
-            if fields.get('owned') is False and identity in ownership.owned and ownership.set_owned(identity,False):
-                applied.append([identity,'owned'])
+        applied.extend([identity, 'owned'] for identity in restore_ownership(False))
     intentionally_absent = {identity for identity, fields in profiles.items() if fields.get('owned') is False}
     return {'applied': applied, 'missing': sorted(set(profiles) - set(inventory) - intentionally_absent),
             'discovery_ms': round(discovery_ms, 1), 'inventory_ms': round(inventory_ms, 1),

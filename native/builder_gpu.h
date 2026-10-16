@@ -32,7 +32,7 @@
         return true;
     }
     template<class Pool> bool gpu_setup(uint64_t b,uint64_t session,Pool& pool) {
-        gpu_error_=0;gpu_pending_=gpu_completed_=gpu_last_capture_=gpu_ready_time_=0;gpu_query_active_=false;gpu_flights_.clear();gpu_candidates_.clear();gpu_ready_component_={};
+        gpu_end_click();gpu_error_=0;gpu_pending_=gpu_completed_=gpu_last_capture_=gpu_ready_time_=0;gpu_query_active_=false;gpu_flights_.clear();gpu_candidates_.clear();gpu_ready_component_={};
         if(!gpu_bridge_.start(257,259,2)){gpu_error_=gpu_bridge_.error();return false;}
         clear();put(0,ids_[0].address);put(8,ids_[80].address);transform(args_+16,position_);args_[112]=1;
         if(!call(b,ids_[4],0))return false;gpu_actor_=call_capture(b,get<uint64_t>(136));

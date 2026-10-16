@@ -15,14 +15,15 @@
         if(!byte_property(b,component,"SceneComponent","Mobility",e.mobility)||e.mobility>2)return false;
         clear();if(!call(b,component,19))return false;std::memcpy(e.transform.data(),args_,96);edits_.push_back(e);return true;
     }
-    template<class Pool> bool clear_spawned(uint64_t b,uint64_t session,Pool& pool,CallIdentity only={}) {
+    template<class Pool> bool clear_spawned(uint64_t b,uint64_t session,Pool& pool,CallIdentity only={},bool preserve_history=false) {
         if(!glow(b,session,pool,{}))return false;
         for(size_t i=spawned_.size();i>0;--i) {
             auto& row=spawned_[i-1];if(only.address&&(only.address!=row.actor.address||only.serial!=row.actor.serial))continue;
             if(call_identity(b,row.actor)){clear();if(!call(b,row.actor,2))return false;}
             const auto component=row.component;
             auto matches=[&](const Edit& e){return e.component.address==component.address&&e.component.serial==component.serial;};
-            edits_.erase(std::remove_if(edits_.begin(),edits_.end(),matches),edits_.end());undo_.erase(std::remove_if(undo_.begin(),undo_.end(),matches),undo_.end());
+            edits_.erase(std::remove_if(edits_.begin(),edits_.end(),matches),edits_.end());
+            if(!preserve_history)undo_.erase(std::remove_if(undo_.begin(),undo_.end(),matches),undo_.end());
             if(selected_.address==component.address){selected_={};selected_actor_={};dragging_=false;carrying_=false;}
             TargetStrongReferenceOps ops{b,{-1,0,0}};if(row.lease&&pool.release(ops,session,row.lease)!=StrongLeaseResult::Ok)return false;
             if(row.actor.address==thumbnail_prop_.address)thumbnail_prop_={};

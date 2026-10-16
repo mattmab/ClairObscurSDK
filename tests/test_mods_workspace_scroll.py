@@ -33,7 +33,7 @@ class ScrollWorkspaceTests(unittest.TestCase):
         self.assertIn('ON',[c.label for c in self.frame.controls])
         self.click('ON')
         self.assertFalse(self.registry.view(self.registry.select('specimen'))['enabled'])
-        self.click('Configure (3 options)');self.assertEqual(self.view.screen,'options')
+        self.click('Configure (3 options, 0 keybinds)');self.assertEqual(self.view.screen,'options')
         self.assertEqual(len(self.frame.controls),105)
         self.click('ON')
         self.assertFalse(self.registry.option(self.registry.select('specimen'),'toggle'))

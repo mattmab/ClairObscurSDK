@@ -69,7 +69,6 @@ class Library:
         return dict(count=len(rows),rows=rows[offset:offset+limit],offset=offset)
     def context(self):
         with reads(self.mod.session.pid):
-            if self._catalog is None:self.refresh(force=False)
             fresh=capture_matching(self.mod.session.pid,classes=('PlayerController',))
             c=fresh;pc=next(o for o in c.select('PlayerController') if not o.object_flags&0x30)
             v,c=read_values_with_references(c,pc,fields=('Pawn','PlayerCameraManager','ControlRotation'))
@@ -139,8 +138,9 @@ class Library:
         if self.owned or self.mod.last.get('edits'):raise ValueError('Save or clear the current tracked scene before loading another')
         if not self.rows:self.refresh(force=False)
         # Complete identity/availability preflight before the first mutation.
-        c=capture()
-        if any(row['kind']!='world_edit' and row['asset'] not in self.known for row in data['objects']):self.refresh(force=False,observed=c)
+        unknown=any(row['kind']!='world_edit' and row['asset'] not in self.known for row in data['objects'])
+        if unknown or any(row['kind']=='world_edit' for row in data['objects']):c=capture()
+        if unknown:self.refresh(force=False,observed=c)
         plans=[]
         for row in data['objects']:
             if row['kind']=='world_edit':
@@ -183,9 +183,10 @@ class Library:
         from .bulk import delete_many
         delete_many(self,list(self.owned));self.mod.restore();self.owned.clear();self.active_map=None;self.selected=None;self.message='Tracked scene cleared';return dict(cleared=True)
 
-    def duplicate(self,key):
-        row=next(r for r in self.snapshot('Duplicate')['objects'] if r['id']==key)
-        transform=list(row['transform']);transform[5]+=100.
+    def duplicate(self,key,offset=(0.,100.,0.),source=None):
+        row=source if source is not None else next(r for r in self.snapshot('Duplicate')['objects'] if r['id']==key)
+        transform=list(row['transform'])
+        for i,value in enumerate(offset,4):transform[i]+=value
         result=self.spawn(row['asset'],transform)
         try:
             if row.get('component_edits'):
@@ -193,7 +194,9 @@ class Library:
                 for child in row['component_edits']:
                     target=c.find_path(prefix+child['component']);v,c=read_values_with_references(c,target,fields=('StaticMesh',));mesh=next(v for k,v in v.values.items() if k[1]=='StaticMesh')
                     if c.path_name(mesh)!=child['asset']:raise ValueError('Duplicated component does not match saved asset')
-                    pose=list(child['transform']);pose[5]+=100.;self.mod.scene_command(30,objects=(target,),transform=pose)
+                    pose=list(child['transform'])
+                    for i,value in enumerate(offset,4):pose[i]+=value
+                    self.mod.scene_command(30,objects=(target,),transform=pose)
         except Exception:
             self.delete(result['id']);raise
         return result

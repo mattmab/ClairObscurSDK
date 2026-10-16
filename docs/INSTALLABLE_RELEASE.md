@@ -1,6 +1,6 @@
 # Expedition 33 SDK — installable release candidate
 
-This package is SDK **0.1.0-rc12**. See `docs/RELEASE_0.1.0_RC12.md` in the
+This package is SDK **0.1.0-rc13**. See `docs/RELEASE_0.1.0_RC13.md` in the
 source repository for release notes.
 
 This candidate supports the verified Windows Steam executable with SHA-256
@@ -42,7 +42,7 @@ SDKManagement, IntrospectionHarness and LiveObjectViewer are bundled in `SDK_Mod
 Enable LiveObjectViewer in Pause → Mods, then choose **Open Live Object Viewer**
 or enter `lov` in the native console. Existing saved enable choices are preserved.
 Download optional mods separately from the repository's Mods catalog and releases.
-World Builder 0.30.1 requires RC12 or later and is a separate optional download.
+World Builder 0.31.0 requires RC13 or later and is a separate optional download.
 Extract its ZIP beside `Sandfall` and enable World Builder in Pause → Mods.
 It needs no second controller or native DLL; preserve `SDK/settings/E33WorldBuilder`
 for maps, camera preferences and thumbnail caches.

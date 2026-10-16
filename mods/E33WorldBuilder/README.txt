@@ -1,13 +1,22 @@
-E33 World Builder 0.30.1 experimental
-Requires SDK 0.1.0-rc12 or later with the World Builder native API.
+RC13 additions:
+F5 opens live duplication of the current selected spawned prop. Set copy count
+and compound X/Y/Z offsets, inspect the world preview, then Apply copies.
+Unapplied previews are canceled when leaving the tab. Originals stay unchanged.
+Delete removes the current spawned selection. Alt+Z restores its position,
+rotation, scale and map tracking; Alt+Y deletes it again.
+F7 switches from duplication to the Build prop catalog; F7 in Build closes it.
+Escape closes the current menu. Selection and Controls are displayed in the HUD.
+
+E33 World Builder 0.31.0 experimental
+Requires SDK 0.1.0-rc13 or later with the World Builder native API.
 Install E33WorldBuilder.sdkmod in the game-root SDK_Mods folder, then enable
 World Builder in Pause > Mods. It is an optional mod, not bundled with the SDK.
 Maps and settings remain in SDK/settings/E33WorldBuilder when disabled.
 
 Downloads:
-  SDK RC12: https://github.com/mattmab/ClairObscurSDK/releases/tag/v0.1.0-rc12
-  World Builder: https://github.com/mattmab/ClairObscurSDK/releases/tag/world-builder-v0.30.1
-Close the game and SDK before updating. Extract E33WorldBuilder-0.30.1.zip
+  SDK RC13: https://github.com/mattmab/ClairObscurSDK/releases/tag/v0.1.0-rc13
+  World Builder: https://github.com/mattmab/ClairObscurSDK/releases/tag/v0.1.0-rc13
+Close the game and SDK before updating. Extract E33WorldBuilder-0.31.0.zip
 beside Sandfall; leave its inner .sdkmod archive intact. Preserve SDK/settings.
 No separate Python, controller or native DLL is needed for World Builder.
 Use the SDK Mods menu's Keybinds tab to rebind F7/F8/F9/F10: choose Rebind and
@@ -15,7 +24,7 @@ press a key. Escape unbinds; Cancel preserves the old binding. Resolve conflicts
 before using a binding. Builder camera settings remain in its own Camera settings UI.
 Catalog prewarming waits while another SDK menu owns focus.
 
-RC12 / 0.30.1 clean-install checks passed on 2026-10-15: Pause > Mods,
+Historical RC12 / 0.30.1 clean-install checks passed on 2026-10-15: Pause > Mods,
 text sizing/reset, Keybinds and rebinding, F7 catalog open/close, F8 camera
 off/on, foreground/rear cube targeting, drag and subsequent console execution.
 Unavailable temporary catalog assets logged skipped-thumbnail errors. Not every
@@ -32,10 +41,10 @@ when aim moves away, the game loses focus, or builder mode exits.
 With Num Lock on:
   Numpad 8/2 forward/back; 4/6 left/right; 9/3 up/down; 7/1 yaw.
   Alt makes these adjustments ten times finer.
-Alt+Z: undo the last drag, nudge gesture, or duplicate creation (64 history entries).
+Alt+Z: undo the last drag, nudge gesture, duplicate creation, or selection deletion (64 history entries).
 Undoing duplicate creation deletes only the copy and removes its map record.
 Later edits undo first; the original gallery prop is preserved.
-Alt+Y: redo undone moves or duplicate creation at the saved transform.
+Alt+Y: redo undone moves, duplicate creation, or deletion at the saved transform.
 Restored copies retain their map ID. New edits clear redo history.
 Z is blocked from gameplay while the builder camera is active.
 History belongs to the current session and is not restored from saved maps.
@@ -62,6 +71,10 @@ Ambient SM_Sphere meshes and cloud/fog/sky/volumetric actors are excluded.
 Landscape and foliage/instanced components are not supported. Translucent
 surfaces that do not write scene depth may not be selectable.
 The tracked scene supports up to 6,000 objects (including owned props and world edits).
+
+Level streaming can reset the position of moved built-in world objects when
+the game unloads and reloads those assets. Custom-placed props do not
+participate in level streaming and are unaffected by those unload/reload cycles.
 
 Movement runs on the native game thread once per rendered frame; Python only
 polls diagnostics twice per second. Losing focus pauses movement and ends a

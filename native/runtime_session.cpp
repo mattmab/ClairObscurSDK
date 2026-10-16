@@ -1087,6 +1087,7 @@ void backend_message(MSG* message) {
            lifetime_valid() && attachment_valid(runtime_base) && local_read<uint64_t>(attached_console+0xd8)==0 &&
            (builder_panel || builder_escape) &&
            session_keys.contains(routed_key)) {
+            if(builder_key==0&&routed_key==VK_F7)session_builder.request_menu_escape();
             session_keys.press(routed_key,(message->lParam & (LPARAM(1)<<30))!=0,true);
             builder_menu_key_down[builder_key]=true;message->message=WM_NULL;return;
         }

@@ -135,20 +135,24 @@ class Mod:
                     if self.error and ('Read worker' in self.error or 'Read batch' in self.error):self.error=None
 
     def management(self):
-        return ModDefinition('e33.world-builder', 'World Builder', version='0.30.1-experimental',
+        return ModDefinition('e33.world-builder', 'World Builder', version='0.31.0-experimental',
             description='F8 freecam. WASD fly, mouse look, Space/Ctrl up/down (E/Q also work), Shift faster. Hold left mouse to grab a world prop; release to place. Numpad 8/2 forward/back, 4/6 left/right, 9/3 up/down, 7/1 yaw; Alt precise; Alt+Z undo. F9 restores edits and clears spawned props. F7 opens folders, previews, spawning, galleries and saved maps.',
             actions=(Action('catalog', 'Open asset catalog', self.open_catalog),Action('toggle', 'Enter / leave builder camera', self.toggle),
                      Action('restore', 'Restore all edited geometry', self.restore),
                      Action('undo', 'Undo last prop edit', self.undo),
                      Action('status', 'Builder status', self.status)),
-            keybinds=(Keybind('catalog', 'Open asset catalog', 'F7', self.open_catalog),Keybind('toggle', 'Toggle builder camera', 'F8', self.toggle),
+            keybinds=(Keybind('directional','Open live duplication for selected prop','F5',self.open_directional),Keybind('catalog', 'Open asset catalog', 'F7', self.open_catalog),Keybind('toggle', 'Toggle builder camera', 'F8', self.toggle),
                       Keybind('restore', 'Restore all geometry edits', 'F9', self.restore),
-                      Keybind('duplicate_to_hand','Duplicate selected prop to hand','F10',self.duplicate_to_hand)))
+                      Keybind('duplicate_to_hand','Duplicate selected prop to hand','F10',self.duplicate_to_hand),
+                      Keybind('delete_selection','Delete Current Selection','Delete',self.delete_selection)))
 
     def enable(self, session):
         self.session = session
         from .library import Library
         self.library = Library(self)
+        from .directional import DuplicationDraft
+        self.directional=DuplicationDraft(self.library)
+        self.current_selection='None'
         from .camera_settings import CameraSettings
         self.camera_settings=CameraSettings(self.library.store.root.parent)
         self.user32 = ctypes.WinDLL('user32', use_last_error=True)
@@ -161,6 +165,8 @@ class Mod:
         session.actions.register('world_builder.restore', self.restore)
         session.actions.register('world_builder.play_from_camera',self.play_from_camera)
         session.actions.register('world_builder.duplicate_to_hand',self.duplicate_to_hand)
+        session.actions.register('world_builder.delete_selection',self.delete_selection)
+        session.actions.register('world_builder.open_directional',self.open_directional)
         session.actions.register('world_builder.pick', self.pick)
         session.actions.register('world_builder.undo', self.undo)
         session.actions.register('world_builder.redo', self.redo)
@@ -215,7 +221,7 @@ class Mod:
         with self.session._lease_context():
             reply = self.session._session._transport.command('mesh', bytes(packet))
         raw = bytes.fromhex(reply['mesh_packet'])
-        if len(raw) != len(packet) or raw[:8] != packet[:8] or raw[16:24] != packet[16:24] or raw[88:3000] != packet[88:3000] or raw[3392:3400] != packet[3392:3400] or (raw[3544:3560] != packet[3544:3560] or raw[3648:4096] != packet[3648:4096] or raw[20480:] != packet[20480:] or (op not in (29,35,50,51,54,60) and raw[4096:20480] != packet[4096:20480])):
+        if len(raw) != len(packet) or raw[:8] != packet[:8] or raw[16:24] != packet[16:24] or raw[88:3000] != packet[88:3000] or raw[3392:3400] != packet[3392:3400] or (raw[3544:3560] != packet[3544:3560] or raw[4080:4096] != packet[4080:4096] or raw[20480:] != packet[20480:] or (op not in (29,35,50,51,54,60) and raw[4096:20480] != packet[4096:20480])):
             raise RuntimeError('Builder acknowledgement mismatch; outcome uncertain')
         self.last_raw = raw
         _, _, error, state, _ = struct.unpack_from('<4IQ', raw)
@@ -240,6 +246,8 @@ class Mod:
         completed,pending,gpu_error = struct.unpack_from('<3d',raw,3072)
         self.last.update(gpu_completed=int(completed),gpu_pending=int(pending),gpu_error=int(gpu_error),gpu_ready=bool(struct.unpack_from('<I',raw,3096)[0]))
         booth=struct.unpack_from('<6d',raw,3600)
+        self.last['selection_samples'] = [list(struct.unpack_from('<6d',raw,3696+48*i)) for i in range(8)]
+        self.last['selection_diagnostics'] = dict(zip(('discovered_meshes','scan_index','collision_distance','query_limit','surface_limit','query_stale'), struct.unpack_from('<6d',raw,3648)))
         self.last.update(booth_active=bool(booth[0]),booth_distance=booth[1],booth_rotation=list(booth[2:5]),booth_lighting=int(booth[5]))
         if error:
             raise RuntimeError(f'Builder operation {op} rejected: error {error}, step {step}')
@@ -327,8 +335,15 @@ class Mod:
                 row=dict(row,actor=actor,component=component)
                 self.library.owned[row['id']]=row
                 removed.discard(row['id'])
+                self.library.selected=row['id']
+                self.current_selection=row.get('asset','Prop').rsplit('.',1)[-1]
+                self._catalog_selection=None
             self._undo_revision=event
-        if self.library.selected in removed:self.library.selected=None
+        if self.library.selected in removed:
+            self.library.selected=None
+            self.current_selection='None'
+            self._catalog_selection=None
+            self.pending_catalog_asset=None
         menu=self.catalog_menu
         if menu:
             if menu.selected and menu.selected.get('id') in removed:menu.selected=None
@@ -344,6 +359,12 @@ class Mod:
             LOG.exception('Click duplication failed')
         finally:self.command(59)
 
+    def open_directional(self,_=None):
+        if not self.catalog_menu or self.catalog_menu.state!='open':self.open_catalog()
+        with self.menu_reads():
+            self.catalog_menu.open_directional()
+            self.catalog_menu.paint()
+
     def sync_catalog_selection(self):
         identity=getattr(self,'selected_identity',None)
         if not identity or not identity[2] or identity==self._catalog_selection:return
@@ -352,6 +373,14 @@ class Mod:
         row=selected_owned(self.library.owned,identity)
         if row and row['id']!=self.library.preview_key:
             self.library.selected=row['id'];self.pending_catalog_asset=row['asset']
+            self.current_selection=row['asset'].rsplit('.',1)[-1]
+        else:
+            from expedition33.catalog import capture_selected
+            try:
+                observed=capture_selected(self.session.pid,[identity])
+                self.current_selection=observed.by_index[identity[0]].name
+            except Exception:
+                LOG.debug('Selected prop expired before its name could be read',exc_info=True)
 
     def refresh_menu_owner(self):
         menu=self.catalog_menu
@@ -374,6 +403,10 @@ class Mod:
             self.library.active_map=None;self.library.world=None
 
     def open_catalog(self,_=None):
+        escape=False
+        if self.started:
+            self.command(64)
+            escape=bool(struct.unpack_from('<I',self.last_raw,3560)[0])
         if self.booth_pending:self.end_booth();return {'open':True}
         if not self.active:self.toggle()
         self.refresh_menu_owner()
@@ -381,13 +414,17 @@ class Mod:
         if self.catalog_menu is None:
             self.catalog_menu=CatalogMenu(self)
             with self.menu_reads():self.catalog_menu.build()
-        if self.catalog_menu.state=='open':self.catalog_menu.hide()
+        if self.catalog_menu.state=='open' and (escape or self.catalog_menu.workspace=='Build'):self.catalog_menu.hide()
         else:
             self.command(26);self.sync_catalog_selection()
             with self.menu_reads():
+                if self.catalog_menu.workspace!='Build':
+                    self.directional.cancel()
+                    self.catalog_menu.click(24)
                 if self.pending_catalog_asset:
                     self.catalog_menu.focus_asset(self.pending_catalog_asset);self.pending_catalog_asset=None
-                self.catalog_menu.paint();self.catalog_menu.open()
+                self.catalog_menu.paint()
+                if self.catalog_menu.state!='open':self.catalog_menu.open()
         return {'open':self.catalog_menu.state=='open'}
 
     def menu_fields(self,first=None,second=None,search=None,map_name=None):
@@ -411,6 +448,14 @@ class Mod:
     def scene_command(self,op,objects=(),transform=None):
         self.command(op,ids=objects,transform=transform)
         return self.last_raw
+
+    def overlay_context(self):
+        from .overlays import context
+        return context(self)
+
+    def load_overlay(self,map_id,expected):
+        from .overlays import load
+        return load(self,map_id,expected,discover)
 
     def toggle(self, _=None):
         if self.active:
@@ -494,6 +539,34 @@ class Mod:
         self.library.message='Copy in hand. Fly to position, then click to place. F10 duplicates again.'
         return dict(result,carrying=True)
 
+    def delete_selection(self,_=None):
+        if not self.active or self.booth_pending:
+            raise ValueError('Use the builder camera outside the asset preview')
+        self.command(26)
+        from .camera_settings import selected_owned
+        row=selected_owned(self.library.owned,getattr(self,'selected_identity',()) or ())
+        if not row or row['id']==self.library.preview_key or row.get('duplication_preview'):
+            raise ValueError('Select a spawned scene or gallery prop first')
+        key=row['id']
+        draft=getattr(self,'directional',None)
+        if draft and draft.source and draft.source['id']==key: draft.cancel()
+        from types import SimpleNamespace
+        actor=SimpleNamespace(**dict(zip(('index','serial','address'),row['actor'])))
+        self.command(63,ids=(actor,))
+        self.sync_undone_copies()
+        if self.library.selected==key:self.library.selected=None
+        menu=self.catalog_menu
+        if menu:
+            if menu.selected and menu.selected.get('id')==key:menu.selected=None
+            menu.signature=None
+        self.current_selection='None'
+        self._catalog_selection=None
+        self.pending_catalog_asset=None
+        self.selected_identity=()
+        self.dragging=False
+        self.library.message='Deleted selected prop. Alt+Z restores it; Alt+Y deletes it again.'
+        return dict(deleted=key)
+
     def pick(self, _=None):
         return self.command(23)
 
@@ -557,7 +630,9 @@ class Mod:
         # Enabling from Mods leaves that menu focused. Wait until it closes;
         # preparing a second menu's focus plan while it owns input is rejected.
         menu_busy = any(menu.active for menu in self.session._session._menus)
-        if self.catalog_menu is None and now>=self.prewarm_at and not menu_busy:
+        overlay=self.session._session.console.dispatcher.namespace.get('map_overlays')
+        overlay_pending=bool(overlay and getattr(overlay,'startup_pending',lambda:False)())
+        if self.catalog_menu is None and now>=self.prewarm_at and not menu_busy and not overlay_pending:
             self.prewarm_at=float('inf')
             try:
                 from .catalog_menu import CatalogMenu
@@ -581,6 +656,9 @@ class Mod:
             self.sync_undone_copies()
             self.process_duplicate_click()
             self.sync_catalog_selection()
+            if self.active and not self.booth_pending:
+                self.directional.poll()
+                if self.hud:self.hud.show_selection(self.current_selection)
             if self.booth_pending and not self.last.get('booth_active'):self.end_booth()
             if self.catalog_menu is not None:
                 with self.menu_reads():

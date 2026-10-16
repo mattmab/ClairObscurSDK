@@ -8,17 +8,63 @@
         if(history_events_.size()>=64)history_events_.erase(history_events_.begin());
         history_events_.push_back({++undo_revision_,before,actor,component});
     }
+    static bool same_history_identity(CallIdentity a,CallIdentity b) {
+        return a.index==b.index&&a.serial==b.serial&&a.address==b.address;
+    }
+    template<class Pool> bool retain_history_asset(uint64_t b,uint64_t session,Pool& pool,CallIdentity identity) {
+        if(!identity.address)return true;
+        if(!call_identity(b,identity))return false;
+        if(std::any_of(history_assets_.begin(),history_assets_.end(),[&](const auto& row){return same_history_identity(row.identity,identity);}))return true;
+        uint64_t lease=0;TargetStrongReferenceOps ops{b,identity};
+        if(pool.acquire(ops,session,identity.address,lease)!=StrongLeaseResult::Ok)return false;
+        history_assets_.push_back({identity,lease});return true;
+    }
+    template<class Pool> bool prune_history_assets(uint64_t b,uint64_t session,Pool& pool) {
+        for(size_t i=history_assets_.size();i>0;--i) {
+            const auto& row=history_assets_[i-1];bool used=false;
+            for(const auto* stack:{&undo_,&redo_})for(const auto& edit:*stack)
+                if(same_history_identity(edit.asset,row.identity)||same_history_identity(edit.actor_class,row.identity))used=true;
+            if(used)continue;
+            TargetStrongReferenceOps ops{b,{-1,0,0}};
+            if(pool.release(ops,session,row.lease)!=StrongLeaseResult::Ok)return false;
+            history_assets_.erase(history_assets_.begin()+i-1);
+        }
+        return true;
+    }
+    void remap_history(const Edit& old,CallIdentity actor,CallIdentity component) {
+        for(auto* stack:{&undo_,&redo_})for(auto& edit:*stack) {
+            if(same_history_identity(edit.component,old.component))edit.component=component;
+            if(same_history_identity(edit.created_actor,old.created_actor))edit.created_actor=actor;
+        }
+    }
+    template<class Pool> bool delete_checkpoint(uint64_t b,uint64_t session,Pool& pool,CallIdentity actor) {
+        const auto owned=std::find_if(spawned_.begin(),spawned_.end(),[&](const auto& row){return same_history_identity(row.actor,actor);});
+        if(owned==spawned_.end()||!call_identity(b,actor))return false;
+        Edit e{};e.deleted=true;e.component=owned->component;e.created_actor=actor;e.asset=owned->asset;
+        e.actor_class=call_capture(b,local_read<uint64_t>(actor.address+16));
+        clear();if(!call(b,e.component,19))return false;std::memcpy(e.transform.data(),args_,96);
+        if(!retain_history_asset(b,session,pool,e.asset)||!retain_history_asset(b,session,pool,e.actor_class))return false;
+        if(!clear_spawned(b,session,pool,actor,true))return false;
+        redo_.clear();if(undo_.size()>=64)undo_.erase(undo_.begin());undo_.push_back(e);
+        history_event(actor);want_grab_=false;duplicate_requested_=false;left_was_=true;return true;
+    }
     template<class Pool> bool redo(uint64_t b,uint64_t session,Pool& pool) {
         if(redo_.empty())return true;
         const auto e=redo_.back();Edit reverse=e;
-        if(e.created_actor.address) {
+        if(e.deleted) {
+            const auto owned=std::find_if(spawned_.begin(),spawned_.end(),[&](const auto& row){return same_history_identity(row.actor,e.created_actor)&&same_history_identity(row.component,e.component);});
+            if(owned==spawned_.end()||!call_identity(b,e.created_actor))return false;
+            clear();if(!call(b,e.component,19))return false;std::memcpy(reverse.transform.data(),args_,96);
+            if(!clear_spawned(b,session,pool,e.created_actor,true))return false;
+            history_event(e.created_actor);
+        } else if(e.created_actor.address) {
             if(!call_identity(b,e.actor_class)||(e.asset.address&&!call_identity(b,e.asset)))return false;
             CallIdentity actor{},component{};
             if(!spawn_asset(b,session,pool,e.asset,e.actor_class,e.transform.data(),actor,component))return false;
             reverse.created_actor=actor;reverse.component=component;
             history_event(e.created_actor,actor,component);
             // Subsequent transform redos refer to the newly spawned identity.
-            for(auto& pending:redo_)if(pending.component.index==e.component.index&&pending.component.serial==e.component.serial&&pending.component.address==e.component.address)pending.component=component;
+            remap_history(e,actor,component);
             selected_=component;selected_actor_=actor;
         } else {
             if(!call_identity(b,e.component))return false;
@@ -33,6 +79,15 @@
         dragging_=false;carrying_=false;duplicate_requested_=false;want_grab_=false;nudging_=false;left_was_=true;
         while(!undo_.empty()) {
             const auto e=undo_.back();
+            if(e.deleted) {
+                if(!call_identity(b,e.actor_class)||(e.asset.address&&!call_identity(b,e.asset)))return false;
+                CallIdentity actor{},component{};
+                if(!spawn_asset(b,session,pool,e.asset,e.actor_class,e.transform.data(),actor,component))return false;
+                remap_history(e,actor,component);
+                Edit reverse=e;reverse.created_actor=actor;reverse.component=component;
+                undo_.pop_back();redo_.push_back(reverse);history_event(e.created_actor,actor,component);
+                selected_=component;selected_actor_=actor;return true;
+            }
             if(e.created_actor.address) {
                 // Only the full identity of a duplicate owned by this session can be removed.
                 const auto owned=std::find_if(spawned_.begin(),spawned_.end(),[&](const auto& row){return row.actor.index==e.created_actor.index&&row.actor.serial==e.created_actor.serial&&row.actor.address==e.created_actor.address&&row.component.index==e.component.index&&row.component.serial==e.component.serial&&row.component.address==e.component.address;});
@@ -108,13 +163,13 @@ public:
         const auto now=GetTickCount64();const auto elapsed=last_clock_?now-last_clock_:0;last_clock_=now;
         DWORD pid=0;GetWindowThreadProcessId(GetForegroundWindow(),&pid);
         if(!eligible||pid!=GetCurrentProcessId()) {
-            history_request_=0;dragging_=false;nudging_=false;left_was_=true;
+            gpu_end_click();history_request_=0;dragging_=false;nudging_=false;left_was_=true;
             glow(b,session,pool,{});if(ids_[48].address)visibility(b,ids_[48],false);
             return;
         }
         clear();put(0,ids_[0].address);
         if(!call(b,ids_[4],34)){tick_error_=1912;return;}
-        if(args_[8]) {dragging_=false;left_was_=true;glow(b,session,pool,{});if(ids_[48].address)visibility(b,ids_[48],false);return;}
+        if(args_[8]) {gpu_end_click();dragging_=false;left_was_=true;glow(b,session,pool,{});if(ids_[48].address)visibility(b,ids_[48],false);return;}
         LARGE_INTEGER begin{},end{},frequency{};QueryPerformanceCounter(&begin);QueryPerformanceFrequency(&frequency);
         // Escape is edge-triggered and consumed by the native message router.
         // Polling its held state here would close the next layer on another frame.
@@ -139,6 +194,7 @@ public:
         if(undo_pressed&&!undo(b,session,pool))tick_error_=1911;
         if(redo_pressed&&!carrying_&&!redo(b,session,pool))tick_error_=1965;
         const bool left=key(VK_LBUTTON);
+        if(!left||undo_pressed||redo_pressed)gpu_end_click();
         const double dt=std::min(.05,double(elapsed)*.001);
         const double forward=int(key('W'))-int(key('S')),right=int(key('D'))-int(key('A'));
         const double up=int(key(VK_SPACE)||key('E'))-int(key(VK_CONTROL)||key('Q'));
@@ -157,10 +213,10 @@ public:
         if(placing){carrying_=false;dragging_=false;}
         if(!carrying_&&!placing&&!duplicate_requested_&&left&&(!left_was_||want_grab_)&&!undo_pressed) {
             if(duplicate_click_) {
-                if(!pick(b,false))tick_error_=1905;
+                if(!pick(b,false,true))tick_error_=1905;
                 const auto owned=std::find_if(spawned_.begin(),spawned_.end(),[&](const auto& row){return row.component.index==hover_.index&&row.component.serial==hover_.serial&&row.component.address==hover_.address;});
-                if(hover_.address&&owned!=spawned_.end()){selected_=hover_;selected_actor_=hover_actor_;duplicate_requested_=true;}
-                dragging_=false;want_grab_=false;
+                if(hover_.address&&owned!=spawned_.end()){selected_=hover_;selected_actor_=hover_actor_;duplicate_requested_=true;gpu_end_click();}
+                dragging_=false;want_grab_=!duplicate_requested_;
             } else {if(!pick(b))tick_error_=1905;dragging_=selected_.address!=0;want_grab_=!dragging_;}
         }
         if(duplicate_requested_)for(int j=3;j<8;++j)v[j]=0;

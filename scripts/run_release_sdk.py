@@ -105,7 +105,7 @@ def main():
         from expedition33.settings import SettingsStore
         original_transport = sdk.SessionTransport
         def release_transport(*, _executable=None):
-            transport = original_transport(_executable=ROOT / 'build/research-probe-worldbuilder-v54-menu/research_probe.exe')
+            transport = original_transport(_executable=ROOT / 'build/research-probe-worldbuilder-v65-selection/research_probe.exe')
             required = ('original_game_action_protocol', 'blueprint_trace_protocol', 'picto_edit_protocol', 'picto_progression_protocol', 'picto_class_load_protocol', 'picto_cost_protocol')
             if any(getattr(transport, name, 0) != 1 for name in required) or transport.mesh_protocol != 3:
                 transport.close()
@@ -129,6 +129,8 @@ def main():
                 if name == 'SDKManagement':
                     # Prepare the usable menu before optional gameplay work.
                     loader._loaded[name][1].prepare()
+            from expedition33.startup_order import StartupGate
+            startup_gate = StartupGate()
             restoration = loader.registry.restore_enabled_steps()
             next_restore = time.monotonic() + .25
             gameplay_confirmed = False
@@ -161,7 +163,7 @@ def main():
                     if server:
                         server.poll()
                     loader.poll()
-                    if restoration is not None and not loader.stop_requested and time.monotonic() >= next_restore:
+                    if restoration is not None and not loader.stop_requested and time.monotonic() >= next_restore and not startup_gate.pending(time.monotonic()):
                         management = loader._loaded['SDKManagement'][1]
                         menu = management.native.menu
                         # Do not begin a synchronous mod enable while the user
@@ -186,6 +188,11 @@ def main():
                                     logging.info('Saved mod restoration complete')
                                 elif result[1]:
                                     logging.error('Saved enable failed for %s: %s', *result)
+                                else:
+                                    folder=settings.get(result[0]).get('folder')
+                                    loaded=loader._loaded.get(folder)
+                                    if loaded:startup_gate.arm(loaded[1],time.monotonic())
+                                    logging.info('Saved mod initialized: %s', result[0])
                         next_restore = time.monotonic() + .25
                     time.sleep(.005)
                 if loader.stop_requested:

@@ -1,0 +1,24 @@
+Custom mod startup order
+
+SDK/settings/startup-order.json is created automatically on first startup.
+Format:
+{
+  "version": 1,
+  "order": ["e33.world-builder", "e33.map-overlays"]
+}
+
+Entries use the mod management ID, not a folder or display name. Listed installed
+mods start first; remaining saved mods retain their previous relative order.
+Missing IDs are ignored and retained for later installation. A disabled mod is
+never enabled by the order file. Core SDK bootstrap runs before custom mods.
+World Builder precedes Map Overlays even if the file reverses their order.
+
+In the Mods menu select a mod, then Startup load order. Move earlier, Move later,
+Load first, or Reset default order. Changes persist for the next game launch.
+Reset restores World Builder and Map Overlays to the front of optional mods.
+
+A custom mod may implement startup_pending() to request polling before the next
+mod is enabled. Return False once ready. The host allows at most ten seconds,
+continues servicing existing mods, and releases the gate after failure/timeout.
+Map Overlays uses this to wait for its initial stable-world overlay attempt.
+Invalid mapping files are preserved and logged; defaults are used for that run.

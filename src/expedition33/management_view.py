@@ -121,7 +121,16 @@ class ManagementView:
                     ('Settings', 'screen', 'options', bool(view['options']), None),
                     ('Actions', 'screen', 'actions', bool(view['actions']), None),
                     ('Keybinds', 'screen', 'keybinds', bool(view['keybinds']), None),
-                    ('Unload', 'unload', None, not view['protected'], None)]
+                    ('Unload', 'unload', None, not view['protected'], None),
+                    ('Startup load order', 'screen', 'startup', not view['protected'], None)]
+        elif self.screen == 'startup':
+            order=self.registry.startup_order()
+            position=order.index(view['id'])+1 if view['id'] in order else len(order)+1
+            detail=f"Startup position: {position} of {len(order)} optional mods. Changes apply next launch. Disabled mods stay disabled. World Builder must precede Map Overlays."
+            rows=[('Move earlier','startup','earlier',position>1,None),
+                  ('Move later','startup','later',position<len(order),None),
+                  ('Load first','startup','first',position>1,None),
+                  ('Reset default order','startup','defaults',True,None)]
         elif self.screen == 'keybinds':
             conflicts = self.registry.key_conflicts()
             rows = [(f"{b['title']}: {b['value'] or 'Unbound'}" +
@@ -207,6 +216,9 @@ class ManagementView:
                 self.screen, self.page = argument, 0
             elif operation == 'enable':
                 self.selection = self.registry.set_enabled(self.selection, argument)
+            elif operation == 'startup':
+                position=self.registry.move_startup(self.selection,argument)
+                self.status=f'Saved startup position {position}; applies next launch.'
             elif operation == 'unload':
                 self.registry.unload(self.selection)
                 self.selection, self.screen, self.page = None, 'list', 0

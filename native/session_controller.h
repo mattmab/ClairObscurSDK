@@ -87,7 +87,11 @@ inline void run_runtime_session(DWORD pid, DWORD thread, int32_t object_index, i
     wchar_t executable[32768]; require(GetModuleFileNameW(nullptr, executable, 32768) != 0, "SESSION_SELF_PATH");
 #ifdef E33_KEYBIND_SESSION
 #if defined(E33_MESH_SESSION)
+    #ifdef E33_BUILDER_SELECTION_SESSION
+    auto path = std::filesystem::path(executable).parent_path().parent_path() / L"runtime-session-worldbuilder-v65-selection" / L"runtime_session_worldbuilder_v65_selection.dll";
+    #else
     auto path = std::filesystem::path(executable).parent_path().parent_path() / L"runtime-session-worldbuilder-v54-menu" / L"runtime_session_worldbuilder_v54_menu.dll";
+    #endif
 #elif defined(E33_VIEWER_MENU_SESSION)
     auto path = std::filesystem::path(executable).parent_path().parent_path() / L"runtime-session-viewer-v2" / L"runtime_session_viewer_v2.dll";
 #elif defined(E33_CATALOG_GAME_OWNED_SESSION)

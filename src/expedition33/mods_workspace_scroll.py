@@ -193,7 +193,7 @@ class ScrollWorkspaceView(ModsWorkspaceView):
                     f"{selected['description']}\n\nModule: {selected['folder']}\n"
                     f"{len(selected['options'])} settings  |  {len(selected['keybinds'])} bindings\n{selected['error'] or ''}")
                 description=f"{selected['name']}\n{'ENABLED' if selected['enabled'] else 'DISABLED'}\n\n{selected['description'][:260]}"
-                add(60, f"Configure ({len(selected['options'])} options)", 'screen', 'options', bool(selected['options'] or selected['keybinds']))
+                add(60, f"Configure ({len(selected['options'])} options, {len(selected['keybinds'])} keybinds)", 'screen', 'options', bool(selected['options'] or selected['keybinds']))
                 add(61, 'Enable', 'inline_toggle', self.selection,not selected['enabled'] and not selected['protected'])
                 add(62, 'Disable', 'inline_toggle', self.selection,selected['enabled'] and not selected['protected'])
                 add(63, 'Reload', 'reload_current', enabled=not selected['protected'])
@@ -494,11 +494,11 @@ class ScrollWorkspacePanel(ModsWorkspacePanel):
                 show=(i<3 if mode=='options' else i==0 if mode=='keys' else i<2)
                 self.direct(self.surfaces[i],'Widget','SetVisibility',InVisibility=self.invisible if show else self.collapsed)
                 self.direct(self.panel_titles[i],'Widget','SetVisibility',InVisibility=self.invisible if show else self.collapsed)
-            x,width,height=(514,782,672) if mode=='options' else (52,556,672) if mode=='mods' else (54,1812,588) if mode=='keys' else (52,1000,672)
+            x,width,height=(514,782,672) if mode=='options' else (54,1812,588) if mode=='keys' else (52,556,672)
             self.position(self.scroll_slot,x,250,width,height)
             self.direct(self.content_size,'SizeBox','SetWidthOverride',InWidthOverride=float(width-10))
             self.direct(self.key_scroll,'Widget','SetVisibility',InVisibility=self.visible if mode=='options' else self.collapsed)
-            widths=(600,210,170,170,230,160) if mode=='keys' else (456,90,1,1,1,1) if mode=='mods' else (570,100,100,1,1,1) if mode=='options' else (990,1,1,1,1,1)
+            widths=(600,210,170,170,230,160) if mode=='keys' else (456,90,1,1,1,1) if mode=='mods' else (570,100,100,1,1,1) if mode=='options' else (546,1,1,1,1,1)
             for row in range(12):
                 x=0
                 for cell,w in enumerate(widths):
@@ -510,14 +510,14 @@ class ScrollWorkspacePanel(ModsWorkspacePanel):
             globals={48:(32,970,190,48),49:(238,970,140,48),50:(394,970,140,48),51:(1708,972,176,52),
                 52:(704,116,112,48),53:(828,116,190,48),54:(1030,116,142,48),55:(1200,116,190,48),
                 56:(32,890,190,46),57:(746,25,188,46),58:(948,25,160,46),59:(1122,25,180,46),
-                60:(1148,484,390,48),61:(674,484,138,48),62:(824,484,138,48),63:(974,484,138,48),
+                60:(1148,484,650,48),61:(674,484,138,48),62:(824,484,138,48),63:(974,484,138,48),
                 76:(438,25,126,46),77:(578,25,154,46),78:(1488,27,38,28),79:(1532,27,38,28),80:(1580,27,82,28)}
             if mode=='options':globals.update({60:(54,822,178,46),61:(244,822,178,46),56:(54,880,368,46)})
             if mode=='mods':globals[56]=(674,548,300,42)
             for i,(x,y,w,h) in globals.items():
                 self.position(self.button_slots[i],x,y,w,h)
                 self.position(self.label_slots[i],x+10,y+7,(w-20)/.53,(h-8)/.53)
-            dx,dy,dw,dh=(54,248,394,540) if mode=='options' else (674,250,1180,142) if mode=='mods' else (1120,250,730,600)
+            dx,dy,dw,dh=(54,248,394,540) if mode=='options' else (674,250,1180,142) if mode=='mods' else (674,250,1180,600)
             self.position(self.detail_slot,dx,dy,dw/.48,dh/.48)
             self.position(self.preview_slot,674,610,580/.44,280/.44)
             self.direct(self.detail,'Widget','SetVisibility',InVisibility=self.collapsed if mode=='keys' else self.invisible)
@@ -671,7 +671,7 @@ class ScrollWorkspaceMenu(ModsWorkspaceMenu):
         self.panel.paint_appearance(theme,scale)
         self.panel.set_text(self.panel.title,"MATT'S E33 MODS")
         self.panel.set_text(self.panel.subtitle,{'list':'MOD WORKSPACE','options':'MOD CONFIGURATION','all_keys':'GLOBAL KEYBINDS'}.get(self.view.screen,self.frame.title)[:38])
-        headings=('MOD SUMMARY','OPTIONS','KEYBINDS') if self.view.screen=='options' else ('ALL SDK KEYBINDS','','') if self.view.screen=='all_keys' else ('INSTALLED SDK MODS','MOD WORKSPACE','')
+        headings=('MOD SUMMARY','OPTIONS','KEYBINDS') if self.view.screen=='options' else ('ALL SDK KEYBINDS','','') if self.view.screen=='all_keys' else ('INSTALLED SDK MODS','MOD WORKSPACE','') if self.view.screen=='list' else ('MOD CONTROLS','DETAILS','')
         for widget,title in zip(self.panel.panel_titles,headings):self.panel.set_text(widget,title)
         summary=getattr(self.view,'summary','') if self.view.screen in ('list','all_keys') else self.frame.status
         if self.view.screen=='all_keys':
@@ -682,7 +682,7 @@ class ScrollWorkspaceMenu(ModsWorkspaceMenu):
         # Long descriptions stop above inspector buttons; full detail is available
         # in the Details / actions screen and diagnostic export.
         ratio=max(1.,scale/TEXT_DEFAULT)
-        dw,dh=(394,540) if self.view.screen=='options' else (1180,142) if self.view.screen=='list' else (730,600)
+        dw,dh=(394,540) if self.view.screen=='options' else (1180,142) if self.view.screen=='list' else (1180,600)
         font=36*min(.48*(48/36)*scale,dh/56)
         width=max(8,int(dw/(font*.65)));height=max(1,int(dh/(font*1.3)))
         self.panel.set_text(self.panel.detail,bounded_detail('\n\n'.join(filter(None,(self.error,self.frame.status,self.frame.description))),width=width,height=height))

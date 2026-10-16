@@ -95,7 +95,7 @@ def snapshot(library,name):
         if owned:
             tracked=by_component.get(identity)
             if tracked is None:raise RuntimeError('Native owned asset has no scene record')
-            if tracked['id']==library.preview_key:continue
+            if tracked['id']==library.preview_key or tracked.get('duplication_preview'):continue
             saved={k:tracked[k] for k in ('id','kind','asset')}|dict(transform=transform)
             rows.append(saved);saved_owned[tracked['id']]=saved;continue
         component=c.by_index[identity[0]]
@@ -103,7 +103,7 @@ def snapshot(library,name):
         parent=c.by_index[component.outer_index];tracked=by_actor.get((parent.index,parent.serial,parent.address))
         values,c=read_values_with_references(c,component,fields=('StaticMesh',));mesh=next(v for k,v in values.values.items() if k[1]=='StaticMesh')
         if tracked:
-            if tracked['id']!=library.preview_key:children.append((tracked['id'],dict(component=c.path_name(component)[len(c.path_name(parent)):],asset=c.path_name(mesh),transform=transform)))
+            if tracked['id']!=library.preview_key and not tracked.get('duplication_preview'):children.append((tracked['id'],dict(component=c.path_name(component)[len(c.path_name(parent)):],asset=c.path_name(mesh),transform=transform)))
         else:rows.append(dict(id=uuid.uuid5(uuid.NAMESPACE_URL,world+'|'+c.path_name(component)).hex,kind='world_edit',asset=c.path_name(mesh),component=c.path_name(component),transform=transform))
     for key,child in children:saved_owned[key].setdefault('component_edits',[]).append(child)
     assets={r['asset'] for r in rows}|{child['asset'] for _,child in children}

@@ -39,9 +39,9 @@ def build(destination, version):
         if source.is_file():
             copy(source.relative_to(ROOT), source.relative_to(ROOT))
     for directory in ('research-probe', 'readonly-worker', 'research-probe-picto-v4'):
-        copy('build/release/research-probe-worldbuilder-v54-menu/research_probe.exe', f'build/{directory}/research_probe.exe')
-    copy('build/release/research-probe-worldbuilder-v54-menu/research_probe.exe', 'build/research-probe-worldbuilder-v54-menu/research_probe.exe')
-    copy('build/release/runtime-session-worldbuilder-v54-menu/runtime_session_worldbuilder_v54_menu.dll', 'build/runtime-session-worldbuilder-v54-menu/runtime_session_worldbuilder_v54_menu.dll')
+        copy('build/release/research-probe-worldbuilder-v65-selection/research_probe.exe', f'build/{directory}/research_probe.exe')
+    copy('build/release/research-probe-worldbuilder-v65-selection/research_probe.exe', 'build/research-probe-worldbuilder-v65-selection/research_probe.exe')
+    copy('build/release/runtime-session-worldbuilder-v65-selection/runtime_session_worldbuilder_v65_selection.dll', 'build/runtime-session-worldbuilder-v65-selection/runtime_session_worldbuilder_v65_selection.dll')
     copy('build/release/thumbnail-worker-v2/thumbnail_worker.dll', 'build/thumbnail-worker-v2/thumbnail_worker.dll')
     # Launchers inside SDK are install-relative and never search a dev checkout.
     (sdk / 'launch-sdk.cmd').write_text('@echo off\r\ncd /d "%~dp0"\r\n"%~dp0runtime\\python.exe" -I -S -B "%~dp0scripts\\run_release_sdk.py" %*\r\n', encoding='ascii')

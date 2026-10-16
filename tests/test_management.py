@@ -79,6 +79,15 @@ class ManagementTests(unittest.TestCase):
         self.assertEqual(list(steps), [])
         self.assertFalse(self.registry.view(self.registry.select('specimen'))['enabled'])
 
+    def test_custom_startup_order_persists_without_enabling(self):
+        self.store.save('missing', {'enabled': True, 'folder': 'Missing'})
+        self.store.save('specimen', {'enabled': False, 'folder': 'Specimen'})
+        self.assertEqual(self.registry.move_startup(self.registry.select('specimen'),'first'),1)
+        self.assertFalse(self.store.get('specimen')['enabled'])
+        self.assertEqual([key for key,_ in self.registry.restore_enabled_steps()],['missing'])
+        self.store.save('specimen', {'enabled': True, 'folder': 'Specimen'})
+        self.assertEqual([key for key,_ in self.registry.restore_enabled_steps()],['specimen','missing'])
+
     def test_saved_options_apply_on_enable_and_views_are_copies(self):
         selection = self.registry.select('specimen')
         self.registry.set_option(selection, 'count', 7)

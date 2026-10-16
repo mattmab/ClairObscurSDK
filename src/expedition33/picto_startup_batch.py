@@ -15,7 +15,7 @@ class ProgressionOwner:
         return self.owned
 
 
-def run(owner, identities, *, level=None, mastery=None, timeout=65.):
+def run(owner, identities, *, level=None, mastery=None, desired=True, timeout=65.):
     # Startup already owns a scoped read worker. No other thread accesses the
     # session, and native game work remains frame paced on the game thread.
     def read(callback):
@@ -23,7 +23,7 @@ def run(owner, identities, *, level=None, mastery=None, timeout=65.):
         try:future.set_result(callback())
         except Exception as error:future.set_exception(error)
         return future
-    job=FrameBulkTransaction(UnlockTransaction(owner,read),level=level,
+    job=FrameBulkTransaction(UnlockTransaction(owner,read,desired=desired),level=level,
                              mastery=mastery,identities=identities)
     deadline=time.monotonic()+timeout
     job.start()

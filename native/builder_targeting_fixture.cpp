@@ -25,6 +25,7 @@ struct Picker {
     CallIdentity ids_[1]{};
     uint8_t args_[512]{};
     int render_mode=0,captures=0;
+    double projected_offset=0;
     uint64_t shown=0;
     void clear(){std::memset(args_,0,sizeof(args_));}
     template<class T> T get(size_t offset=0){T v{};std::memcpy(&v,args_+offset,sizeof(v));return v;}
@@ -33,7 +34,7 @@ struct Picker {
     bool gpu_setting(uint64_t,const char*,uint64_t value){render_mode=int(value);return true;}
     bool call(uint64_t,CallIdentity,int fn){
         if(fn==32){put(0,int32_t(100));put(4,int32_t(100));}
-        if(fn==24){put(24,50.);put(32,50.);args_[41]=1;}
+        if(fn==24){put(24,50.+projected_offset);put(32,50.);args_[41]=1;}
         if(fn==5)args_[305]=1;
         if(fn==42)shown=get<uint64_t>();
         if(fn==43)shown=0;
@@ -46,8 +47,8 @@ struct Picker {
         Candidate c{};c.actor.address=c.component.address=id;c.low[0]=entry;c.high[0]=1000;
         c.low[1]=c.low[2]=-1;c.high[1]=c.high[2]=1;c.pose[3]=1;c.pose[8]=c.pose[9]=c.pose[10]=1;candidates_.push_back(c);
     }
-    uint64_t tick(double x=0){
-        const double origin[]={x,0,0},dir[]={1,0,0};CallIdentity actor{},component{};double distance=200000;
+    uint64_t tick(double x=0,double yaw=0){
+        const double origin[]={x,0,0},dir[]={std::cos(yaw),std::sin(yaw),0};CallIdentity actor{},component{};double distance=200000;
         ++clock_ms;assert(gpu_pick(0,origin,dir,actor,component,distance));return component.address;
     }
 };
@@ -68,6 +69,40 @@ int main(){
     pending.tick();pending.tick();assert(pending.captures==captures);
     // Camera movement invalidates pending results, even when the old point
     // projects onto the center again (moving forward on the same ray).
-    pending.gpu_bridge_.finish(50);assert(!pending.tick(20));assert(!pending.gpu_ready_component_.address);assert(pending.render_mode==1);
+    pending.gpu_bridge_.finish(50);assert(!pending.tick(30));assert(!pending.gpu_ready_component_.address);assert(pending.render_mode==1);
+    // Prioritize a likely mesh, but require its actual GPU surface. Exact
+    // foreground depth completes without visiting overlapping empty bounds.
+    Picker preferred;preferred.add(1,10);preferred.add(2,20);preferred.add(3,30);
+    preferred.gpu_preferred_component_.address=3;
+    preferred.tick();preferred.gpu_bridge_.finish(500);preferred.tick();assert(preferred.shown==3);
+    preferred.gpu_bridge_.finish(500);assert(preferred.tick()==3);assert(preferred.captures==3);
+    // A misleading collision hint must not select a surface behind foreground.
+    Picker misleading;misleading.add(1,10);misleading.add(2,20);misleading.gpu_preferred_component_.address=2;
+    misleading.tick();misleading.gpu_bridge_.finish(50);misleading.tick();assert(misleading.shown==2);
+    misleading.gpu_bridge_.finish(80);assert(!misleading.tick());assert(misleading.shown==1);
+    misleading.gpu_bridge_.finish(50);assert(misleading.tick()==1);
+    // Continuous small movement must not starve a two-capture query.
+    Picker moving;moving.add(1,10);moving.tick();moving.gpu_bridge_.finish(500);
+    moving.tick(2);assert(moving.render_mode==2);moving.gpu_bridge_.finish(500);
+    assert(moving.tick(4)==1);assert(moving.tick(6)==1);
+    // Small continuous mouse turns finish rather than cancelling every frame.
+    Picker turning;turning.add(1,10);turning.tick();turning.gpu_bridge_.finish(500);
+    turning.projected_offset=2;turning.tick(0,.002);turning.gpu_bridge_.finish(500);
+    turning.projected_offset=4;assert(turning.tick(0,.004)==1);
+    // Reprojection outside the small crosshair aperture rejects the old hit.
+    moving.projected_offset=9;assert(!moving.tick(6));moving.projected_offset=0;
+    // A near surface cannot be reused after moving a large fraction of its depth.
+    Picker near;near.add(1,10);near.tick();near.gpu_bridge_.finish(50);near.tick(2);
+    near.gpu_bridge_.finish(50);assert(!near.tick(4));
+    // Published results expire even when the view remains centered.
+    clock_ms+=151;assert(!moving.tick(6));
+    // A click owns its original ray even while the live view turns away.
+    Picker clicked;clicked.add(1,10);const double clickOrigin[]={0.,0.,0.},clickDir[]={1.,0.,0.};
+    clicked.gpu_begin_click(clickOrigin,clickDir);clicked.tick();
+    clicked.gpu_bridge_.finish(500);clicked.projected_offset=100;clicked.tick();
+    clicked.gpu_bridge_.finish(500);assert(clicked.tick()==1);
+    clicked.gpu_end_click();assert(!clicked.tick());
+    // A fresh click cannot reuse a previous hover capture.
+    clicked.gpu_begin_click(clickOrigin,clickDir);assert(!clicked.tick());
     puts("PASS: >32 candidates, vanished hits, foreground occlusion, capture ownership, moved camera");
 }

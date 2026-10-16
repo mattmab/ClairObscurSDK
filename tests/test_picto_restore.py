@@ -124,3 +124,34 @@ class RestoreTests(unittest.TestCase):
     def test_level_precedes_explicit_multiplier_and_final_refresh(self):
         self.run_restore({'Cheater':{'level':32,'multipliers':{'1':.6}}})
         self.assertEqual(self.calls,[4,'SetBaseStatsMultiplier','RefreshCurrentGearStats','UpdateEquipmentStats'])
+
+    def test_ownership_additions_use_one_explicit_subset_batch(self):
+        self.scope._session._transport.picto_batch_protocol=1
+        owner=NS(owned={'Cheater':(self.item,33)},catalog=self.catalog,set_owned=Mock())
+        self.catalog.with_observations=lambda other:self.catalog
+        with patch('expedition33.picto_inventory.PictoOwnership',return_value=owner), \
+             patch('expedition33.picto_startup_batch.run',return_value=['NewA','NewB']) as run:
+            result=self.run_restore({'Cheater':{'owned':True},'NewA':{'owned':True},'NewB':{'owned':True}})
+        run.assert_called_once_with(owner,['NewA','NewB'],desired=True)
+        owner.set_owned.assert_not_called()
+        self.assertEqual(result['applied'],[['NewA','owned'],['NewB','owned']])
+
+    def test_ownership_removals_use_false_batch(self):
+        self.scope._session._transport.picto_batch_protocol=1
+        owner=NS(owned={'Cheater':(self.item,33)},catalog=self.catalog,set_owned=Mock())
+        self.catalog.with_observations=lambda other:self.catalog
+        with patch('expedition33.picto_inventory.PictoOwnership',return_value=owner), \
+             patch('expedition33.picto_startup_batch.run',return_value=['Cheater']) as run:
+            self.run_restore({'Cheater':{'owned':False}})
+        run.assert_called_once_with(owner,['Cheater'],desired=False)
+        owner.set_owned.assert_not_called()
+
+    def test_ownership_batch_failure_never_retries_individually(self):
+        self.scope._session._transport.picto_batch_protocol=1
+        owner=NS(owned={},catalog=self.catalog,set_owned=Mock())
+        with patch('expedition33.picto_inventory.PictoOwnership',return_value=owner), \
+             patch('expedition33.picto_startup_batch.run',side_effect=RuntimeError('uncertain')) as run:
+            with self.assertRaisesRegex(RuntimeError,'uncertain'):
+                self.run_restore({'NewA':{'owned':True}})
+        run.assert_called_once()
+        owner.set_owned.assert_not_called()

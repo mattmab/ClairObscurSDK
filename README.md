@@ -1,6 +1,6 @@
 # Clair Obscur: Expedition 33 — independent Python SDK
 
-MIT-licensed SDK **0.1.0-rc12** (release candidate) for the verified Windows Steam build. Our native
+MIT-licensed SDK **0.1.0-rc13** (release candidate) for the verified Windows Steam build. Our native
 runtime independently identifies live Unreal objects and executes supported
 engine operations on the game thread. Python runs in a persistent external
 controller. No Borderlands offsets or layouts are used as Expedition 33 facts.
@@ -14,6 +14,13 @@ and Cinematics, plus Asset Creator/Main Character Replacer. Each has its own rel
 [installation and restart instructions](docs/INSTALLABLE_RELEASE.md).
 The checkout's `launch-sdk.cmd` delegates to the installed SDK using `SDK_GAME_DIR`
 or the local, untracked `settings/install-path.txt`.
+
+## RC13: live duplication and deletion history
+
+[RC13 release notes](docs/RELEASE_0.1.0_RC13.md) cover World Builder **0.31.0**,
+its required matching SDK, live duplication previews and compound XYZ offsets,
+Delete selection with Alt+Z/Alt+Y history, and F7 returning to the prop catalog.
+The prerelease includes separate SDK, mod, thumbnail and source downloads.
 
 ## RC12: startup improvements and World Builder recovery
 

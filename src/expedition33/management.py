@@ -123,6 +123,8 @@ class Registry:
         self._entries = {}
         self._generation = 0
         self._dispatching = set()
+        from .startup_order import StartupOrder
+        self._startup_order = StartupOrder(settings.path.parent / "startup-order.json") if settings is not None else None
 
     def _check(self):
         if threading.get_ident() != self._owner:
@@ -270,6 +272,33 @@ class Registry:
         operation(entry.name)
         return self.select(selection.mod_id)
 
+    def startup_order(self):
+        self._check()
+        ids=list(self._settings.records()) if self._settings is not None else []
+        ids.extend(key for key,entry in self._entries.items() if not entry.definition.protected)
+        ids=[key for key in ids if key not in ('sdk.management','sdk.introspection')
+             and not (key in self._entries and self._entries[key].definition.protected)]
+        return self._startup_order.ordered(ids) if self._startup_order else list(dict.fromkeys(ids))
+
+    def move_startup(self, selection, direction):
+        entry=self._entry(selection)
+        if entry.definition.protected or self._startup_order is None:
+            raise ManagementError('Startup order is unavailable for this mod')
+        order=self.startup_order();key=selection.mod_id
+        if key not in order:order.append(key)
+        if direction=='defaults':
+            from .startup_order import DEFAULT_ORDER
+            self._startup_order.save(DEFAULT_ORDER)
+        else:
+            index=order.index(key)
+            target=0 if direction=='first' else max(0,index-1) if direction=='earlier' else min(len(order)-1,index+1) if direction=='later' else None
+            if target is None:raise ManagementError('Unknown load-order action')
+            order.pop(index);order.insert(target,key)
+            # Retain temporarily uninstalled custom IDs in the mapping.
+            order.extend(k for k in self._startup_order.read() if k not in order)
+            self._startup_order.save(order)
+        return self.startup_order().index(key)+1
+
     def restore_enabled(self):
         """Restore explicit saved choices once at host startup; isolate failures."""
         return {mod_id: error for mod_id, error in self.restore_enabled_steps() if error}
@@ -284,7 +313,7 @@ class Registry:
         if self._settings is None:
             return
         installed = set(self.installed())
-        for mod_id, preference in self._settings.records().items():
+        for mod_id in self.startup_order():
             self._check()
             preference = self._settings.get(mod_id)
             if preference.get('enabled') is not True:

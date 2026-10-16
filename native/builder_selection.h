@@ -32,12 +32,21 @@
         if(meshName.find("sm_sphere")!=std::string::npos||meshName.find("cloud")!=std::string::npos||meshName.find("fog")!=std::string::npos||meshName.find("sky")!=std::string::npos)return true;
         return false;
     }
+    bool editable_mesh_class(uint64_t b,uint64_t cls) {
+        // Instanced components are edited as a group, retaining the game's
+        // instance transforms and the existing component undo/save identity.
+        if(cls==ids_[63].address)return true;
+        if(!call_derives(b,cls,ids_[63].address))return false;
+        return
+            named(b,cls,"InstancedStaticMeshComponent","/Script/Engine") ||
+            named(b,cls,"HierarchicalInstancedStaticMeshComponent","/Script/Engine");
+    }
     bool ordinary(uint64_t b,CallIdentity actor,CallIdentity component) {
         if(component.address&&component.address==gallery_floor_component_.address)return false;
         if(!call_identity(b,actor)||!call_identity(b,component))return false;
         if((local_read<uint32_t>(actor.address+8)&0x30)||
            call_derives(b,local_read<uint64_t>(actor.address+16),ids_[7].address)||
-           local_read<uint64_t>(component.address+16)!=ids_[63].address)return false;
+           !editable_mesh_class(b,local_read<uint64_t>(component.address+16)))return false;
         if(ambient(b,actor,component))return false;
         const auto level=call_capture(b,local_read<uint64_t>(actor.address+32));
         if(!level.address||!named(b,local_read<uint64_t>(level.address+16),"Level","/Script/Engine"))return false;
@@ -46,9 +55,29 @@
         clear();return call(b,component,18)&&get<uint64_t>()==actor.address;
     }
     bool candidate_pose(uint64_t b,Candidate& c) {
-        clear();if(!call(b,c.component,19))return false;std::memcpy(c.pose,args_,96);
-        clear();if(!call(b,c.component,37))return false;
-        std::memcpy(c.low,args_,24);std::memcpy(c.high,args_+24,24);
+        // Show-only capture and collision queries create weak references lazily.
+        // Assign stable serials before caching identities across render frames.
+        for(auto* id:{&c.actor,&c.component}) {
+            if(!call_identity(b,*id))return false;
+            if(!id->serial) {
+                TargetStrongReferenceOps ops{b,*id};
+                if(!ops.can_assign()||ops.allocate_serial(id->index)<=0)return false;
+                *id=call_capture(b,id->address);
+            }
+        }
+        if(local_read<uint64_t>(c.component.address+16)!=ids_[63].address) {
+            // GetLocalBounds describes the source mesh, not its instances.
+            // Cached component bounds cover the entire group at constant cost.
+            // This box only schedules captures; GPU depth proves the mesh hit.
+            clear();put(0,c.component.address);if(!call(b,ids_[5],64))return false;
+            std::fill(std::begin(c.pose),std::end(c.pose),0.);
+            c.pose[3]=c.pose[8]=c.pose[9]=c.pose[10]=1.;
+            for(int j=0;j<3;++j){c.pose[4+j]=get<double>(8+8*j);c.low[j]=-get<double>(32+8*j);c.high[j]=-c.low[j];}
+        } else {
+            clear();if(!call(b,c.component,19))return false;std::memcpy(c.pose,args_,96);
+            clear();if(!call(b,c.component,37))return false;
+            std::memcpy(c.low,args_,24);std::memcpy(c.high,args_+24,24);
+        }
         for(int j=0;j<3;++j)if(!std::isfinite(c.low[j])||!std::isfinite(c.high[j])||c.high[j]<=c.low[j]||std::abs(c.pose[8+j])<1.e-8)return false;
         return true;
     }
@@ -59,10 +88,11 @@
         const auto count=local_read<int32_t>(b+0x9361b84);if(count<=0||count>4000000)return;
         const auto chunks=local_read<uint64_t>(b+0x9361b70);int added=0;LARGE_INTEGER start{},freq{};QueryPerformanceCounter(&start);QueryPerformanceFrequency(&freq);
         for(int budget=0;budget<1024&&added<64;++budget) {
+            if((budget&63)==63){LARGE_INTEGER now{};QueryPerformanceCounter(&now);if(double(now.QuadPart-start.QuadPart)/double(freq.QuadPart)>.0003)break;}
             if(scan_index_>=count){scan_index_=0;candidates_.erase(std::remove_if(candidates_.begin(),candidates_.end(),[&](const Candidate& c){return !call_identity(b,c.component)||!call_identity(b,c.actor);}),candidates_.end());break;}
             const auto index=scan_index_++;
             const auto chunk=local_read<uint64_t>(chunks+uint64_t(index>>16)*8);if(!chunk)continue;
-            const auto object=local_read<uint64_t>(chunk+uint64_t(index&65535)*24);if(!object||local_read<uint64_t>(object+16)!=ids_[63].address||(local_read<uint32_t>(object+8)&0x30))continue;
+            const auto object=local_read<uint64_t>(chunk+uint64_t(index&65535)*24);if(!object||!editable_mesh_class(b,local_read<uint64_t>(object+16))||(local_read<uint32_t>(object+8)&0x30))continue;
             auto component=call_capture(b,object);if(!call_identity(b,component))continue;
             clear();if(!call(b,component,18))continue;auto actor=call_capture(b,get<uint64_t>());
             if(!ordinary(b,actor,component))continue;

@@ -18,6 +18,17 @@ class ManagementViewTests(unittest.TestCase):
         self.view = ManagementView(self.registry)
         return self.click(self.view.render(), 'Specimen [disabled]')
 
+    def test_startup_controls_save_without_enabling(self):
+        self.store.save('other', {'enabled': False, 'folder': 'Other'})
+        frame=self.details()
+        frame=self.click(frame,'Startup load order')
+        self.assertIn('Startup position: 2',frame.description)
+        frame=self.click(frame,'Load first')
+        self.assertIn('Startup position: 1',frame.description)
+        self.assertEqual(self.registry.startup_order()[0],'specimen')
+        self.assertFalse(self.registry.view(self.view.selection)['enabled'])
+        with self.assertRaises(ManagementError):self.click(frame,'Move earlier')
+
     def test_report_navigation_and_stale_controls(self):
         frame = self.details()
         frame = self.click(frame, 'Enable')

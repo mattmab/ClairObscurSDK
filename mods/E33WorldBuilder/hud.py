@@ -20,7 +20,7 @@ class BuilderHUD(OwnedMenuPanel):
             'TextLayoutWidget','SetStyle','SetJustification','WidgetBlueprintLibrary','GameplayStatics',
             'Default__WidgetBlueprintLibrary','Default__GameplayStatics','ESlateVisibility',
             'ETextJustify','Vector2D','LinearColor','Anchors','Create','SpawnObject','AddChildToCanvas','SetPosition',
-            'SetSize','SetAnchors','SetIsEnabled','SetVisibility','SetBrushColor','SetText',
+            'SetRenderScale','SetRenderTransformPivot','SetSize','SetAnchors','SetIsEnabled','SetVisibility','SetBrushColor','SetText',
             'AddToViewport','RemoveFromParent'), classes=('PlayerController',))
         self.player = self._one(o for o in self.catalog.select('PlayerController') if not o.object_flags & 0x30)
         descriptors = {'Function','ScriptStruct','Enum'}
@@ -59,6 +59,15 @@ class BuilderHUD(OwnedMenuPanel):
         self._planner.refresh_from(current)
         self._call(slot,'CanvasPanelSlot','SetAnchors',InAnchors={'Minimum':{'X':.5,'Y':0.},'Maximum':{'X':.5,'Y':0.}})
         self._call(self.title,'TextLayoutWidget','SetJustification',InJustification=1)
+        self.selection_label=self._label(-490,110,760,100)
+        self.controls_label=self._label(-490,190,760,690)
+        self.labels.extend((self.selection_label,self.controls_label))
+        for label in (self.selection_label,self.controls_label):
+            slot,current=read_object_reference(self._planner._catalog,label,self._class('Widget'),'Slot')
+            self._planner.refresh_from(current)
+            self._call(slot,'CanvasPanelSlot','SetAnchors',InAnchors={'Minimum':{'X':1.,'Y':0.},'Maximum':{'X':1.,'Y':0.}})
+            self._call(label,'Widget','SetRenderTransformPivot',Pivot={'X':0.,'Y':0.})
+            self._call(label,'Widget','SetRenderScale',Scale={'X':.6,'Y':.6})
         self._call(self.widget,'Widget','SetVisibility',InVisibility=self.invisible)
         self._flush_layout()
         self._mutate(self.scope.assign_object,self.tree,self._class('WidgetTree'),'RootWidget',self.canvas,
@@ -66,7 +75,32 @@ class BuilderHUD(OwnedMenuPanel):
         self.assigned=True
         self.state='built'
         self.set_text(self.title,'WORLD BUILDER | Aim at a prop')
+        self.show_selection('None')
+        self.set_text(self.controls_label,
+            'CONTROLS\n'
+            'F7: Open / close menu | Esc: Back / close\n'
+            'F8: Enter / leave builder camera\n'
+            'WASD: Fly | Mouse: Look\n'
+            'Space / E: Up | Ctrl / Q: Down\n'
+            'Shift: Fly faster\n'
+            'LMB: Hold to move; release to place\n'
+            'Click-copy mode: Click to copy / place\n'
+            'F5: Live duplication panel\n'
+            'F10: Copy selected prop into hand\n'
+            'Delete: Delete current spawned selection\n'
+            'Numpad 8 / 2: Move forward / back\n'
+            'Numpad 6 / 4: Move right / left\n'
+            'Numpad 9 / 3: Move up / down\n'
+            'Numpad 7 / 1: Rotate yaw\n'
+            'Alt: Precise movement\n'
+            'Alt+Z: Undo | Alt+Y: Redo\n'
+            'F9: Restore edits / clear spawned props\n'
+            'Menu > Directional copies: Count / spacing')
         return self
+
+    def show_selection(self,name):
+        import textwrap
+        self.set_text(self.selection_label,'CURRENT SELECTION\n'+textwrap.fill(name,width=42))
 
     def close(self):
         if self.widget is not None and self.state != 'closed':
