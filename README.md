@@ -1,6 +1,6 @@
 # Clair Obscur: Expedition 33 — independent Python SDK
 
-MIT-licensed SDK **0.1.0-rc13** (release candidate) for the verified Windows Steam build. Our native
+MIT-licensed SDK **0.1.0-rc14** (release candidate) for the verified Windows Steam build. Our native
 runtime independently identifies live Unreal objects and executes supported
 engine operations on the game thread. Python runs in a persistent external
 controller. No Borderlands offsets or layouts are used as Expedition 33 facts.
@@ -14,6 +14,14 @@ and Cinematics, plus Asset Creator/Main Character Replacer. Each has its own rel
 [installation and restart instructions](docs/INSTALLABLE_RELEASE.md).
 The checkout's `launch-sdk.cmd` delegates to the installed SDK using `SDK_GAME_DIR`
 or the local, untracked `settings/install-path.txt`.
+
+## RC14: keep freecam active when a held prop unloads
+
+[RC14 release notes](docs/RELEASE_0.1.0_RC14.md) cover the verified level-streaming
+selection fix. Install the matching SDK and World Builder **0.31.1** downloads.
+When the game unloads a held built-in prop, World Builder releases the selection
+without stopping freecam. Existing built-in edits may still reset on streaming;
+custom-placed props do not participate in level streaming.
 
 ## RC13: live duplication and deletion history
 

@@ -1,3 +1,6 @@
+RC14: Holding built-in scenery through a level-streaming unload now releases
+the expired selection while freecam stays active. Requires the RC14 SDK.
+
 RC13 additions:
 F5 opens live duplication of the current selected spawned prop. Set copy count
 and compound X/Y/Z offsets, inspect the world preview, then Apply copies.
@@ -7,16 +10,16 @@ rotation, scale and map tracking; Alt+Y deletes it again.
 F7 switches from duplication to the Build prop catalog; F7 in Build closes it.
 Escape closes the current menu. Selection and Controls are displayed in the HUD.
 
-E33 World Builder 0.31.0 experimental
-Requires SDK 0.1.0-rc13 or later with the World Builder native API.
+E33 World Builder 0.31.1 experimental
+Requires SDK 0.1.0-rc14 or later with the World Builder native API.
 Install E33WorldBuilder.sdkmod in the game-root SDK_Mods folder, then enable
 World Builder in Pause > Mods. It is an optional mod, not bundled with the SDK.
 Maps and settings remain in SDK/settings/E33WorldBuilder when disabled.
 
 Downloads:
-  SDK RC13: https://github.com/mattmab/ClairObscurSDK/releases/tag/v0.1.0-rc13
-  World Builder: https://github.com/mattmab/ClairObscurSDK/releases/tag/v0.1.0-rc13
-Close the game and SDK before updating. Extract E33WorldBuilder-0.31.0.zip
+  SDK RC13: https://github.com/mattmab/ClairObscurSDK/releases/tag/v0.1.0-rc14
+  World Builder: https://github.com/mattmab/ClairObscurSDK/releases/tag/v0.1.0-rc14
+Close the game and SDK before updating. Extract E33WorldBuilder-0.31.1.zip
 beside Sandfall; leave its inner .sdkmod archive intact. Preserve SDK/settings.
 No separate Python, controller or native DLL is needed for World Builder.
 Use the SDK Mods menu's Keybinds tab to rebind F7/F8/F9/F10: choose Rebind and

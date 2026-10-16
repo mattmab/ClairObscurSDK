@@ -187,6 +187,7 @@ public:
             booth_lamp_was_=lamp;return;
         }
         if(!current(b)){tick_error_=1904;stop(b,session,pool,false);return;}
+        discard_unloaded_selection(b);
         scan_candidates(b);
         const auto history_request=history_request_;history_request_=0;
         const bool undo_pressed=history_request==1;
