@@ -46,6 +46,45 @@ class StructValueTests(unittest.TestCase):
         self.assertNotIn((2, 'Data'), result.values)
         self.assertIn('reference changed', result.errors[2, 'Data'])
 
+    def test_autocomplete_strings_and_full_185_entry_encoding(self):
+        from expedition33.values import StoredArray
+        value = self.struct([
+            {'name': 'Command', 'type': 'StrProperty', 'value': 'show Fog'},
+            {'name': 'Desc', 'type': 'StrProperty', 'value': 'Brouillard — 日本語 🎮'},
+            {'name': 'Empty', 'type': 'StrProperty', 'value': ''}])
+        stored = self.observe(value).values[2, 'Data']
+        backend = _Backend()
+        encoded = _Explorer(backend).encode(_adapt(backend, StoredArray((stored,) * 185, 185)),
+                                            depth=3, budget=[2000])
+        self.assertEqual(len(encoded['items']), 185)
+        self.assertFalse(encoded['truncated'])
+        self.assertEqual(encoded['items'][-1]['fields'],
+                         {'Command': 'show Fog', 'Desc': 'Brouillard — 日本語 🎮', 'Empty': ''})
+
+    def test_struct_string_rejects_nonstring_and_oversize(self):
+        from expedition33.values import _struct_value
+        for value in (None, 42, {}, 'x' * 4097):
+            with self.subTest(value_type=type(value)), self.assertRaisesRegex(ValueError, 'Invalid struct string'):
+                _struct_value(self.base.catalog, self.struct([
+                    {'name': 'Desc', 'type': 'StrProperty', 'value': value}]))
+
+    def test_array_encoding_remains_bounded(self):
+        encoded = _Explorer(_Backend()).encode(list(range(300)), depth=2, budget=[2000])
+        self.assertEqual(len(encoded['items']), 256)
+        self.assertEqual(encoded['length'], 300)
+        self.assertTrue(encoded['truncated'])
+
+    def test_native_185_entry_struct_array_decodes_without_truncation(self):
+        value = self.struct([{'name': 'Command', 'type': 'StrProperty', 'value': 'show Fog'},
+                             {'name': 'Desc', 'type': 'StrProperty', 'value': ''}])
+        self.base.array('StructProperty', 185, [value] * 185)
+        self.base.rows[-1]['truncated'] = False
+        self.base.rows[-2].update(inner_struct_index=self.reference['index'],
+            inner_struct_serial=self.reference['serial'], inner_struct_name=self.reference['name'])
+        result = self.base.read()
+        self.assertEqual(len(result.values[2, 'Dynamic'].items), 185)
+        self.assertNotIn((2, 'Dynamic'), result.truncated)
+
     def test_class_members_accept_null_and_verified_class_identity(self):
         cls = self.base.catalog.by_index[next(iter(self.base.catalog.classes))]
         ref = dict(index=cls.index, serial=cls.serial, address=hex(cls.address), name=cls.name)

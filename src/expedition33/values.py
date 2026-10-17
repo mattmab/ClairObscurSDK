@@ -201,6 +201,9 @@ def _struct_value(catalog, value, depth=0, budget=None):
             item = float(item['$float']) if isinstance(item, dict) else float(item)
         elif kind == 'BoolProperty':
             if type(item) is not bool: raise ValueError('Invalid struct bool')
+        elif kind == 'StrProperty':
+            if type(item) is not str or len(item) > 4096:
+                raise ValueError('Invalid struct string')
         elif kind == 'NameProperty':
             if type(item) is not str: raise ValueError('Invalid struct name')
         elif kind in ('ByteProperty', 'IntProperty', 'UInt16Property'):
@@ -432,7 +435,8 @@ def _decode_values(catalog, obj, start, rows):
                         raise ValueError('Unexpected array fields')
                     length, items = array['length'], array['items']
                     if (type(length) is not int or not 0 <= length <= 1048576 or type(items) is not list
-                            or len(items) != min(length, 64) or row.get('truncated') is not (length > 64)):
+                            or len(items) not in (min(length, 64), min(length, 256))
+                            or row.get('truncated') is not (length > len(items))):
                         raise ValueError('Invalid array extent or truncation')
                     element_type = metadata[key]['inner_type']
                     if element_type not in ('ObjectProperty', 'ClassProperty', 'FloatProperty', 'DoubleProperty',

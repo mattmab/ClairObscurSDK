@@ -106,6 +106,7 @@ class SessionTransport:
             self.sequence_camera_protocol = ready.get('sequence_camera_protocol', 0)
             self.sequence_binding_query_protocol = ready.get('sequence_binding_query_protocol', 0)
             self.original_game_action_protocol = ready.get('original_game_action_protocol', 0)
+            self.zone_travel_protocol = ready.get('zone_travel_protocol', 0)
             profiles = ready.get('cinematic_title_profiles', [])
             if (type(profiles) is not list or len(profiles) > 32 or
                     any(type(value) is not str or not value or len(value) > 64 for value in profiles) or
@@ -205,6 +206,9 @@ class SessionTransport:
         music_audio = command == 'music-audio-owner'
         sound_event = command == 'cinematic-sound-event'
         widget_hook = command == 'cinematic-widget'
+        zone = command == 'zone-travel'
+        if zone and getattr(self,'zone_travel_protocol',0)!=2:
+            raise ValueError('Normal zone travel requires the updated SDK runtime')
         picto_batch = command == 'picto-batch'
         if picto_batch and getattr(self,'picto_batch_protocol',0)!=1:
             raise ValueError('Picto batch capability unavailable')
@@ -270,10 +274,14 @@ class SessionTransport:
             raise ValueError('Native session does not support object leases')
         if reflected and getattr(self, 'reflected_protocol', 0) != 1:
             raise ValueError('Native session does not support reflected invocation')
-        if not mesh and not picto_batch and not picto_progress and not lease_policy and not widget_hook and not sound_event and not music_audio and not override and not sequence and not media and not pause and not ui_batch and not keys and not trace and not reflected and not leased and not retained and not assignment and not text and not menu and not button_action and not multi_button and command not in ('enable', 'disable', 'invoke', 'drain', 'ping', 'close', 'console-attach', 'console-detach', 'console-status', 'console-poll', 'console-execute', 'console-print', 'console-names', 'console-key'):
+        if not zone and not mesh and not picto_batch and not picto_progress and not lease_policy and not widget_hook and not sound_event and not music_audio and not override and not sequence and not media and not pause and not ui_batch and not keys and not trace and not reflected and not leased and not retained and not assignment and not text and not menu and not button_action and not multi_button and command not in ('enable', 'disable', 'invoke', 'drain', 'ping', 'close', 'console-attach', 'console-detach', 'console-status', 'console-poll', 'console-execute', 'console-print', 'console-names', 'console-key'):
             raise ValueError('Unsupported native session command')
         suffix = ''
-        if picto_batch:
+        if zone:
+            from .zone_travel import validate_request
+            validate_request(payload)
+            suffix = ' ' + payload.hex()
+        elif picto_batch:
             from .picto_batch import validate_request
             validate_request(payload)
             from .picto_batch import HEADER

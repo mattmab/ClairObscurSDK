@@ -22,7 +22,7 @@ class BuilderHUD(OwnedMenuPanel):
             'Default__WidgetBlueprintLibrary','Default__GameplayStatics','ESlateVisibility',
             'ETextJustify','Vector2D','LinearColor','Anchors','Create','SpawnObject','AddChildToCanvas','SetPosition',
             'SetRenderScale','SetRenderTransformPivot','SetSize','SetAnchors','SetIsEnabled','SetVisibility','SetBrushColor','SetText',
-            'AddToViewport','RemoveFromParent'), classes=('PlayerController',))
+            'AddToViewport','RemoveFromParent','SetRenderOpacity'), classes=('PlayerController',))
         self.player = self._one(o for o in self.catalog.select('PlayerController') if not o.object_flags & 0x30)
         descriptors = {'Function','ScriptStruct','Enum'}
         self.catalog = self.catalog.subset(o for o in self.catalog.objects if o.index in self.catalog.classes
@@ -86,6 +86,8 @@ class BuilderHUD(OwnedMenuPanel):
             'CONTROLS (F1: Minimize help)\n'
             'F7: Open / close menu | Esc: Back / close\n'
             'F8: Enter / leave builder camera\n'
+            'P: Play from camera\n'
+            'H: Hide / show builder HUD\n'
             'WASD: Fly | Mouse: Look\n'
             'Space / E: Up | Ctrl / Q: Down\n'
             'Shift: Fly faster\n'
@@ -108,6 +110,15 @@ class BuilderHUD(OwnedMenuPanel):
     def show_selection(self,name):
         import textwrap
         self.set_text(self.selection_label,'CURRENT SELECTION\n'+textwrap.fill(name,width=42))
+
+    def set_hidden(self, hidden):
+        self._render_call(self.widget,'Widget','SetRenderOpacity',InOpacity=0. if hidden else 1.)
+
+    def show_building(self, active):
+        if active:
+            self.set_text(self.controls_label, 'WORLD BUILDER\nBuilding Widgets...')
+        else:
+            self.show_help(self.help_minimized)
 
     def close(self):
         if self.widget is not None and self.state != 'closed':

@@ -60,6 +60,30 @@ class ScrollWorkspaceView(ModsWorkspaceView):
         self.capture_target = None
         self.key_scroll_start = 0
         self.key_total = 0
+        self.binding_start = 0
+
+    @property
+    def native_scroll_list(self):
+        return self.screen == 'list' and self.total_rows <= 36
+
+    @staticmethod
+    def mod_token(index):
+        cell = index * 2
+        return cell if cell < 48 else 81 + cell - 48
+
+    def bindable_tokens(self):
+        if not self.native_scroll_list:
+            return set(range(CONTROL_COUNT))
+        return ({self.mod_token(i) + cell
+                 for i in range(self.binding_start, min(self.total_rows, self.binding_start + 24))
+                 for cell in (0, 1)} | set(range(48, 81)))
+
+    def update_scroll_bindings(self, first_visible):
+        end = min(self.total_rows, first_visible + 12)
+        if first_visible >= self.binding_start and end <= self.binding_start + 24:
+            return False
+        self.binding_start = min(max(0, first_visible - 6), max(0, self.total_rows - 24))
+        return True
 
     def chrome(self,frame):
         controls=list(frame.controls)
@@ -69,7 +93,7 @@ class ScrollWorkspaceView(ModsWorkspaceView):
                 (80,'Reset','text_scale',None,True)):
             controls[index]=MenuControl(index,label,enabled)
             self._commands[index]=(op,arg,enabled)
-        if sum(c.enabled for c in controls if c.label)>64:
+        if sum(c.enabled for c in controls if c.label and c.token in self.bindable_tokens())>64:
             raise ManagementError('Menu exceeds native active-control capacity')
         return self.capture_frame(replace(frame,controls=tuple(controls)))
 
@@ -96,6 +120,7 @@ class ScrollWorkspaceView(ModsWorkspaceView):
         self.scroll_start = 0
         self.key_scroll_start = 0
         self.scroll_reset += 1
+        self.binding_start = 0
 
     def _mods(self):
         # Reuse the existing installed/search/filter policy, excluding utility rows.
@@ -211,8 +236,11 @@ class ScrollWorkspaceView(ModsWorkspaceView):
         self.summary = summary
         self.total_rows = len(rows)
         self.scroll_start = min(self.scroll_start, max(0, len(rows)-(10 if self.screen=='list' else 7)))
-        for local, row in enumerate(rows[self.scroll_start:self.scroll_start+(12 if self.screen=='list' else 8)]):
-            index = row_token(local)
+        if self.native_scroll_list:
+            self.scroll_start = 0
+        visible_rows = rows if self.native_scroll_list else rows[self.scroll_start:self.scroll_start+(12 if self.screen=='list' else 8)]
+        for local, row in enumerate(visible_rows):
+            index = self.mod_token(local) if self.native_scroll_list else row_token(local)
             if self.screen == 'list':
                 label, operation, argument, allowed, _ = row
                 if operation == 'load':
@@ -397,6 +425,13 @@ class ScrollWorkspacePanel(ModsWorkspacePanel):
         for x,w in ((32,596),(650,1238),(1340,548)):
             self.panel_titles.append(self.label(x+20,196,w-40,40,.34));self.panel_title_slots.append(self.last_slot)
         self.summary=self.label(32,1040,1856,30,.30)
+        self.readiness_label=self.label(674,978,980,28,.30)
+        self.readiness_track=self._spawn('Border');self._place(self.readiness_track,674,1014,980,10)
+        self.readiness_fill=self._spawn('Border');self.readiness_slot=self._place(self.readiness_fill,674,1014,0,10)
+        self._call(self.readiness_track,'Border','SetBrushColor',InBrushColor={'R':.04,'G':.06,'B':.09,'A':1.})
+        self._call(self.readiness_fill,'Border','SetBrushColor',InBrushColor={'R':.18,'G':.75,'B':.55,'A':1.})
+        for widget in (self.readiness_label,self.readiness_track,self.readiness_fill):
+            self._call(widget,'Widget','SetVisibility',InVisibility=self.invisible)
         self.detail=self.label(674,248,1180,300,.48)
         self.detail_slot=self.last_slot
         self.preview=self.label(674,600,1180,280,.44)
@@ -484,8 +519,10 @@ class ScrollWorkspacePanel(ModsWorkspacePanel):
         self._render_call(slot,'CanvasPanelSlot','SetSize',InSize={'X':float(w),'Y':float(h)})
 
     def layout(self, view):
-        mode='keys' if view.screen=='all_keys' else 'mods' if view.screen=='list' else 'options' if view.screen=='options' else 'editor'
-        if self.layout_mode != mode:
+        mode='maps' if getattr(view,'native_scroll_list',False) and view.screen != 'list' else 'keys' if view.screen=='all_keys' else 'mods' if view.screen=='list' else 'options' if view.screen=='options' else 'editor'
+        fixed_mods = mode == 'mods' and view.native_scroll_list
+        layout_key = (mode, fixed_mods)
+        if self.layout_mode != layout_key:
             columns=((32,438),(492,826),(1340,548)) if mode=='options' else ((32,596),(650,1238),(1340,548))
             if mode=='keys':columns=((32,1856),(650,1238),(1340,548))
             for i,(x,w) in enumerate(columns):
@@ -505,7 +542,15 @@ class ScrollWorkspacePanel(ModsWorkspacePanel):
                     i=row_token(row)+cell;h=58 if mode in ('mods','options') else 72
                     self.position(self.button_slots[i],x,2,max(1,w-8),h)
                     self.position(self.label_slots[i],x+10,12,max(1,w-26)/.53,(h-12)/.53)
+                    if mode=='maps':
+                        self.position(self.button_slots[i],0,cell*ROW_HEIGHT+2,538,72)
+                        self.position(self.label_slots[i],10,cell*ROW_HEIGHT+12,520/.53,60/.53)
                     if mode=='mods' and cell==1:self.position(self.button_slots[i],x,16,w-8,32)
+                    if fixed_mods:
+                        cx, cw = (0, 456) if cell % 2 == 0 else (456, 90)
+                        cy = (cell // 2) * 64
+                        self.position(self.button_slots[i],cx,cy+2,cw-8,58)
+                        self.position(self.label_slots[i],cx+10,cy+12,(cw-26)/.53,46/.53)
                     x+=w
             globals={48:(32,970,190,48),49:(238,970,140,48),50:(394,970,140,48),51:(1708,972,176,52),
                 52:(704,116,112,48),53:(828,116,190,48),54:(1030,116,142,48),55:(1200,116,190,48),
@@ -524,7 +569,7 @@ class ScrollWorkspacePanel(ModsWorkspacePanel):
             self.direct(self.preview,'Widget','SetVisibility',InVisibility=self.invisible if mode=='mods' else self.collapsed)
             self.direct(self.key_preview,'Widget','SetVisibility',InVisibility=self.invisible if mode=='mods' else self.collapsed)
             for widget in (*self.metadata,*self.metadata_labels):self.direct(widget,'Widget','SetVisibility',InVisibility=self.invisible if mode=='mods' else self.collapsed)
-            self.layout_mode=mode
+            self.layout_mode=layout_key
         total=getattr(view,'total_rows',8);rh=row_height(view.screen)
         self.direct(self.content_size,'SizeBox','SetHeightOverride',InHeightOverride=float(max(588 if mode=='keys' else 672,total*rh)))
         self.direct(self.key_size,'SizeBox','SetHeightOverride',InHeightOverride=float(max(672,view.key_total*64)))
@@ -534,13 +579,14 @@ class ScrollWorkspacePanel(ModsWorkspacePanel):
             self.direct(self.key_scroll,'ScrollBox','SetScrollOffset',NewScrollOffset=float(view.key_scroll_start*64))
             self.scroll_marker=marker
         start=view.scroll_start if view.screen in ('list','all_keys','options','keybinds') else 0
-        for i,slot in enumerate(self.row_slots):self.position(slot,0,(start+i)*rh,1840,rh)
+        for i,slot in enumerate(self.row_slots):
+            self.position(slot,0,i*6*rh if mode=='maps' else i*3*rh if fixed_mods else (start+i)*rh,1840,6*rh if mode=='maps' else 3*rh if fixed_mods else rh)
         for i,(button,label) in enumerate(self.key_slots):
             y=(view.key_scroll_start+i)*64
             self.position(button,0,y,494,58);self.position(label,10,y+10,474/.53,48/.53)
         for i,knob in enumerate(self.switches):
             states=getattr(view,'row_states',[]);token=row_token(i)
-            show=mode=='mods' and i<len(states) and view._commands.get(token+1,('',))[0]=='inline_toggle'
+            show=mode=='mods' and not fixed_mods and i<len(states) and view._commands.get(token+1,('',))[0]=='inline_toggle'
             self._render_call(knob,'Widget','SetVisibility',InVisibility=self.invisible if show else self.collapsed)
             if show:self.position(self.switch_slots[i],514 if states[i][1] else 460,22,18,20)
         self.direct(self.slider,'Widget','SetIsEnabled',bInIsEnabled=view.capture_target is None)
@@ -585,7 +631,7 @@ class ScrollWorkspacePanel(ModsWorkspacePanel):
             return float(result.return_value)
 
     def set_text(self,label,text):
-        if label in (self.summary,self.preview,self.key_preview,self.subtitle,self.scale_label,*self.panel_titles,*self.metadata_labels):
+        if label in (self.readiness_label,self.summary,self.preview,self.key_preview,self.subtitle,self.scale_label,*self.panel_titles,*self.metadata_labels):
             key=('chrome',label.index)
             if self._text.get(key) != text:
                 self._render_call(label,'TextBlock','SetText',InText=text)
@@ -679,6 +725,18 @@ class ScrollWorkspaceMenu(ModsWorkspaceMenu):
             if self.view.total_rows==0:summary+='   |   No matching bindings'
         if self.frame.status:summary=self.frame.status
         self.panel.set_text(self.panel.summary,summary)
+        progress = getattr(self.view.registry, '_startup_progress', None)
+        if hasattr(self.panel, 'readiness_label'):
+            show = self.view.screen == 'list' and progress is not None
+            for widget in (self.panel.readiness_label,self.panel.readiness_track,self.panel.readiness_fill):
+                self.panel.direct(widget,'Widget','SetVisibility',InVisibility=self.panel.invisible if show else self.panel.collapsed)
+            if show:
+                completed, total = progress['completed'], progress['total']
+                fraction = min(1., completed / max(1,total)) if not progress['finished'] else 1.
+                state = 'Complete' if progress['finished'] else 'Loading'
+                if progress['failed']: state += f" ({progress['failed']} failed)"
+                self.panel.set_text(self.panel.readiness_label,f'SDK Mods Readiness: {completed}/{total}  |  {state}')
+                self.panel.position(self.panel.readiness_slot,674,1014,980*fraction,10)
         # Long descriptions stop above inspector buttons; full detail is available
         # in the Details / actions screen and diagnostic export.
         ratio=max(1.,scale/TEXT_DEFAULT)
@@ -700,7 +758,7 @@ class ScrollWorkspaceMenu(ModsWorkspaceMenu):
             self.panel.set_text(self.panel.key_preview,bounded_detail('\n\n'.join(keys),width=pw,height=ph))
         for i,control in enumerate(self.frame.controls):
             label=control.label
-            if self.view.screen=='list' and (i<48 or i>=81) and (i if i<48 else i-81)%6==1 and label in ('ON','OFF'):label=''
+            if self.view.screen=='list' and not self.view.native_scroll_list and (i<48 or i>=81) and (i if i<48 else i-81)%6==1 and label in ('ON','OFF'):label=''
             bounds=getattr(self.panel,'text_bounds',{}).get(getattr(self.panel.labels[i],'index',None))
             if bounds:
                 _,w,h=bounds
@@ -713,11 +771,12 @@ class ScrollWorkspaceMenu(ModsWorkspaceMenu):
             accent=THEMES.get(self.panel.appearance[0],THEMES['World Builder'])[2]
             self.panel._render_call(self.panel.buttons[i],'Button','SetBackgroundColor',InBackgroundColor=dict(zip(('R','G','B','A'),(*accent,1.))))
         for row,(selected,enabled,conflict) in enumerate(getattr(self.view,'row_states',[])):
+            token = self.view.mod_token(row) if self.view.screen == 'list' and self.view.native_scroll_list else row_token(row)
             accent=(.30,.12,.04) if conflict else (.06,.26,.32) if selected else THEMES.get(self.panel.appearance[0],THEMES['World Builder'])[2]
-            self.panel._render_call(self.panel.buttons[row_token(row)],'Button','SetBackgroundColor',InBackgroundColor=dict(zip(('R','G','B','A'),(*accent,1.))))
+            self.panel._render_call(self.panel.buttons[token],'Button','SetBackgroundColor',InBackgroundColor=dict(zip(('R','G','B','A'),(*accent,1.))))
             if self.view.screen=='list':
                 color=(.035,.42,.20) if enabled else (.14,.16,.18)
-                self.panel._render_call(self.panel.buttons[row_token(row)+1],'Button','SetBackgroundColor',InBackgroundColor=dict(zip(('R','G','B','A'),(*color,1.))))
+                self.panel._render_call(self.panel.buttons[token+1],'Button','SetBackgroundColor',InBackgroundColor=dict(zip(('R','G','B','A'),(*color,1.))))
         self._paint_field()
 
     def poll_scroll(self):
@@ -735,6 +794,18 @@ class ScrollWorkspaceMenu(ModsWorkspaceMenu):
                 owner=self.view.registry.select('sdk.management')
                 self.view.registry.set_option(owner,'text_scale',max(TEXT_MIN,min(TEXT_MAX,value)))
                 changed=True
+        # All map widgets/labels occupy permanent positions. Native Slate owns
+        # scrolling; only the bounded handler window changes, without repaint,
+        # relayout, view.render(), scroll reset, or text replacement.
+        if getattr(self.view, 'native_scroll_list', False):
+            first=max(0,min(int(self.panel.scroll_offset()//row_height(self.view.screen)),max(0,self.view.total_rows-1)))
+            rebind=self.view.update_scroll_bindings(first)
+            if changed:
+                self.refresh()
+            elif rebind:
+                self._revoke()
+                self._bind()
+            return
         if self.view.screen not in ('list','all_keys','options','keybinds'):
             if changed:self.refresh()
             return

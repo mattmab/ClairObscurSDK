@@ -14,6 +14,23 @@ from .values import read_values, read_object_reference
 from ._scope import SessionScope
 
 
+_WIDGET_DEFINITIONS = frozenset((
+    'Widget', 'UserWidget', 'CommonActivatableWidget', 'WidgetTree',
+    'CanvasPanel', 'CanvasPanelSlot', 'Button', 'TextBlock', 'Border',
+    'CommonTextBlock', 'WBP_BaseButton_C', 'CTS_B1_SmallLine_Outline_C',
+    'Overlay', 'OverlaySlot', 'TextLayoutWidget', 'WidgetBlueprintLibrary',
+    'GameplayStatics', 'EditableText', 'ScrollBox', 'SizeBox', 'PanelWidget',
+    'ContentWidget', 'Slider',
+))
+
+
+def widget_definition_names(names):
+    # A CDO's closure includes its class. Bare names such as WidgetTree also
+    # match every Blueprint instance, exceeding the reader's 1024-hit cap.
+    return tuple(dict.fromkeys('Default__' + name if name in _WIDGET_DEFINITIONS
+                               else name for name in names))
+
+
 class OwnedMenuPanel:
     EXTRA_NAMES = ()
     BATCH_CONSTRUCTION = False
@@ -202,7 +219,7 @@ class OwnedMenuPanel:
         started = time.perf_counter()
         log = logging.getLogger(__name__)
         log.info('Building owned native menu panel with %d reusable controls', self.count)
-        self.catalog = capture_matching(self.scope.pid, names=(
+        self.catalog = capture_matching(self.scope.pid, names=widget_definition_names((
             'Widget', 'UserWidget', 'CommonActivatableWidget', 'WidgetTree',
             'CanvasPanel', 'CanvasPanelSlot', 'Button', 'TextBlock', 'Border',
             'CommonTextBlock', 'WBP_BaseButton_C', 'CTS_B1_SmallLine_Outline_C', 'SetStyle',
@@ -217,12 +234,19 @@ class OwnedMenuPanel:
             'SetText', 'AddToViewport', 'IsInViewport', 'ActivateWidget',
             'IsActivated', 'SetUserFocus', 'HasKeyboardFocus', 'HasUserFocus',
             'DeactivateWidget', 'RemoveFromParent', 'SetFocusToGameViewport',
-            'SetInputMode_UIOnlyEx','SetInputMode_GameOnly','EMouseLockMode') + self.EXTRA_NAMES,
-            classes=('PlayerController', 'GameEngine')) if self._selected_results else capture()
+            'SetInputMode_UIOnlyEx','SetInputMode_GameOnly','EMouseLockMode') + self.EXTRA_NAMES),
+            classes=('GameEngine',)) if self._selected_results else capture()
         if self.catalog.pid != self.scope.pid:
             raise ValueError('Widget catalog belongs to another process')
-        self.player = self._one(o for o in self.catalog.select('PlayerController')
-                                if not o.object_flags & 0x10)
+        if self._selected_results:
+            from .cinematics.original_game_action import controller_context
+            current = controller_context(self.scope)
+            observed = capture_selected(self.scope.pid, (current['controller'][1:],))
+            self.catalog = self.catalog.with_observations(observed)
+            self.player = self.catalog.by_index[current['controller'][1]]
+        else:
+            self.player = self._one(o for o in self.catalog.select('PlayerController')
+                                    if not o.object_flags & 0x10)
         if self._selected_results:
             # Exact-name discovery also finds transient instances (notably an
             # old panel's WidgetTree). Do not merge those unowned registry slots
@@ -436,6 +460,18 @@ class OwnedMenuPanel:
         return True
 
     def close(self):
+        return self._close_tree(detach_children=True)
+
+    def close_owned_tree(self):
+        """Release a wholly owned detached tree without removing each child.
+
+        Input ownership is closed first and RootWidget is cleared/read back.
+        Children reference only this owned tree; releasing its leases lets UE
+        collect the hierarchy together. Never use this for borrowed widgets.
+        """
+        return self._close_tree(detach_children=False)
+
+    def _close_tree(self, *, detach_children):
         if self.state == 'closed':
             return True
         # Native ownership must finish before tree changes or leases are released.
@@ -447,10 +483,10 @@ class OwnedMenuPanel:
             self._mutate(self.scope.assign_object, self.tree, self._class('WidgetTree'),
                 'RootWidget', None, expected=self.canvas, allow_mutation=True,
                 catalog=self._planner._catalog if self._planner is not None else None)
-            self.assigned = False
             if self._root() is not None:
                 raise RuntimeError('Panel root was not restored')
-        if self._planner is not None and self.children and not self._selected_results:
+            self.assigned = False
+        if detach_children and self._planner is not None and self.children and not self._selected_results:
             # Native input is detached and the root readback has succeeded.
             # All children remain leased. Refresh once for teardown; native
             # identity/schema gates still run for every removal. A failed
@@ -460,7 +496,7 @@ class OwnedMenuPanel:
         # planning closure. Native dispatch revalidates the identity/schema on
         # each removal. Enumerating the entire world here adds seconds without
         # granting any additional dispatch authority.
-        while self.children:
+        while detach_children and self.children:
             child = self.children[-1]
             if self._planner is not None:
                 self._render_call(child, 'Widget', 'RemoveFromParent')
@@ -471,6 +507,7 @@ class OwnedMenuPanel:
             self._planner.close()
             self._planner = None
         self.scope.close()
+        self.children.clear()
         self._text.clear()
         self._enabled.clear()
         self._visible.clear()

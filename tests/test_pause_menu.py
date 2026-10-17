@@ -6,16 +6,31 @@ from unittest.mock import Mock, patch
 from expedition33.pause_menu import PauseMenuEntry
 
 class PauseMenuLifecycleTests(unittest.TestCase):
+    def test_pause_button_reports_startup_stages(self):
+        o=self.entry();o.label='Mods';o.service.registry=SimpleNamespace()
+        self.assertEqual(o._readiness_text(),'Mods [SDK starting]')
+        progress=dict(completed=0,total=9,failed=0,finished=False,phase='widgets')
+        o.service.registry._startup_progress=progress
+        self.assertEqual(o._readiness_text(),'Mods [SDK widgets...]')
+        progress.update(completed=3,phase='mods')
+        self.assertEqual(o._readiness_text(),'Mods [SDK 3/9]')
+        progress.update(completed=9,finished=True)
+        self.assertEqual(o._readiness_text(),'Mods [SDK ready]')
+        progress['failed']=1
+        self.assertEqual(o._readiness_text(),'Mods [1 failed]')
+        o.label='Map Travel'
+        self.assertEqual(o._readiness_text(),'Map Travel')
+
     def test_failed_open_restores_pause_and_focus_without_retry(self):
         o = self.entry(); events = []
         o.observer.read.return_value = [object()]
-        o.attachment.conceal.side_effect = lambda *a: events.append('conceal') or True
+        o.attachment.show_busy.side_effect = lambda *a: events.append('conceal') or True
         o.attachment.restore.side_effect = lambda: events.append('restore') or True
         o.invoke.side_effect = lambda call: events.append(call) or True
         o.service.open.side_effect = RuntimeError('native_error=811')
         with self.assertLogs('expedition33.pause_menu', level='ERROR'):
             o.poll()
-        self.assertEqual(events, ['active', 'conceal', 'viewport', 'restore', 'active', 'button'])
+        self.assertEqual(events, ['active', 'loading', 'conceal', 'viewport', 'restore', 'active', 'button', 'normal'])
         self.assertEqual(o.state, 'failed')
         o.poll()
         o.service.open.assert_called_once()
@@ -59,9 +74,10 @@ class PauseMenuLifecycleTests(unittest.TestCase):
         owner.observer=SimpleNamespace(read=Mock(return_value=[]),state='active',_observed=0,renew=Mock(),close=Mock())
         owner._renew_at=float('inf')
         owner._next_world_check=float('inf')
-        owner.attachment=SimpleNamespace(conceal=Mock(return_value=True),restore=Mock(return_value=True),close=Mock(return_value=True))
+        owner.attachment=SimpleNamespace(show_busy=Mock(return_value=True),hide_busy=Mock(return_value=True),restore=Mock(return_value=True),close=Mock(return_value=True))
         owner._active_call='active';owner._viewport_focus='viewport';owner._button_focus='button'
         owner._hide_opacity='opacity';owner._hide_enabled='enabled'
+        owner._loading_label='loading';owner._normal_label='normal'
         owner.invoke=Mock(return_value=True)
         return owner
 

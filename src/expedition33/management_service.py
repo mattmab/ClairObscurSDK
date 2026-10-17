@@ -1,6 +1,7 @@
 """SDK Management's lifecycle owner for the experimental native frontend."""
 import logging
 import time
+from . import RuntimeQueryError
 
 from .management import ManagementError
 from .management_native import NativeManagementMenu
@@ -19,6 +20,8 @@ class NativeMenuService:
         self._next_poll = 0.
         self._warmup_attempted = False
         self.travel_recovery = None
+        self._discovery_retries = 0
+        self._next_prepare = 0.
 
     @property
     def travel_recovery_pending(self):
@@ -31,6 +34,8 @@ class NativeMenuService:
         self._check()
         if self.travel_recovery_pending:
             return
+        if time.monotonic() < self._next_prepare:
+            return
         if self._warmup_attempted or self.menu is not None or not self.scope.supports_multi_controls:
             return
         self._warmup_attempted = True
@@ -40,10 +45,25 @@ class NativeMenuService:
             started = time.perf_counter()
             with self.menu._read_operation():
                 self.menu.prepare()
+            self._discovery_retries = 0
             self._observed = self._snapshot()
             logging.getLogger(__name__).info('Native menu ready (detached warmup %.3fs)',
                                             time.perf_counter() - started)
         except BaseException as error:
+            panel = self.menu.panel
+            if (isinstance(error, RuntimeQueryError) and self._discovery_retries < 3
+                    and any(code in str(error) for code in ('DESCRIPTOR_IDENTITY_CHANGED',
+                        'MATCH_RESULT_LIMIT', 'READ_FAILED', 'Catalog outer missing or changed'))
+                    and panel.widget is None and panel._planner is None
+                    and not panel.children and not panel.assigned and not panel.uncertain):
+                # Discovery only: no widget was constructed or engine call
+                # dispatched. Dispose the empty owner before a bounded retry.
+                self.dispose_menu()
+                self._discovery_retries += 1
+                self._warmup_attempted = False
+                self._next_prepare = time.monotonic() + .5
+                logging.getLogger(__name__).warning('Menu discovery changed during loading; retry %d/3', self._discovery_retries)
+                return
             self._failure = f'{type(error).__name__}: {error}'
             logging.getLogger(__name__).exception('Native menu warmup failed; owner retained: %s', self._failure)
 
@@ -53,7 +73,8 @@ class NativeMenuService:
         self.scope._check()
 
     def _snapshot(self):
-        return (self.registry.views(), self.registry.installed())
+        return (self.registry.views(), self.registry.installed(),
+                dict(getattr(self.registry, '_startup_progress', {})))
 
     def status(self):
         self._check()

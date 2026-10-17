@@ -63,6 +63,9 @@ static uint64_t runtime_base = 0, target_object = 0, target_function = 0;
 #ifdef E33_AUDIO_ISOLATION_SESSION
 #include "picto_batch.h"
 static PictoBatch session_picto_batch;
+#ifdef E33_ZONE_TRAVEL_SESSION
+#include "zone_travel.h"
+#endif
 #endif
 #ifdef E33_MESH_SESSION
 #include "mesh_owner.h"
@@ -577,6 +580,13 @@ uint32_t backend_command(SessionPacket* packet) {
         picto_progression(runtime_base,wire);
         return 0;
     }
+#ifdef E33_ZONE_TRAVEL_SESSION
+    case SessionZoneTravel: {
+        auto& wire=*reinterpret_cast<ZoneTravelPacket*>(packet->console_text);
+        if(session_sequence.active() || session_picto_batch.active() || (wire.operation==1 && session_menu.menu.active())){wire.error=1812;return 0;}
+        zone_travel(runtime_base,wire);return 0;
+    }
+#endif
     case SessionPictoBatch: {
         auto& wire=*reinterpret_cast<PictoBatchPacket*>(packet->console_text);
         if(wire.operation==1 && session_sequence.active()){wire.error=1712;return 0;}

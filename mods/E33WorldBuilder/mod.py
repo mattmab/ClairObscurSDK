@@ -98,6 +98,7 @@ class Mod:
         self.dragging = False
         self.hud = None
         self.help_minimized = False
+        self.hud_hidden = False
         self.next_status = 0.
         self.catalog_menu = None
         self.prewarm_at = time.monotonic()+3
@@ -141,14 +142,22 @@ class Mod:
         if self.hud is not None:
             with self.menu_reads():self.hud.show_help(self.help_minimized)
 
+    def toggle_hud(self, _=None):
+        if not self.active or self.hud is None:return
+        hidden = not self.hud_hidden
+        with self.menu_reads():self.hud.set_hidden(hidden)
+        self.hud_hidden = hidden
+
     def management(self):
-        return ModDefinition('e33.world-builder', 'World Builder', version='0.32.0-experimental',
+        return ModDefinition('e33.world-builder', 'World Builder', version='0.32.1-experimental',
             description='F8 freecam. WASD fly, mouse look, Space/Ctrl up/down (E/Q also work), Shift faster. Hold left mouse to grab a world prop; release to place. Numpad 8/2 forward/back, 4/6 left/right, 9/3 up/down, 7/1 yaw; Alt precise; Alt+Z undo. F9 restores edits and clears spawned props. F7 opens folders, previews, spawning, galleries and saved maps.',
             actions=(Action('catalog', 'Open asset catalog', self.open_catalog),Action('toggle', 'Enter / leave builder camera', self.toggle),
                      Action('restore', 'Restore all edited geometry', self.restore),
                      Action('undo', 'Undo last prop edit', self.undo),
                      Action('status', 'Builder status', self.status)),
             keybinds=(Keybind('toggle_help','Minimize / expand builder help','F1',self.toggle_help),Keybind('region_point1','Region corner 1 at camera','F3',lambda _:self.templates.mark(1)),Keybind('region_point2','Region corner 2 at camera','F4',self.region_corner2),Keybind('directional','Open live duplication for selected prop','F5',self.open_directional),Keybind('catalog', 'Open asset catalog', 'F7', self.open_catalog),Keybind('toggle', 'Toggle builder camera', 'F8', self.toggle),
+                      Keybind('play_from_camera', 'Play from camera', 'P', self.play_from_camera),
+                      Keybind('hide_hud', 'Hide / show World Builder HUD', 'H', self.toggle_hud),
                       Keybind('restore', 'Restore all geometry edits', 'F9', self.restore),
                       Keybind('duplicate_to_hand','Duplicate selected prop to hand','F10',self.duplicate_to_hand),
                       Keybind('delete_selection','Delete Current Selection','Delete',self.delete_selection)))
@@ -446,20 +455,27 @@ class Mod:
         if not self.active:self.toggle()
         self.refresh_menu_owner()
         from .catalog_menu import CatalogMenu
-        if self.catalog_menu is None:
-            self.catalog_menu=CatalogMenu(self)
-            with self.menu_reads():self.catalog_menu.build()
-        if self.catalog_menu.state=='open' and (escape or self.catalog_menu.workspace=='Build'):self.catalog_menu.hide()
-        else:
-            self.command(26);self.sync_catalog_selection()
-            with self.menu_reads():
-                if self.catalog_menu.workspace!='Build':
-                    self.directional.cancel()
-                    self.catalog_menu.click(24)
-                if self.pending_catalog_asset:
-                    self.catalog_menu.focus_asset(self.pending_catalog_asset);self.pending_catalog_asset=None
-                self.catalog_menu.paint()
-                if self.catalog_menu.state!='open':self.catalog_menu.open()
+        building = self.catalog_menu is None and self.hud is not None
+        if building:
+            with self.menu_reads():self.hud.show_building(True)
+        try:
+            if self.catalog_menu is None:
+                self.catalog_menu=CatalogMenu(self)
+                with self.menu_reads():self.catalog_menu.build()
+            if self.catalog_menu.state=='open' and (escape or self.catalog_menu.workspace=='Build'):self.catalog_menu.hide()
+            else:
+                self.command(26);self.sync_catalog_selection()
+                with self.menu_reads():
+                    if self.catalog_menu.workspace!='Build':
+                        self.directional.cancel()
+                        self.catalog_menu.click(24)
+                    if self.pending_catalog_asset:
+                        self.catalog_menu.focus_asset(self.pending_catalog_asset);self.pending_catalog_asset=None
+                    self.catalog_menu.paint()
+                    if self.catalog_menu.state!='open':self.catalog_menu.open()
+        finally:
+            if building:
+                with self.menu_reads():self.hud.show_building(False)
         return {'open':self.catalog_menu.state=='open'}
 
     def menu_fields(self,first=None,second=None,search=None,map_name=None):
@@ -503,6 +519,7 @@ class Mod:
             if self.hud is not None:self.hud.close()
             self.hud = BuilderHUD(self.session, self.help_minimized)
             with self.menu_reads():self.hud.build()
+        self.hud.set_hidden(self.hud_hidden)
         self.hud._render_call(self.hud.widget,'UserWidget','AddToViewport',ZOrder=10000)
         ids[48:58] = [self.hud.widget,self.hud.title,*self.hud.slots,*self.hud.lines]
         ids[60:62] = self.hud.crosshair

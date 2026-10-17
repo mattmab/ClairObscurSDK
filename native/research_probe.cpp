@@ -1025,6 +1025,7 @@ int run_query(int argc, char** argv) {
                         // Copied reflected fields only: never reconstruct or own
                         // non-reflected state (for example FKey's shared pointer).
                         size_t struct_budget = 4096;
+                        size_t struct_string_budget = 262144;
                         std::function<std::string(uint64_t, const PropertyPrefix&, uint64_t,
                             const uint8_t*, unsigned)> struct_json;
                         struct_json = [&](uint64_t property, const PropertyPrefix& layout, uint64_t at,
@@ -1081,6 +1082,38 @@ int run_query(int argc, char** argv) {
                                             std::string encoded;
                                             if (kind == "StructProperty") {
                                                 encoded = struct_json(member, child, at + child.offset, source, depth + 1);
+                                            } else if (kind == "StrProperty") {
+                                                // Copy FString contents, never expose or own its pointer.
+                                                struct StringHeader { uint64_t data; int32_t count, capacity; };
+                                                static_assert(sizeof(StringHeader) == 16);
+                                                require(child.element_size == sizeof(StringHeader), "STRING_PROPERTY_LAYOUT_INVALID");
+                                                StringHeader text; std::memcpy(&text, source, sizeof(text));
+                                                require(text.count >= 0 && text.count <= text.capacity && text.capacity <= 1048576,
+                                                        "STRING_COUNTS_INVALID");
+                                                require(text.count <= 4097 && size_t(text.count) <= struct_string_budget,
+                                                        "STRUCT_STRING_SIZE_LIMIT");
+                                                struct_string_budget -= text.count;
+                                                std::wstring wide(text.count, 0), repeated(text.count, 0);
+                                                if (text.count) {
+                                                    require(text.data && !(text.data & 1), "STRING_DATA_INVALID");
+                                                    reader.read(text.data, wide.data(), wide.size() * 2);
+                                                    reader.read(text.data, repeated.data(), repeated.size() * 2);
+                                                    require(wide == repeated, "STRING_CONTENT_CHANGED");
+                                                    require(wide.back() == 0, "STRING_TERMINATOR_INVALID");
+                                                    wide.pop_back();
+                                                }
+                                                const auto text_again = reader.get<StringHeader>(at + child.offset);
+                                                require(std::memcmp(&text, &text_again, sizeof(text)) == 0, "STRING_HEADER_CHANGED");
+                                                std::string decoded;
+                                                if (!wide.empty()) {
+                                                    const auto size = WideCharToMultiByte(CP_UTF8, WC_ERR_INVALID_CHARS, wide.data(),
+                                                        static_cast<int>(wide.size()), nullptr, 0, nullptr, nullptr);
+                                                    require(size > 0, "STRING_UTF16_INVALID"); decoded.resize(size);
+                                                    require(WideCharToMultiByte(CP_UTF8, WC_ERR_INVALID_CHARS, wide.data(),
+                                                        static_cast<int>(wide.size()), decoded.data(), size, nullptr, nullptr) == size,
+                                                        "STRING_UTF16_INVALID");
+                                                }
+                                                encoded = quote(decoded);
                                             } else if (kind == "BoolProperty") {
                                                 const auto encoding = reader.get<uint32_t>(member + 0x70);
                                                 const auto offset = uint8_t(encoding >> 8), mask = uint8_t(encoding >> 24);
@@ -1291,7 +1324,7 @@ int run_query(int argc, char** argv) {
                                     const auto observed_array = reader.get<ArrayHeader>(at);
                                     require(observed_array.count >= 0 && observed_array.count <= observed_array.capacity && observed_array.capacity <= 1048576,
                                             "ARRAY_COUNTS_INVALID");
-                                    const auto copied = std::min(observed_array.count, 64);
+                                    const auto copied = std::min(observed_array.count, 256);
                                     std::vector<uint8_t> bytes(size_t(copied) * width), repeated(bytes.size());
                                     if (copied) {
                                         require(observed_array.data && (observed_array.data & 1) == 0, "ARRAY_DATA_INVALID");

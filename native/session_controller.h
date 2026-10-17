@@ -88,7 +88,11 @@ inline void run_runtime_session(DWORD pid, DWORD thread, int32_t object_index, i
 #ifdef E33_KEYBIND_SESSION
 #if defined(E33_MESH_SESSION)
     #ifdef E33_BUILDER_SELECTION_SESSION
+    #ifdef E33_ZONE_TRAVEL_SESSION
+    auto path = std::filesystem::path(executable).parent_path().parent_path() / L"runtime-session-zone-v68" / L"runtime_session_zone_v68.dll";
+    #else
     auto path = std::filesystem::path(executable).parent_path().parent_path() / L"runtime-session-worldbuilder-v65-selection" / L"runtime_session_worldbuilder_v65_selection.dll";
+    #endif
     #else
     auto path = std::filesystem::path(executable).parent_path().parent_path() / L"runtime-session-worldbuilder-v54-menu" / L"runtime_session_worldbuilder_v54_menu.dll";
     #endif
@@ -341,6 +345,9 @@ inline void run_runtime_session(DWORD pid, DWORD thread, int32_t object_index, i
 #endif
 #ifdef E33_CATALOG_GAME_OWNED_SESSION
               << ",\"original_game_action_protocol\":1"
+#ifdef E33_ZONE_TRAVEL_SESSION
+              << ",\"zone_travel_protocol\":2"
+#endif
 #endif
 #ifdef E33_SEQUENCE_BINDING_QUERY_SESSION
               << ",\"sequence_binding_query_protocol\":1"
@@ -431,6 +438,17 @@ inline void run_runtime_session(DWORD pid, DWORD thread, int32_t object_index, i
         }
 #endif
 #ifdef E33_AUDIO_ISOLATION_SESSION
+#ifdef E33_ZONE_TRAVEL_SESSION
+        bool zone=command.substr(0,separator)=="zone-travel";
+        if(zone) {
+            require(separator!=std::string::npos,"ZONE_PAYLOAD_MISSING");auto encoded=command.substr(separator+1);
+            require(encoded.size()==sizeof(ZoneTravelPacket)*2,"ZONE_PAYLOAD_SIZE");
+            auto* destination=reinterpret_cast<uint8_t*>(packet.console_text);
+            auto digit=[](char c)->unsigned {if(c>='0'&&c<='9')return c-'0';if(c>='a'&&c<='f')return c-'a'+10;throw std::runtime_error("ZONE_ENCODING");};
+            for(size_t i=0;i<sizeof(ZoneTravelPacket);++i)destination[i]=static_cast<uint8_t>(digit(encoded[i*2])*16+digit(encoded[i*2+1]));
+            command.resize(separator);separator=std::string::npos;
+        }
+#endif
         bool picto_batch=command.substr(0,separator)=="picto-batch";
         if(picto_batch) {
             require(separator!=std::string::npos,"PICTO_BATCH_PAYLOAD_MISSING");auto encoded=command.substr(separator+1);
@@ -728,6 +746,9 @@ inline void run_runtime_session(DWORD pid, DWORD thread, int32_t object_index, i
 #endif
         if(picto_progress) action=SessionPictoProgression;
         if(picto_batch) action=SessionPictoBatch;
+#ifdef E33_ZONE_TRAVEL_SESSION
+        if(zone) action=SessionZoneTravel;
+#endif
         if(scoped_assignment) action=SessionScopedAssignment;
 #endif
 #ifdef E33_MUSIC_AUDIO_SESSION
@@ -797,6 +818,14 @@ inline void run_runtime_session(DWORD pid, DWORD thread, int32_t object_index, i
         }
 #endif
 #ifdef E33_AUDIO_ISOLATION_SESSION
+#ifdef E33_ZONE_TRAVEL_SESSION
+        if(zone) {
+            static const char digits[]="0123456789abcdef";const auto* source=reinterpret_cast<const uint8_t*>(packet.console_text);
+            std::string encoded(sizeof(ZoneTravelPacket)*2,'0');
+            for(size_t i=0;i<sizeof(ZoneTravelPacket);++i){encoded[i*2]=digits[source[i]>>4];encoded[i*2+1]=digits[source[i]&15];}
+            std::cout << ",\"zone_packet\":" << quote(encoded);
+        }
+#endif
         if(picto_batch) {
             static const char digits[]="0123456789abcdef";const auto* source=reinterpret_cast<const uint8_t*>(packet.console_text);
             std::string encoded(sizeof(PictoBatchPacket)*2,'0');

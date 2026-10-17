@@ -287,11 +287,12 @@ class _Explorer(Explorer):
                 self.sdk.assignment_expected = None
         if request['op'] == 'inspect' and request.get('target',{}).get('$identity'):
             from .core import bounded
-            from ..values import read_values_many, read_object_reference
+            from ..values import read_values_with_references, read_object_reference
             if 'members' in request and (not isinstance(request['members'],list) or len(request['members'])>64 or not all(isinstance(name,str) for name in request['members'])):
                 raise ValueError('members must be a list of up to 64 property names')
             obj=self.resolve(request['target'])
-            observed=read_values_many(self.sdk.catalog,(obj._observed,),fields=tuple(request['members']) if 'members' in request else None)[obj._observed.index]
+            observed, self.sdk.catalog = read_values_with_references(self.sdk.catalog, obj._observed,
+                fields=tuple(request['members']) if request.get('members') else None)
             keys=list(observed.types)
             if 'members' in request: keys=[key for key in keys if key[1] in request['members']]
             offset=max(0,min(int(request.get('offset',0)),100000)); limit=bounded(request.get('limit'))
@@ -358,6 +359,14 @@ class _Explorer(Explorer):
             obj = self.sdk.catalog.resolve(value.enum)
             return {'$enum': {'type': self.sdk.catalog.path_name(obj),
                               'name': value.name, 'value': value.value}}
+        if isinstance(value, (list, tuple, StoredArray)) and depth > 0:
+            from itertools import islice
+            budget = [500] if budget is None else budget
+            budget[0] -= 1
+            if budget[0] < 0:
+                return {'$truncated': 'node budget'}
+            items = [self.encode(item, depth - 1, budget) for item in islice(value, 256)]
+            return {'items': items, 'length': len(value), 'truncated': len(value) > len(items)}
         result = super().encode(value, depth, budget)
         if isinstance(value, _StructValue) and '$struct' in result and value._observation.truncated:
             result['truncated'] = True

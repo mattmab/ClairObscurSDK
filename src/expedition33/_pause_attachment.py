@@ -70,3 +70,12 @@ class PauseAttachment:
     def restore(self):
         if self.state != 'armed': raise RuntimeError('Pause ownership is unavailable')
         return self._send(7)
+
+    def show_busy(self, enabled):
+        """Keep the panel visible, with native-owned restoration of disabled input."""
+        if not self.restore(): return False
+        return self._send(6, plan=enabled)
+
+    def hide_busy(self, opacity):
+        """Hide after show_busy; input is already disabled by this owner."""
+        return self._send(5, plan=opacity)

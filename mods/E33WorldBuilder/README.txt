@@ -1,3 +1,7 @@
+H: Hide / show the entire World Builder HUD (remappable).
+P: Play from camera (remappable in Mods > World Builder keybinds).
+F7 shows Building Widgets... in the HUD while constructing its menu.
+
 RC14: Holding built-in scenery through a level-streaming unload now releases
 the expired selection while freecam stays active. Requires the RC14 SDK.
 

@@ -5,11 +5,10 @@ The SDK installer includes **SDK Management**, **Introspection Harness** and
 Mods below are separate downloads with independent release tags and MIT licenses.
 They use the SDK runtime; do not install separate controllers.
 
-The SDK release is **RC12**; see [release notes](../docs/RELEASE_0.1.0_RC12.md).
-Its Mods menu provides enable toggles, text sizing, separate settings/keybind
-panels and press-a-key rebinding. World Builder is a standalone **0.30.1**
-download, with [installation, controls and limitations](E33WorldBuilder/README.txt).
-RC12 includes startup and targeting fixes; World Builder 0.30.1 adds reader recovery.
+The current SDK release is **RC16**. [Download the SDK and current mod packages](https://github.com/mattmab/ClairObscurSDK/releases/tag/v0.1.0-rc16).
+World Builder **0.32.1** adds P (play from camera), H (hide/show HUD), and F7
+construction feedback. [Map Travel 0.2.2](MapTravel/README.txt) opens grouped map
+choices and uses normal entrance transitions. Both require the matching RC16 SDK.
 
 | Mod | Download / release | Purpose |
 | --- | --- | --- |

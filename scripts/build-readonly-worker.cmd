@@ -3,7 +3,7 @@ setlocal
 set "TEMP=D:\HobbyDevelopment\Caches\ClairObscurSDK"
 set "TMP=%TEMP%"
 set "PROJECT_ROOT=%~dp0.."
-set "BUILD_DIR=%PROJECT_ROOT%\build\readonly-worker"
+set "BUILD_DIR=%PROJECT_ROOT%\build\readonly-worker-strings-v1"
 if not exist "%BUILD_DIR%" mkdir "%BUILD_DIR%"
 call D:\HobbyDevelopment\Tools\VSBuildTools\VC\Auxiliary\Build\vcvarsall.bat x64
 if errorlevel 1 exit /b %errorlevel%

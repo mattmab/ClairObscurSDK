@@ -384,8 +384,11 @@ class ModsWorkspaceMenu(NativeManagementMenu):
             return super()._bind()
         frame = self.frame
         bindings = []
+        bindable = self.view.bindable_tokens() if callable(getattr(self.view, 'bindable_tokens', None)) else None
         for index, control in enumerate(frame.controls):
             if not control.enabled:
+                continue
+            if bindable is not None and control.token not in bindable:
                 continue
             def click(_event, control=control, frame=frame):
                 if self._presentation_suspended:

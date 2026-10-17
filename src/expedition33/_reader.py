@@ -93,7 +93,7 @@ class ReadBatch:
                 raise RuntimeQueryError('Read batches cannot be nested across owners or processes')
             self._borrowed = parent
             return self
-        executable = self._executable or Path(__file__).resolve().parents[2] / 'build/readonly-worker/research_probe.exe'
+        executable = self._executable or Path(__file__).resolve().parents[2] / 'build/readonly-worker-strings-v1/research_probe.exe'
         try:
             self._process = subprocess.Popen([str(executable), '--reader-session', str(self.pid)],
                 stdin=subprocess.PIPE, stdout=subprocess.PIPE, stderr=subprocess.STDOUT,

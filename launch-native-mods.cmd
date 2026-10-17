@@ -1,3 +1,3 @@
 @echo off
-call "%~dp0launch.cmd" management --keybinds --pause-menu %*
+call "%~dp0launch-sdk.cmd" %*
 exit /b %errorlevel%

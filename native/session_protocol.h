@@ -4,6 +4,9 @@
 #endif
 #include "picto_progression_protocol.h"
 #include "picto_batch_protocol.h"
+#ifdef E33_ZONE_TRAVEL_SESSION
+#include "zone_travel_protocol.h"
+#endif
 #ifdef E33_GROWING_LEASE_SESSION
 #include "lease_policy_protocol.h"
 #endif
@@ -107,7 +110,11 @@ constexpr uint32_t SessionMenu=107;
 #ifdef E33_BLUEPRINT_DIRECT_SESSION
 #if defined(E33_AUDIO_CLEANUP_DIAGNOSTICS_SESSION)
 #if defined(E33_MESH_SESSION)
+#ifdef E33_ZONE_TRAVEL_SESSION
+constexpr wchar_t kSessionMessage[] = L"E33SDK.Session.v68zonetravel";
+#else
 constexpr wchar_t kSessionMessage[] = L"E33SDK.Session.mesh27";
+#endif
 #elif defined(E33_COVERAGE_SESSION)
 constexpr wchar_t kSessionMessage[] = L"E33SDK.Session.v58mediaaudio";
 #elif defined(E33_FRAME_TIME_SESSION)

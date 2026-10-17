@@ -73,11 +73,19 @@ def main():
             # Transparent eye shells require a different blend mode; leaving
             # them out preserves the actual eyeballs with our opaque shader.
             if any(x in material for x in ('Occlusion','meniscus')) or material.startswith('SIM') or material in ('MI_AYA_eb','MI_AYA_el'):continue
+            # This source overlay becomes a solid white eye cover under opaque rendering.
+            if args.model=='2b' and material=='2BRip_EyeShadow':continue
             if args.model=='ayane':
                 metadata=folder/'Materials'/f'{material}.json'
                 materialdata=json.loads(metadata.read_text());tex=materialdata['Textures']
                 name=(tex.get('Albedo') or tex.get('PM_Diffuse') or next((v for k,v in tex.items() if k.endswith('_alb')),None))
-                if name:image=Image.open(folder/'Textures'/(name.split('.')[-1]+'.png')).convert('RGBA')
+                if 'IrisColor' in tex and 'ScleraColor' in tex:
+                    from eye_materials import bake_iris_sclera
+                    iris=Image.open(folder/'Textures'/(tex['IrisColor'].split('.')[-1]+'.png'))
+                    sclera=Image.open(folder/'Textures'/(tex['ScleraColor'].split('.')[-1]+'.png'))
+                    radius=materialdata['Parameters']['Scalars']['Iris UV Radius']
+                    image=bake_iris_sclera(iris,sclera,radius)
+                elif name:image=Image.open(folder/'Textures'/(name.split('.')[-1]+'.png')).convert('RGBA')
                 else:
                     color=materialdata['Parameters']['Colors'].get('MidColor')
                     if not color:raise ValueError('Missing diffuse '+material)

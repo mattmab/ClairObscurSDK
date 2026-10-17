@@ -19,6 +19,10 @@ __pycache__/
 research/USER_REQUEST*.txt
 
 *.egg-info/
+/AGENTS.md
+/mods/*Birthday*/
+/custom-source/*Birthday*/
+*.obj
 .sdk-loader.lock
 .test-tmp/
 .agent-work/

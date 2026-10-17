@@ -5,6 +5,7 @@ armed before borrowing the grid; click observation never changes engine calls.
 """
 import logging
 import time
+from weakref import WeakSet
 from dataclasses import replace
 from contextlib import contextmanager
 from .catalog import capture_matching, capture_selected
@@ -20,6 +21,8 @@ from . import RuntimeQueryError
 log = logging.getLogger(__name__)
 
 class PauseMenuEntry:
+    _entries = WeakSet()
+
     def __init__(self, scope, service, *, label='Mods'):
         if type(label) is not str or not label or len(label) > 32:
             raise ValueError('Pause entry label must contain 1 to 32 characters')
@@ -37,6 +40,22 @@ class PauseMenuEntry:
         self._world_reader = None
         self._layout_calls = []
         self.timings = {}
+        self._base_row = None
+        self._entries.add(self)
+
+    def _choose_row(self, rows):
+        # Keep the game's rows untouched. Share the original append boundary
+        # among owners of this exact grid, including while one is rebuilding.
+        bases = [entry._base_row for entry in self._entries
+                 if entry is not self and entry.state in ('building', 'attached')
+                 and entry.parent_scope.pid == self.parent_scope.pid
+                 and getattr(entry, 'grid', None) == self.grid
+                 and entry._base_row is not None]
+        self._base_row = min(bases) if bases else max(rows) + 1
+        reserved = {'Mods': 0, 'Map Travel': 1}
+        if self.label in reserved:
+            return self._base_row + reserved[self.label]
+        return max(self._base_row + 2, max(rows) + 1)
 
     @staticmethod
     def current_entry(catalog):
@@ -60,6 +79,31 @@ class PauseMenuEntry:
         if len(candidates) > 1:
             raise RuntimeError('Multiple local pause-menu owners; refusing ambiguous attachment')
         return candidates[0] if candidates else None
+
+    def _readiness_text(self):
+        if self.label != 'Mods':
+            return self.label
+        progress = getattr(getattr(self.service, 'registry', None), '_startup_progress', None)
+        if progress is None:
+            return 'Mods [SDK starting]'
+        completed, total = progress['completed'], progress['total']
+        if progress['finished']:
+            return ('Mods [SDK ready]' if not progress['failed']
+                    else f"Mods [{progress['failed']} failed]")
+        if progress.get('phase') == 'widgets':
+            return 'Mods [SDK widgets...]'
+        return f'Mods [SDK {completed}/{total}]'
+
+    def _update_readiness(self):
+        if self.label != 'Mods' or not hasattr(self, '_label_widget'):
+            return
+        text = self._readiness_text()
+        if text == getattr(self, '_readiness_shown', None):
+            return
+        self._normal_label = self.planner.prepare(self._label_widget,
+            self.fn('TextBlock', 'SetText'), InText=text)
+        self.invoke(self._normal_label)
+        self._readiness_shown = text
 
     @property
     def available(self):
@@ -173,7 +217,7 @@ class PauseMenuEntry:
                 slots.append(slot)
             slot_values = read_values_many(self.planner._catalog, slots, fields=('Row', 'Padding'))
             rows = [slot_values[o.index].values[self.cls('GridSlot').index,'Row'] for o in slots]
-            self.row = max(rows) + 1
+            self.row = self._choose_row(rows)
             if not 1 <= self.row <= 16: raise RuntimeError('Unexpected pause grid row count')
             padding = slot_values[source_slot.index].values[self.cls('GridSlot').index,'Padding']
             self.timings['discovery_ms'] = (time.perf_counter() - started) * 1000
@@ -222,7 +266,12 @@ class PauseMenuEntry:
             self._active_call = self.planner.prepare(self.pause,self.fn('CommonActivatableWidget','IsActivated'))
             self._viewport_focus = self.planner.prepare(self.library,self.fn('WidgetBlueprintLibrary','SetFocusToGameViewport'))
             self._button_focus = self.planner.prepare(self.button,self.fn('Widget','SetUserFocus'),PlayerController=self.player)
+            self._loading_label = self.planner.prepare(label,self.fn('TextBlock','SetText'),InText='Constructing widgets...')
+            self._cleanup_label = self.planner.prepare(label,self.fn('TextBlock','SetText'),InText='Deconstructing widgets...')
+            self._normal_label = self.planner.prepare(label,self.fn('TextBlock','SetText'),InText=self.label)
+            self._label_widget = label
             self.state = 'attached'
+            self._update_readiness()
             self.timings['total_ms'] = (time.perf_counter() - started) * 1000
             log.info('Native Mods pause entry attached: pause=%s button=%s row=%d style=%s (attach %.3fs)',
                 self.pause.index,self.button.index,self.row,style.name,time.perf_counter()-started)
@@ -243,13 +292,16 @@ class PauseMenuEntry:
 
     def _open_from_pause(self):
         if self.service.menu is None or self.service.menu.panel.state != 'open':
-            if not self.attachment.conceal(self._hide_opacity,self._hide_enabled):
+            self.invoke(self._loading_label)
+            if not self.attachment.show_busy(self._hide_enabled):
                 raise RuntimeError('Pause conceal deferred; restore through cleanup')
             try:
                 # Disabling the old panel can move focus. Establish the
                 # required viewport baseline after that transition.
                 self.invoke(self._viewport_focus)
                 self.service.open()
+                if not self.attachment.hide_busy(self._hide_opacity):
+                    raise RuntimeError('Pause hide deferred')
             except BaseException:
                 # Restore the borrowed pause UI even when SDK preparation
                 # fails before an open menu exists. Do not retry opening.
@@ -257,8 +309,25 @@ class PauseMenuEntry:
                     raise RuntimeError('Failed-open pause restoration deferred; retain owner')
                 if self.invoke(self._active_call): self.invoke(self._button_focus)
                 raise
+            finally:
+                self.invoke(self._normal_label)
             self._return_focus = True
             log.info('Native Mods pause click opened SDK menu')
+
+    @contextmanager
+    def cleanup_feedback(self):
+        visible = self.state == 'attached' and self.invoke(self._active_call)
+        try:
+            if visible:
+                self.invoke(self._cleanup_label)
+                if not self.attachment.show_busy(self._hide_enabled):
+                    raise RuntimeError('Pause cleanup feedback deferred')
+            yield
+        finally:
+            if visible:
+                self.invoke(self._normal_label)
+                if not self.attachment.restore():
+                    raise RuntimeError('Pause cleanup restoration deferred')
 
     @contextmanager
     def _world_read_operation(self):
@@ -283,7 +352,19 @@ class PauseMenuEntry:
             raise
 
     def poll(self):
-        if not self.available or self.state in ('closed','failed'): return
+        if not self.available or self.state == 'closed': return
+        if self.state == 'failed':
+            if (self.error != 'RuntimeError: Pause click observer expired or stopped; no silent reinstallation'
+                    or self.observer is None or self.observer.state not in ('expired', 'capped', 'active')):
+                return
+            try:
+                self.observer.recover()
+            except BaseException as error:
+                self.error = f'{type(error).__name__}: {error}'
+                log.exception('Pause observer recovery failed; owner retained')
+                return
+            self.state, self.error = 'attached', None
+            log.info('Recovered expired pause click subscription')
         now = time.monotonic()
         try:
             if self.state == 'new':
@@ -316,6 +397,7 @@ class PauseMenuEntry:
                     self.__init__(parent, service, label=self.label)
                     log.info('Pause owner changed after travel; old entry removed, rebuilding for current controller')
                     return
+            self._update_readiness()
             events = self.observer.read()
             if self.observer.state != 'active':
                 raise RuntimeError('Pause click observer expired or stopped; no silent reinstallation')

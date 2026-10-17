@@ -1,7 +1,7 @@
 import sys,types,struct,unittest
 from pathlib import Path
 from contextlib import nullcontext
-from unittest.mock import Mock
+from unittest.mock import Mock, patch
 
 package=types.ModuleType('shortcut_test_builder')
 package.__path__=[str(Path(__file__).resolve().parents[2]/'mods/E33WorldBuilder')]
@@ -9,6 +9,14 @@ sys.modules[package.__name__]=package
 from shortcut_test_builder.mod import Mod
 
 class MenuShortcuts(unittest.TestCase):
+    def test_build_indicator_is_restored_even_when_construction_fails(self):
+        mod,_=self.make_mod('Build');mod.catalog_menu=None;mod.hud=Mock()
+        with patch('shortcut_test_builder.catalog_menu.CatalogMenu') as factory:
+            factory.return_value.build.side_effect=RuntimeError('build failed')
+            with self.assertRaisesRegex(RuntimeError,'build failed'):mod.open_catalog()
+        self.assertEqual(mod.hud.show_building.call_args_list,
+                         [unittest.mock.call(True),unittest.mock.call(False)])
+
     def make_mod(self,workspace,state='open',escape=False):
         mod=Mod();mod.active=True;mod.started=True;mod.booth_pending=False
         mod.command=Mock();mod.last_raw=bytearray(20984)

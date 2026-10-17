@@ -1,6 +1,6 @@
 # Expedition 33 SDK — installable release candidate
 
-This package is SDK **0.1.0-rc14**. See `docs/RELEASE_0.1.0_RC14.md` in the
+This package is SDK **0.1.0-rc16**. See `docs/RELEASE_0.1.0_RC16.md` in the
 source repository for release notes.
 
 This candidate supports the verified Windows Steam executable with SHA-256
@@ -27,10 +27,10 @@ Choose Rebind and press a key; Escape unbinds and Cancel preserves the old key.
 Single keyboard keys are supported. Normal mod key callbacks are suppressed
 while the console or SDK menu owns input.
 
-RC12 waits for a gameplay pawn and pause UI before attaching,
-prepare the menu before optional mods, and defer further saved mod activation
-while paused. Close pause to let remaining saved mods finish loading. These changes include the post-RC11 startup fixes; timings and test scope are
-recorded in the repository's startup validation document.
+RC16 creates the Mods pause entry before constructing the full Mods menu. Its
+label reports widget construction, saved-mod progress and SDK readiness. Saved
+mods restore in order while Pause or Mods is open. The Mods list and Map Travel
+use fixed widget rows for smooth scrolling with the current catalog.
 
 `SDK/logs/controller.log` records startup and runtime activity.
 `SDK/logs/startup-error.log` records startup failures. A second controller for the
@@ -42,7 +42,7 @@ SDKManagement, IntrospectionHarness and LiveObjectViewer are bundled in `SDK_Mod
 Enable LiveObjectViewer in Pause → Mods, then choose **Open Live Object Viewer**
 or enter `lov` in the native console. Existing saved enable choices are preserved.
 Download optional mods separately from the repository's Mods catalog and releases.
-World Builder 0.31.1 requires RC14 or later and is a separate optional download.
+World Builder 0.32.1 requires RC16 or later and is a separate optional download.
 Extract its ZIP beside `Sandfall` and enable World Builder in Pause → Mods.
 It needs no second controller or native DLL; preserve `SDK/settings/E33WorldBuilder`
 for maps, camera preferences and thumbnail caches.

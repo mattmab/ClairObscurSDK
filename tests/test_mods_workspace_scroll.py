@@ -76,11 +76,40 @@ class ScrollWorkspaceTests(unittest.TestCase):
         self.start();old=self.frame
         self.assertEqual(self.view.total_rows,21)
         self.view.scroll_start=10;self.frame=self.view.render()
-        self.assertTrue(self.frame.controls[0].label.startswith('Mod10'))
+        self.assertTrue(self.frame.controls[0].label.startswith('Mod00'))
+        self.assertTrue(self.frame.controls[self.view.mod_token(10)].label.startswith('Mod10'))
+        self.assertEqual(self.view.scroll_start,0)
         with self.assertRaises(ManagementError):self.view.activate(old.revision,old.controls[0].token)
         self.click('Search',value='specimen')
         self.assertEqual(self.view.scroll_start,0)
         self.assertEqual(self.view.total_rows,1)
+
+    def test_readiness_label_is_registered_as_panel_chrome(self):
+        from unittest.mock import Mock
+        from expedition33.mods_workspace_scroll import ScrollWorkspacePanel
+        panel=Mock()
+        panel._text={};panel.readiness_label=SimpleNamespace(index=123)
+        panel.panel_titles=[];panel.metadata_labels=[]
+        ScrollWorkspacePanel.set_text(panel,panel.readiness_label,'SDK Mods Readiness: 2/9')
+        panel._render_call.assert_called_once_with(panel.readiness_label,'TextBlock','SetText',InText='SDK Mods Readiness: 2/9')
+
+    def test_native_mod_scrolling_never_repaints_or_repositions_rows(self):
+        from unittest.mock import Mock
+        from expedition33.mods_workspace_scroll import ScrollWorkspaceMenu,TEXT_MIN,TEXT_MAX
+        for i in range(30):
+            folder=self.root/f'Mod{i:02}';folder.mkdir();(folder/'mod.py').write_text('class Mod: pass')
+        self.start();revision=self.frame.revision
+        panel=Mock(state='open',slider_scale=1.35)
+        panel.slider_value.return_value=(1.35-TEXT_MIN)/(TEXT_MAX-TEXT_MIN)
+        menu=Mock(panel=panel,view=self.view,failure=None,_presentation_suspended=False)
+        for offset in (0,40,320,800,1400,0):
+            menu._scroll_poll=0;panel.scroll_offset.return_value=offset
+            ScrollWorkspaceMenu.poll_scroll(menu)
+            tokens=self.view.bindable_tokens()
+            self.assertLessEqual(sum(c.enabled and c.token in tokens for c in self.frame.controls),64)
+        menu.refresh.assert_not_called()
+        self.assertEqual(self.view._revision,revision)
+        self.assertEqual(self.view.scroll_start,0)
 
     def test_settings_scroll_recycles_actions_for_correct_option(self):
         folder=self.root/'ManySettings';folder.mkdir()

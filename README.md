@@ -1,6 +1,6 @@
 # Clair Obscur: Expedition 33 — independent Python SDK
 
-MIT-licensed SDK **0.1.0-rc14** (release candidate) for the verified Windows Steam build. Our native
+MIT-licensed SDK **0.1.0-rc16** (release candidate) for the verified Windows Steam build. Our native
 runtime independently identifies live Unreal objects and executes supported
 engine operations on the game thread. Python runs in a persistent external
 controller. No Borderlands offsets or layouts are used as Expedition 33 facts.
@@ -14,6 +14,18 @@ and Cinematics, plus Asset Creator/Main Character Replacer. Each has its own rel
 [installation and restart instructions](docs/INSTALLABLE_RELEASE.md).
 The checkout's `launch-sdk.cmd` delegates to the installed SDK using `SDK_GAME_DIR`
 or the local, untracked `settings/install-path.txt`.
+
+## RC16: normal map travel and visible SDK readiness
+
+[RC16 downloads and release notes](https://github.com/mattmab/ClairObscurSDK/releases/tag/v0.1.0-rc16)
+include Map Travel **0.2.2**, World Builder **0.32.1**, and the current optional mods.
+Map Travel uses the normal game transition to arrive at the entrance in one load,
+including numbered map variants. The Mods pause button shows startup progress
+before the full menu is constructed. Menu scrolling keeps the current mod rows
+in place, and shared pause click observers renew and recover after expiry.
+World Builder adds **P** to play from camera, **H** to hide/show its HUD, and
+**Building Widgets...** feedback for F7 menu construction. Both keys are remappable.
+See [validation and known limits](docs/RELEASE_0.1.0_RC16.md).
 
 ## RC14: keep freecam active when a held prop unloads
 

@@ -105,9 +105,9 @@ def main():
         from expedition33.settings import SettingsStore
         original_transport = sdk.SessionTransport
         def release_transport(*, _executable=None):
-            transport = original_transport(_executable=ROOT / 'build/research-probe-worldbuilder-v65-selection/research_probe.exe')
+            transport = original_transport(_executable=ROOT / 'build/research-probe-zone-v68/research_probe.exe')
             required = ('original_game_action_protocol', 'blueprint_trace_protocol', 'picto_edit_protocol', 'picto_progression_protocol', 'picto_class_load_protocol', 'picto_cost_protocol')
-            if any(getattr(transport, name, 0) != 1 for name in required) or transport.mesh_protocol != 3:
+            if transport.zone_travel_protocol != 2 or any(getattr(transport, name, 0) != 1 for name in required) or transport.mesh_protocol != 3:
                 transport.close()
                 raise RuntimeError('Combined release runtime is missing capabilities')
             return transport
@@ -117,6 +117,9 @@ def main():
             from expedition33.lease_policy import configure
             configure(session, hard_limit=8192, owner_quota=7000, cleanup_reserve=512)
             session.console.enable()
+            loader.registry._startup_progress = dict(completed=0,
+                total=sum(settings.get(key).get('enabled') is True for key in loader.registry.startup_order()),
+                failed=0, finished=False, phase='widgets')
             # Only core/default UI mods start automatically on a fresh install.
             # Explicit saved false always wins for optional mods.
             for name in ('SDKManagement', 'IntrospectionHarness'):
@@ -131,6 +134,8 @@ def main():
                     loader._loaded[name][1].prepare()
             from expedition33.startup_order import StartupGate
             startup_gate = StartupGate()
+            loader.registry._startup_progress['phase'] = 'mods'
+            startup_pending_result = None
             restoration = loader.registry.restore_enabled_steps()
             next_restore = time.monotonic() + .25
             gameplay_confirmed = False
@@ -164,13 +169,17 @@ def main():
                         server.poll()
                     loader.poll()
                     if restoration is not None and not loader.stop_requested and time.monotonic() >= next_restore and not startup_gate.pending(time.monotonic()):
+                        if startup_pending_result is not None:
+                            loader.registry._startup_progress['completed'] += 1
+                            loader.registry._startup_progress['failed'] += bool(startup_pending_result[1])
+                            startup_pending_result = None
                         management = loader._loaded['SDKManagement'][1]
-                        menu = management.native.menu
-                        # Do not begin a synchronous mod enable while the user
-                        # is in either menu. Poll commands between each enable.
-                        busy = menu is not None and menu.panel.state == 'open'
-                        if not busy and management.pause.state == 'attached':
-                            busy = management.pause.invoke(management.pause._active_call)
+                        # Restore saved mods even while Pause/Mods is open.
+                        # Keep polling between enables, but never initialize a
+                        # gameplay mod during SDK-owned travel/recovery.
+                        busy = management.native.travel_recovery_pending
+                        if busy:
+                            gameplay_confirmed = False
                         if not busy:
                             if not gameplay_confirmed:
                                 try:
@@ -183,7 +192,9 @@ def main():
                                     gameplay_confirmed = False
                             if gameplay_confirmed:
                                 result = next(restoration, None)
+                                startup_pending_result = result
                                 if result is None:
+                                    loader.registry._startup_progress['finished'] = True
                                     restoration = None
                                     logging.info('Saved mod restoration complete')
                                 elif result[1]:
