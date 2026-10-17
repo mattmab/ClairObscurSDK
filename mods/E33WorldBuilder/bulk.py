@@ -115,3 +115,13 @@ def place_existing(library,key):
     actor=SimpleNamespace(**dict(zip(('index','serial','address'),library.owned[key]['actor'])))
     library.mod.command(54,ids=(actor,));raw=library.mod.last_raw;at=4096
     return dict(id=key,transform=list(struct.unpack_from('<12d',raw,at+40)),center=list(struct.unpack_from('<3d',raw,at+136)),extent=list(struct.unpack_from('<3d',raw,at+160)))
+
+
+def transform_batch(library,moves):
+    """Move up to 128 serial-validated components; consume acknowledged rows only."""
+    requests=[(library.owned[key]['component'],pose(p)) for key,p in moves[:128]]
+    if not requests:return 0
+    library.mod.command(66,bulk=requests)
+    done=struct.unpack_from('<I',library.mod.last_raw,3560)[0]
+    if not 1<=done<=len(requests):raise RuntimeError('Invalid transform batch progress')
+    return done

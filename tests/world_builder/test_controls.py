@@ -13,14 +13,14 @@ spec.loader.exec_module(mod)
 
 class Controls(unittest.TestCase):
     def test_catalog_prewarm_waits_for_management_menu_to_close(self):
-        builder=mod.Mod();builder.prewarm_at=0
+        builder=mod.Mod();builder.prewarm_at=0;builder.templates=Mock()
         builder.session=SimpleNamespace(_session=SimpleNamespace(_menus=[SimpleNamespace(active=True)],console=SimpleNamespace(dispatcher=SimpleNamespace(namespace={}))))
         builder.poll()
         self.assertIsNone(builder.catalog_menu)
         self.assertEqual(builder.prewarm_at,0)
 
     def test_catalog_prewarm_yields_to_initial_overlay(self):
-        builder=mod.Mod();builder.prewarm_at=0
+        builder=mod.Mod();builder.prewarm_at=0;builder.templates=Mock()
         overlay=SimpleNamespace(startup_pending=lambda:True)
         builder.session=SimpleNamespace(_session=SimpleNamespace(_menus=[],console=SimpleNamespace(dispatcher=SimpleNamespace(namespace={'map_overlays':overlay}))))
         builder.poll()

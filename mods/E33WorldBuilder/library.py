@@ -141,11 +141,21 @@ class Library:
         unknown=any(row['kind']!='world_edit' and row['asset'] not in self.known for row in data['objects'])
         if unknown or any(row['kind']=='world_edit' for row in data['objects']):c=capture()
         if unknown:self.refresh(force=False,observed=c)
-        plans=[]
+        plans=[];unavailable=[]
+        # Streamed vanilla components may not exist on this visit yet. Resolve
+        # exact paths once; never substitute another component or spawn a copy.
+        world_paths={}
+        if any(row['kind']=='world_edit' for row in data['objects']):
+            for obj in c.select('Object'):
+                if not obj.object_flags&0x30:world_paths.setdefault(c.path_name(obj),[]).append(obj)
         for row in data['objects']:
             if row['kind']=='world_edit':
+                matches=world_paths.get(row['component'],[])
+                if not matches:
+                    unavailable.append(row['component']);continue
+                if len(matches)!=1:raise ValueError('Saved world component path is ambiguous')
                 asset=c.find_path(row['asset'])
-                component=c.find_path(row['component']);v,c=read_values_with_references(c,component,fields=('StaticMesh',));mesh=next(v for k,v in v.values.items() if k[1]=='StaticMesh')
+                component=matches[0];v,c=read_values_with_references(c,component,fields=('StaticMesh',));mesh=next(v for k,v in v.values.items() if k[1]=='StaticMesh')
                 if mesh!=asset:raise ValueError('Saved world component now uses a different asset')
                 plans.append((row,component))
             else:
@@ -178,7 +188,9 @@ class Library:
             from .bulk import delete_many
             delete_many(self,list(self.owned));self.mod.restore();self.owned.clear();raise
         self.active_map=map_id
-        self.message=f"Loaded {data['name']}: {len(plans)} objects";return dict(name=data['name'],objects=len(plans))
+        self.message=f"Loaded {data['name']}: {len(plans)} objects"
+        if unavailable:self.message+=f'; skipped {len(unavailable)} unloaded built-in edits (original save unchanged)'
+        return dict(name=data['name'],objects=len(plans),skipped_world_edits=len(unavailable))
     def clear(self):
         from .bulk import delete_many
         delete_many(self,list(self.owned));self.mod.restore();self.owned.clear();self.active_map=None;self.selected=None;self.message='Tracked scene cleared';return dict(cleared=True)

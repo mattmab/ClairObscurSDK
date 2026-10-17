@@ -994,7 +994,7 @@ bool backend_mesh_wake_needed(){return session_mesh.animating() || session_build
 void backend_message(MSG* message) {
 #ifdef E33_MESH_SESSION
     if(session_builder.active())session_builder.poll(runtime_base,lease_session,session_leases,
-        !session_menu.menu.active() && attachment_valid(runtime_base) && local_read<uint64_t>(attached_console+0xd8)==0);
+        (!session_menu.menu.active() || session_builder.owns_menu(session_menu.widget)) && attachment_valid(runtime_base) && local_read<uint64_t>(attached_console+0xd8)==0);
     if(session_mesh.active())guarded_mesh_poll();
 #endif
 #ifdef E33_AUDIO_ISOLATION_SESSION

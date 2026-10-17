@@ -1,5 +1,6 @@
 """Single-selected-prop duplication; no folder or scene duplication."""
-import math
+import math,time
+from types import SimpleNamespace
 
 
 def offsets(transform,axis,sign,count,spacing,local=False):
@@ -55,7 +56,7 @@ class DirectionalCopies:
 class DuplicationDraft:
     """Temporary scene copies become map assets only when Apply is pressed."""
     def __init__(self,library):
-        self.library=library;self.source=None;self.pending=[];self.previews=[];self.delta=[0.,0.,0.]
+        self.library=library;self.source=None;self.pending=[];self.previews=[];self.delta=[0.,0.,0.];self.moves=[]
     def begin(self,key):
         self.cancel()
         if key not in self.library.owned or key==self.library.preview_key:raise ValueError('Select one spawned scene prop first')
@@ -72,35 +73,67 @@ class DuplicationDraft:
             direction=[a+b*value for a,b in zip(direction,basis)]
         from .bulk import SCENE_LIMIT
         if len(self.library.owned)-len(self.previews)+len(unit)>SCENE_LIMIT-16:raise ValueError('Not enough scene capacity')
-        self.clear_previews()
+        from .bulk import prepare,delete_many,CUBE
+        prepare(self.library)
+        self.batched=self.source['kind']=='mesh' and not self.source.get('component_edits') and (self.source['asset'] in self.library.bulk_indices or self.source['asset']==CUBE)
         self.delta=list(delta);self.total=len(unit)
-        self.pending=[tuple(v*i for v in direction) for i in range(1,self.total+1)]
+        if not self.batched:self.clear_previews()
+        if len(self.previews)>self.total:
+            delete_many(self.library,self.previews[self.total:]);del self.previews[self.total:]
+        planned_offsets=[tuple(v*i for v in direction) for i in range(1,self.total+1)]
+        self.moves=[]
+        for key,offset in zip(self.previews,planned_offsets):
+            p=list(self.source['transform']);p[4:7]=[v+d for v,d in zip(p[4:7],offset)]
+            self.moves.append((key,p))
+        self.pending=planned_offsets[len(self.previews):]
+        self.preview_started=time.monotonic()
         self.library.message='Building temporary preview; Apply keeps the copies'
     def clear_previews(self):
-        self.pending=[]
+        self.pending=[];self.moves=[]
         from .bulk import delete_many
         delete_many(self.library,self.previews)
         self.previews=[]
     def cancel(self):
         self.clear_previews();self.source=None
     def apply(self):
-        if self.pending:raise ValueError('Wait for the preview to finish before Apply')
+        if self.pending or getattr(self,'moves',[]):raise ValueError('Preview is updating; Apply when its remaining count reaches zero')
         if not self.previews:raise ValueError('Create a preview first')
         for key in self.previews:self.library.owned[key].pop('duplication_preview',None)
         count=len(self.previews);self.previews=[]
         self.library.message=f'Applied {count} copies; included in map saves'
         return count
     def poll(self):
-        if not self.pending:return
+        if not self.pending and not getattr(self,'moves',[]):return
         if self.source['id'] not in self.library.owned or self.library.world!=self.world:
             self.cancel();self.library.message='Preview cancelled: source or map changed';return
-        delta=self.pending.pop(0)
         try:
-            result=self.library.duplicate(self.source['id'],delta,self.source)
-            self.previews.append(result['id'])
-            self.library.owned[result['id']]['duplication_preview']=True
+            if self.pending and getattr(self,'batched',False):
+                from .bulk import spawn_batch
+                requests=[]
+                for offset in self.pending[:64]:
+                    p=list(self.source['transform']);p[4:7]=[v+d for v,d in zip(p[4:7],offset)]
+                    requests.append((self.source['asset'],p))
+                results=spawn_batch(self.library,requests,prepared=True)
+                for result in results:
+                    if 'error' not in result:
+                        self.previews.append(result['id']);self.library.owned[result['id']]['duplication_preview']=True
+                if any('error' in r for r in results):raise RuntimeError('Native preview batch failed')
+                del self.pending[:len(results)]
+            elif self.pending:
+                delta=self.pending.pop(0)
+                result=self.library.duplicate(self.source['id'],delta,self.source)
+                self.previews.append(result['id']);self.library.owned[result['id']]['duplication_preview']=True
+            else:
+                from .bulk import transform_batch
+                deadline=time.monotonic()+.04
+                for _ in range(16):
+                    if not self.moves:break
+                    done=transform_batch(self.library,self.moves)
+                    del self.moves[:done]
+                    if time.monotonic()>=deadline:break
             self.library.selected=self.source['id']
-            self.library.message=f'Preview {len(self.previews)}/{self.total} | X {self.delta[0]:g}, Y {self.delta[1]:g}, Z {self.delta[2]:g} | Apply to keep'
+            remaining=len(self.pending)+len(getattr(self,'moves',[]))
+            self.library.message=f'Preview {len(self.previews)}/{self.total}; {remaining} updates remaining | Apply to keep'
         except Exception as exc:
             self.clear_previews()
             self.library.message='Preview failed; no copies applied: '+str(exc)

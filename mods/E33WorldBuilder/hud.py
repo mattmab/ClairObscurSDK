@@ -6,8 +6,9 @@ from expedition33.enums import describe_enums
 
 
 class BuilderHUD(OwnedMenuPanel):
-    def __init__(self, session):
+    def __init__(self, session, help_minimized=False):
         super().__init__(session, controls=1, cached_construction=True, selected_results=True)
+        self.help_minimized = help_minimized
         self.lines = []
         self.slots = []
         self.crosshair = []
@@ -76,8 +77,13 @@ class BuilderHUD(OwnedMenuPanel):
         self.state='built'
         self.set_text(self.title,'WORLD BUILDER | Aim at a prop')
         self.show_selection('None')
-        self.set_text(self.controls_label,
-            'CONTROLS\n'
+        self.show_help(self.help_minimized)
+        return self
+
+    def show_help(self, minimized):
+        self.help_minimized = bool(minimized)
+        self.set_text(self.controls_label, "(F1) Help" if minimized else
+            'CONTROLS (F1: Minimize help)\n'
             'F7: Open / close menu | Esc: Back / close\n'
             'F8: Enter / leave builder camera\n'
             'WASD: Fly | Mouse: Look\n'
@@ -85,6 +91,8 @@ class BuilderHUD(OwnedMenuPanel):
             'Shift: Fly faster\n'
             'LMB: Hold to move; release to place\n'
             'Click-copy mode: Click to copy / place\n'
+            'F3 / F4: Region corners at camera\n'
+            'Maps > Templates: Save / place structure\n'
             'F5: Live duplication panel\n'
             'F10: Copy selected prop into hand\n'
             'Delete: Delete current spawned selection\n'
@@ -96,7 +104,6 @@ class BuilderHUD(OwnedMenuPanel):
             'Alt+Z: Undo | Alt+Y: Redo\n'
             'F9: Restore edits / clear spawned props\n'
             'Menu > Directional copies: Count / spacing')
-        return self
 
     def show_selection(self,name):
         import textwrap

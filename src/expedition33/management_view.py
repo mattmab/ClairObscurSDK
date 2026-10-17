@@ -126,7 +126,7 @@ class ManagementView:
         elif self.screen == 'startup':
             order=self.registry.startup_order()
             position=order.index(view['id'])+1 if view['id'] in order else len(order)+1
-            detail=f"Startup position: {position} of {len(order)} optional mods. Changes apply next launch. Disabled mods stay disabled. World Builder must precede Map Overlays."
+            detail=f"Startup position: {position} of {len(order)} optional mods. Changes apply next launch. Disabled mods stay disabled. World Builder must precede Custom Map Loader."
             rows=[('Move earlier','startup','earlier',position>1,None),
                   ('Move later','startup','later',position<len(order),None),
                   ('Load first','startup','first',position>1,None),
@@ -155,7 +155,7 @@ class ManagementView:
         else:
             rows = [(a['title'], 'action', a['id'], view['enabled'], MenuEditor('json'))
                     for a in view['actions']]
-        return f"{view['name']} — {self.screen}", detail, rows
+        return f"{view['name']} â€” {self.screen}", detail, rows
 
     def render(self):
         self._check()

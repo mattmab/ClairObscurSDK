@@ -19,3 +19,22 @@ class LoadTests(unittest.TestCase):
   with patch.object(library,'capture',side_effect=AssertionError('full scan')),patch.object(bulk,'prepare'),patch.object(bulk,'spawn_batch',side_effect=spawn):
    self.assertEqual(lib._load(key)['objects'],1)
   self.assertEqual(list(lib.owned),[key]);self.assertEqual(lib.owned[key]['id'],key)
+
+class StreamedLoadTests(unittest.TestCase):
+ def test_missing_world_component_does_not_block_custom_mesh(self):
+  asset='/Game/Rock.Rock';world='/Game/Map.Map';key='a'*32
+  transform=[0.,0.,0.,1.,1.,2.,3.,0.,1.,1.,1.,0.]
+  data=dict(format=library.FORMAT,version=1,name='Test',world=world,assets=[asset],objects=[dict(id=key,kind='mesh',asset=asset,transform=transform),dict(id='b'*32,kind='world_edit',asset=asset,component=world+':PersistentLevel.Unloaded.Mesh',transform=transform)])
+  lib=library.Library.__new__(library.Library);lib.mod=types.SimpleNamespace(active=True,last={})
+  lib.clear_preview=Mock();lib.context=Mock(return_value=(None,None,None,world));lib.store=types.SimpleNamespace(read=lambda _:data)
+  lib.owned={};lib.rows=[dict(path=asset,kind='mesh')];lib.known={asset:lib.rows[0]};lib.bulk_indices={asset:0}
+  catalog=Mock();catalog.select.return_value=[]
+  def spawn(*args,**kwargs):
+   lib.owned['temporary']={'id':'temporary','asset':asset,'world':world}
+   return [{'id':'temporary'}]
+  with patch.object(library,'capture',return_value=catalog),patch.object(bulk,'prepare'),patch.object(bulk,'spawn_batch',side_effect=spawn):
+   result=lib._load(key)
+  self.assertEqual(result['objects'],1);self.assertEqual(result['skipped_world_edits'],1)
+  self.assertEqual(len(data['objects']),2);self.assertEqual(list(lib.owned),[key])
+  catalog.find_path.assert_not_called()
+  self.assertIn('original save unchanged',lib.message)

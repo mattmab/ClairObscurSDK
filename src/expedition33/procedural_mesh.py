@@ -31,7 +31,7 @@ def validate_request(data):
     if type(data) is not bytes or len(data)!=SIZE:raise ValueError('Mesh packet size')
     version,op,error,state,owner=HEADER.unpack_from(data)
     # World Builder bounded adapter; independently checked again on game thread.
-    if 20 <= op <= 64:
+    if 20 <= op <= 67:
         if version != 3 or error or state or not owner or any(data[24:88]):
             raise ValueError('Builder header')
         if op in (20,62):
@@ -51,6 +51,24 @@ def validate_request(data):
             if any(data[88:2000]) or any(data[2064:]): raise ValueError('Builder motion padding')
             if any(not math.isfinite(v) or abs(v)>(1e7 if op in (42,52) else 10000) for v in struct.unpack_from('<8d',data,2000)):
                 raise ValueError('Builder motion bounds')
+        elif op == 67:
+            enabled=struct.unpack_from('<d',data,2000)[0]
+            if enabled not in (0.,1.) or any(data[88:2000]) or any(data[2008:]):raise ValueError('Builder menu drag flag')
+        elif op == 66:
+            count=struct.unpack_from('<I',data,2000)[0]
+            if not 1<=count<=128 or any(data[88:2000]) or any(data[2004:4096]) or any(data[4096+112*count:]):raise ValueError('Builder transform batch padding/count')
+            for i in range(count):
+                at=4096+112*i;index,serial,address=IDENTITY.unpack_from(data,at)
+                values=struct.unpack_from('<12d',data,at+16)
+                if index<0 or serial<0 or not address or any(not math.isfinite(v) or abs(v)>1e8 for v in values):raise ValueError('Builder transform batch row')
+        elif op == 65:
+            count,instance=struct.unpack_from('<II',data,2000)
+            bounds=struct.unpack_from('<6d',data,2016)
+            if not 1<=count<=64 or instance>1000000 or any(data[88:2000]) or any(data[2008:2016]) or any(data[2064:4096]) or any(data[4096+16*count:]):raise ValueError('Builder region batch padding/count')
+            if any(not math.isfinite(v) or abs(v)>1e8 for v in bounds) or any(bounds[i]>bounds[i+3] for i in range(3)):raise ValueError('Builder region bounds')
+            for i in range(count):
+                index,serial,address=IDENTITY.unpack_from(data,4096+16*i)
+                if index<0 or serial<0 or not address:raise ValueError('Builder region component identity')
         elif op in (50,53):
             count=struct.unpack_from('<I',data,2000)[0];stride=192 if op==50 else 16
             if not 1<=count<=(64 if op==50 else 128) or any(data[88:2000]) or any(data[2004:4096]) or any(data[4096+count*stride:]):raise ValueError('Builder bulk padding/count')

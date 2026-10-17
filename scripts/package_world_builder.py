@@ -15,13 +15,13 @@ ROOT = Path(__file__).resolve().parents[1]
 def build(destination):
     destination = Path(destination).resolve()
     manifest = build_all(ROOT / 'mods', destination / 'SDK_Mods', include={'E33WorldBuilder'})
-    archive = destination / 'E33WorldBuilder-0.31.1.zip'
+    archive = destination / 'E33WorldBuilder-0.32.0.zip'
     with zipfile.ZipFile(archive, 'w', zipfile.ZIP_DEFLATED) as out:
         out.write(destination / 'SDK_Mods/E33WorldBuilder.sdkmod', 'SDK_Mods/E33WorldBuilder.sdkmod')
         out.write(ROOT / 'mods/E33WorldBuilder/README.txt', 'README-WorldBuilder.txt')
         out.write(ROOT / 'LICENSE', 'LICENSE')
     result = dict(archive=str(archive), sha256=hashlib.sha256(archive.read_bytes()).hexdigest(),
-                  requires_sdk='0.1.0-rc14', mods=manifest['mods'])
+                  requires_sdk='0.1.0-rc15', mods=manifest['mods'])
     (destination / 'artifact.json').write_text(json.dumps(result, indent=2) + '\n')
     return result
 

@@ -55,13 +55,14 @@ class DraftTests(unittest.TestCase):
         from unittest.mock import patch
         from directional_test_builder.directional import DuplicationDraft
         self.lib=Mock(owned={'source':{}},preview_key=None,world='map')
-        self.lib.snapshot.return_value={'objects':[dict(id='source',asset='mesh',transform=POSE.copy())]}
+        self.lib.snapshot.return_value={'objects':[dict(id='source',kind='actor',asset='mesh',transform=POSE.copy())]}
         self.number=0
         def spawn(key,offset,source):
             self.number+=1;name='copy'+str(self.number);self.lib.owned[name]={};return {'id':name}
         self.lib.duplicate.side_effect=spawn
         def delete(lib,keys):
             for key in keys:lib.owned.pop(key,None)
+        prep=patch('directional_test_builder.bulk.prepare');prep.start();self.addCleanup(prep.stop)
         self.clean=patch('directional_test_builder.bulk.delete_many',side_effect=delete);self.clean.start();self.addCleanup(self.clean.stop)
         self.draft=DuplicationDraft(self.lib);self.draft.begin('source')
     def test_compound_preview_apply_and_close(self):
@@ -82,3 +83,22 @@ class DraftTests(unittest.TestCase):
         self.draft.preview(1,[400.,0.,0.]);self.draft.poll()
         with self.assertRaises(ValueError):self.draft.preview(1,[float('nan'),0.,0.])
         self.assertIn('copy1',self.lib.owned)
+
+    def test_mesh_preview_uses_bounded_batch_and_keeps_existing_on_update(self):
+        from unittest.mock import patch
+        self.draft.source['kind']='mesh';self.lib.bulk_indices={'mesh':0}
+        def batch(lib,requests,prepared=False):
+            results=[]
+            for asset,p in requests[:32]:
+                self.number+=1;key='mesh'+str(self.number);lib.owned[key]={'component':(self.number,1,123)}
+                results.append({'id':key})
+            return results
+        with patch('directional_test_builder.bulk.spawn_batch',side_effect=batch) as spawn:
+            self.draft.preview(100,[400,400,0]);self.draft.poll()
+            self.assertEqual(len(spawn.call_args.args[1]),64)
+            self.assertEqual(len(self.draft.pending),68)
+            existing=list(self.draft.previews)
+            self.draft.preview(100,[800,400,0])
+            self.assertEqual(self.draft.previews,existing)
+            self.assertEqual(len(self.draft.moves),32)
+            self.assertTrue(all(self.lib.owned[key]['duplication_preview'] for key in existing))

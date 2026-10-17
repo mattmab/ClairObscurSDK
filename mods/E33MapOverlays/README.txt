@@ -1,15 +1,17 @@
-Map Overlays
-Enable the updated World Builder and Map Overlays in Mods.
-Press F4 or use Mods > Map Overlays > Choose overlay for current map.
-The menu lists every valid World Builder save for the current vanilla map.
-Choose one; each vanilla map has an independent persistent assignment.
-Close the menu or use Load now to apply it in the current clean visit.
-It also loads whenever you return to that vanilla map, after an exploration
-pawn is ready and stable. After an attempt, changed choices apply next visit.
-No automatic overlay removes the assignment without deleting saved files.
-No builder camera, GPU picker or input lock is used during overlay loading.
-Existing tracked edits are never silently cleared in the current map.
-A failed attempt is not replayed automatically; reload the map to retry.
-Keep both mods enabled. Disable Map Overlays to stop future automatic loads;
-already placed objects remain managed by World Builder.
-Assignments and map files remain local; no user saves are in this archive.
+Custom Map Loader 0.2.0 (formerly Map Overlays)
+Requires World Builder and the matching RC15 SDK.
+Enable World Builder and Custom Map Loader in Mods. Press F2 to choose a saved
+World Builder map for the current vanilla level. Each level remembers its own
+assignment and loads it once per visit when exploration is ready.
+Close the menu or use Load now to apply it in a clean visit. Builder camera may
+be active or inactive; loading preserves that mode. Existing tracked scene edits
+are never silently cleared. Failed attempts require re-entering the level.
+Unloaded built-in world edits are skipped with a count so custom props can load.
+Skipped edits are not retried later in that visit. The original saved map is
+unchanged. Built-in edits remain subject to level streaming.
+The archive and internal ID remain E33MapOverlays for upgrade compatibility.
+Existing enabled state, startup order, assignments and saved maps are preserved.
+Extract the archive into the game directory, replacing E33MapOverlays.sdkmod;
+do not install a second copy under a different name. Close the game and SDK first.
+Disable Custom Map Loader to stop future automatic loads; existing objects remain
+managed by World Builder. No personal saves or assignments ship in this package.

@@ -12,7 +12,7 @@ namespace e33_builder {
 // No pointer supplied by Python is used without a live slot/serial check.
 class Owner {
     CallIdentity ids_[128]{},camera_{},target_{},selected_{},hover_{},hover_actor_{},selected_actor_{};
-    bool schemas_[65]{},dragging_=false,left_was_=true,nudging_=false;
+    bool schemas_[67]{},dragging_=false,left_was_=true,nudging_=false;
     bool auto_tick_=true,want_grab_=false,carrying_=false;
     unsigned highlight_mode_=1;
     bool duplicate_click_=false,duplicate_requested_=false;
@@ -26,6 +26,8 @@ class Owner {
     OwnedTextStorage text_;
     uint64_t owner_=0,token_=0;
     CallIdentity menu_widget_{};
+    bool menu_drag_enabled_=false,menu_drag_down_=true,menu_dragging_=false;
+    POINT menu_drag_point_{};
     bool active_=false,ignored_=false,frozen_=false,overlay_=false;
     uint8_t mode_=0,custom_=0;
     double position_[3]{},rotation_[3]{},original_rotation_[3]{},offset_[3]{},depth_=0;
@@ -45,7 +47,7 @@ class Owner {
     template<class T> T get(size_t at=0){T v{};std::memcpy(&v,args_+at,sizeof(T));return v;}
     bool call(uint64_t b,CallIdentity recipient,size_t i) {
         step_=uint32_t(i+1);
-        if(i>=65 || !TargetPodSchemaOps{b}.context())return false;
+        if(i>=67 || !TargetPodSchemaOps{b}.context())return false;
         const auto fn=call_identity(b,ids_[i>=56?96+i-56:(i>=41?64+i-41:(i==40?62:8+i))]);const auto& p=profiles[i];
         if(i==46)step_=4701;if(!fn)return false;
         if(i==46)step_=4702;
@@ -103,6 +105,7 @@ class Owner {
         selected_={};selected_actor_={};undo_.clear();redo_.clear();dragging_=false;return true;
     }
     #include "builder_selection.h"
+    #include "builder_templates.h"
     #include "builder_gpu.h"
     #include "builder_registry.h"
     bool pick(uint64_t b,bool select=true,bool click=false) {
@@ -216,7 +219,7 @@ public:
     template<class Pool> void command(uint64_t b,uint64_t session,Pool& pool,MeshPacket& packet) {
         auto raw=reinterpret_cast<uint8_t*>(&packet);
         const auto op=packet.operation;
-        if(packet.version!=3||op<20||op>64||!packet.owner||packet.error||packet.state||!TargetPodSchemaOps{b}.context()){packet.error=1900;return;}
+        if(packet.version!=3||op<20||op>67||!packet.owner||packet.error||packet.state||!TargetPodSchemaOps{b}.context()){packet.error=1900;return;}
         if(owner_&&owner_!=packet.owner){packet.error=1901;return;}
         if(op==45) {
             CallIdentity widget{};std::memcpy(&widget,raw+88,sizeof(widget));
@@ -276,6 +279,14 @@ public:
             if(op==57){if(!duplicate_hand(b,session,pool,source,actor,component))packet.error=1964;}
             else if(!carry_owned(b,source))packet.error=1964;
             std::memcpy(raw+3568,&actor,16);std::memcpy(raw+3584,&component,16);
+        } else if(op==66) {
+            if(!active_||!current(b)||!bulk_transform(b,raw))packet.error=1968;
+        } else if(op==67) {
+            double enabled=0;std::memcpy(&enabled,raw+2000,8);
+            if((enabled!=0.&&enabled!=1.)||!active_){packet.error=1969;return;}
+            menu_drag_enabled_=enabled!=0.;menu_drag_down_=true;menu_dragging_=false;
+        } else if(op==65) {
+            if(!active_||!current(b)||!template_scan(b,raw))packet.error=1967;
         } else if(op==64) {
             const uint32_t escape=menu_escape_requested_?1:0;std::memcpy(raw+3560,&escape,4);menu_escape_requested_=false;
         } else if(op==63) {

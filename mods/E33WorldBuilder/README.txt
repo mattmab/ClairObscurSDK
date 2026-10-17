@@ -10,7 +10,7 @@ rotation, scale and map tracking; Alt+Y deletes it again.
 F7 switches from duplication to the Build prop catalog; F7 in Build closes it.
 Escape closes the current menu. Selection and Controls are displayed in the HUD.
 
-E33 World Builder 0.31.1 experimental
+E33 World Builder 0.32.0 experimental
 Requires SDK 0.1.0-rc14 or later with the World Builder native API.
 Install E33WorldBuilder.sdkmod in the game-root SDK_Mods folder, then enable
 World Builder in Pause > Mods. It is an optional mod, not bundled with the SDK.
@@ -19,7 +19,7 @@ Maps and settings remain in SDK/settings/E33WorldBuilder when disabled.
 Downloads:
   SDK RC13: https://github.com/mattmab/ClairObscurSDK/releases/tag/v0.1.0-rc14
   World Builder: https://github.com/mattmab/ClairObscurSDK/releases/tag/v0.1.0-rc14
-Close the game and SDK before updating. Extract E33WorldBuilder-0.31.1.zip
+Close the game and SDK before updating. Extract E33WorldBuilder-0.32.0.zip
 beside Sandfall; leave its inner .sdkmod archive intact. Preserve SDK/settings.
 No separate Python, controller or native DLL is needed for World Builder.
 Use the SDK Mods menu's Keybinds tab to rebind F7/F8/F9/F10: choose Rebind and
@@ -159,3 +159,56 @@ Native v47: F10 / Duplicate to hand clones the selected spawned scene or gallery
 Reader recovery: a failed menu read is reported once and its closed worker is
 retired. The next operation creates a fresh reader; it does not repeat a failed
 widget mutation or clear scene edits. Successful recovery resumes status polls.
+
+Region templates (paired template-capable SDK required):
+F3 and F4 mark opposite corners at the builder camera position.
+The box includes loaded, visible static-mesh origins inside it. Instanced meshes
+are captured as independent props; rotations and scales are preserved. Hidden,
+ambient, unloaded, skeletal, and gameplay logic objects are not copied. Material
+overrides and actor scripts are not serialized by mesh templates.
+In Maps, enter a name and choose Save Template (region). Capture runs in bounded
+batches. Saved templates opens the reusable template list, across game maps.
+Preview template places a temporary group anchored at the camera. Enter XYZ
+world offsets and yaw, or use the +/- movement buttons. Apply makes the copies
+tracked map assets; Cancel or closing/leaving the tab removes unapplied copies.
+Templates are stored in SDK/settings/E33WorldBuilder/templates. The source
+structure stays unchanged. Clear region removes the box and cancels scanning.
+
+F1 toggles the Controls help between its full text and "(F1) Help".
+Current Selection stays visible. The toggle is also rebindable in SDK Keybinds.
+In Maps / Templates, selection yaw, pitch and roll rotate the bounds around
+their center. Apply rotation updates the visible box and its capture filter.
+Yaw +/- 15 offers quick adjustments. Capture discovers components in the
+background, resolves asset references incrementally, and displays progress.
+Cancel scan keeps your corners. Templates support at most 5900 captured props.
+
+Maps > Edit bounds live hides the catalog so the selection box stays visible.
+Mode cycles Move / Rotate / Resize; Step cycles fine to coarse increments.
+The six +/- buttons change each axis immediately. Move uses world axes; Resize
+uses box-local axes and preserves the center. Rotate also preserves the center.
+Name and Save Template capture the adjusted region. Back to maps restores the catalog.
+
+Hold an axis +/- button to repeat after a short delay. Releasing the mouse or
+leaving the game stops repetition. Bounds edges update in place without respawning.
+Mode also includes Scale with percentage steps; All scale +/- changes all axes.
+Whole box cycles through eight corners, labelled by local XYZ signs and marked
+with a cube. Move changes that corner in world axes while fixing its opposite;
+Resize and Scale expand from the opposite corner. Rotation stays center-pivoted.
+
+Region capture resolves up to 64 mesh references together and runs bounded scan
+work per controller tick. Template and static-mesh duplication previews use the
+same native batches of up to 64 props as saved maps. Duplication reuses existing
+preview copies when adjusting offsets. Template updates replace pending movement
+and apply the newest placement to remaining spawns. Apply waits for completion;
+progress shows the remaining work and changes to ready when it finishes.
+
+Template and duplication movement uses native batches of up to 128 transforms,
+with a 4 ms game-thread budget and partial-progress acknowledgements. Requires
+the matching SDK with builder operations 66/67. New templates are centered ahead
+of the camera using their group extent. In Duplicate, Template Placement and
+Bounds, hold the left mouse button in the open left side and drag to look around.
+Release to use the placement controls; drags begun over the right panel do not
+move the camera. The menu and current preview remain open.
+
+Placement navigation: hold left mouse over the open world view and drag to look; while held, WASD flies, Space/E rises, Ctrl/Q lowers, and Shift boosts speed. Works in template, duplication and bounds menus. Release to edit fields. Requires the matching native SDK menu-flight update.
+Large template previews start at most 5,000 units ahead of the camera. Bring preview here repositions the unapplied group near your current view, preserving its yaw and resetting XYZ offsets.

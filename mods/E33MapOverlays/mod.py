@@ -10,10 +10,10 @@ class Mod:
         self.next_poll=0.;self.message='Choose one saved overlay for each vanilla map.'
         self.visits=Visits();self.assignments=None
     def management(self):
-        return ModDefinition('e33.map-overlays','Map Overlays',version='0.1.0',
-            description='Requires World Builder enabled. F4: choose a saved overlay for the current vanilla map. Each map remembers its own choice and loads it once per visit, without freecam.',
-            actions=(Action('open','Choose overlay for current map',self.open_menu),Action('status','Overlay status',self.status)),
-            keybinds=(Keybind('open','Choose map overlay','F4',self.open_menu),))
+        return ModDefinition('e33.map-overlays','Custom Map Loader',version='0.2.0',
+            description='Requires World Builder enabled. F2: choose a saved overlay for the current vanilla map. Each map remembers its own choice and loads it once per visit, with or without builder camera.',
+            actions=(Action('open','Choose custom map for current level',self.open_menu),Action('status','Overlay status',self.status)),
+            keybinds=(Keybind('open','Choose custom map','F2',self.open_menu),))
     def enable(self,session):
         self.session=session;self.assignments=Assignments(settings_dir()/'E33MapOverlays'/'assignments.json')
         session.console.expose('map_overlays',self)
@@ -63,8 +63,10 @@ class Mod:
     def apply(self,key):
         self.visits.attempted=True
         try:
-            self.builder().load_overlay(key,self.current)
+            result=self.builder().load_overlay(key,self.current)
             self.message='Overlay loaded. It will load again on the next visit.'
+            if isinstance(result,dict) and result.get('skipped_world_edits'):
+                self.message=f"Loaded {result['objects']} objects; skipped {result['skipped_world_edits']} unloaded built-in edits. Original save unchanged."
             __import__('logging').getLogger(__name__).info('Automatic map overlay loaded')
         except Exception as exc:self.message='Overlay not loaded: '+str(exc)
     def open_menu(self,_=None):
@@ -90,7 +92,7 @@ class Mod:
     def _paint(self):
         p=self.panel;key=self.assignments.values.get(self.current['world']);page=self.rows[self.offset:self.offset+6]
         with p.paint_batch():
-            p.set_text(p.title,'Map Overlays - '+self.current['world'].rsplit('.',1)[-1])
+            p.set_text(p.title,'Custom Map Loader - '+self.current['world'].rsplit('.',1)[-1])
             p.set_text(p.detail,textwrap.fill(self.message,44)+'\n\nOne overlay per vanilla map. '+str(len(self.rows))+' saves here.\nPage '+str(self.offset//6+1)+'/'+str(max(1,(len(self.rows)+5)//6)))
             for i in range(6):
                 row=page[i] if i<len(page) else None

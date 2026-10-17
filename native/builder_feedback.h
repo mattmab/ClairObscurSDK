@@ -159,6 +159,33 @@ public:
         const auto frame=local_read<uint64_t>(b+0x9272d10);
         if(!frame||frame==last_frame_)return;last_frame_=frame;
         image_tick(b);
+        if(menu_drag_enabled_&&!auto_tick_){
+            const auto now=GetTickCount64();const auto elapsed=last_clock_?now-last_clock_:0;last_clock_=now;
+            DWORD foreground_pid=0;const auto window=GetForegroundWindow();GetWindowThreadProcessId(window,&foreground_pid);
+            POINT point{};RECT area{};const bool down=(GetAsyncKeyState(VK_LBUTTON)&0x8000)!=0;
+            if(!eligible||foreground_pid!=GetCurrentProcessId()||!call_identity(b,menu_widget_)||!current(b)||
+                !GetCursorPos(&point)||!ScreenToClient(window,&point)||!GetClientRect(window,&area)){
+                menu_dragging_=false;menu_drag_down_=true;return;}
+            if(!down)menu_dragging_=false;
+            else if(!menu_drag_down_)menu_dragging_=point.x>=0&&point.x<(area.right-area.left)*.69&&point.y>=0&&point.y<area.bottom;
+            else if(menu_dragging_){
+                rotation_[1]=std::remainder(rotation_[1]+std::clamp(double(point.x-menu_drag_point_.x),-200.,200.)*.15*mouse_sensitivity_,360.);
+                rotation_[0]=std::clamp(rotation_[0]-std::clamp(double(point.y-menu_drag_point_.y),-200.,200.)*.15*mouse_sensitivity_,-89.,89.);
+                  clear();std::memcpy(args_,rotation_,24);if(!call(b,ids_[0],23))menu_dragging_=false;
+            }
+              // Navigation requires a held viewport drag, so editing a text
+              // field or pressing a menu button cannot fly the camera.
+              if(menu_dragging_){
+                  auto key=[](int k){return (GetAsyncKeyState(k)&0x8000)!=0;};
+                  const double forward=int(key('W'))-int(key('S')),right=int(key('D'))-int(key('A'));
+                  const double up=int(key(VK_SPACE)||key('E'))-int(key(VK_CONTROL)||key('Q'));
+                  const double speed=fly_speed_*std::min(.05,double(elapsed)*.001)*(key(VK_SHIFT)?4.:1.)/
+                      std::max(1.,std::sqrt(forward*forward+right*right+up*up));
+                  const double v[]={forward*speed,right*speed,up*speed,0.,0.,0.,0.,0.};
+                  if(!move(b,v))menu_dragging_=false;
+              }
+            menu_drag_point_=point;menu_drag_down_=down;return;
+        }
         if(!auto_tick_||tick_error_)return;
         const auto now=GetTickCount64();const auto elapsed=last_clock_?now-last_clock_:0;last_clock_=now;
         DWORD pid=0;GetWindowThreadProcessId(GetForegroundWindow(),&pid);

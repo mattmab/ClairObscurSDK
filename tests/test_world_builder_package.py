@@ -21,4 +21,4 @@ class StandaloneWorldBuilderTests(unittest.TestCase):
             with zipfile.ZipFile(result['archive']) as archive:
                 self.assertEqual(set(archive.namelist()), {
                     'SDK_Mods/E33WorldBuilder.sdkmod', 'README-WorldBuilder.txt', 'LICENSE'})
-            self.assertEqual(result['requires_sdk'], '0.1.0-rc12')
+            self.assertEqual(result['requires_sdk'], '0.1.0-rc15')

@@ -31,7 +31,6 @@ def load(mod,map_id,expected,discover):
     data=mod.library.store.read(map_id)
     if data['world']!=current['world']:raise ValueError('Save belongs to a different vanilla map')
     previous=getattr(mod,'_overlay_visit',None)
-    if mod.active:raise RuntimeError('Leave the builder camera before automatic map loading')
     if previous and previous!=current['visit']:
         # Retire only the previous world's now-stale tracking and leases.
         mod.restore();mod.library._catalog=None;mod.library.registry_names_ready=False
@@ -39,6 +38,13 @@ def load(mod,map_id,expected,discover):
     if mod.started:mod.command(26)
     if mod.library.owned or mod.last.get('edits'):
         raise RuntimeError('Current scene has tracked edits; overlay deferred until a clean map visit')
+    if mod.active:
+        # Reuse the live builder owner. Headless initialization or shutdown
+        # here would replace the user's camera session and its input state.
+        mod._overlay_visit=current['visit']
+        result=mod.library.load(map_id)
+        logging.getLogger(__name__).info('Overlay load with builder camera: total_ms=%.1f', (time.perf_counter()-started)*1000)
+        return result
     with mod.menu_reads():ids=discover(mod.session.pid)
     discovered=time.perf_counter()
     ids[48]=None  # No HUD widget is installed for camera-free ownership.

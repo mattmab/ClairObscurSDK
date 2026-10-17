@@ -97,6 +97,7 @@ class Mod:
         self.started = False
         self.dragging = False
         self.hud = None
+        self.help_minimized = False
         self.next_status = 0.
         self.catalog_menu = None
         self.prewarm_at = time.monotonic()+3
@@ -134,14 +135,20 @@ class Mod:
                     self.next_status=0.
                     if self.error and ('Read worker' in self.error or 'Read batch' in self.error):self.error=None
 
+    def toggle_help(self, _=None):
+        if not self.active:return
+        self.help_minimized = not self.help_minimized
+        if self.hud is not None:
+            with self.menu_reads():self.hud.show_help(self.help_minimized)
+
     def management(self):
-        return ModDefinition('e33.world-builder', 'World Builder', version='0.31.1-experimental',
+        return ModDefinition('e33.world-builder', 'World Builder', version='0.32.0-experimental',
             description='F8 freecam. WASD fly, mouse look, Space/Ctrl up/down (E/Q also work), Shift faster. Hold left mouse to grab a world prop; release to place. Numpad 8/2 forward/back, 4/6 left/right, 9/3 up/down, 7/1 yaw; Alt precise; Alt+Z undo. F9 restores edits and clears spawned props. F7 opens folders, previews, spawning, galleries and saved maps.',
             actions=(Action('catalog', 'Open asset catalog', self.open_catalog),Action('toggle', 'Enter / leave builder camera', self.toggle),
                      Action('restore', 'Restore all edited geometry', self.restore),
                      Action('undo', 'Undo last prop edit', self.undo),
                      Action('status', 'Builder status', self.status)),
-            keybinds=(Keybind('directional','Open live duplication for selected prop','F5',self.open_directional),Keybind('catalog', 'Open asset catalog', 'F7', self.open_catalog),Keybind('toggle', 'Toggle builder camera', 'F8', self.toggle),
+            keybinds=(Keybind('toggle_help','Minimize / expand builder help','F1',self.toggle_help),Keybind('region_point1','Region corner 1 at camera','F3',lambda _:self.templates.mark(1)),Keybind('region_point2','Region corner 2 at camera','F4',self.region_corner2),Keybind('directional','Open live duplication for selected prop','F5',self.open_directional),Keybind('catalog', 'Open asset catalog', 'F7', self.open_catalog),Keybind('toggle', 'Toggle builder camera', 'F8', self.toggle),
                       Keybind('restore', 'Restore all geometry edits', 'F9', self.restore),
                       Keybind('duplicate_to_hand','Duplicate selected prop to hand','F10',self.duplicate_to_hand),
                       Keybind('delete_selection','Delete Current Selection','Delete',self.delete_selection)))
@@ -152,6 +159,8 @@ class Mod:
         self.library = Library(self)
         from .directional import DuplicationDraft
         self.directional=DuplicationDraft(self.library)
+        from .templates import Templates
+        self.templates=Templates(self.library)
         self.current_selection='None'
         from .camera_settings import CameraSettings
         self.camera_settings=CameraSettings(self.library.store.root.parent)
@@ -160,6 +169,10 @@ class Mod:
         self.user32.GetAsyncKeyState.restype = ctypes.c_short
         self.user32.GetForegroundWindow.restype = ctypes.c_void_p
         self.user32.GetWindowThreadProcessId.argtypes = [ctypes.c_void_p, ctypes.POINTER(ctypes.c_ulong)]
+        session.actions.register('world_builder.template_status',self.templates.status,mutates=False)
+        session.actions.register('world_builder.template_corner',self.templates.mark,schema={'type':'object','properties':{'number':{'type':'integer'}},'required':['number'],'additionalProperties':False})
+        session.actions.register('world_builder.template_save',self.templates.save,schema={'type':'object','properties':{'name':{'type':'string'}},'required':['name'],'additionalProperties':False})
+        session.actions.register('world_builder.templates',self.templates.store.list,mutates=False)
         session.actions.register('world_builder.toggle', self.toggle)
         session.actions.register('world_builder.stop', self.stop)
         session.actions.register('world_builder.restore', self.restore)
@@ -190,7 +203,7 @@ class Mod:
         session.actions.register('world_builder.preview_motion',self.booth_motion,schema={'type':'object','properties':{'values':{'type':'array'}},'required':['values'],'additionalProperties':False})
         session.console.expose('world_builder', self)
 
-    def command(self, op, ids=(), values=(), automatic=False, transform=None, registry_offset=0,thumbnail_key=None,thumbnail_stage=0,asset_path=None,bulk=None):
+    def command(self, op, ids=(), values=(), automatic=False, transform=None, registry_offset=0,thumbnail_key=None,thumbnail_stage=0,asset_path=None,bulk=None,region=None):
         packet = bytearray(20984)
         struct.pack_into('<4IQ', packet, 0, 3, op, 0, 0, self.owner)
         if op == 28: struct.pack_into('<I',packet,20976,int(automatic))
@@ -206,10 +219,20 @@ class Mod:
             if not 1<=len(encoded)<512:raise ValueError('Invalid thumbnail asset path')
             packet[2000:2000+len(encoded)]=encoded
         if op in (35,51):struct.pack_into('<I',packet,2000,registry_offset)
+        if op==65:
+            if not bulk or len(bulk)>64 or region is None:raise ValueError('Expected a bounded region batch')
+            low,high,instance=region
+            struct.pack_into('<II',packet,2000,len(bulk),instance)
+            struct.pack_into('<6d',packet,2016,*low,*high)
+            for i,obj in enumerate(bulk):struct.pack_into('<iiQ',packet,4096+16*i,obj.index,obj.serial,obj.address)
         if op==50:
             if not bulk or len(bulk)>64:raise ValueError('Expected 1–64 spawn rows')
             struct.pack_into('<I',packet,2000,len(bulk))
             for i,(index,flags,pose) in enumerate(bulk):struct.pack_into('<II12d',packet,4096+192*i,index,flags,*pose)
+        if op==66:
+            if not bulk or len(bulk)>128:raise ValueError('Expected 1-128 transform rows')
+            struct.pack_into('<I',packet,2000,len(bulk))
+            for i,(identity,pose) in enumerate(bulk):struct.pack_into('<iiQ12d',packet,4096+112*i,*identity,*pose)
         if op==53:
             if not bulk or len(bulk)>128:raise ValueError('Expected 1–128 deletion rows')
             struct.pack_into('<I',packet,2000,len(bulk))
@@ -221,7 +244,7 @@ class Mod:
         with self.session._lease_context():
             reply = self.session._session._transport.command('mesh', bytes(packet))
         raw = bytes.fromhex(reply['mesh_packet'])
-        if len(raw) != len(packet) or raw[:8] != packet[:8] or raw[16:24] != packet[16:24] or raw[88:3000] != packet[88:3000] or raw[3392:3400] != packet[3392:3400] or (raw[3544:3560] != packet[3544:3560] or raw[4080:4096] != packet[4080:4096] or raw[20480:] != packet[20480:] or (op not in (29,35,50,51,54,60) and raw[4096:20480] != packet[4096:20480])):
+        if len(raw) != len(packet) or raw[:8] != packet[:8] or raw[16:24] != packet[16:24] or raw[88:3000] != packet[88:3000] or raw[3392:3400] != packet[3392:3400] or (raw[3544:3560] != packet[3544:3560] or raw[4080:4096] != packet[4080:4096] or raw[20480:] != packet[20480:] or (op not in (29,35,50,51,54,60,65) and raw[4096:20480] != packet[4096:20480])):
             raise RuntimeError('Builder acknowledgement mismatch; outcome uncertain')
         self.last_raw = raw
         _, _, error, state, _ = struct.unpack_from('<4IQ', raw)
@@ -385,6 +408,12 @@ class Mod:
     def refresh_menu_owner(self):
         menu=self.catalog_menu
         if menu is None:return
+        # Discovery can race level streaming before construction has acquired
+        # a player or any widgets. Release that empty owner and rebuild.
+        if not hasattr(menu,'player') and menu.widget is None:
+            if not menu.close():raise RuntimeError('Previous menu cleanup is still pending')
+            self.catalog_menu=None
+            return
         with self.menu_reads():
             current=capture_matching(self.session.pid,classes=('PlayerController',))
             player=next(o for o in current.select('PlayerController') if not o.object_flags&0x30)
@@ -401,6 +430,12 @@ class Mod:
         if not self.last.get('edits'):
             self.library.owned.clear();self.library.selected=None;self.library.preview_key=None
             self.library.active_map=None;self.library.world=None
+
+    def region_corner2(self, _=None):
+        if self.active:return self.templates.mark(2)
+        overlay=self.session._session.console.dispatcher.namespace.get('map_overlays')
+        if overlay is not None and overlay.session is not None:return overlay.open_menu()
+        raise ValueError('Enter the builder camera with F8 to mark corners')
 
     def open_catalog(self,_=None):
         escape=False
@@ -466,7 +501,7 @@ class Mod:
         same_player=self.hud is not None and self.hud.state=='built' and all(getattr(self.hud.player,k)==getattr(ids[0],k) for k in ('index','serial','address'))
         if not same_player:
             if self.hud is not None:self.hud.close()
-            self.hud = BuilderHUD(self.session)
+            self.hud = BuilderHUD(self.session, self.help_minimized)
             with self.menu_reads():self.hud.build()
         self.hud._render_call(self.hud.widget,'UserWidget','AddToViewport',ZOrder=10000)
         ids[48:58] = [self.hud.widget,self.hud.title,*self.hud.slots,*self.hud.lines]
@@ -627,6 +662,7 @@ class Mod:
         # Flight, picking, dragging and HUD all run natively once per game frame.
         # Python only reads diagnostics twice a second; other mods cannot throttle flight.
         now = time.monotonic()
+        self.templates.poll()
         # Enabling from Mods leaves that menu focused. Wait until it closes;
         # preparing a second menu's focus plan while it owns input is rejected.
         menu_busy = any(menu.active for menu in self.session._session._menus)
@@ -642,7 +678,7 @@ class Mod:
                     self.catalog_menu.prime_menu_plan()
                 if self.hud is None:
                     from .hud import BuilderHUD
-                    self.hud=BuilderHUD(self.session)
+                    self.hud=BuilderHUD(self.session, self.help_minimized)
                     with self.menu_reads():self.hud.build()
             except Exception:
                 LOG.exception('Catalog prewarm failed')
@@ -650,6 +686,7 @@ class Mod:
             return
         self.next_status = now + (.02 if self.catalog_menu and self.catalog_menu.state=='open' and self.catalog_menu.batch_gallery.queue and not self.catalog_menu.batch_gallery.paused else self.catalog_menu.background.poll_interval() if self.active and self.catalog_menu and not self.booth_pending else .5)
         if self.catalog_menu and self.catalog_menu.state=='open' and self.catalog_menu.image_queue:self.next_status=min(self.next_status,now+.02)
+        if self.catalog_menu and self.catalog_menu.state=='open' and self.catalog_menu.workspace=='Bounds':self.next_status=min(self.next_status,now+.04)
         if self.active and self.camera_settings.values.get('duplicate_click',False):self.next_status=min(self.next_status,now+.05)
         try:
             self.command(26)
@@ -683,6 +720,8 @@ class Mod:
 
     def disable(self):
         failures=[]
+        try:self.templates.close()
+        except Exception as exc:failures.append(str(exc))
         if self.catalog_menu is not None:
             try:self.catalog_menu.close()
             except Exception as exc:failures.append(str(exc))

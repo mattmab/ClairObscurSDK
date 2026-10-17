@@ -13,7 +13,7 @@ from .browser import Browser
 from .menu_profile import measured
 LOG=logging.getLogger('expedition33.world_builder.preview')
 MENU_NAMES=frozenset(('Widget UserWidget CommonActivatableWidget WidgetTree CanvasPanel CanvasPanelSlot '
-    'Button TextBlock Border CommonTextBlock CTS_B1_SmallLine_Outline_C SetStyle '
+    'Button IsPressed TextBlock Border CommonTextBlock CTS_B1_SmallLine_Outline_C SetStyle '
     'WidgetBlueprintLibrary GameplayStatics Default__WidgetBlueprintLibrary Default__GameplayStatics '
     'ESlateVisibility Vector2D LinearColor Margin Anchors Create SpawnObject AddChildToCanvas '
     'SetPosition SetSize SetAnchors SetIsEnabled SetVisibility SetBackgroundColor SetBrushColor '
@@ -119,6 +119,7 @@ class CatalogMenu(OwnedMenuPanel):
         backdrop=self._spawn('Border');slot=self._place(backdrop,0,0,0,0);self.backdrop_slot=slot
         self._call(slot,'CanvasPanelSlot','SetAnchors',InAnchors={'Minimum':{'X':0.,'Y':0.},'Maximum':{'X':1.,'Y':1.}})
         self._call(backdrop,'Border','SetBrushColor',InBrushColor={'R':.012,'G':.018,'B':.028,'A':.98})
+        self.drag_hint=self.label(30,90,1200,55,.7)
         self.title=self.label(24,20,1300,48,.9);self.breadcrumb=self.label(24,73,660,35)
         self.detail=self.label(1360,145,530,180);self.footer=self.label(24,1030,1300,45,.57)
         for i in range(self.PAGE):
@@ -140,6 +141,10 @@ class CatalogMenu(OwnedMenuPanel):
         self.button(350,16,280,40)
         self.field1=self._spawn('EditableTextBox');self._place(self.field1,1360,220,530,38)
         self.field2=self._spawn('EditableTextBox');self._place(self.field2,1360,288,530,38)
+        self.region_roll=self._spawn('EditableTextBox');self._place(self.region_roll,1360,288,530,38)
+        self._call(self.region_roll,'EditableTextBox','SetText',InText='0')
+        self.region_roll_label=self.label(1360,264,530,22,.5)
+        self.template_info=self.label(1360,625,530,120,.48)
         self.duplicate_status=self.label(1360,875,530,170,.55)
         self.duplicate_fields=[];self.duplicate_labels=[]
         for j,axis in enumerate('XYZ'):
@@ -150,7 +155,7 @@ class CatalogMenu(OwnedMenuPanel):
         self.camera_labels=[self.label(1360,195,530,22,.5),self.label(1360,264,530,22,.5)]
         self.search=self._spawn('EditableTextBox');self._place(self.search,24,120,1296,58)
         self.map_name=self._spawn('EditableTextBox');self._place(self.map_name,1360,750,530,55)
-        for widget,text in ((self.field1,'18'),(self.field2,'600'),(self.search,''),(self.map_name,'Builder '+datetime.now().strftime('%Y-%m-%d %H-%M'))):
+        for widget,text in ((self.field1,'18'),(self.field2,'600'),(self.region_roll,'0'),(self.search,''),(self.map_name,'Builder '+datetime.now().strftime('%Y-%m-%d %H-%M'))):
             self._call(widget,'EditableTextBox','SetText',InText=text)
             self._call(widget,'EditableTextBox','SetForegroundColor',Color={'R':.015,'G':.02,'B':.03,'A':1.})
         self.image=self._spawn('Image');self._place(self.image,1385,355,480,360);self._call(self.image,'Widget','SetVisibility',InVisibility=self.collapsed)
@@ -163,7 +168,7 @@ class CatalogMenu(OwnedMenuPanel):
         self._slots[child.index]=slot
         return slot
     def set_text(self,label,text):
-        if label in (self.breadcrumb,self.footer,*getattr(self,'camera_labels',()),*getattr(self,'duplicate_labels',()),getattr(self,'duplicate_status',None)):
+        if label in (self.breadcrumb,self.footer,*getattr(self,'camera_labels',()),*getattr(self,'duplicate_labels',()),getattr(self,'duplicate_status',None),getattr(self,'template_info',None),getattr(self,'region_roll_label',None),getattr(self,'drag_hint',None)):
             if self._text.get(label.index)!=text:
                 self._render_call(label,'TextBlock','SetText',InText=text);self._text[label.index]=text
             return
@@ -203,8 +208,9 @@ class CatalogMenu(OwnedMenuPanel):
             self._render_call(field,'EditableTextBox','SetText',InText=f'{value:g}')
 
     def all_rows(self):
-        if self.workspace in ('Camera','Duplicate'):return []
+        if self.workspace in ('Camera','Duplicate','TemplatePlace','Bounds'):return []
         if self.workspace=='Library' and not self.library_assets:return [dict(path=r['asset'],name=r['asset'].rsplit('.',1)[-1],kind=r['kind'],id=r['id']) for r in self.library.owned.values() if r['id']!=self.library.preview_key and self.query.casefold() in r['asset'].casefold()]
+        if self.workspace=='Templates':return [dict(r,kind='template') for r in self.mod.templates.store.list() if self.query.casefold() in r['name'].casefold()]
         if self.workspace=='Maps':return [dict(r,kind='map') for r in self.library.store.list() if self.query.casefold() in r['name'].casefold()]
         if not self.library.registry_complete:self.library.refresh(force=False)
         return self.browser.rows(self.library.rows,self.query,self.kind,self.folder,self.folders,self.favorites)
@@ -215,7 +221,7 @@ class CatalogMenu(OwnedMenuPanel):
         signature=tuple((r['kind'],r.get('path',r.get('id'))) for r in self.rows)
         if signature!=self.signature:
             self.clear_images();self.signature=signature
-        assets=list(dict.fromkeys(r.get('cover',r.get('path')) for r in self.rows if r['kind']!='map'))
+        assets=list(dict.fromkeys(r.get('cover',r.get('path')) for r in self.rows if r['kind'] not in ('map','template')))
         cached=[(asset,cache.thumbnail_key(asset)) for asset in assets if asset and asset not in self.thumbnails and asset not in self.preview_failures]
         cached += [('map:'+row['id'],self.map_key(row['id'])) for row in self.rows if row['kind']=='map' and 'map:'+row['id'] not in self.thumbnails]
         # Publish navigation first. Import only visible page images on later
@@ -227,56 +233,96 @@ class CatalogMenu(OwnedMenuPanel):
             for asset in dict.fromkeys(visible):
                 if asset in self.thumbnails:self.show_texture(asset,False)
         self.pending=[asset for asset in assets if asset and asset not in disk and asset not in self.thumbnails and asset not in self.preview_failures and asset not in self.background.failures and (not self.preview_job or asset!=self.preview_job['asset'])]
+        # EditableTextBox setters are not supported by the native paint batch.
+        if self.workspace in ('Maps','Templates'):
+            for field,value in zip((self.field1,self.field2,self.region_roll),reversed(self.mod.templates.angles)):
+                self._render_call(field,'EditableTextBox','SetText',InText=str(value))
         with self.paint_batch():
             self.set_text(self.title,'WORLD BUILDER')
             self._render_call(self._slots[self.detail.index],'CanvasPanelSlot','SetPosition',InPosition={'X':1360.,'Y':145.})
-            self._render_call(self.backdrop_slot,'CanvasPanelSlot','SetAnchors',InAnchors={'Minimum':{'X':.69 if self.workspace=='Duplicate' else 0.,'Y':0.},'Maximum':{'X':1.,'Y':1.}})
-            for widget in (self.title,self.footer):self._render_call(widget,'Widget','SetVisibility',InVisibility=self.collapsed if self.workspace=='Duplicate' else self.invisible)
-            self._render_call(self.duplicate_status,'Widget','SetVisibility',InVisibility=self.invisible if self.workspace=='Duplicate' else self.collapsed)
+            drag_view=self.workspace in ('Duplicate','TemplatePlace','Bounds')
+            self.set_text(self.drag_hint,'Hold left mouse here: drag to look, WASD fly, Space/Ctrl up/down, Shift faster')
+            self._render_call(self.drag_hint,'Widget','SetVisibility',InVisibility=self.invisible if drag_view else self.collapsed)
+            self.mod.command(67,values=[int(drag_view),0,0,0,0,0,0,0])
+            self._render_call(self.backdrop_slot,'CanvasPanelSlot','SetAnchors',InAnchors={'Minimum':{'X':.69 if self.workspace in ('Duplicate','TemplatePlace','Bounds') else 0.,'Y':0.},'Maximum':{'X':1.,'Y':1.}})
+            for widget in (self.title,self.footer):self._render_call(widget,'Widget','SetVisibility',InVisibility=self.collapsed if self.workspace in ('Duplicate','TemplatePlace','Bounds') else self.invisible)
+            self._render_call(self.duplicate_status,'Widget','SetVisibility',InVisibility=self.invisible if self.workspace in ('Duplicate','TemplatePlace') else self.collapsed)
             for j,(field,label) in enumerate(zip(self.duplicate_fields,self.duplicate_labels)):
-                self.set_text(label,'XYZ'[j]+' offset per copy (units)')
-                for widget in (field,label):self._render_call(widget,'Widget','SetVisibility',InVisibility=self.visible if self.workspace=='Duplicate' else self.collapsed)
+                self.set_text(label,'XYZ'[j]+(' group offset (units)' if self.workspace=='TemplatePlace' else ' offset per copy (units)'))
+                for widget in (field,label):self._render_call(widget,'Widget','SetVisibility',InVisibility=self.visible if self.workspace in ('Duplicate','TemplatePlace') else self.collapsed)
             self.set_text(self.labels[50],'Close / F7')
             self.set_text(self.labels[51],'Play from camera')
             self.set_text(self.labels[52],'Camera settings')
             self.set_text(self.labels[55],'Live copies / F5')
-            for i in (51,52,53,54,55):self.set_visible(i,self.workspace!='Duplicate')
+            for i in (51,52,53,54,55):self.set_visible(i,self.workspace not in ('Duplicate','TemplatePlace','Bounds'))
             self.set_text(self.labels[53],'Duplicate / F10')
             self.set_text(self.labels[54],'Click copies: '+('ON' if self.mod.camera_settings.values.get('duplicate_click',False) else 'OFF'))
-            for i in (*range(24),*range(28,36)):self.set_visible(i,self.workspace not in ('Camera','Duplicate'))
-            for widget in (self.search,self.map_name,self.breadcrumb):self._render_call(widget,'Widget','SetVisibility',InVisibility=self.collapsed if self.workspace in ('Camera','Duplicate') else self.visible)
-            captions=('Copies (1 to 250)','Movement step (units)') if self.workspace=='Duplicate' else ('Mouse sensitivity (0.05 to 10)','Fly speed (100 to 10000 cm/s)')
+            for i in (*range(24),*range(28,36)):self.set_visible(i,self.workspace not in ('Camera','Duplicate','TemplatePlace','Bounds'))
+            for widget in (self.search,self.map_name,self.breadcrumb):self._render_call(widget,'Widget','SetVisibility',InVisibility=self.collapsed if self.workspace in ('Camera','Duplicate','TemplatePlace','Bounds') else self.visible)
+            captions=('Group yaw (degrees)','Movement step (units)') if self.workspace=='TemplatePlace' else ('Copies (1 to 250)','Movement step (units)') if self.workspace in ('Duplicate','TemplatePlace') else ('Mouse sensitivity (0.05 to 10)','Fly speed (100 to 10000 cm/s)')
             for widget,caption in zip(self.camera_labels,captions):
-                self.set_text(widget,caption);self._render_call(widget,'Widget','SetVisibility',InVisibility=self.invisible if self.workspace in ('Camera','Duplicate') else self.collapsed)
+                self.set_text(widget,caption);self._render_call(widget,'Widget','SetVisibility',InVisibility=self.invisible if self.workspace in ('Camera','Duplicate','TemplatePlace') else self.collapsed)
             self.set_text(self.breadcrumb,f"{self.folder if self.folders else 'All assets'}  |  {count} entries  |  Page {1+self.offset//self.PAGE}/{max(1,math.ceil(count/self.PAGE))}")
             for i in range(self.PAGE):
                 valid=i<len(self.rows);self.set_enabled(i,valid);text=''
                 if valid:
                     r=self.rows[i];name=r['name'];text='\n'.join(name[j:j+19] for j in range(0,min(len(name),38),19))
                     if r['kind']=='folder':text+=f"\n{r['count']} assets / Open folder"
-                    elif r['kind']=='map':text+=f"\n{r['count']} tracked objects"
+                    elif r['kind'] in ('map','template'):text+=f"\n{r['count']} tracked objects"
                     elif r.get('path') in self.browser.favorites:text+='  [*]'
                 self.set_text(self.labels[i],text)
             labels=['Previous','Next','Favorites ON' if self.favorites else 'Favorites','Folders ON' if self.folders else 'All assets',self.kind.title(),'Up folder','Build','Gallery','Library','Maps','Load map' if self.workspace=='Maps' else 'Spawn page' if self.workspace=='Gallery' else 'Spawn selected','Preview','Favorite / unfavorite','Save map','Load selected map','Clear scene','Resume camera','Refresh catalog']
             for i,label in enumerate(labels,self.PAGE):self.set_text(self.labels[i],label)
             extra=[]
-            if self.workspace=='Camera':extra=['Apply and save','Reset defaults','Prop highlight: '+('On click' if self.mod.camera_settings.values['highlight']=='click' else 'Auto' if self.mod.camera_settings.values['highlight'] else 'Off')]
-            elif self.workspace=='Duplicate':extra=['X +','X -','Y +','Y -','Z +','Z -','Axes: '+('Prop local' if self.duplicate_local else 'World'),'Update preview','Apply copies','Cancel preview']
+            if self.workspace in ('Maps','Templates'):extra=['Save Template (region)','Saved templates' if self.workspace=='Maps' else 'Preview template','Back to maps','Clear region','Cancel scan','Apply rotation','Yaw - 15','Yaw + 15','Edit bounds live']
+            elif self.workspace=='Bounds':
+                mode=getattr(self,'bounds_mode','Move');step=getattr(self,'bounds_step',100.)
+                axes=('Roll','Pitch','Yaw') if mode=='Rotate' else ('X','Y','Z')
+                corner=getattr(self,'bounds_corner',None)
+                corner_label='Whole box' if corner is None else 'Corner '+str(corner+1)+' ('+''.join('+' if corner&(1<<i) else '-' for i in range(3))+')'
+                scale_step=step if mode=='Scale' else 5.
+                extra=[a+sign for a in axes for sign in (' +',' -')]+['Mode: '+mode,f'Step: {step:g}'+(' deg' if mode=='Rotate' else ' %' if mode=='Scale' else ' units'),'Save Template','Back to maps','Cancel scan',corner_label,f'All scale - {scale_step:g}%',f'All scale + {scale_step:g}%']
+            elif self.workspace=='TemplatePlace':extra=['X +','X -','Y +','Y -','Z +','Z -','Yaw + 15','Update placement','Apply template','Cancel preview','Yaw - 15','Bring preview here']
+            elif self.workspace=='Camera':extra=['Apply and save','Reset defaults','Prop highlight: '+('On click' if self.mod.camera_settings.values['highlight']=='click' else 'Auto' if self.mod.camera_settings.values['highlight'] else 'Off')]
+            elif self.workspace in ('Duplicate','TemplatePlace'):extra=['X +','X -','Y +','Y -','Z +','Z -','Axes: '+('Prop local' if self.duplicate_local else 'World'),'Update preview','Apply copies','Cancel preview']
             elif self.workspace=='Gallery':extra=['Packing: '+('Tight' if self.batch_gallery.tight else 'Spaced'),'Spawn first batch','Previous batch','Next batch','Clear gallery','Pause / resume','Visit next','Resume camera','Save galleries','Rebuild saved','Free camera','Retry failed']
             elif self.workspace=='Library':extra=['Favorite / unfavorite','Save category/tags','Quick icons','Resume capture','Pause capture','Cancel capture','Index loaded meshes','All registered meshes','Retry cleanup','Scene objects' if self.library_assets else 'Asset tools','Visit selected','Duplicate selected','Delete selected','AFK cache: '+('ON' if self.background.mode=='afk' else 'OFF')]
             for j in range(14):
+                y=340+(j//2)*(48 if self.workspace=='TemplatePlace' else 55)
+                for widget,dx,dy in ((self.buttons[36+j],0,0),(self.labels[36+j],10,8)):
+                    self._render_call(self._slots[widget.index],'CanvasPanelSlot','SetPosition',InPosition={'X':float(1360+(j%2)*270+dx),'Y':float(y+dy)})
+                self._render_call(self._slots[self.buttons[36+j].index],'CanvasPanelSlot','SetSize',InSize={'X':260.,'Y':42. if self.workspace=='TemplatePlace' else 48.})
                 self.set_visible(36+j,j<len(extra));self.set_text(self.labels[36+j],extra[j] if j<len(extra) else '')
-            for field in (self.field1,self.field2):self._render_call(field,'Widget','SetVisibility',InVisibility=self.visible if extra else self.collapsed)
+            for field in (self.field1,self.field2):self._render_call(field,'Widget','SetVisibility',InVisibility=self.visible if extra and self.workspace not in ('Maps','Templates','Bounds') else self.collapsed)
+            region=self.workspace in ('Maps','Templates')
+            for widget in (self.region_roll,self.region_roll_label):self._render_call(widget,'Widget','SetVisibility',InVisibility=self.visible if region else self.collapsed)
+            self.set_text(self.region_roll_label,'Selection roll (degrees)')
+            for j,field in enumerate((self.field1,self.field2)):
+                self._render_call(self._slots[field.index],'CanvasPanelSlot','SetPosition',InPosition={'X':float(1360+(270*j if region else 0)),'Y':float(220 if region else 220+68*j)})
+                self._render_call(self._slots[field.index],'CanvasPanelSlot','SetSize',InSize={'X':250. if region else 530.,'Y':38.})
+                self._render_call(self._slots[self.camera_labels[j].index],'CanvasPanelSlot','SetPosition',InPosition={'X':float(1360+(270*j if region else 0)),'Y':float(195 if region else 195+69*j)})
+                if region:
+                    self._render_call(field,'Widget','SetVisibility',InVisibility=self.visible)
+                    self._render_call(self.camera_labels[j],'Widget','SetVisibility',InVisibility=self.invisible)
+                    self.set_text(self.camera_labels[j],('Selection yaw','Selection pitch')[j]+' (degrees)')
             if extra:self._render_call(self.image,'Widget','SetVisibility',InVisibility=self.collapsed)
             if self.workspace=='Maps':
                 self.set_text(self.labels[29],'Take map thumbnail');self.set_text(self.labels[30],'Visit saved view')
             detail=self.batch_gallery.summary()+'\nBatch size / spacing (cm)' if self.workspace=='Gallery' else self.library.message
-            if self.workspace=='Maps':detail+='\n\nLEVEL STREAMING\nMoved built-in world objects may reset position when the game unloads and reloads them. Custom-placed props do not participate in level streaming and are unaffected.'
+            self._render_call(self.template_info,'Widget','SetVisibility',InVisibility=self.invisible if self.workspace in ('Maps','Templates') else self.collapsed)
+            if self.workspace in ('Maps','Templates'):
+                self.set_text(self.template_info,'F3/F4: opposite corners at camera.\nEdit bounds live: move / rotate / resize.\nLoaded mesh origins inside the box only.\nMaximum 5900 props; Cancel keeps corners.\nName below, then Save Template.')
+            if self.workspace=='Templates':
+                self.set_text(self.labels[28],'Preview template')
+                for i in (29,30,31,32,33):self.set_visible(i,False)
+            if self.workspace=='Bounds':
+                detail='LIVE SELECTION BOUNDS\nMove: world axes. Resize: box axes.\nRotate / resize around center.\nMode and Step cycle; +/- updates live.'
+                self._render_call(self.map_name,'Widget','SetVisibility',InVisibility=self.visible)
             if self.workspace=='Camera':detail='Apply saves both fields. Shift flies 4x faster.'
-            if self.workspace=='Duplicate':detail='CURRENT SELECTION: '+(self.selected['name'][:32] if self.selected else 'None')
+            if self.workspace in ('Duplicate','TemplatePlace'):detail='CURRENT SELECTION: '+(self.selected['name'][:32] if self.selected else 'None')
             if self.workspace=='Library':detail+='\nCategory / tags fields'+(f'\nIcons: {len(self.capture_queue)} queued / '+('paused' if self.capture_paused else 'running') if self.library_assets else '')
 
-            if self.selected and self.workspace!='Duplicate':detail+=('\n'+self.selected['name'][:42]) if extra else ('\n\n'+self.selected['name'][:75]+'\n'+self.selected.get('path',self.selected.get('world',''))[:110])
+            if self.selected and self.workspace not in ('Duplicate','TemplatePlace','Bounds'):detail+=('\n'+self.selected['name'][:42]) if extra else ('\n\n'+self.selected['name'][:75]+'\n'+self.selected.get('path',self.selected.get('world',''))[:110])
             detail="\n".join(textwrap.fill(line,width=48,break_long_words=True,break_on_hyphens=False) for line in detail.splitlines())
             self.set_text(self.detail,detail)
             tracked=len(self.library.owned)-int(self.library.preview_key in self.library.owned)
@@ -292,7 +338,7 @@ class CatalogMenu(OwnedMenuPanel):
         # The base panel uses button zero as its initial Slate focus target.
         # Camera settings hides the catalog grid, so focus its visible tab.
         first=self.buttons[0]
-        if self.workspace in ('Camera','Duplicate'):self.buttons[0]=self.buttons[52 if self.workspace=='Camera' else 36]
+        if self.workspace in ('Camera','Duplicate','TemplatePlace','Bounds'):self.buttons[0]=self.buttons[52 if self.workspace=='Camera' else 36]
         try:super().open()
         except Exception:
             if self.menu is None and not self.uncertain:
@@ -308,13 +354,17 @@ class CatalogMenu(OwnedMenuPanel):
         with self.mod.menu_reads():return self._click(i)
     def _click(self,i):
         try:
+            if self.workspace=='Bounds' and getattr(self,'_bounds_suppress',None)==i and time.monotonic()<getattr(self,'_bounds_suppress_until',0):
+                self._bounds_suppress=None;return
             if 18<=i<=23:self.selected=None
-            if self.workspace=='Duplicate' and (24<=i<=27 or i in (50,51,52,53,55)):self.mod.directional.cancel()
+            if self.workspace in ('Duplicate','TemplatePlace') and (24<=i<=27 or i in (50,51,52,53,55)):
+                self.mod.directional.cancel();self.mod.templates.cancel()
             if i<self.PAGE:
                 if i>=len(self.rows):return
                 self.selected=self.rows[i]
                 if self.selected['kind']=='folder':self.folder=self.selected['path'];self.offset=0;self.selected=None
                 elif self.selected['kind']=='map':self.show_map()
+                elif self.selected['kind']=='template':self.library.message=f"Template: {self.selected['count']} meshes. Preview to place as a group."
                 else:
                     if self.workspace=='Library':
                         if self.selected.get('id') in self.library.owned:
@@ -335,11 +385,13 @@ class CatalogMenu(OwnedMenuPanel):
                 self.workspace=('Build','Gallery','Library','Maps')[i-24];self.offset=0;self.selected=None
                 for field,value in ((self.field1,'1000' if self.workspace=='Gallery' else 'Props'),(self.field2,'600' if self.workspace=='Gallery' else '')):self._render_call(field,'EditableTextBox','SetText',InText=value)
             elif i==28:
-                if self.workspace=='Gallery':self.start_gallery()
+                if self.workspace=='Templates':self.start_template()
+                elif self.workspace=='Gallery':self.start_gallery()
                 elif self.workspace=='Maps':self.load_map()
                 else:self.library.spawn(self.asset())
             elif i==29:
-                if self.workspace=='Maps':self.take_map_thumbnail()
+                if self.workspace=='Templates':self.start_template()
+                elif self.workspace=='Maps':self.take_map_thumbnail()
                 else:self.mod.start_booth(self.asset());return
             elif i==30:
                 if self.workspace=='Maps':self.visit_map()
@@ -371,8 +423,14 @@ class CatalogMenu(OwnedMenuPanel):
         self.mod.current_selection=self.selected['name']
         for field,value in ((self.field1,'1'),(self.field2,'100')):self._render_call(field,'EditableTextBox','SetText',InText=value)
 
+    def start_template(self):
+        if not self.selected or self.selected['kind']!='template':raise ValueError('Select a saved template first')
+        self.cancel_preview();self.mod.templates.begin(self.selected['id']);self.workspace='TemplatePlace'
+        for field in self.duplicate_fields:self._render_call(field,'EditableTextBox','SetText',InText='0')
+        for field,value in ((self.field1,'0'),(self.field2,'100')):self._render_call(field,'EditableTextBox','SetText',InText=value)
+
     def asset(self):
-        if not self.selected or self.selected['kind'] in ('folder','map'):raise ValueError('Select a mesh or actor first')
+        if not self.selected or self.selected['kind'] in ('folder','map','template'):raise ValueError('Select a mesh or actor first')
         return self.selected['path']
     def load_map(self):
         if not self.selected or self.selected['kind']!='map':raise ValueError('Choose a saved map in the Maps tab')
@@ -394,7 +452,54 @@ class CatalogMenu(OwnedMenuPanel):
             return ([result.outputs['Origin'][x] for x in ('X','Y','Z')],[result.outputs['BoxExtent'][x] for x in ('X','Y','Z')])
     def workspace_action(self,i):
         g=self.batch_gallery
-        if self.workspace=='Duplicate':
+        if self.workspace in ('Maps','Templates'):
+            if i==0:self.mod.templates.save(self.text(self.map_name))
+            elif i==1:
+                if self.workspace=='Maps':self.workspace='Templates';self.offset=0;self.selected=None
+                else:self.start_template()
+            elif i==2:self.workspace='Maps';self.offset=0;self.selected=None
+            elif i==8:self.workspace='Bounds';self.bounds_mode='Move';self.bounds_step=100.
+            elif i==4:self.mod.templates.cancel_scan()
+            elif i in (5,6,7):
+                angles=[float(self.text(self.region_roll)),float(self.text(self.field2)),float(self.text(self.field1))]
+                if i in (6,7):angles[2]+=(-15 if i==6 else 15)
+                self.mod.templates.rotate_bounds(angles)
+            elif i==3:self.mod.templates.cancel_scan();self.mod.templates.clear_box();self.mod.templates.points=[None,None];self.library.message='Region cleared'
+        elif self.workspace=='Bounds':
+            t=self.mod.templates;mode=getattr(self,'bounds_mode','Move');step=getattr(self,'bounds_step',100.)
+            if i<6:t.adjust_bounds(mode,i//2,step*(1 if i%2==0 else -1),getattr(self,'bounds_corner',None))
+            elif i==6:
+                self.bounds_mode=('Move','Rotate','Resize','Scale')[(('Move','Rotate','Resize','Scale').index(mode)+1)%4]
+                self.bounds_step=5. if self.bounds_mode in ('Rotate','Scale') else 100.
+            elif i==7:
+                steps=(1.,5.,15.,45.) if mode=='Rotate' else (1.,5.,10.,25.) if mode=='Scale' else (1.,10.,100.,500.,1000.)
+                self.bounds_step=steps[(steps.index(step)+1)%len(steps)]
+            elif i==8:t.save(self.text(self.map_name))
+            elif i==9:self.workspace='Maps'
+            elif i==10:t.cancel_scan()
+            elif i==11:
+                corner=getattr(self,'bounds_corner',None)
+                self.bounds_corner=0 if corner is None else corner+1 if corner<7 else None
+                t.selected_corner=self.bounds_corner;t.update_box()
+            elif i in (12,13):t.adjust_bounds('Scale',3,(step if mode=='Scale' else 5.)*(-1 if i==12 else 1),getattr(self,'bounds_corner',None))
+        elif self.workspace=='TemplatePlace':
+            t=self.mod.templates
+            if i==8:t.apply();return
+            if i==9:t.cancel();self.library.message='Template preview cancelled';return
+            if i==11:
+                t.bring_here()
+                for field in self.duplicate_fields:self._render_call(field,'EditableTextBox','SetText',InText='0')
+                return
+            delta=[float(self.text(f)) for f in self.duplicate_fields];yaw=float(self.text(self.field1))
+            if i<6:
+                step=float(self.text(self.field2))
+                if not math.isfinite(step) or step<=0:raise ValueError('Movement step must be positive')
+                delta[i//2]+=(1 if i%2==0 else -1)*step
+            if i in (6,10):yaw+=15 if i==6 else -15
+            t.reposition(delta,yaw)
+            for field,value in zip(self.duplicate_fields,delta):self._render_call(field,'EditableTextBox','SetText',InText=f'{value:g}')
+            self._render_call(self.field1,'EditableTextBox','SetText',InText=f'{yaw:g}')
+        elif self.workspace=='Duplicate':
             if i==8:self.mod.directional.apply();return
             if i==9:self.mod.directional.clear_previews();self.library.message='Preview cancelled';return
             delta=[float(self.text(field)) for field in self.duplicate_fields]
@@ -510,9 +615,38 @@ class CatalogMenu(OwnedMenuPanel):
             except Exception as error:
                 self.background.finish(job['asset'],error);LOG.exception('Thumbnail processing failed')
             self.processing.remove(job)
+    def poll_bounds_hold(self):
+        self.mod.thumbnail_input_busy()
+        state=self.mod._thumbnail_busy
+        down=state['foreground'] and 1 in state['held']
+        if not down:
+            self._bounds_down=False;self._bounds_pressed=None;return
+        if not getattr(self,'_bounds_down',False):
+            self._bounds_down=True;self._bounds_suppress=None
+            self._bounds_pressed=None;self._bounds_repeat_at=time.monotonic()+.35
+        candidates=[self._bounds_pressed] if getattr(self,'_bounds_pressed',None) is not None else list(range(36,42))+[48,49]
+        pressed=None
+        for index in candidates:
+            with self._planner.prepare(self.buttons[index],self._function('Button','IsPressed')).invoke() as result:
+                if result.return_value:pressed=index;break
+        if pressed is None:return
+        self._bounds_pressed=pressed
+        if time.monotonic()<self._bounds_repeat_at:return
+        self._bounds_suppress=pressed;self._bounds_suppress_until=time.monotonic()+1.
+        try:self.workspace_action(pressed-36)
+        except Exception as exc:self.library.message=str(exc)
+        # No full menu repaint or queued repeats. A release/focus loss stops it.
+        self._bounds_repeat_at=time.monotonic()+.08
+
     def poll(self):
-        if self.state=='open' and self.workspace=='Duplicate':
-            self.set_text(self.duplicate_status,textwrap.fill(self.library.message,46)+'\nOffsets accumulate. Update preview reads XYZ.\nApply keeps copies for map saving.\nClose / leave tab cancels unapplied copies.')
+        if self.state=='open' and self.workspace=='Bounds':
+            self.poll_bounds_hold()
+            self.set_text(self.detail,textwrap.fill(self.library.message,46))
+            return
+        if self.state=='open' and self.workspace in ('Maps','Templates','Bounds'):
+            self.set_text(self.detail,textwrap.fill(self.library.message,46))
+        if self.state=='open' and self.workspace in ('Duplicate','TemplatePlace'):
+            self.set_text(self.duplicate_status,textwrap.fill(self.library.message,46)+('\nXYZ offsets and yaw move the whole template.' if self.workspace=='TemplatePlace' else '\nOffsets accumulate. Update preview reads XYZ.')+'\nApply keeps copies for map saving.\nClose / leave tab cancels unapplied copies.')
             return
         self.collect_processing()
         if not self.mod.active or self.mod.booth_pending:return
@@ -678,10 +812,11 @@ class CatalogMenu(OwnedMenuPanel):
         if select:self.library.message='Thumbnail preview: '+self.library.known.get(asset,{}).get('name',asset)
         if asset in self.pending:self.pending.remove(asset)
     def hide(self):
-        self.mod.directional.cancel()
+        if self.mod.active:self.mod.command(67,values=[0]*8)
+        self.mod.directional.cancel();self.mod.templates.cancel()
         self.gallery=[];self.batch_gallery.paused=True;self.capture_paused=True
         if self.map_job:self.map_job=None;self.mod.scene_command(36)
-        if self.state=='open':self._render_call(self.buttons[52 if self.workspace=='Camera' else 36 if self.workspace=='Duplicate' else 0],'Widget','SetUserFocus',PlayerController=self.player)
+        if self.state=='open':self._render_call(self.buttons[52 if self.workspace=='Camera' else 36 if self.workspace in ('Duplicate','TemplatePlace','Bounds') else 0],'Widget','SetUserFocus',PlayerController=self.player)
         self.cancel_preview()
         if self.bindings:
             while self.bindings:

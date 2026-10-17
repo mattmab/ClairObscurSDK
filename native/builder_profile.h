@@ -160,6 +160,11 @@ inline const MeshField fields_64[]={
 {"Origin","StructProperty",8,24,6755469234275200ULL,0x6e136a0ULL,"Vector","",0,"",0U,""},
 {"BoxExtent","StructProperty",32,24,6755469234275200ULL,0x6e136a0ULL,"Vector","",0,"",0U,""},
 {"SphereRadius","FloatProperty",56,4,6755469234275200ULL,0x6e11560ULL,"","",0,"",0U,""}};
+inline const MeshField fields_65[]={{"ReturnValue","IntProperty",0,4,6755469234276224ULL,0x6e10a98ULL,"","",0,"",0U,""}};
+inline const MeshField fields_66[]={{"InstanceIndex","IntProperty",0,4,6755469234274944ULL,0x6e10a98ULL,"","",0,"",0U,""},
+{"OutInstanceTransform","StructProperty",16,96,6755469234274688ULL,0x6e136a0ULL,"Transform","",0,"",0U,""},
+{"bWorldSpace","BoolProperty",112,1,6755469234274944ULL,0x6e119b0ULL,"","",0,"",0xff010001U,""},
+{"ReturnValue","BoolProperty",113,1,6755469234276224ULL,0x6e119b0ULL,"","",0,"",0xff010001U,""}};
 inline const MeshFunction profiles[]={
 {"GameplayStatics","BeginDeferredActorSpawnFromClass",0x4c22403,144,144,136,0x37336c0,fields_0,7},
 {"GameplayStatics","FinishSpawningActor",0x4c22403,128,128,120,0x37372f0,fields_1,4},
@@ -226,6 +231,8 @@ inline const MeshFunction profiles[]={
 {"PlayerController","GetInputMouseDelta",1413612547,8,8,65535,0x3b26190,fields_62,2},
 {"Actor","K2_TeleportTo",75629571,49,56,48,0x333f380,fields_63,3},
 {"KismetSystemLibrary","GetComponentBounds",348267523,60,64,65535,0x384c320,fields_64,4},
+{"InstancedStaticMeshComponent","GetInstanceCount",1409418243,4,4,0,0x328af80,fields_65,1},
+{"InstancedStaticMeshComponent","GetInstanceTransform",1422001155,114,128,113,0x328afb0,fields_66,4},
 };
-inline const char* packages[]={"/Script/Engine","/Script/Engine","/Script/Engine","/Script/Engine","/Script/Engine","/Script/Engine","/Script/Engine","/Script/Engine","/Script/Engine","/Script/Engine","/Script/Engine","/Script/Engine","/Script/Engine","/Script/Engine","/Script/Engine","/Script/Engine","/Script/Engine","/Script/Engine","/Script/Engine","/Script/Engine","/Script/Engine","/Script/Engine","/Script/Engine","/Script/Engine","/Script/Engine","/Script/Engine","/Script/UMG","/Script/UMG","/Script/UMG","/Script/UMG","/Script/UMG","/Script/UMG","/Script/Engine","/Script/UMG","/Script/Engine","/Script/Engine","/Script/Engine","/Script/Engine","/Script/Engine","/Script/Engine","/Script/Engine","/Script/Engine","/Script/Engine","/Script/Engine","/Script/Engine","/Script/Engine","/Script/Engine","/Script/Engine","/Script/Engine","/Script/Engine","/Script/Engine","/Script/Engine","/Script/Engine","/Script/Engine","/Script/Engine","/Script/Engine","/Script/Engine","/Script/Engine","/Script/Engine","/Script/Engine","/Script/Engine","/Script/Engine","/Script/Engine","/Script/Engine","/Script/Engine"};
+inline const char* packages[]={"/Script/Engine","/Script/Engine","/Script/Engine","/Script/Engine","/Script/Engine","/Script/Engine","/Script/Engine","/Script/Engine","/Script/Engine","/Script/Engine","/Script/Engine","/Script/Engine","/Script/Engine","/Script/Engine","/Script/Engine","/Script/Engine","/Script/Engine","/Script/Engine","/Script/Engine","/Script/Engine","/Script/Engine","/Script/Engine","/Script/Engine","/Script/Engine","/Script/Engine","/Script/Engine","/Script/UMG","/Script/UMG","/Script/UMG","/Script/UMG","/Script/UMG","/Script/UMG","/Script/Engine","/Script/UMG","/Script/Engine","/Script/Engine","/Script/Engine","/Script/Engine","/Script/Engine","/Script/Engine","/Script/Engine","/Script/Engine","/Script/Engine","/Script/Engine","/Script/Engine","/Script/Engine","/Script/Engine","/Script/Engine","/Script/Engine","/Script/Engine","/Script/Engine","/Script/Engine","/Script/Engine","/Script/Engine","/Script/Engine","/Script/Engine","/Script/Engine","/Script/Engine","/Script/Engine","/Script/Engine","/Script/Engine","/Script/Engine","/Script/Engine","/Script/Engine","/Script/Engine","/Script/Engine","/Script/Engine"};
 }

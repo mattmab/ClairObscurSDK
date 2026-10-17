@@ -61,6 +61,18 @@
         clear();args_[0]=2;if(!call(b,component,16)||!component_pose(b,component,pose))return false;
         refresh_candidate(b,component);gpu_ready_component_={};return true;
     }
+    bool bulk_transform(uint64_t b,uint8_t* raw) {
+        uint32_t count=0;std::memcpy(&count,raw+2000,4);if(!count||count>128)return false;
+        // Preflight every identity and pose before changing any object.
+        for(uint32_t i=0;i<count;++i){const auto* row=raw+4096+112*i;CallIdentity id{};std::memcpy(&id,row,16);
+            if(!call_identity(b,id)||!valid_pose(row+16))return false;}
+        const auto begin=std::chrono::steady_clock::now();uint32_t done=0;
+        for(;done<count;){const auto* row=raw+4096+112*done;CallIdentity id{};std::memcpy(&id,row,16);
+            if(!apply_pose(b,id,row+16)){std::memcpy(raw+3560,&done,4);return false;}++done;
+            if(std::chrono::duration<double,std::milli>(std::chrono::steady_clock::now()-begin).count()>=4.)break;}
+        const double ms=std::chrono::duration<double,std::milli>(std::chrono::steady_clock::now()-begin).count();
+        std::memcpy(raw+3560,&done,4);std::memcpy(raw+3568,&ms,8);return true;
+    }
     bool export_scene(uint64_t b,uint8_t* raw,uint32_t offset=0) {
         uint32_t count=0,index=offset;const auto total=uint32_t(edits_.size());if(offset>total)return false;
         for(;index<total&&count<128;++index) {const auto& e=edits_[index];
