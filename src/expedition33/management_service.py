@@ -74,6 +74,14 @@ class NativeMenuService:
                                             time.perf_counter() - started)
         except BaseException as error:
             panel = self.menu.panel
+            from .cinematics.original_game_action import NotReady
+            if (isinstance(error,NotReady) and panel.widget is None and panel._planner is None
+                    and not panel.children and not panel.assigned and not panel.uncertain):
+                # Pure controller discovery raced travel: no engine mutation
+                # occurred, so retain no failed frontend and sample again later.
+                self.dispose_menu();self._warmup_attempted=False
+                self._next_prepare=time.monotonic()+.5
+                return
             if (isinstance(error, RuntimeQueryError) and self._discovery_retries < 3
                     and any(code in str(error) for code in ('DESCRIPTOR_IDENTITY_CHANGED',
                         'MATCH_RESULT_LIMIT', 'READ_FAILED', 'Catalog outer missing or changed'))

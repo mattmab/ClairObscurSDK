@@ -36,6 +36,28 @@ class ProcessUiTests(unittest.TestCase):
         self.router=m.ProcessUI(self.session,self.registry,shell_factory=Shell,entry_factory=Entry,reader_factory=lambda pid:self.reader)
         self.title=context();self.world=context('world',world=5,pc=6)
 
+    def test_travel_blocks_stale_world_and_unready_destination_reconstruction(self):
+        self.router.poll(self.world);self.router.quiesce();self.events.clear()
+        self.router._travel_recovery=N(state='traveling',poll=Mock())
+        self.router._travel_origin=self.world.signature
+        self.router._rebuild_requested=True
+        self.assertFalse(self.router.observe(N(ui_context=self.world,menu_ready=True)))
+        self.assertEqual(self.router.phase,'travel_pending');self.assertEqual(self.events,[])
+        destination=context('world',world=50,pc=60)
+        self.assertFalse(self.router.observe(N(ui_context=None,prewarm_context=destination,menu_ready=False)))
+        self.assertEqual(self.events,[])
+        self.assertTrue(self.router.observe(N(ui_context=destination,menu_ready=True,admission=N(activation_ready=True))))
+        self.assertEqual(self.router.context,destination)
+
+    def test_travel_arrival_poll_survives_originating_mod_retirement(self):
+        self.router.poll(self.world);self.router.quiesce()
+        request=N(state='traveling',poll=Mock())
+        request.poll.side_effect=lambda:setattr(request,'state','arrived')
+        self.router._travel_recovery=request;self.router._travel_origin=self.world.signature
+        destination=context('world',world=50,pc=60)
+        self.assertTrue(self.router.observe(N(ui_context=destination,menu_ready=True,admission=N(activation_ready=True))))
+        request.poll.assert_called_once();self.assertEqual(request.state,'arrived')
+
     def test_detached_pause_owner_is_adopted_once_with_current_controller(self):
         self.router.shell=N(service=object())
         source=object();self.session._pause_button_source=source

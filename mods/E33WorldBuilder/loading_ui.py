@@ -63,3 +63,4 @@ class LoadingUI:
         for panel in (self.catalog,self.hud):
             if panel is not None and panel.state!='closed':panel.close()
         if not self.scope._closed:self.scope.close()
+        if self.mod._loading_ui is self:self.mod._loading_ui=None

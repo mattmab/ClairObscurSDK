@@ -691,6 +691,9 @@ class SessionTransport:
     def _abort(self):
         # Only our controller subprocess. Its exit wakes the target-owned cleanup
         # watcher; never terminate or force-unload anything from the game here.
+        if not self._closed:
+            import logging
+            logging.getLogger(__name__).error('Native controller abort requested', stack_info=True)
         self._closed = True
         if self._process.poll() is None:
             if self.target_exit_code is not None:

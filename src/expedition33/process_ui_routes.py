@@ -29,6 +29,8 @@ class ProcessMenuRoute:
     @travel_recovery.setter
     def travel_recovery(self,value):
         self._travel_recovery=value
+        self.owner._travel_recovery=value
+        self.owner._travel_origin=getattr(self.owner.context,'signature',None)
         service=self._service()
         if service is not None:service.travel_recovery=value
     @property
@@ -57,6 +59,12 @@ class ProcessMenuRoute:
     def close_menu(self):
         service=self._service()
         if service is not None:return service.close_menu()
+    def prepare_travel(self):
+        """ACK borrowed input/entry teardown, retaining the GI-owned shell."""
+        self._service(required=True)
+        if not self.owner.quiesce():
+            raise ManagementError('Menu input cleanup is still pending')
+        return True
     def dispose_menu(self):
         service=self._service()
         if service is not None:

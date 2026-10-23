@@ -58,3 +58,30 @@ down from 2.19 seconds. Its paint phase remains about 0.50-0.52 seconds. Thus th
 200 ms goal applies to the measured prepared Mods opening, not every view change.
 Timings remain available through `startuptiming`; detailed stage measurements
 are kept in the local SDK log, not normal console startup output.
+
+## Map Travel recovery follow-up
+
+Map Travel now detaches borrowed input and pause entries while retaining the
+GameInstance-owned menu shell. Destination observation belongs to the process,
+so retirement of the departing mod cannot leave travel waiting for its timeout.
+Read-only arrival checks borrow an active reader and discard known loading/GC
+read failures; the native transition is never redispatched.
+
+The departing Map Travel instance also leaves destination button creation to
+fresh world activation. Attaching it from the old scope could cause retirement
+to reject the new-world owner and abort the shared SDK controller. Controller
+aborts and held retirement adapters now retain local stack diagnostics.
+
+Released loading preparations are discarded after their cleanup acknowledgement,
+including during world-to-world travel. World Builder clears its corresponding
+preparation reference so a later activation cannot adopt closed panels.
+
+The regression suite passes 2,071 tests with 8 skips. A cold-session transition
+from Ancient Sanctuary to Blades Graveyard restored all seven enabled gameplay
+mods and reopened Mods successfully (166 ms measured opening). Restoration
+completed about four seconds after destination exploration admission; this
+travel check does not establish the initial save-loading latency target.
+The following return trip exposed the released-preparation gate; applying its
+scheduling correction recovered that session without restarting. A subsequent
+Ancient Sanctuary to Blades Graveyard transition then restored all seven mods
+automatically, with no controller abort or retained-preparation stall.

@@ -125,6 +125,17 @@ class NativeServiceTests(unittest.TestCase):
         route.close()  # An inactive route cannot close the default view.
         self.assertEqual(original.panel.state, 'open')
 
+    def test_absent_controller_during_pure_discovery_defers_without_failure(self):
+        from expedition33.cinematics.original_game_action import NotReady
+        service=self.service()
+        panel=SimpleNamespace(widget=None,_planner=None,children=[],assigned=[],uncertain=[])
+        menu=SimpleNamespace(panel=panel,prepare=Mock(side_effect=NotReady('Player controller is not available yet')),
+            _read_operation=lambda:nullcontext(),close=Mock(return_value=True))
+        service._menu_factory=Mock(return_value=menu)
+        service.prepare()
+        menu.close.assert_called_once();self.assertIsNone(service.menu)
+        self.assertIsNone(service._failure);self.assertFalse(service._warmup_attempted)
+
     def test_unchanged_warmed_first_open_skips_paint_but_attaches_and_binds(self):
         service=self.service();service.prepare();menu=service.menu
         menu._paint=Mock(wraps=menu._paint);menu._render_view=Mock(wraps=menu._render_view)

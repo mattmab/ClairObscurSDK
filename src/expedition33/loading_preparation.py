@@ -73,8 +73,11 @@ class LoadingPreparation:
                     self.failed.add(name)
                     LOG.exception('Loading preparation held: %s',name)
         else:
-            for name,owner in self.owners.items():
+            for name,owner in tuple(self.owners.items()):
                 if name in self.failed:continue
+                if getattr(owner,'released',False) is True:
+                    owner.close();del self.owners[name]
+                    continue
                 try:owner.bind(context,preparing=not getattr(getattr(packet,'admission',None),'activation_ready',False))
                 except UiProofPending:return False
                 except Exception:

@@ -94,3 +94,13 @@ class LoadingPreparationTests(unittest.TestCase):
         c.observe(packet)
         owner.close.assert_called_once()
         self.assertEqual(owner.prepare.call_count,2)
+
+    def test_world_handoff_discards_acknowledged_released_preparation(self):
+        c,mod,owner=self.fixture()
+        c.observe(N(ui_context=N(kind='title')))
+        owner.released=True
+        owner.bind.side_effect=UiProofPending('closed widgets cannot rebind')
+        self.assertTrue(c.observe(N(ui_context=N(kind='world'),admission=N(activation_ready=True))))
+        owner.close.assert_called_once()
+        owner.bind.assert_not_called()
+        self.assertNotIn('Builder',c.owners)

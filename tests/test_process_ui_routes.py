@@ -74,6 +74,19 @@ class RouteTests(unittest.TestCase):
         self.owner.context.kind='world';self.route.dispose_menu()
         self.service.dispose_menu.assert_called_once_with();self.assertTrue(self.owner._rebuild_requested)
 
+    def test_travel_detaches_host_entries_without_disposing_process_tree(self):
+        self.owner.context.kind='world';self.owner.quiesce=Mock(return_value=True)
+        self.route.prepare_travel()
+        self.owner.quiesce.assert_called_once();self.service.dispose_menu.assert_not_called()
+        self.owner.quiesce.return_value=False
+        with self.assertRaisesRegex(Exception,'cleanup is still pending'):self.route.prepare_travel()
+
+    def test_travel_request_is_retained_on_owner_across_service_replacement(self):
+        self.owner.context.signature=('world',1)
+        request=object();self.route.travel_recovery=request
+        self.assertIs(self.owner._travel_recovery,request)
+        self.assertEqual(self.owner._travel_origin,('world',1))
+
     def test_sdkmanagement_process_branch_constructs_no_second_service_or_entry(self):
         spec=importlib.util.spec_from_file_location('reuse_sdkmanagement',ROOT/'mods/SDKManagement/mod.py')
         mod=importlib.util.module_from_spec(spec);spec.loader.exec_module(mod)

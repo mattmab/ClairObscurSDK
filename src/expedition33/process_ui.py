@@ -279,6 +279,27 @@ class ProcessUI:
     def _observe(self,packet):
         context=getattr(packet,'ui_context',None) if packet is not None else None
         prewarm=getattr(packet,'prewarm_context',None) if packet is not None else None
+        request=getattr(self,'_travel_recovery',None)
+        if request is not None and getattr(request,'state',None)=='traveling':
+            # Arrival is pure observation, serviced even after the old world
+            # mod has retired. Never replay the normal-transition dispatch.
+            request.poll()
+            from ._reader import active_reader
+            reader=active_reader()
+            if reader is not None and reader._closed:
+                self.phase='travel_pending';return False
+            if request.state!='traveling':
+                import logging
+                logging.getLogger(__name__).info('Process travel observation finished: %s',request.state)
+        if request is not None and getattr(request,'state',None) in ('traveling','recovering'):
+            destination=context or prewarm
+            # An in-flight transition can leave one last old-world sample.
+            # Never rebuild/attach against it or an unready destination.
+            if (destination is None or destination.signature==getattr(self,'_travel_origin',None)
+                    or getattr(packet,'menu_ready',None) is not True):
+                if self.shell is not None:self.shell.ready=None
+                if self.entry is not None:self.entry.ready=None
+                self.phase='travel_pending';return False
         if prewarm is not None and prewarm.kind=='world':
             if self.shell is None:return self.poll(prewarm,_prepare_only=True)
             # Build/rebind detached widgets while the loading screen still owns

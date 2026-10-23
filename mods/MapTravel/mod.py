@@ -4,12 +4,13 @@ import re
 import time
 from contextlib import nullcontext
 
+from expedition33 import RuntimeQueryError
 from expedition33.paths import game_root
 from expedition33.management import Action, ModDefinition, ManagementError
 from expedition33.management_view import MenuControl, MenuFrame
 from expedition33.pause_menu import PauseMenuEntry
 from expedition33.invocation import InvocationError
-from expedition33._reader import ReadBatch
+from expedition33._reader import ReadBatch, active_reader
 from expedition33.cinematics.original_game_action import (
     controller_context, ready_history, NotReady,
 )
@@ -45,6 +46,7 @@ class Travel:
     """One normal transition invocation, with fresh destination readiness checks."""
     def __init__(self, session, destination):
         self.session, self.destination = session, destination
+        self._observer=getattr(session,'_session',session) # Process owner outlives the originating mod scope.
         self.state, self.error = 'new', None
         self.deadline = self.next_poll = 0.
 
@@ -78,20 +80,28 @@ class Travel:
             self.state, self.error = 'failed', 'Travel timed out; no command was retried.'
             return
         try:
-            with ReadBatch(self.session.pid, share=True):
-                current = controller_context(self.session)
+            with ReadBatch(self._observer.pid, share=active_reader() is None):
+                current = controller_context(self._observer)
             if current['controller'] == self.before['controller']:
                 raise NotReady('Waiting for the new player controller')
             if current['world_path'] != self.destination['world_path']:
                 raise NotReady('Waiting for the destination map')
             # The game's spawn manager handles the entrance during this load.
-            with ReadBatch(self.session.pid, share=True):
-                ready_history(self.session)
-                if controller_context(self.session) != current:
+            with ReadBatch(self._observer.pid, share=active_reader() is None):
+                ready_history(self._observer)
+                if controller_context(self._observer) != current:
                     raise NotReady('Destination is still loading')
             self.state, self.error = 'arrived', None
         except NotReady as error:
             self.error = str(error)
+        except RuntimeQueryError as error:
+            # Pure reads can straddle loading/GC. Discard those observations;
+            # the transition itself is never invoked again.
+            if any(code in str(error) for code in ('DESCRIPTOR_IDENTITY_CHANGED','DESCRIPTOR_SET_INCOMPLETE',
+                    'MODULE_SNAPSHOT_FAILED','READ_FAILED','SELECTED_DEPENDENCY_CHANGED',
+                    'Object identity changed or belongs to another process')):
+                self.error='Destination observation pending'
+            else:self.state,self.error='failed',str(error)
         except Exception as error:
             self.state, self.error = 'failed', str(error)
 
@@ -211,19 +221,23 @@ class Mod:
         request = Travel(self.session, destination)
         started = time.perf_counter()
         LOG.info('Travel phase begin_cleanup')
-        # Dispose the shared widget tree and this entry before world teardown.
-        menu = self.native.parent.menu
-        with self.pause.cleanup_feedback() if self.pause else nullcontext():
-            if menu is not None and callable(getattr(menu.panel, 'close_owned_tree', None)):
-                # The closed browser has already detached native input. Keep the
-                # read worker scoped to cleanup; never carry it across map travel.
-                with menu._read_operation():
-                    if not menu.panel.close_owned_tree():
-                        raise ManagementError('Menu input cleanup is still pending')
-            self.native.parent.dispose_menu()
-        LOG.info('Travel phase menu_cleanup: %.3fs', time.perf_counter() - started)
-        if menu is not None and menu.panel.state != 'closed':
-            raise ManagementError('The menu must fully dispose before travel')
+        # Process-owned GI widgets survive travel; only input and borrowed
+        # pause entries must detach. Legacy world-owned frontends still dispose.
+        parent=self.native.parent
+        prepare_travel=getattr(parent,'prepare_travel',None)
+        menu=parent.menu
+        if callable(prepare_travel):
+            prepare_travel()
+        else:
+            with self.pause.cleanup_feedback() if self.pause else nullcontext():
+                if menu is not None and callable(getattr(menu.panel,'close_owned_tree',None)):
+                    with menu._read_operation():
+                        if not menu.panel.close_owned_tree():
+                            raise ManagementError('Menu input cleanup is still pending')
+                parent.dispose_menu()
+            if menu is not None and menu.panel.state!='closed':
+                raise ManagementError('The menu must fully dispose before travel')
+        LOG.info('Travel phase menu_cleanup: %.3fs', time.perf_counter()-started)
         if self.pause:
             pause_started = time.perf_counter()
             self.pause.close()
@@ -248,7 +262,12 @@ class Mod:
         LOG.info('%s', self.message)
         if self.native.parent.travel_recovery is request:
             self.native.parent.travel_recovery = None
-        if self.pause is None:
+        # This instance still belongs to the departing world. A successful
+        # process-owned handoff is followed by retirement and fresh enable;
+        # never attach a destination button to this old epoch's scope.
+        process_handoff=(request.state=='arrived' and callable(
+            getattr(self.native.parent,'prepare_travel',None)))
+        if self.pause is None and not process_handoff:
             self.pause = self._new_pause_entry()
 
     def poll(self):
