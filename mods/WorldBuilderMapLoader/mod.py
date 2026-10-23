@@ -1,7 +1,8 @@
 """WorldBuilder Map Loader: independent runtime maps during normal gameplay."""
-import time,textwrap,logging
+import time,logging
 LOG=logging.getLogger("expedition33.worldbuilder_map_loader")
 from expedition33.management import ModDefinition,Action,Keybind
+from expedition33.management_native import display_detail,display_line
 from expedition33.paths import settings_dir
 from .state import Assignments,Visits
 from expedition33.map_runtime import MapRuntime,context
@@ -178,10 +179,10 @@ class Mod:
         p=self.panel;key=self.assignments.values.get(self.current['world']);page=self.rows[self.offset:self.offset+6]
         with p.paint_batch():
             p.set_text(p.title,'WorldBuilder Map Loader - '+self.current['world'].rsplit('.',1)[-1])
-            p.set_text(p.detail,textwrap.fill(self.message,44)+'\n\nOne saved map per vanilla world. '+str(len(self.rows))+' saves here.\nPage '+str(self.offset//6+1)+'/'+str(max(1,(len(self.rows)+5)//6)))
+            p.set_text(p.detail,display_detail(self.message,width=44,height=12)+'\n\nOne saved map per vanilla world. '+str(len(self.rows))+' saves here.\nPage '+str(self.offset//6+1)+'/'+str(max(1,(len(self.rows)+5)//6)))
             for i in range(6):
                 row=page[i] if i<len(page) else None
-                p.set_text(p.labels[i],('[Selected] ' if row and row['id']==key else '')+row['name']+f" ({row['count']} objects)" if row else ('No saves for this map - Close' if i==0 else ''))
+                p.set_text(p.labels[i],display_line(('[Selected] ' if row and row['id']==key else '')+row['name']+f" ({row['count']} objects)",80) if row else ('No saves for this map - Close' if i==0 else ''))
                 p.set_visible(i,row is not None or i==0)
             for i,label in enumerate(('Previous','Next','No automatic map','Load Now / Reload','Close','Unload map'),6):p.set_text(p.labels[i],label)
             p.set_enabled(6,self.offset>0);p.set_enabled(7,self.offset+6<len(self.rows));p.set_enabled(9,bool(key))

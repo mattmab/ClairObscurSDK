@@ -9,6 +9,19 @@ from expedition33.worldbuilder_maps import FORMAT
 def data(name='test'):
     return dict(format=FORMAT,version=1,name=name,world='/Game/Test.Test',objects=[dict(id='a'*32,kind='mesh',asset='/Game/M.M',transform=[0,0,0,1,0,0,0,0,1,1,1,0])],assets=['/Game/M.M'])
 class PreparationTests(unittest.TestCase):
+    def test_menu_bounds_long_error_and_supplementary_unicode_names(self):
+        from contextlib import nullcontext
+        from types import SimpleNamespace
+        model=loader.Mod();model.current={'world':'/Game/Test.Test'}
+        model.assignments=SimpleNamespace(values={})
+        model.message='Read failed: '+('diagnostic '*2000)
+        model.rows=[{'id':'a'*32,'name':'\U0001f600'*5000,'count':1}];model.offset=0
+        model.panel=Mock(title=object(),detail=object(),labels=[object() for _ in range(12)])
+        model.panel.paint_batch.return_value=nullcontext()
+        model._paint()
+        for call in model.panel.set_text.call_args_list:
+            self.assertLessEqual(len(call.args[1].encode('utf-16-le'))//2,4095)
+
     def setUp(self):
         self.temp=tempfile.TemporaryDirectory();self.addCleanup(self.temp.cleanup);self.root=pathlib.Path(self.temp.name)
         self.store=PreparedMapStore(self.root);self.key='b'*32;self.path=self.store.file(self.key);self.path.write_text(json.dumps(data()))
