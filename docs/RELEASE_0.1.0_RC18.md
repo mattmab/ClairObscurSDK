@@ -50,7 +50,7 @@ menu timings depend on the installation and current game state.
 
 ## Validation
 
-- 1,994 SDK tests passed (8 existing skips); 140 World Builder tests passed.
+- 1,995 SDK tests passed (8 existing skips); 140 World Builder tests passed.
 - Runtime210 and its native fixtures compiled with MSVC `/W4 /WX`.
 - Live title and gameplay Mods-button opens measured approximately 150–197 ms
   after preparation. Initial preparation and individual mod activation

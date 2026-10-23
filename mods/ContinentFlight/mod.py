@@ -11,7 +11,7 @@ from concurrent.futures import ThreadPoolExecutor
 from expedition33.catalog import capture_matching
 from expedition33._reader import ReadBatch, active_reader
 from expedition33.management import Action, Keybind, ModDefinition
-from expedition33.values import read_values
+from expedition33.values import read_values, read_values_many
 from expedition33.invocation import InvocationError
 from expedition33.keys import VIRTUAL_KEYS
 
@@ -71,7 +71,7 @@ def discover_snapshot(pid, cached=None):
     candidates = []
     for controller in catalog.select('PlayerController'):
         if controller.object_flags & 0x10: continue
-        values = read_values(catalog, controller, fields=('bIsLocalPlayerController','Pawn')).values
+        values = read_values_many(catalog,(controller,),fields=('bIsLocalPlayerController','Pawn'))[controller.index].values
         if values.get((player_class, 'bIsLocalPlayerController')) is not True: continue
         current = values.get((controller_class, 'Pawn'))
         if current is not None and current.class_name in (
