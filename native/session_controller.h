@@ -384,7 +384,7 @@ inline void run_runtime_session(DWORD pid, DWORD thread, int32_t object_index, i
 #ifdef E33_PAUSE_MENU_SESSION
               << ",\"pause_attachment_protocol\":2,\"trace_renew_protocol\":1"
 #ifdef E33_RETIRED_WORLD_SESSION
-              << ",\"retired_world_cleanup_protocol\":1"
+              << ",\"retired_world_cleanup_protocol\":1,\"builder_world_retirement_protocol\":1"
 #endif
 #endif
 #ifdef E33_MEDIA_SESSION

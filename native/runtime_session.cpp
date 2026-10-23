@@ -958,7 +958,11 @@ uint32_t backend_command(SessionPacket* packet) {
             __except(EXCEPTION_EXECUTE_HANDLER) {session_runtime_cinematic.quarantine();p.error=2015;}
             return 0;
         }
-        if(p.operation>=20 && session_runtime_cinematic.active()){p.error=2001;return 0;}
+        if(p.operation>=20 &&
+#ifdef E33_RETIRED_WORLD_SESSION
+            p.operation!=68 &&
+#endif
+            session_runtime_cinematic.active()){p.error=2001;return 0;}
 #endif
         if(p.operation>=20) {session_builder.command(runtime_base,lease_session,session_leases,p);p.step=session_builder.step();return 0;}
         session_mesh.command(runtime_base,lease_session,session_leases,p);session_mesh.reply(p);return 0;

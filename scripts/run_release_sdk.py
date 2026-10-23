@@ -108,8 +108,9 @@ def main():
         from expedition33.settings import SettingsStore
         original_transport = sdk.SessionTransport
         def release_transport(*, _executable=None):
-            transport = original_transport(_executable=ROOT / 'build/research-probe-cinematic-v209-lease-batch/research_probe.exe')
+            transport = original_transport(_executable=ROOT / 'build/research-probe-cinematic-v210-lease-batch/research_probe.exe')
             required = ('retired_world_cleanup_protocol', 'menu_open_focus_protocol', 'metadata_stabilization_protocol', 'stable_lease_protocol', 'console_color_status_protocol', 'lease_release_batch_protocol', 'original_game_action_protocol', 'blueprint_trace_protocol', 'picto_edit_protocol', 'picto_progression_protocol', 'picto_class_load_protocol', 'picto_cost_protocol')
+            required = (*required,'builder_world_retirement_protocol')
             if transport.zone_travel_protocol != 2 or any(getattr(transport, name, 0) != 1 for name in required) or transport.mesh_protocol != 3:
                 transport.close()
                 raise RuntimeError('Combined release runtime is missing capabilities')
