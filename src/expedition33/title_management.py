@@ -2,7 +2,7 @@
 from dataclasses import replace
 from .management import ManagementError
 from .management_view import MenuFrame,MenuControl
-from .mods_workspace_scroll import ScrollWorkspaceView
+from .mods_workspace_scroll import ScrollWorkspaceView, EMPTY, CONTROL_COUNT
 
 class TitleRegistryFacade:
     def __init__(self,registry):self._registry=registry;self._settings=registry._settings;self._view=None
@@ -62,10 +62,10 @@ class TitleWorkspaceView(ScrollWorkspaceView):
             self._check();self._invalidate();self.row_states=[];self.total_rows=2;self.scroll_start=0;folder=self._legacy_folder;record=self.registry.saved_folder(folder)
             description='Definition deferred until a save is loaded. Python has not been imported. Options and keybinds become available after an audited startup preparation or the first world load.'
             description+='\n\nSaved preference: '+('enabled' if record and record[1] else 'disabled' if record else 'not configured')
-            controls=[]
-            for index,(label,op,arg,enabled) in enumerate((('Enable after loading','title_stage_legacy',True,record is not None),('Disable after loading','title_stage_legacy',False,record is not None),('Back','title_back',None,True),('Previous','none',None,False),('Next','none',None,False),('Close','close',None,True))):
-                controls.append(MenuControl(index,label,enabled));self._commands[index]=(op,arg,enabled)
-            return MenuFrame(self._revision,folder,description,tuple(controls),0,1,self.status,False)
+            controls=[EMPTY]*CONTROL_COUNT
+            for index,label,op,arg,enabled in ((0,'Enable after loading','title_stage_legacy',True,record is not None),(6,'Disable after loading','title_stage_legacy',False,record is not None),(48,'Back','title_back',None,True),(51,'Close','close',None,True)):
+                controls[index]=MenuControl(index,label,enabled);self._commands[index]=(op,arg,enabled)
+            return self.chrome(MenuFrame(self._revision,folder,description,tuple(controls),0,1,self.status,False))
         frame=super().render();controls=[]
         blocked={'action','reload_current','reload','unload','install_staged','diagnostics','shutdown'}
         for c in frame.controls:

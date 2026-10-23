@@ -205,4 +205,18 @@ class WorldLifecycleTests(unittest.TestCase):
    self.assertEqual(keys.cancel_capture.called,expected)
   self.loader._keys=None
 
+class HarnessWorldGateTests(unittest.TestCase):
+ def test_harness_bridge_is_compatible_and_revokes_direct_dispatch(self):
+  from expedition33.world_lifecycle import GatedActions
+  from expedition33.introspection import Harness
+  bridge=N(OPERATIONS=frozenset(('agent_status',)),dispatch=Mock(return_value={'ok':True}))
+  coordinator=N(allows_scope=Mock(return_value=True));scope=object()
+  actions=GatedActions(N(_bridge=bridge),coordinator,'Harness',scope)
+  harness=Harness(N(actions=actions,supports_reflected_invocation=False))
+  self.assertEqual(harness.request({'op':'agent_status'}),{'ok':True})
+  coordinator.allows_scope.return_value=False
+  with self.assertRaises(WorldLifecycleError):harness.request({'op':'agent_status'})
+  bridge.dispatch.assert_called_once_with({'op':'agent_status'})
+  harness.close()
+
 if __name__=='__main__':unittest.main()

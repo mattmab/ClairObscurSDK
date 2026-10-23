@@ -31,6 +31,20 @@ class TitleManagementTests(unittest.TestCase):
   view=TitleWorkspaceView(self.registry);frame=view.render();control=next(c for c in frame.controls if view._commands.get(c.token)==('title_legacy','Legacy',True));frame=view.activate(frame.revision,control.token)
   self.assertIn('Definition deferred',frame.description);control=next(c for c in frame.controls if c.label=='Enable after loading');view.activate(frame.revision,control.token)
   self.assertTrue(self.store.get('legacy.id')['enabled']);self.assertNotIn('Legacy',self.loader._loaded)
+ def test_deferred_page_keeps_workspace_navigation_after_staging(self):
+  folder=self.root/'Legacy';folder.mkdir();(folder/'mod.py').write_text("raise AssertionError('must remain deferred')")
+  self.store.save('legacy.id',{'folder':'Legacy','enabled':False})
+  view=TitleWorkspaceView(self.registry);frame=view.render()
+  token=next(c.token for c in frame.controls if view._commands.get(c.token)==('title_legacy','Legacy',True))
+  frame=view.activate(frame.revision,token)
+  for label,enabled in (('Enable after loading',True),('Disable after loading',False)):
+   control=next(c for c in frame.controls if c.label==label)
+   frame=view.activate(frame.revision,control.token)
+   self.assertEqual(self.store.get('legacy.id')['enabled'],enabled)
+   self.assertEqual(frame.controls[48].label,'Back');self.assertEqual(frame.controls[51].label,'Close')
+   self.assertEqual(frame.controls[76].label,'Mods');self.assertEqual(frame.controls[77].label,'Keybinds')
+  frame=view.activate(frame.revision,77)
+  self.assertEqual(view.screen,'all_keys');self.assertNotIn('Legacy',self.loader._loaded)
  def test_unknown_legacy_identity_cannot_guess_saved_id(self):
   facade=TitleRegistryFacade(self.registry)
   with self.assertRaisesRegex(ManagementError,'known saved identity'):facade.stage_saved('Unknown',True)
@@ -49,7 +63,7 @@ class TitleAttachmentTests(unittest.TestCase):
   self.service=N(menu=None,open=lambda:self.events.append('open'))
   self.entry=TitleMenuEntry(self.parent,self.service,readiness=lambda:self.ready)
   self.scope=N(_session=self.parent._session,_leases=[],invocation_planner=lambda **kw:self.planner,retain=lambda obj:N(object=obj,active=True),close=lambda:self.events.append('scope-close'))
-  self.planner=N(_catalog=None,prepare=lambda *a,**kw:N(_plan=object(),invoke=lambda:nullcontext(N(return_value=True))))
+  self.planner=N(_catalog=None,_metadata=N(_entries={}),prepare=lambda *a,**kw:N(_plan=object(),invoke=lambda:nullcontext(N(return_value=True))))
   def obj(name,index):return N(name=name,index=index,serial=1,address=index+1000,class_name=name)
   self.player=obj('PlayerController',1);self.title=obj('WBP_MM_TitleScreen_C',2);self.box=obj('VerticalBox',3);self.button=obj('WBP_BaseButton_C',4);self.style=obj('style',5)
   self.catalog=N(objects=[obj('Default__WidgetBlueprintLibrary',20),obj('Default__GameplayStatics',21)],with_observations=lambda value:self.catalog)
@@ -191,6 +205,15 @@ class TitleInputRestorationTests(unittest.TestCase):
   from expedition33.cinematics.original_game_action import NotReady
   self.entry._poll_title=lambda:(_ for _ in ()).throw(NotReady('partial link'))
   self.entry.poll();self.assertEqual(self.events,[]);self.assertTrue(self.entry._title_restore_pending)
+ def test_discovery_race_waits_only_before_ui_construction(self):
+  from expedition33 import RuntimeQueryError
+  self.entry._poll_title=lambda:(_ for _ in ()).throw(RuntimeQueryError('DESCRIPTOR_IDENTITY_CHANGED'))
+  self.entry.state='new';self.entry.poll()
+  self.entry.state='building'
+  with self.assertRaises(RuntimeQueryError):self.entry.poll()
+  self.entry.state='new'
+  self.entry._poll_title=lambda:(_ for _ in ()).throw(RuntimeQueryError('Unexpected schema'))
+  with self.assertRaises(RuntimeQueryError):self.entry.poll()
  def test_acknowledged_hide_restores_overlay_then_uionly_then_button_focus(self):
   self.assertTrue(self.entry.restore_title_input_after_menu_close());self.assertEqual(self.events,['overlay','uionly','focus']);self.assertFalse(self.entry._title_restore_pending)
   self.assertTrue(self.entry.restore_title_input_after_menu_close());self.assertEqual(self.events,['overlay','uionly','focus'])

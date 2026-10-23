@@ -85,9 +85,11 @@ class CachedProcessShell:
         if self.service._failure:raise UiFrontendHeld('Prepared process UI frontend failed; retain its owner')
         menu=self.service.menu
         if menu is None or menu.panel.state!='built':return False
-        self.proof.verify(menu.panel,context)
         from ._reader import ReadBatch
-        with ReadBatch(self.scope.pid):
+        from .ui_shell_proof import prepare_panel_metadata
+        with ReadBatch(self.scope.pid,share=True):
+            prepare_panel_metadata(menu.panel)
+            self.proof.verify(menu.panel,context)
             # Proof metadata stabilization invalidates the process menu plan.
             # Rebuild it on this retained reader before publishing the entry.
             menu.panel.prime_menu_plan()
@@ -121,7 +123,14 @@ class CachedProcessShell:
         if callable(cancel):cancel()
         return True
 
-    def rebind(self,context):
+    def rebind(self,context,*,preparing=False):
+        from ._reader import ReadBatch
+        # One read-only worker for proof and detached repaint. Nested operation
+        # batches borrow it without redoing executable validation at each step.
+        with ReadBatch(self.scope.pid,share=True):
+            return self._rebind(context,preparing=preparing)
+
+    def _rebind(self,context,*,preparing=False):
         menu=self.service.menu
         if menu is None or menu.panel.state!='built' or menu.panel.menu is not None:
             raise UiProofPending('Detached process UI shell required')
@@ -133,7 +142,8 @@ class CachedProcessShell:
             raise UiProofMismatch('Process UI bindings exceed the supported fixed row bound')
         if bindings>menu.panel.key_row_capacity:
             raise UiCapacityRebuild('Detached process UI requires a larger key capacity')
-        self.proof.verify(menu.panel,context,rebind=True)
+        if preparing:self.proof.verify(menu.panel,context,rebind=True,preparing=True)
+        else:self.proof.verify(menu.panel,context,rebind=True)
         # Metadata and native menu plans were refreshed by proof before any
         # presenter/callback is moved to the new context. No scope is reparented.
         menu.view.close()
@@ -192,6 +202,7 @@ class ProcessUI:
         self._entry_context=None
         self._rebuild_requested=False
         self._pending_reason=None
+        self._prewarmed_signature=None
         self.frontend_failed=None;self._frontend_record=None
 
     def _check(self):
@@ -220,6 +231,13 @@ class ProcessUI:
         """Copied scheduling only; actual handoff independently proves context."""
         context=getattr(packet,'ui_context',None) if packet is not None else None
         prewarm=getattr(packet,'prewarm_context',None) if packet is not None else None
+        if prewarm is not None and prewarm.kind=='world':
+            # Build/rebind detached widgets while the loading screen still owns
+            # presentation. No pause entry, input, or gameplay enable is granted.
+            if self.shell is not None and self._prewarmed_signature==prewarm.signature:
+                if getattr(packet,'menu_ready',None) is not True:return False
+            elif self.shell is not None:
+                return self.poll(prewarm,_prepare_only=True)
         if (context is None and prewarm is not None and prewarm.kind=='title'
                 and self.context is None and self.entry is None):
             return self.poll(prewarm,_prepare_only=True)
@@ -352,7 +370,11 @@ class ProcessUI:
             else:
                 self.phase='rebinding'
                 try:
-                    if not self.shell.rebind(context):return False
+                    if self._prewarmed_signature!=context.signature:
+                        self._prewarmed_signature=None
+                        if _prepare_only and context.kind=='world':
+                            if not self.shell.rebind(context,preparing=True):return False
+                        elif not self.shell.rebind(context):return False
                 except UiCapacityRebuild:
                     self.phase='capacity_rebuild'
                     if not self.shell.close():return False
@@ -361,6 +383,7 @@ class ProcessUI:
                     # next observation must reauthorize even this clean rebuild.
                     return False
             if _prepare_only:
+                self._prewarmed_signature=context.signature
                 self.phase='prewarmed';self.shell.ready=None;return False
             self.phase='entry'
             self.entry=self._entry_factory(self.session,self.shell.service,context)

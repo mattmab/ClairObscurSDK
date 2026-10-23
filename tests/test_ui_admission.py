@@ -14,6 +14,15 @@ m=importlib.util.module_from_spec(spec);sys.modules[spec.name]=m;spec.loader.exe
 
 
 class UiProbeTests(unittest.TestCase):
+    def test_title_prewarm_does_not_wait_for_save_manager(self):
+        observer=m.UiAdmissionObserver.__new__(m.UiAdmissionObserver)
+        observer._reader=object();context=object()
+        for admission in (Admission('inactive','save_manager_unavailable'),Admission('loading','save_load_in_progress')):
+            with patch.object(m.WarmAdmissionObserver,'observe',return_value=admission), \
+                 patch.object(observer,'_title_prewarm_context',return_value=context) as prepare:
+                packet=observer.observe()
+                self.assertIs(packet.prewarm_context,context);self.assertFalse(packet.title_ready)
+                prepare.assert_called_once_with()
     def test_warm_binding_uses_fast_fresh_gate_then_rediscovers_after_invalidation(self):
         observer=m.UiAdmissionObserver.__new__(m.UiAdmissionObserver)
         observer._activation_binding=('selected',)
@@ -42,6 +51,12 @@ class UiProbeTests(unittest.TestCase):
             select.assert_called_once_with(7,((4,1,0x10400),))
             values.assert_called_once_with(catalog,(controller,),fields=('PauseMenuWidget',))
             self.assertEqual(reference.call_args.kwargs,{'project':True})
+            with patch.object(m.WarmAdmissionObserver,'observe',return_value=Admission(
+                    'world_ready','possession_pending',result.token,False)):
+                loading=observer.observe()
+            self.assertTrue(loading.menu_ready)
+            self.assertEqual(loading.prewarm_context,loading.ui_context)
+            self.assertFalse(loading.admission.activation_ready)
 
     def test_inactive_and_uncertain_skip_ui_queries(self):
         observer=m.UiAdmissionObserver.__new__(m.UiAdmissionObserver)

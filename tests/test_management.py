@@ -213,6 +213,14 @@ class ManagementTests(unittest.TestCase):
         menu.close(); self.assertNotIn('mods', dispatch.command_names)
         with self.assertRaises(ManagementError): menu.command('')
 
+    def test_console_open_alias(self):
+        from unittest.mock import Mock
+        native=Mock();shared=FakeSession()
+        menu=ConsoleMenu(self.registry,shared.console,native=native)
+        self.assertFalse(shared.console.dispatcher.execute('mods open').failed)
+        native.command.assert_called_once_with('open')
+        menu.close()
+
     def test_core_protection_duplicate_id_and_owner_thread(self):
         other = self.root / 'Other'; other.mkdir()
         (other / 'mod.py').write_text(SOURCE, encoding='utf-8')

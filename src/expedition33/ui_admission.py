@@ -31,11 +31,23 @@ class UiAdmissionObserver(WarmAdmissionObserver):
         admission=(super().observe_activation() if getattr(self,'_activation_binding',None) is not None
             else super().observe())
         if admission.state!='world_ready':
+            if ((admission.state=='inactive' and admission.reason=='save_manager_unavailable')
+                    or (admission.state=='loading' and admission.reason=='save_load_in_progress')):
+                # Detached title preparation needs the verified engine/GI/LP/PC,
+                # not a save manager or borrowed title widgets. The independent
+                # double proof rejects gameplay worlds and changed identities.
+                context=self._title_prewarm_context() if self._reader is not None else None
+                if context is None and admission.state=='loading' and self._reader is not None:
+                    context=self._detached_prewarm_context('world')
+                return UiAdmission(admission,False,prewarm_context=context)
             if admission.state=='inactive' and admission.reason=='save_not_loaded':
                 packet=self._title_observation(admission)
                 if packet.title_ready is True or self._reader is None:return packet
                 return replace(packet,prewarm_context=self._title_prewarm_context())
-            return UiAdmission(admission,False if admission.state in ('loading','inactive') else None)
+            context=(self._detached_prewarm_context('world')
+                if getattr(self,'_reader',None) is not None and admission.state in ('loading','observation_pending') else None)
+            return UiAdmission(admission,False if admission.state in ('loading','inactive') else None,
+                prewarm_context=context)
         try:
             with self._reader.bind():
                 # Exact controller selected from the successful fresh double
@@ -48,13 +60,14 @@ class UiAdmissionObserver(WarmAdmissionObserver):
                     return UiAdmission(admission,None)
                 values=read_values_many(catalog,(controller,),fields=('PauseMenuWidget',))[controller.index]
                 owners=[key[0] for key in values.types if key[1]=='PauseMenuWidget']
-                if len(owners)!=1:raise RuntimeQueryError('Current pause field is ambiguous or missing')
+                copied=UiContext('world',admission.token[0],admission.token[1],
+                    tuple(self._ui_local_player),tuple(self._ui_controller))
+                if len(owners)!=1:return UiAdmission(admission,False,prewarm_context=copied)
                 pause,_=read_object_reference(catalog,controller,catalog.by_index[owners[0]],
                     'PauseMenuWidget',project=True)
                 ready=pause is not None and pause.class_name=='WBP_PauseMenu_C'
-                copied=UiContext('world',admission.token[0],admission.token[1],
-                    tuple(self._ui_local_player),tuple(self._ui_controller))
-                return UiAdmission(admission,ready,ui_context=copied)
+                return UiAdmission(admission,ready,ui_context=copied,
+                    prewarm_context=copied if not ready or not admission.activation_ready else None)
         except RuntimeQueryError as error:
             self._discard()
             if any(reason in str(error) for reason in ('READ_FAILED',
@@ -68,24 +81,29 @@ class UiAdmissionObserver(WarmAdmissionObserver):
 
     def _title_prewarm_context(self):
         """No borrowed title widget/input authority; verify engine/PC twice."""
+        return self._detached_prewarm_context('title')
+
+    def _detached_prewarm_context(self,kind):
         from .cinematics.history import anchor, identity
         from .cinematics.original_game_action import NotReady
         from .ui_shell_proof import TITLE_WORLD
         def once():
             chain,catalog=anchor(self.engine_catalog(),project=True)
             world,gi=chain[2:]
-            if catalog.path_name(world)!=TITLE_WORLD:return None
+            if (catalog.path_name(world)==TITLE_WORLD)!=(kind=='title'):return None
             current=self.controller(catalog,gi)
             if tuple(current['world'])!=identity(world):return None
             selected=capture_selected(self.pid,(current['controller'][1:],))
             pc=selected.by_index[current['controller'][1]]
-            if pc.class_name!='BP_jRPG_Controller_MainMenu_C' or pc.object_flags&0x30:return None
-            local,selected=read_object_reference(selected,pc,selected.find_class('PlayerController'),
+            if pc.object_flags&0x30:return None
+            if (pc.class_name=='BP_jRPG_Controller_MainMenu_C')!=(kind=='title'):return None
+            owner=selected.by_index[selected.find_class('PlayerController').index]
+            local,selected=read_object_reference(selected,pc,owner,
                 'Player',project=True)
             if local is None or identity(local)!=tuple(self._ui_local_player):return None
             worlds=[o for o in selected.outer_chain(pc) if o.class_name=='World']
             if len(worlds)!=1 or identity(worlds[0])!=identity(world):return None
-            return UiContext('title',identity(world),identity(gi),identity(local),identity(pc))
+            return UiContext(kind,identity(world),identity(gi),identity(local),identity(pc))
         try:
             with self._reader.bind():
                 first=once()

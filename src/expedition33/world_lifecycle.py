@@ -204,6 +204,17 @@ class WorldLifecycle:
 
 class GatedActions:
     def __init__(self,actions,coordinator,name,scope):self.actions=actions;self.coordinator=coordinator;self.name=name;self.scope=scope
+    @property
+    def _bridge(self):
+        # Harness consumes the scoped bridge interface. Keep its dispatch
+        # behind this same world gate instead of exposing the raw bridge.
+        return self
+    @property
+    def OPERATIONS(self):return self.actions._bridge.OPERATIONS
+    def dispatch(self,request):
+        if not self.coordinator.allows_scope(self.name,self.scope):
+            raise WorldLifecycleError('Action belongs to an inactive world owner')
+        return self.actions._bridge.dispatch(request)
     def register(self,name,callback,**options):
         def guarded(**arguments):
             if not self.coordinator.allows_scope(self.name,self.scope):

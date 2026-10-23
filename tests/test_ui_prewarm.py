@@ -12,7 +12,8 @@ def identity(o):return(o.pid,o.index,o.serial,o.address)
 class PrewarmAdmissionTests(unittest.TestCase):
     def setUp(self):
         self.world=obj(1,'World');self.gi=obj(2,'GameInstance');self.pc=obj(3,'BP_jRPG_Controller_MainMenu_C');self.lp=obj(4,'LocalPlayer')
-        self.catalog=N(by_index={3:self.pc},path_name=lambda o:'/Game/Levels/UI/MainMenu/Level_MainMenu.Level_MainMenu',find_class=lambda name:object(),outer_chain=lambda o:(self.world,))
+        self.owner=obj(5,'Class')
+        self.catalog=N(by_index={3:self.pc,5:self.owner},path_name=lambda o:'/Game/Levels/UI/MainMenu/Level_MainMenu.Level_MainMenu',find_class=lambda name:N(index=5),outer_chain=lambda o:(self.world,))
         self.observer=m.UiAdmissionObserver.__new__(m.UiAdmissionObserver)
         self.observer.pid=7;self.observer._reader=N(bind=lambda:nullcontext());self.observer._ui_local_player=identity(self.lp)
         self.observer.engine_catalog=Mock(return_value=self.catalog)
@@ -23,6 +24,16 @@ class PrewarmAdmissionTests(unittest.TestCase):
     def test_two_fresh_proofs_create_only_copied_title_context(self):
         found=self.run_probe();self.assertEqual(found.kind,'title');self.assertEqual(found.controller,identity(self.pc))
         self.assertEqual(self.observer.controller.call_count,2);self.assertEqual(self.observer.engine_catalog.call_count,2)
+    def test_player_reference_uses_object_identity_not_class_relation(self):
+        def reference(catalog,pc,owner,*args,**kwargs):
+            self.assertIs(owner,self.owner)
+            self.assertEqual(owner.pid,7)
+            return self.lp,catalog
+        with patch.object(history,'anchor',return_value=((None,None,self.world,self.gi),self.catalog)), \
+             patch.object(m,'capture_selected',return_value=self.catalog), \
+             patch.object(m,'read_object_reference',side_effect=reference) as read:
+            self.assertEqual(self.observer._title_prewarm_context().kind,'title')
+            self.assertEqual(read.call_count,2)
     def test_wrong_controller_class_never_grants_prewarm(self):
         self.pc.class_name='PlayerController';self.assertIsNone(self.run_probe())
     def test_anchor_change_between_proofs_never_grants_prewarm(self):

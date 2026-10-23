@@ -54,5 +54,12 @@ class MenuPlanRewarmTests(unittest.TestCase):
         self.service._next_poll=float('inf')
         with patch.object(_reader,'ReadBatch') as batch:self.service.poll()
         batch.assert_not_called()
+    def test_other_mods_open_menu_defers_rewarm_without_suspending_frontend(self):
+        self.session._menu_plan_cache=None;self.session._menus=[N(active=True)]
+        with patch.object(_reader,'ReadBatch') as batch:self.service._warm_menu_plan()
+        batch.assert_not_called();self.assertIsNone(self.service._failure)
+        self.session._menus[0].active=False
+        with patch.object(_reader,'ReadBatch',side_effect=self.batch):self.service._warm_menu_plan()
+        self.assertEqual(self.events,['reader.enter','prime','reader.exit'])
 
 if __name__=='__main__':unittest.main()

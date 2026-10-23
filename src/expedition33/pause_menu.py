@@ -9,7 +9,7 @@ from weakref import WeakSet
 from dataclasses import replace
 from contextlib import contextmanager
 from .catalog import capture_matching, capture_selected
-from .values import read_values, read_values_many, read_object_reference
+from .values import read_values, read_values_many, read_object_reference,read_values_with_references,StoredArray
 from . import _ui_batch
 from .invocation import prepare_call
 from ._scope import SessionScope
@@ -113,13 +113,30 @@ class PauseMenuEntry:
             return 'Mods [SDK widgets...]'
         return f'Mods [SDK {completed}/{total}]'
 
+    def grid_slots(self):
+        """Read this grid's complete slot array without per-child engine calls."""
+        values,catalog=read_values_with_references(self.planner._catalog,self.grid,fields=('Slots',))
+        rows=[value for (_,name),value in values.values.items() if name=='Slots']
+        if len(rows)!=1 or not isinstance(rows[0],StoredArray):
+            raise RuntimeError('Pause grid slot array is unavailable')
+        array=rows[0]
+        if not 1<=array.length<=16 or len(array.items)!=array.length:
+            raise RuntimeError('Pause grid slot array is incomplete or outside bounds')
+        slots=tuple(array.items)
+        if (any(slot is None or slot.class_name!='GridSlot' or slot.outer_index!=self.grid.index
+                or slot.outer_serial!=self.grid.serial or slot.object_flags&0x30 for slot in slots)
+                or len({(slot.index,slot.serial,slot.address) for slot in slots})!=len(slots)):
+            raise RuntimeError('Pause grid slot ownership changed')
+        self.planner.adopt_observations(catalog)
+        return slots
+
     def _update_readiness(self):
         if self.label != 'Mods' or not hasattr(self, '_label_widget'):
             return
         text = self._readiness_text()
         if text == getattr(self, '_readiness_shown', None):
             return
-        self._normal_label = self.planner.prepare(self._label_widget,
+        self._normal_label = self.prepare(self._label_widget,
             self.fn('TextBlock', 'SetText'), InText=text)
         self.invoke(self._normal_label)
         self._readiness_shown = text
@@ -187,24 +204,41 @@ class PauseMenuEntry:
             return self.call(obj, owner, name, **args)
         self._layout_calls.append((obj, owner, name, args))
 
+    def prepare(self,obj,function,**arguments):
+        # Entry construction refreshes its planner while adopting owned child
+        # trees. Keep only copied native schemas across those refreshes and
+        # across title/pause entries; MetadataObservations resolves every
+        # recorded dependency before reuse, and native dispatch checks again.
+        cache=None
+        if getattr(self,'_metadata_stable_ui',False) is True:
+            from ._planning_metadata import MetadataObservations
+            session=self.parent_scope._session
+            cache=getattr(session,'_pause_schema_observations',None)
+            if cache is None:
+                cache=MetadataObservations();session._pause_schema_observations=cache
+            self.planner._metadata._entries=dict(cache._entries)
+        prepared=self.planner.prepare(obj,function,**arguments)
+        if cache is not None:cache._entries=dict(self.planner._metadata._entries)
+        return prepared
+
     def flush_layout(self):
         # Prepare only after creation/reference reads have revoked old plans.
         # Clear before dispatch: partial failure must never replay setters.
         calls, self._layout_calls = self._layout_calls, []
         for start in range(0, len(calls), _ui_batch.LIMIT):
             _ui_batch.invoke_setters(self.scope, [
-                self.planner.prepare(obj, self.fn(owner, name), **args)
+                self.prepare(obj, self.fn(owner, name), **args)
                 for obj, owner, name, args in calls[start:start + _ui_batch.LIMIT]])
 
     def call(self, obj, owner, name, **args):
         def run():
-            with self.planner.prepare(obj,self.fn(owner,name),**args).invoke(refresh_from_result=True) as result:
+            with self.prepare(obj,self.fn(owner,name),**args).invoke(refresh_from_result=True) as result:
                 return result.return_value
         return self._timed(owner+'.'+name,run)
 
     def create(self, obj, owner, name, **args):
         # Result remains scope-owned until complete entry teardown.
-        def run():return self.planner.prepare(obj,self.fn(owner,name),**args).invoke(refresh_from_result=True).return_value
+        def run():return self.prepare(obj,self.fn(owner,name),**args).invoke(refresh_from_result=True).return_value
         return self._timed(owner+'.'+name,run)
 
     def install(self):
@@ -269,17 +303,9 @@ class PauseMenuEntry:
             bound=self.current_entry(self.planner._catalog)
             if bound is None or bound!=(self.player,self.pause):
                 raise RuntimeError('Pause authority changed during target preparation')
-            count = self.call(self.grid,'PanelWidget','GetChildrenCount')
-            if type(count) is not int or not 1 <= count <= 16:
-                raise RuntimeError('Unexpected pause grid child count')
-            slots = []
-            for index in range(count):
-                child = self.call(self.grid,'PanelWidget','GetChildAt',Index=index)
-                if child is None: raise RuntimeError('Pause grid changed during discovery')
-                slot = self.reference(child,'Widget','Slot')
-                if slot is None or slot.class_name != 'GridSlot' or slot.outer_index != self.grid.index:
-                    raise RuntimeError('Pause child slot changed during discovery')
-                slots.append(slot)
+            slots=self.grid_slots()
+            if not any((slot.index,slot.serial,slot.address)==(source_slot.index,source_slot.serial,source_slot.address)
+                    for slot in slots):raise RuntimeError('Resume slot is outside the current pause grid')
             slot_values = read_values_many(self.planner._catalog, slots, fields=('Row', 'Padding'))
             rows = [slot_values[o.index].values[self.cls('GridSlot').index,'Row'] for o in slots]
             self.row = self._choose_row(rows)
@@ -323,7 +349,7 @@ class PauseMenuEntry:
             original_opacity = self.call(pause_panel,'Widget','GetRenderOpacity')
             original_enabled = self.call(pause_panel,'Widget','GetIsEnabled')
             def simple(name, **args):
-                return replace(self.planner.prepare(pause_panel,self.fn('Widget',name),**args)._plan,wire_version=1)
+                return replace(self.prepare(pause_panel,self.fn('Widget',name),**args)._plan,wire_version=1)
             self.attachment.arm_restore(panel_lease,
                 simple('SetRenderOpacity',InOpacity=original_opacity),
                 simple('SetIsEnabled',bInIsEnabled=original_enabled))
@@ -339,12 +365,12 @@ class PauseMenuEntry:
             self.layout(slot,'GridSlot','SetVerticalAlignment',InVerticalAlignment=0)
             self.flush_layout()
             self.timings['attachment_ms']=(time.perf_counter()-attachment_started)*1000
-            self._active_call = self.planner.prepare(self.pause,self.fn('CommonActivatableWidget','IsActivated'))
-            self._viewport_focus = self.planner.prepare(self.library,self.fn('WidgetBlueprintLibrary','SetFocusToGameViewport'))
-            self._button_focus = self.planner.prepare(self.button,self.fn('Widget','SetUserFocus'),PlayerController=self.player)
-            self._loading_label = self.planner.prepare(label,self.fn('TextBlock','SetText'),InText='Constructing widgets...')
-            self._cleanup_label = self.planner.prepare(label,self.fn('TextBlock','SetText'),InText='Deconstructing widgets...')
-            self._normal_label = self.planner.prepare(label,self.fn('TextBlock','SetText'),InText=self.label)
+            self._active_call = self.prepare(self.pause,self.fn('CommonActivatableWidget','IsActivated'))
+            self._viewport_focus = self.prepare(self.library,self.fn('WidgetBlueprintLibrary','SetFocusToGameViewport'))
+            self._button_focus = self.prepare(self.button,self.fn('Widget','SetUserFocus'),PlayerController=self.player)
+            self._loading_label = self.prepare(label,self.fn('TextBlock','SetText'),InText='Constructing widgets...')
+            self._cleanup_label = self.prepare(label,self.fn('TextBlock','SetText'),InText='Deconstructing widgets...')
+            self._normal_label = self.prepare(label,self.fn('TextBlock','SetText'),InText=self.label)
             self._label_widget = label
             self.state = 'attached'
             self._update_readiness()

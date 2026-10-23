@@ -20,7 +20,7 @@ class ProcessUiTests(unittest.TestCase):
                 self.service=object();self.ready=None;self.context=None;self.widgets=object();outer.shells.append(self);outer.events.append('shell.create')
             def prepare(self,ctx):self.context=ctx;outer.events.append('shell.build_and_prove');return True
             def detach(self):outer.events.append('menu.close.ack' if outer.detach else 'menu.close.pending');return outer.detach
-            def rebind(self,ctx):
+            def rebind(self,ctx,*,preparing=False):
                 outer.events.extend(('set_owner.'+ctx.kind,'getters.ack','plans.fresh','view.'+ctx.kind));self.context=ctx;return True
             def close(self):outer.events.append('shell.release.ack' if outer.shell_ack else 'shell.release.pending');return outer.shell_ack
             def poll(self):outer.events.append('shell.poll')
@@ -44,6 +44,19 @@ class ProcessUiTests(unittest.TestCase):
         self.assertTrue(self.router.observe(N(ui_context=self.title,title_ready=True)))
         self.assertEqual(len(self.entries),1)
         self.assertEqual(self.events.count('shell.build_and_prove'),1)
+
+    def test_loading_world_rebinds_detached_shell_without_entry_or_repeating_proof(self):
+        self.router.observe(N(ui_context=self.title,title_ready=True))
+        packet=N(ui_context=None,prewarm_context=self.world,menu_ready=False)
+        self.assertFalse(self.router.observe(packet))
+        self.assertEqual(self.router.phase,'prewarmed')
+        self.assertIsNone(self.router.entry)
+        self.assertFalse(self.router.gameplay_ui_ready)
+        self.assertFalse(self.router.observe(packet))
+        self.assertEqual(self.events.count('set_owner.world'),1)
+        self.assertTrue(self.router.observe(N(ui_context=self.world,menu_ready=True,
+            admission=N(activation_ready=True))))
+        self.assertEqual(self.events.count('set_owner.world'),1)
 
     def test_changed_pre_title_gi_requires_shell_release_before_rebuild(self):
         self.router.observe(N(ui_context=None,prewarm_context=self.title,title_ready=False))
@@ -243,7 +256,7 @@ class InitialPreparedPlanTests(unittest.TestCase):
         shell=m.CachedProcessShell.__new__(m.CachedProcessShell)
         shell.scope=N(pid=7);shell.context=None;shell.needs_capacity_rebuild=Mock()
         shell._factory=lambda kind:object
-        panel=N(state='built')
+        panel=N(state='built',catalog=N(objects=()),_planner=N(_catalog=N(objects=())))
         def verify(*args):
             events.append('proof');session._menu_plan_cache=None
         def prime():
@@ -255,17 +268,17 @@ class InitialPreparedPlanTests(unittest.TestCase):
         shell.service=N(_view_options={},_failure=None,menu=N(panel=panel),
             prepare=lambda:events.append('prepare'))
         @contextmanager
-        def batch(pid):
+        def batch(pid,**options):
             self.assertEqual(pid,7);events.append('reader.enter')
             yield
             events.append('reader.exit')
         ctx=context()
         with patch.object(_reader,'ReadBatch',side_effect=batch):
             self.assertTrue(shell.prepare(ctx))
-        self.assertEqual(events,['prepare','proof','reader.enter','prime','reader.exit'])
+        self.assertEqual(events,['prepare','reader.enter','proof','prime','reader.exit'])
         self.assertIs(shell.context,ctx);self.assertIsNotNone(session._menu_plan_cache)
 
-    def test_actual_reader_proof_owner_is_closed_before_prime_owner_enters(self):
+    def test_proof_and_prime_share_one_read_only_worker(self):
         from expedition33 import _reader
         events=[]
         shell=m.CachedProcessShell.__new__(m.CachedProcessShell)
@@ -277,13 +290,14 @@ class InitialPreparedPlanTests(unittest.TestCase):
             self.assertIsNotNone(_reader.active_reader());events.append('prime')
         shell.proof=N(verify=verify)
         shell.service=N(_view_options={},_failure=None,
-            menu=N(panel=N(state='built',prime_menu_plan=prime)),prepare=Mock())
+            menu=N(panel=N(state='built',prime_menu_plan=prime,catalog=N(objects=()),_planner=N(_catalog=N(objects=())))),prepare=Mock())
         # Exercise real ContextVar/nesting ownership. Only child-process IO is
         # mocked; an outer nonsharing reader around proof would fail here.
-        with patch.object(_reader.subprocess,'Popen',return_value=Mock()), \
+        with patch.object(_reader.subprocess,'Popen',return_value=Mock()) as spawn, \
                 patch.object(_reader.ReadBatch,'_read'), \
                 patch.object(_reader.ReadBatch,'_line',return_value='{"event":"reader_ready","version":1,"pid":7}'):
             self.assertTrue(shell.prepare(context()))
+        spawn.assert_called_once()
         self.assertEqual(events,['proof','prime']);self.assertIsNone(_reader.active_reader())
 
     def test_prime_failure_does_not_publish_context(self):
@@ -292,18 +306,90 @@ class InitialPreparedPlanTests(unittest.TestCase):
         shell=m.CachedProcessShell.__new__(m.CachedProcessShell)
         shell.scope=N(pid=7);shell.context=None;shell.needs_capacity_rebuild=Mock()
         shell._factory=lambda kind:object;shell.proof=N(verify=Mock())
-        panel=N(state='built',prime_menu_plan=Mock(side_effect=RuntimeError('plan failed')))
+        panel=N(state='built',prime_menu_plan=Mock(side_effect=RuntimeError('plan failed')),catalog=N(objects=()),_planner=N(_catalog=N(objects=())))
         shell.service=N(_view_options={},_failure=None,menu=N(panel=panel),prepare=Mock())
         with patch.object(_reader,'ReadBatch',return_value=nullcontext()):
             with self.assertRaisesRegex(RuntimeError,'plan failed'):shell.prepare(context())
         self.assertIsNone(shell.context)
 
 class ProofGetterTests(unittest.TestCase):
+    def test_loading_metadata_uses_final_owned_graph_not_initial_discovery(self):
+        from expedition33 import _metadata_stabilization as metadata,_stable_lease as stable
+        row=N(serial=0,class_name='Class');unrelated=N(class_name='BlueprintGeneratedClass')
+        anchors=N(serial=0,class_name='ScriptStruct')
+        pruned=object();final=N(objects=(row,unrelated,anchors),subset=Mock(return_value=pruned));fresh=object()
+        owner=N(prepare=Mock(return_value=N(by_index={1:row})))
+        session=N(_menu_plan_cache=object(),_menu_schema_observations=Mock())
+        owned=object();scope=N(_session=session,invocation_planner=Mock(return_value=N()),_leases=[N(active=True,object=owned)])
+        planner=N(_catalog=final,close=Mock())
+        panel=N(catalog=object(),_planner=planner,scope=scope,_functions={'old':1},_defaults={'old':1},
+            widget=owned,tree=owned,canvas=owned,player=object())
+        def admit(catalog,obj):
+            if obj is unrelated or obj is anchors:raise ValueError('outside native metadata whitelist')
+            return obj
+        with patch.object(metadata,'script_function',side_effect=admit), \
+             patch.object(metadata,'process_preparation',return_value=owner), \
+             patch.object(stable,'fresh_catalog_replacing',return_value=fresh) as recapture:
+            proof.prepare_panel_metadata(panel)
+        owner.prepare.assert_called_once_with(pruned,[row])
+        recapture.assert_called_once_with(pruned,(row,))
+        self.assertIn(owned,final.subset.call_args.args[0]);self.assertNotIn(unrelated,final.subset.call_args.args[0])
+        self.assertIn(anchors,final.subset.call_args.args[0])
+        self.assertIs(panel.catalog,fresh);self.assertFalse(panel._functions);self.assertFalse(panel._defaults)
+        planner.close.assert_called_once();session._menu_schema_observations.clear.assert_called_once()
+
+    def test_loading_context_null_and_serial_races_defer_without_hiding_programming_errors(self):
+        p=proof.OwnedUiProof(N())
+        for error in (RuntimeError('Current history context reference is null'),
+                proof.RuntimeQueryError('DESCRIPTOR_IDENTITY_CHANGED')):
+            p._current_observation=Mock(side_effect=error)
+            with self.assertRaises(proof.UiProofPending):p._current(context('world'),preparing=True)
+        p._current_observation=Mock(side_effect=RuntimeError('programming failure'))
+        with self.assertRaisesRegex(RuntimeError,'programming failure'):p._current(context('world'))
+
+    def test_metadata_discovery_uses_bounded_cdo_names_and_defers_unavailable_reads(self):
+        first=obj(1849,'GameInstance','Class');second=obj(1850,'LocalPlayer','Class')
+        first.serial=second.serial=0
+        catalog=N(by_index={1849:first,1850:second})
+        catalog.with_observations=lambda other:catalog
+        def discover(pid,*,names):
+            self.assertEqual(names,('Default__GameInstance','Default__LocalPlayer'))
+            return catalog
+        with patch.object(proof,'capture_matching',side_effect=discover) as query:
+            self.assertEqual(proof.refresh_panel_metadata(7,[first,second]),(first,second))
+            self.assertEqual(query.call_count,1)
+        with patch.object(proof,'capture_matching',side_effect=proof.RuntimeQueryError('READ_FAILED')):
+            with self.assertRaises(proof.UiProofPending):proof.refresh_panel_metadata(7,[first])
+
+    def test_context_refresh_rediscovers_zero_metadata_and_preserves_positive_selectors(self):
+        old=obj(1849,'GameInstance','Class');old.serial=0
+        current=obj(1849,'GameInstance','Class');current.serial=77
+        with patch.object(proof,'capture_matching',return_value=N(by_index={1849:current})) as discover:
+            self.assertEqual(proof.refresh_panel_metadata(7,[old]),(current,))
+            discover.assert_called_once_with(7,names=('Default__GameInstance',))
+            old.serial=76
+            self.assertEqual(proof.refresh_panel_metadata(7,[old]),(old,))
+            self.assertEqual(discover.call_count,1)
+    def test_reference_identity_ignores_observed_gc_flags_but_rejects_recycling(self):
+        first=N(pid=7,index=10,serial=4,address=100,object_flags=0)
+        current=N(pid=7,index=10,serial=4,address=100,object_flags=0x80000000)
+        self.assertTrue(proof.same_identity(first,current))
+        current.serial=5;self.assertFalse(proof.same_identity(first,current))
+        self.assertFalse(proof.same_identity(None,first))
+    def test_selected_metadata_refresh_avoids_scan_and_rejects_recycled_class(self):
+        old=obj(1849,'GameInstance','Class');old.serial=0
+        current=obj(1849,'GameInstance','Class');current.serial=77
+        with patch.object(proof,'capture_matching') as scan:
+            self.assertEqual(proof.refresh_panel_metadata(7,[old],observed=N(by_index={old.index:current})),(current,))
+            current.address+=16
+            with self.assertRaises(proof.UiProofPending):
+                proof.refresh_panel_metadata(7,[old],observed=N(by_index={old.index:current}))
+        scan.assert_not_called()
     def test_zero_localplayer_constraint_uses_real_script_provenance_preparation(self):
         from expedition33 import _metadata_stabilization as metadata,_stable_lease as stable
         engine=N(index=100,class_name='Package',outer_index=-1,serial=1)
         umg=N(index=101,class_name='Package',outer_index=-1,serial=1)
-        classes=[N(index=1916+i,name=name,class_name='Class',serial=0 if i==0 else 8,
+        classes=[N(pid=7,index=1916+i,name=name,class_name='Class',serial=0 if i==0 else 8,
             address=0x10000+i*16,outer_index=100 if i<2 else 101,object_flags=0)
             for i,name in enumerate(('LocalPlayer','PlayerController','Widget','UserWidget'))]
         def catalog(serial):
@@ -312,8 +398,10 @@ class ProofGetterTests(unittest.TestCase):
             def path(obj):
                 if obj.index in (100,101):return '/Script/Engine' if obj.index==100 else '/Script/UMG'
                 return ('/Script/Engine.' if obj.outer_index==100 else '/Script/UMG.')+obj.name
-            return N(objects=tuple(rows),by_index=by_index,resolve=lambda obj:by_index[obj.index],
+            result=N(objects=tuple(rows),by_index=by_index,resolve=lambda obj:by_index[obj.index],
                 path_name=path,find_path=lambda name,kind:next(o for o in rows if path(o)==name))
+            result.with_observations=lambda observed:result
+            return result
         before=catalog(0);after=catalog(4001);selected=[]
         def prepare(current,rows):
             for row in rows:
@@ -334,10 +422,16 @@ class ProofGetterTests(unittest.TestCase):
         with self.assertRaises(metadata.UnstableUIIdentity):metadata.require_positive_plan_identities(plan)
         plan.parameters=(N(constraint=fresh.find_path('/Script/Engine.LocalPlayer','Class')),)
         self.assertIs(metadata.require_positive_plan_identities(plan),plan)
+        with patch.object(proof,'capture_selected',return_value=after) as selected_read, \
+                patch.object(proof,'capture_matching') as global_scan, \
+                patch.object(stable,'fresh_catalog_replacing',return_value=after):
+            self.assertIs(p._functions(after),after)
+        selected_read.assert_called_once_with(7,session._ui_proof_metadata_selectors)
+        global_scan.assert_not_called()
 
     def test_proof_function_metadata_is_stabilized_then_fully_recaptured(self):
         from expedition33 import _metadata_stabilization as metadata,_stable_lease as stable
-        old=object();extra=N(objects=(object(),),find_path=lambda *_:N(serial=1001));fresh=object()
+        old=N(objects=());extra=N(objects=(),by_index={},find_path=lambda *_:N(serial=1001));fresh=N(objects=())
         scope=N(pid=7,_session=N(_transport=N(metadata_stabilization_protocol=1)))
         p=proof.OwnedUiProof(scope)
         with patch.object(metadata,'prepare_discovery',return_value=(extra,())) as prepare, \
@@ -353,7 +447,7 @@ class ProofGetterTests(unittest.TestCase):
     def test_getter_result_lease_ack_required_and_journal_retained(self):
         lease=N(_state='pending_release')
         result=N(return_value='expected',release=Mock(return_value=False),_leases=[lease])
-        planner=N(prepare=Mock(return_value=N(invoke=Mock(return_value=result))),close=Mock())
+        planner=N(prepare=Mock(return_value=N(invoke=Mock(return_value=result))),close=Mock(),_metadata=N(_entries={}))
         scope=N(invocation_planner=Mock(return_value=planner))
         p=proof.OwnedUiProof(scope)
         fn=N(class_name='Function',outer_index=4,name='GetOwningPlayer')
@@ -365,7 +459,7 @@ class ProofGetterTests(unittest.TestCase):
 
     def test_released_getter_result_never_remains_owned(self):
         result=N(return_value='expected',release=Mock(return_value=True),_leases=[])
-        planner=N(prepare=Mock(return_value=N(invoke=Mock(return_value=result))),close=Mock())
+        planner=N(prepare=Mock(return_value=N(invoke=Mock(return_value=result))),close=Mock(),_metadata=N(_entries={}))
         p=proof.OwnedUiProof(N(invocation_planner=lambda **kw:planner))
         catalog=N(find_class=lambda owner:N(index=4),objects=[N(class_name='Function',outer_index=4,name='GetOwningPlayer')])
         self.assertEqual(p._invoke(catalog,object(),'Widget','GetOwningPlayer'),'expected')
@@ -378,7 +472,7 @@ class RebindPreparedFrameTests(unittest.TestCase):
         from expedition33 import _reader
         self.reader_active=False
         @contextmanager
-        def batch(pid):
+        def batch(pid,**options):
             self.reader_active=True
             try:yield
             finally:self.reader_active=False
@@ -525,12 +619,13 @@ class TypedReadbackTests(unittest.TestCase):
         self.ctx=context();self.pc=obj(4,'PC','PlayerController');self.local=obj(3,'LP','LocalPlayer')
         self.root=obj(20,'Root','CommonActivatableWidget');self.library=obj(30,'Default__GameplayStatics','GameplayStatics')
         self.catalog=N(resolve=lambda value:value,select=lambda name:(self.library,),by_index={4:self.pc})
+        self.catalog.with_observations=lambda observed:self.catalog
         self.scope=N(pid=7,_session=N(_menu_plan_cache=object()),invocation_planner=Mock(return_value=Mock()))
         self.p=proof.OwnedUiProof(self.scope)
         self.p._current=Mock(return_value=(self.catalog,self.pc));self.p._graph=Mock(return_value=self.catalog)
         self.p._functions=Mock(return_value=self.catalog)
         self.panel=N(widget=self.root,catalog=N(objects=[]),scope=N(_leases=[],invocation_planner=self.scope.invocation_planner),
-            _planner=Mock(),prime_menu_plan=Mock())
+            _planner=Mock(),prime_menu_plan=Mock(),_functions={},_defaults={})
 
     def verify(self,**options):
         from contextlib import nullcontext
@@ -565,5 +660,22 @@ class TypedReadbackTests(unittest.TestCase):
         self.assertEqual(calls[0][1],dict(LocalPlayerController=self.pc))
         self.assertIsNone(self.scope._session._menu_plan_cache)
         self.panel.prime_menu_plan.assert_called_once_with()
+
+    def test_loading_argument_rejection_holds_old_context_without_dispatch_replay(self):
+        from expedition33.invocation import InvocationError
+        self.p._invoke=Mock(side_effect=InvocationError('retired argument',outcome='not_dispatched',native_error=218))
+        with self.assertRaises(proof.UiProofPending):self.verify(rebind=True,preparing=True)
+        with self.assertRaises(proof.UiProofPending):self.verify(rebind=True,preparing=True)
+        self.assertEqual(self.p._invoke.call_count,1)
+        self.ctx=context('world',world=9,pc=8);current=obj(8,'PC','PlayerController')
+        self.catalog.by_index[current.index]=current;self.p._current.return_value=(self.catalog,current)
+        self.p._invoke.side_effect=(None,current,self.local,current)
+        self.assertTrue(self.verify(rebind=True,preparing=True))
+        self.assertEqual(self.p._invoke.call_count,5)
+
+    def test_unknown_dispatch_outcome_is_never_treated_as_loading_deferral(self):
+        from expedition33.invocation import InvocationError
+        self.p._invoke=Mock(side_effect=InvocationError('unknown',outcome='unknown',native_error=218))
+        with self.assertRaises(InvocationError):self.verify(rebind=True)
 
 if __name__=='__main__':unittest.main()

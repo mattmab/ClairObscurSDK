@@ -131,6 +131,10 @@ class NativeMenuService:
         if not getattr(self,'_keep_menu_plan_warm',False):return
         if self.menu is None or self.menu.panel.state!='built':return
         session=self.scope._session
+        # Another mod can own the native input menu while this cached shell is
+        # detached. Rewarm after its close ACK; competing with that owner would
+        # reject preparation and incorrectly suspend the Mods frontend.
+        if any(menu.active for menu in getattr(session,'_menus',())):return
         cached=getattr(session,'_menu_plan_cache',None)
         if cached is not None and cached is getattr(self,'_primed_menu_cache',None):return
         from ._reader import ReadBatch

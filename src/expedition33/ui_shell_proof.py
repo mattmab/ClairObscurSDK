@@ -1,6 +1,6 @@
-"""Explicit handoff proof for the SDK's exact owned ScrollWorkspacePanel tree.
+"""Explicit handoff proof for an exactly registered detached UMG panel type.
 
-Prototype only. Runs on the Session owner at a context boundary, never a passive
+Runs on the Session owner at a context boundary, never a passive
 poll. Uses existing typed APIs and their native schema/identity gates. No raw
 memory reads/writes, guessed offsets, global callback enable or scope reparenting.
 """
@@ -27,6 +27,50 @@ PROOF_CONSTRAINT_CLASSES=('/Script/Engine.LocalPlayer','/Script/Engine.PlayerCon
     '/Script/UMG.Widget','/Script/UMG.UserWidget')
 
 
+def prepare_panel_metadata(panel):
+    """Finish retained Script metadata admission during detached construction.
+
+    Unrelated game/Blueprint metadata is not admitted. Each changed identity is
+    recaptured before replacing planners; this grants no gameplay authority.
+    """
+    from ._metadata_stabilization import script_function,process_preparation,CAPACITY
+    from ._stable_lease import fresh_catalog_replacing
+    # Construction adopts owned outputs into the planner's catalog. The
+    # panel's initial discovery catalog can still omit the generated widgets.
+    catalog=panel._planner._catalog
+    retained=[];candidates=[]
+    for obj in catalog.objects:
+        try:script_function(catalog,obj)
+        except ValueError:continue
+        retained.append(obj)
+        if not obj.serial:candidates.append(obj)
+    if not candidates:return
+    # Broad name discovery can include unrelated game Blueprint functions.
+    # They are neither UI dependencies nor ours to keep across loading. Keep
+    # the retained native metadata plus the complete leased tree/current PC.
+    retained.extend(lease.object for lease in panel.scope._leases if lease.active)
+    # Read-only POD/enum descriptors can live outside the stabilization
+    # whitelist (for example /Script/Slate.Anchors). They are still required
+    # to validate typed setters. Retain their exact observations without
+    # granting metadata leases or admitting unrelated Blueprint functions.
+    retained.extend(o for o in catalog.objects if o.class_name in ('Class','ScriptStruct','Enum'))
+    retained.extend((panel.widget,panel.tree,panel.canvas,panel.player))
+    retained.extend(o for o in catalog.objects if o.class_name=='GameEngine' and not o.object_flags&0x30)
+    catalog=catalog.subset(retained)
+    session=panel.scope._session;owner=process_preparation(session);replacements={}
+    for offset in range(0,len(candidates),CAPACITY):
+        observed=owner.prepare(catalog,candidates[offset:offset+CAPACITY])
+        replacements.update(observed.by_index)
+    fresh=fresh_catalog_replacing(catalog,tuple(replacements.values()))
+    panel._planner.close();panel.catalog=fresh
+    panel._functions.clear();panel._defaults.clear()
+    panel._planner=panel.scope.invocation_planner(catalog=fresh,selected_results=True)
+    panel._planner._require_stable_ui_identities=getattr(panel,'_metadata_stable_ui',False)
+    session._menu_plan_cache=None
+    schemas=getattr(session,'_menu_schema_observations',None)
+    if schemas is not None:schemas.clear()
+
+
 def capture_complete(pid,selectors):
     """Fresh complete selected reads; the native request bound is unchanged."""
     selectors=tuple(dict.fromkeys(selectors))
@@ -43,7 +87,8 @@ def capture_complete(pid,selectors):
             if any(reason in str(error) for reason in ('Object identity changed or belongs to another process',
                     'Planning class relation changed; full refresh required','READ_FAILED',
                     'DESCRIPTOR_IDENTITY_CHANGED','SELECTED_DEPENDENCY_CHANGED')):
-                raise UiProofPending('Selected UI closure changed between proof chunks') from None
+                raise UiProofPending('Selected UI closure changed between proof chunks '
+                    f'(offset {offset}): {str(error)[-512:]}') from None
             raise
     for index,serial,address in selectors:
         obj=fresh.by_index.get(index)
@@ -55,6 +100,56 @@ def capture_complete(pid,selectors):
 def graph_signature(obj):
     return (obj.pid,obj.index,obj.serial,obj.address,obj.name,obj.class_index,
         obj.outer_index,obj.outer_serial,obj.object_flags)
+
+
+def same_identity(observed,expected):
+    # UObject flags are observations, not identity. GC may change them between
+    # two valid reference reads without changing the referenced object.
+    return observed is not None and expected is not None and identity(observed)==identity(expected)
+
+
+def refresh_panel_metadata(pid,previous,*,observed=None):
+    """Rediscover descriptors after admitted metadata gained positive serials.
+
+    A serial-zero descriptor is never reused as an exact selector. Positive
+    identities must still match, and zero transitions must preserve address,
+    index, name and class. This refresh applies only to planner metadata.
+    """
+    # A CDO's dependency closure includes its class. Bare class names can also
+    # match thousands of blueprint components; CDO names keep discovery bounded.
+    rows=[]
+    for old in previous:
+        current=(observed.by_index.get(old.index,old) if observed is not None and
+            old.class_name=='Class' and old.serial==0 else old)
+        if (current.pid,current.index,current.address,current.name,current.class_index)!=(
+                old.pid,old.index,old.address,old.name,old.class_index):
+            raise UiProofPending('Panel metadata identity changed during selected refresh')
+        rows.append(current)
+    previous=tuple(rows)
+    names=tuple(sorted({'Default__'+o.name for o in previous if o.class_name=='Class' and o.serial==0
+        and (observed is None or o.index not in observed.by_index)}))
+    if not names:return tuple(previous)
+    fresh=None
+    for offset in range(0,len(names),128):
+        group=names[offset:offset+128]
+        try:observed=capture_matching(pid,names=group)
+        except RuntimeQueryError as error:
+            raise UiProofPending('Panel metadata rediscovery is temporarily unavailable: '
+                +str(error)[-200:]+': '+repr(group)) from None
+        fresh=observed if fresh is None else fresh.with_observations(observed)
+    rows=[]
+    for old in previous:
+        # Class descriptors can acquire serials while typed metadata is admitted.
+        # Functions/default objects retain their exact selectors and are read
+        # afresh by capture_complete below; matching generic function names
+        # would enumerate unrelated game objects with those names.
+        current=fresh.by_index.get(old.index,old) if old.class_name=='Class' and old.serial==0 else old
+        if (current is None or current.pid!=old.pid or current.address!=old.address
+                or current.name!=old.name or current.class_index!=old.class_index
+                or (old.serial>0 and current.serial!=old.serial)):
+            raise UiProofPending('Panel metadata identity changed during rediscovery')
+        rows.append(current)
+    return tuple(rows)
 
 
 @dataclass(frozen=True)
@@ -79,7 +174,10 @@ class UiContext:
 
 
 class OwnedUiProof:
-    def __init__(self,scope):
+    def __init__(self,scope,*,panel_type=None,prime=True):
+        from .mods_workspace_scroll import ScrollWorkspacePanel
+        self.panel_type=panel_type or ScrollWorkspacePanel
+        self.prime=prime
         self.scope=scope;self._engine=None;self.pending_results=[];self._setter_done=None
 
     def pending(self):
@@ -87,7 +185,21 @@ class OwnedUiProof:
             if any(getattr(lease,'_state',None)!='released' for lease in r._leases)]
         return bool(self.pending_results)
 
-    def _current(self,context):
+    def _current(self,context,*,preparing=False):
+        try:return self._current_observation(context,preparing=preparing)
+        except RuntimeQueryError as error:
+            if any(reason in str(error) for reason in ('DESCRIPTOR_IDENTITY_CHANGED','READ_FAILED',
+                    'SELECTED_DEPENDENCY_CHANGED','Object identity changed or belongs to another process',
+                    'Object property reference changed during observation')):
+                raise UiProofPending('UI context changed during loading observation') from None
+            raise
+        except RuntimeError as error:
+            if str(error) in ('Current history context reference is null',
+                    'Current history context is ambiguous or unavailable','Active world has no verified game instance'):
+                raise UiProofPending('UI world is between loading generations') from None
+            raise
+
+    def _current_observation(self,context,*,preparing=False):
         if self.pending():raise UiProofPending('UI getter leases cleanup pending; retain proof owner')
         pid=self.scope.pid
         if self._engine is None:
@@ -112,13 +224,13 @@ class OwnedUiProof:
             return value
         pc=reference(local,'Player','PlayerController')
         if pc is None or identity(pc)!=context.controller:raise UiProofPending('Current UI controller changed')
-        if reference(pc,'PlayerController','Player')!=local:raise UiProofMismatch('UI controller backlink mismatch')
+        if not same_identity(reference(pc,'PlayerController','Player'),local):raise UiProofMismatch('UI controller backlink mismatch')
         worlds=[o for o in catalog.outer_chain(pc) if o.class_name=='World']
         if len(worlds)!=1 or identity(worlds[0])!=context.world:raise UiProofMismatch('UI controller belongs to another world')
         if context.kind=='title':
             if catalog.path_name(world)!=TITLE_WORLD or pc.class_name!='BP_jRPG_Controller_MainMenu_C':
                 raise UiProofPending('Current title UI context unavailable')
-        else:
+        elif not preparing:
             flags=read_values_many(catalog,(gi,),fields=('SaveLoaded','IsChangingMap'))[gi.index]
             if field(flags,'SaveLoaded','BoolProperty') is not True or field(flags,'IsChangingMap','BoolProperty') is not False:
                 raise UiProofPending('Gameplay UI save context is loading')
@@ -129,7 +241,7 @@ class OwnedUiProof:
             reciprocal,catalog=read_object_reference(catalog,manager,catalog.by_index[manager.class_index],
                 'GameInstanceReference',project=True)
             loading=read_values_many(catalog,(manager,),fields=('LoadIsInProgress',))[manager.index]
-            if reciprocal!=gi or field(loading,'LoadIsInProgress','BoolProperty') is not False:
+            if not same_identity(reciprocal,gi) or field(loading,'LoadIsInProgress','BoolProperty') is not False:
                 raise UiProofPending('Gameplay save manager changed or loading')
             pawn=reference(pc,'Controller','Pawn')
             if pawn is None or pawn.class_name not in EXPLORATION_PAWNS:
@@ -138,7 +250,7 @@ class OwnedUiProof:
 
     def _graph(self,panel,context,catalog):
         from .mods_workspace_scroll import ScrollWorkspacePanel
-        if type(panel) is not ScrollWorkspacePanel:raise UiProofPreflightRejected('Only exact SDK ScrollWorkspacePanel can be reused')
+        if type(panel) is not getattr(self,'panel_type',ScrollWorkspacePanel):raise UiProofPreflightRejected('Panel type differs from the explicitly registered detached tree')
         if panel.state!='built' or panel.menu is not None or panel.uncertain:
             raise UiProofPending('Native UI close ACK required before tree proof')
         objects=[lease.object for lease in panel.scope._leases if lease.active]
@@ -169,7 +281,7 @@ class OwnedUiProof:
                 raise UiProofPreflightRejected('Owned UI object escaped the root tree')
         root_tree,current=read_object_reference(current,root,current.by_index[user_class],'WidgetTree',project=True)
         assigned,current=read_object_reference(current,tree,current.by_index[tree.class_index],'RootWidget',project=True)
-        if root_tree!=tree or assigned!=current.resolve(panel.canvas):raise UiProofPreflightRejected('Owned root property readback mismatch')
+        if not same_identity(root_tree,tree) or not same_identity(assigned,current.resolve(panel.canvas)):raise UiProofPreflightRejected('Owned root property readback mismatch')
         return catalog.with_observations(current)
 
     def _functions(self,catalog):
@@ -181,7 +293,20 @@ class OwnedUiProof:
                 'Default__PlayerController','Default__Widget','Default__UserWidget'))
         if not available(self.scope._session._transport):
             raise UiProofMismatch('Process UI proof requires positive metadata preparation')
-        extra,_=prepare_discovery(self.scope._session,discover)
+        session=self.scope._session
+        selectors=getattr(session,'_ui_proof_metadata_selectors',None)
+        if selectors is None:
+            extra,_=prepare_discovery(session,discover)
+            # Retained Script metadata is process-owned. Subsequent roots and
+            # world handoffs need fresh selected reads, not another global scan.
+            selectors=tuple(identity(o)[1:] for o in extra.objects if o.serial>0 and
+                (o.class_name=='Function' and o.name in ('SetOwningPlayer','GetOwningPlayer',
+                    'GetOwningLocalPlayer','GetPlayerController') or
+                 o.name in ('Default__GameplayStatics','Default__LocalPlayer',
+                    'Default__PlayerController','Default__Widget','Default__UserWidget') or
+                 o.class_name=='Class' and extra.path_name(o) in PROOF_CONSTRAINT_CLASSES))
+            session._ui_proof_metadata_selectors=selectors
+        else:extra=capture_selected(self.scope.pid,selectors)
         # Function object closure does not include every FObjectProperty's
         # constraint. These exact native getter outputs/setter input classes
         # are discovered through their CDOs and the same Script provenance gate.
@@ -190,16 +315,51 @@ class OwnedUiProof:
                 raise UiProofPreflightRejected('UI proof constraint metadata was not stabilized')
         # Metadata stabilization may assign a serial to a previously zero row.
         # Never merge that transition into the pre-boundary planning catalog.
-        return fresh_catalog_replacing(catalog,extra.objects)
+        # Preparing getter metadata can also admit a previously zero class in
+        # the live engine/GI closure. Rediscover those exact class identities
+        # before selecting the combined closure; do not reuse their old zeros.
+        # Only the first stabilization can change our metadata serials. Later
+        # selected reads contain already admitted identities; merging them into
+        # the freshly proved graph needs no global CDO scan or tree recapture.
+        metadata=(() if getattr(self,'_metadata_warmed',False) else
+            refresh_panel_metadata(self.scope.pid,tuple(o for o in catalog.objects
+                if o.class_name=='Class' and o.serial==0 and o.index not in extra.by_index)))
+        try:
+            combined=(catalog.with_observations(extra) if getattr(self,'_metadata_warmed',False)
+                else fresh_catalog_replacing(catalog,(*extra.objects,*metadata)))
+        except RuntimeQueryError as error:
+            if any(reason in str(error) for reason in ('DESCRIPTOR_IDENTITY_CHANGED','READ_FAILED',
+                    'SELECTED_DEPENDENCY_CHANGED','Object identity changed or belongs to another process',
+                    'Planning class relation changed; full refresh required')):
+                self._metadata_warmed=False
+                raise UiProofPending('UI metadata changed during loading handoff') from None
+            raise
+
+        from ._planning_metadata import MetadataObservations
+        from .reflection import describe
+        if not hasattr(self,'_getter_metadata'):self._getter_metadata=MetadataObservations()
+        getters=tuple(o for o in combined.objects if o.class_name=='Function' and
+            o.name in ('SetOwningPlayer','GetOwningPlayer','GetOwningLocalPlayer','GetPlayerController') and
+            combined.by_index[o.outer_index].name in ('UserWidget','Widget','GameplayStatics'))
+        self._getter_metadata.read('struct',combined,getters,describe)
+        self._metadata_warmed=True
+        return combined
 
     def _invoke(self,catalog,target,owner,name,**args):
         cls=catalog.find_class(owner).index
         matches=[o for o in catalog.objects if o.class_name=='Function' and o.outer_index==cls and o.name==name]
         if len(matches)!=1:raise UiProofMismatch('UI proof function unavailable or ambiguous')
         planner=self.scope.invocation_planner(catalog=catalog,selected_results=True)
+        metadata=getattr(self,'_getter_metadata',None)
+        if metadata is None:
+            from ._planning_metadata import MetadataObservations
+            metadata=MetadataObservations();self._getter_metadata=metadata
+        planner._metadata._entries=dict(metadata._entries)
         planner._require_stable_ui_identities=True
         try:
-            result=planner.prepare(target,matches[0],**args).invoke()
+            prepared=planner.prepare(target,matches[0],**args)
+            metadata._entries=dict(planner._metadata._entries)
+            result=prepared.invoke()
             self.pending_results.append(result) # retain before exposing any result
             value=result.return_value
             if not result.release():raise UiProofPending('UI getter leases cleanup pending; retain proof owner')
@@ -207,9 +367,21 @@ class OwnedUiProof:
             return value
         finally:planner.close()
 
-    def verify(self,panel,context,*,rebind=False):
+    def verify(self,panel,context,*,rebind=False,preparing=False):
+        try:return self._verify_observation(panel,context,rebind=rebind,preparing=preparing)
+        except RuntimeQueryError as error:
+            if any(reason in str(error) for reason in ('DESCRIPTOR_IDENTITY_CHANGED','READ_FAILED',
+                    'SELECTED_DEPENDENCY_CHANGED','Object identity changed or belongs to another process',
+                    'Object property reference changed during observation')):
+                raise UiProofPending('UI closure changed during loading handoff') from None
+            raise
+
+    def _verify_observation(self,panel,context,*,rebind=False,preparing=False):
+        if getattr(self,'_rejected_setter_context',None)==context.signature:
+            raise UiProofPending('Rejected loading controller; awaiting a different current UI context')
         with ReadBatch(self.scope.pid):
-            catalog,pc=self._current(context)
+            current=lambda:self._current(context,preparing=True) if preparing else self._current(context)
+            catalog,pc=current()
             catalog=self._functions(self._graph(panel,context,catalog))
             root=catalog.resolve(panel.widget)
             if rebind and self._setter_done!=context.signature:
@@ -217,7 +389,15 @@ class OwnedUiProof:
                 # result-release ACK must never replay an already returned
                 # setter; unknown dispatch errors quarantine the router.
                 self._setter_done=context.signature
-                self._invoke(catalog,root,'UserWidget','SetOwningPlayer',LocalPlayerController=pc)
+                try:self._invoke(catalog,root,'UserWidget','SetOwningPlayer',LocalPlayerController=pc)
+                except RuntimeQueryError as error:
+                    if getattr(error,'outcome',None)=='not_dispatched' and getattr(error,'native_error',None)==218:
+                        # Loading retired the argument between proof and native
+                        # dispatch. Never replay against this context. A future
+                        # different controller/world must pass the full proof.
+                        self._rejected_setter_context=context.signature
+                        raise UiProofPending('Loading controller retired before UI ownership dispatch') from None
+                    raise
             owning=self._invoke(catalog,root,'Widget','GetOwningPlayer')
             local=self._invoke(catalog,root,'Widget','GetOwningLocalPlayer')
             libraries=[o for o in catalog.select('GameplayStatics') if o.name=='Default__GameplayStatics']
@@ -231,7 +411,7 @@ class OwnedUiProof:
                     identity(owning)!=context.controller or identity(local)!=context.local_player or
                     identity(world_pc)!=context.controller):
                 raise UiProofMismatch('Typed widget owning-player/local-player/world readback mismatch')
-            self._current(context) # reject a generation switch during getter calls
+            current() # reject a generation switch during getter calls
             if rebind:
                 # Old controller/world copies are discarded. The native menu
                 # prepare cache already keys PC identity; explicitly revoke it.
@@ -242,11 +422,15 @@ class OwnedUiProof:
                 # selected anew; no old PC/world catalog is merged here.
                 metadata=[o for o in panel.catalog.objects if o.class_name in ('Function','Class','ScriptStruct','Enum')
                     or o.name in ('Default__GameplayStatics','Default__WidgetBlueprintLibrary')]
-                objects=[lease.object for lease in panel.scope._leases if lease.active]
-                selectors=tuple(dict.fromkeys(identity(o)[1:] for o in (*metadata,*objects,pc)))
-                fresh=capture_complete(self.scope.pid,selectors)
+                metadata=refresh_panel_metadata(self.scope.pid,metadata,observed=catalog)
+                # The complete leased hierarchy was already freshly read twice
+                # above. Add only the remaining planner metadata/current PC;
+                # dispatch still validates every owned target and argument.
+                selectors=tuple(dict.fromkeys(identity(o)[1:] for o in (*metadata,pc)))
+                fresh=catalog.with_observations(capture_complete(self.scope.pid,selectors))
                 panel.catalog=fresh
+                panel._functions.clear();panel._defaults.clear()
                 panel._planner=panel.scope.invocation_planner(catalog=fresh,selected_results=True)
                 panel._planner._require_stable_ui_identities=getattr(panel,'_metadata_stable_ui',False)
-                panel.prime_menu_plan()
+                if getattr(self,'prime',True):panel.prime_menu_plan()
             return True

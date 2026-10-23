@@ -127,6 +127,8 @@ def main():
                 from expedition33.process_ui import ProcessUI
                 process_ui = ProcessUI(session,loader.registry)
                 session._process_ui = process_ui
+                from expedition33.loading_preparation import LoadingPreparation
+                loading_preparation=LoadingPreparation(session,loader)
             if args.early_init:
                 # Core services register Python callbacks immediately. Neither
                 # console attachment nor native widgets are needed for readiness.
@@ -172,7 +174,7 @@ def main():
             loader.registry._startup_progress['phase'] = 'mods'
             startup_pending_result = None
             restoration = loader.registry.restore_enabled_steps()
-            next_restore = time.monotonic() + .25
+            next_restore = time.monotonic() + .005
             gameplay_confirmed = False
             activation_candidate = False
             startup_counts_refreshed = not args.early_init
@@ -311,6 +313,8 @@ def main():
                         if not runtime_polling_started:
                             session.poll() # No generic mod/key polling before first admission.
                         process_ui.observe(observation.admission if observation is not None else None)
+                        loading_ui_ready=loading_preparation.observe(observation.admission if observation is not None else None)
+                        if not loading_ui_ready:activation_candidate=False
                         if title_readiness is True:
                             process_console.title_active()
                         title_cleanup_ready = process_ui.title_cleanup_ready
@@ -439,7 +443,10 @@ def main():
                                     loaded=loader._loaded.get(folder)
                                     if loaded:startup_gate.arm(loaded[1],time.monotonic())
                                     logging.info('Saved mod initialized: %s', result[0])
-                        next_restore = time.monotonic() + .25
+                        # Yield through the owner loop between mods; their
+                        # readiness contracts and fresh admission gate the next
+                        # enable. An extra fixed 250 ms adds latency per mod.
+                        next_restore = time.monotonic() + .005
                     if args.early_init:
                         title_service=getattr(title_ui,'service',None)
                         frontend_failed=bool(getattr(title_ui,'frontend_failed',None) or
@@ -473,6 +480,7 @@ def main():
                     if title_ui is not None:
                         if not title_ui.close():
                             raise RuntimeError('Process UI cleanup pending; retain owner before Session close')
+                    if args.early_init:loading_preparation.close()
                 finally:
                     try:
                         if admission_monitor is not None:
