@@ -72,7 +72,7 @@ def build(output, *, source_only=False):
             for name in ('LICENSE', 'README.txt', 'convert.py', 'eye_materials.py', 'run.py'):
                 archive.write(ROOT / 'tools/asset_converter' / name, name)
         shutil.copyfile(ROOT / 'docs/RELEASE_0.1.0_RC17.md', output / 'GITHUB_RELEASE.md')
-    tracked = subprocess.check_output(['git', 'ls-files', '-z'], cwd=ROOT).decode().split('\0')
+    tracked = subprocess.check_output(['git', '-c', 'safe.directory='+str(ROOT), 'ls-files', '-z'], cwd=ROOT).decode().split('\0')
     source = output / 'ClairObscurSDK-rc17-source.zip'
     with zipfile.ZipFile(source, 'w', zipfile.ZIP_DEFLATED) as archive:
         for name in sorted(filter(None, tracked)):
@@ -81,7 +81,7 @@ def build(output, *, source_only=False):
                 assert (ROOT / name).is_file(), name
                 archive.write(ROOT / name, name)
         archive.writestr('RC17-SOURCE.txt', 'Source commit: ' + subprocess.check_output(
-            ['git', 'rev-parse', 'HEAD'], cwd=ROOT, text=True).strip() + '\n'
+            ['git', '-c', 'safe.directory='+str(ROOT), 'rev-parse', 'HEAD'], cwd=ROOT, text=True).strip() + '\n'
             'Build native: scripts/build-rc17-native.cmd from an x64 Visual Studio tools prompt.\n'
             'Prepare runtime/bootstrap using scripts/prepare_runtime.py and scripts/build-bootstrap.cmd.\n'
             'Package release: scripts/package_rc17.py NEW_DIRECTORY\n')
