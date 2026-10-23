@@ -1,11 +1,24 @@
 # SDK 0.1.0-rc18 — startup preparation and Mods menus
 
-RC18 pairs the SDK with native runtime209. Install the matching SDK ZIP before
+RC18 pairs the SDK with native runtime210. Install the matching SDK ZIP before
 updating optional mods. Downloads contain SDK runtime files and public mod sources/assets; existing
 user settings, saved maps and local custom packages are not included.
 
 ## Changes
 
+- World Builder prepares its detached catalog and HUD before gameplay and now
+  retires its native resources on world changes. Saved ON choices reactivate
+  after returning to title and loading again in the same SDK session.
+- Map Travel prepares its pause entry during loading and adopts that exact
+  owner at activation. Flight prepares copied function schemas and starts its
+  read worker before the save loads. Map Loader starts its passive context observer during preparation.
+- The foreground world-check worker starts during loading. Every activation
+  still reads the current world, save, local-player and pawn binding twice;
+  copied background selectors only avoid repeated discovery.
+- Synchronous activation no longer repaints the closed Mods menu or polls all
+  earlier mods between every enable. Open menus still receive current state.
+- Foreign mod presenters are not deep-copied into the shared menu cache; their
+  model objects can own worker locks and Sessions without breaking menu open.
 - Public mods can prepare management metadata before a save loads. The title
   screen Mods button stages desired enable states, options and keybinds;
   gameplay activation waits for a loaded-world admission.
@@ -13,7 +26,7 @@ user settings, saved maps and local custom packages are not included.
   caching calls. Owned cleanup and acknowledged native outcomes remain required.
 - Keybind lists use fixed row widgets and bounded active callback windows.
   Native focus ownership accommodates the larger reusable list.
-- Native lease release batching and colored startup status are included in209.
+- Native lease release batching and colored startup status are included in210.
 - World retirement revokes queued world actions and uses explicit native cleanup
   for borrowed UI and SDK-owned props. Cleanup owners remain retained until
   acknowledgments arrive; unsupported or unknown outcomes stay held without
@@ -37,10 +50,10 @@ menu timings depend on the installation and current game state.
 
 ## Validation
 
-- 1,949 SDK tests passed (8 existing skips); 133 World Builder tests passed.
-- Runtime209 and its native fixtures compiled with MSVC `/W4 /WX`.
-- Live title and gameplay Mods-button opens measured approximately 150 and
-  151 ms after preparation. Initial preparation and individual mod activation
+- 1,994 SDK tests passed (8 existing skips); 140 World Builder tests passed.
+- Runtime210 and its native fixtures compiled with MSVC `/W4 /WX`.
+- Live title and gameplay Mods-button opens measured approximately 150–197 ms
+  after preparation. Initial preparation and individual mod activation
   still take additional time; `startuptiming` reports those costs separately.
 - Title → save → title → save retained the SDK process and menu shell. Map
   Travel, Continent Flight, Scene Editor, WorldBuilder Map Loader and Enemy
@@ -60,11 +73,11 @@ context observer.
 
 ## Release inventory
 
-The SDK archive contains runtime209, its matching native controller, the bundled
+The SDK archive contains runtime210, its matching native controller, the bundled
 Python runtime, public SDK Python sources, licensing notices and core mods.
 Optional mods, World Builder, Scene Editor, Enemy Spawner and Asset Converter
 are separate downloads. The source archive includes `gpu/` dependencies and the
-public build scripts. Build runtime209 with
+public build scripts. Build runtime210 with
 `scripts/build-rc18-native.cmd` (including the thumbnail worker), prepare the
 pinned runtime and bootstrap with their existing scripts, then package a new destination with
 `scripts/package_rc18.py` after committing the reviewed public source inputs.

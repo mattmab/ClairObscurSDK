@@ -16,6 +16,7 @@ class UiAdmission:
     title_token: tuple | None = None
     ui_context: UiContext | None = None
     prewarm_context: UiContext | None = None
+    activation_selectors: tuple | None = None
 
 
 class UiAdmissionObserver(WarmAdmissionObserver):
@@ -25,11 +26,20 @@ class UiAdmissionObserver(WarmAdmissionObserver):
         return current
 
     def observe(self):
+        packet=self._observe()
+        # Even a missing/racing pause widget must not force the owner thread to
+        # rediscover the world. These selectors grant no admission: the owner
+        # re-reads the entire binding twice before every activation.
+        return replace(packet,activation_selectors=(getattr(self,'_observed_activation_selectors',None)
+            if packet.admission.activation_ready else None))
+
+    def _observe(self):
         # A proven world binding keeps passive sampling on four fresh queries.
         # Do not call the fast method without a binding: its deliberate full
         # fallback dispatches self.observe(), which would otherwise recurse.
         admission=(super().observe_activation() if getattr(self,'_activation_binding',None) is not None
             else super().observe())
+        self._observed_activation_selectors=getattr(self,'_activation_binding',None)
         if admission.state!='world_ready':
             if ((admission.state=='inactive' and admission.reason=='save_manager_unavailable')
                     or (admission.state=='loading' and admission.reason=='save_load_in_progress')):
@@ -67,7 +77,8 @@ class UiAdmissionObserver(WarmAdmissionObserver):
                     'PauseMenuWidget',project=True)
                 ready=pause is not None and pause.class_name=='WBP_PauseMenu_C'
                 return UiAdmission(admission,ready,ui_context=copied,
-                    prewarm_context=copied if not ready or not admission.activation_ready else None)
+                    prewarm_context=copied if not ready or not admission.activation_ready else None,
+                    activation_selectors=getattr(self,'_activation_binding',None))
         except RuntimeQueryError as error:
             self._discard()
             if any(reason in str(error) for reason in ('READ_FAILED',

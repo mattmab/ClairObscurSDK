@@ -138,6 +138,12 @@ class WarmAdmissionObserver:
         if self._closed:
             raise RuntimeError('Admission observer is closed')
 
+    def prepare(self):
+        """Start the read-only worker during loading; capture no world data."""
+        self._check()
+        if self._reader is None:self._reader=ReadBatch(self.pid,share=True)
+        with self._reader.bind():pass
+
     def engine_catalog(self):
         self._check()
         if self._engine is None:
@@ -220,6 +226,7 @@ class WarmAdmissionObserver:
         self._check()
         binding=getattr(self,'_activation_binding',None)
         if binding is None:return self.observe()
+        if self._reader is None:self._reader=ReadBatch(self.pid,share=True)
         try:
             with self._reader.bind():
                 first=self._activation_pass(binding)
@@ -234,6 +241,17 @@ class WarmAdmissionObserver:
         except BaseException:
             self._discard()
             raise
+
+    def seed_activation(self,binding):
+        """Copy read-worker selectors only; both activation passes remain fresh."""
+        self._check()
+        if (type(binding) is not tuple or len(binding)!=8 or any(
+                type(row) is not tuple or len(row)!=4 or
+                any(type(value) is not int for value in row) or
+                row[0]!=self.pid or row[1]<0 or row[2]<0 or row[3]<=0
+                for row in binding)):
+            raise ValueError('Expected eight copied activation identities from this process')
+        self._activation_binding=binding
 
     def _activation_pass(self,binding):
         catalog=capture_selected(self.pid,tuple(row[1:] for row in binding))

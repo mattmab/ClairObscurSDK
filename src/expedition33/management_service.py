@@ -275,6 +275,13 @@ class NativeMenuService:
             self._failure = self.menu.failure
         if (self._failure or self.menu is None or self.menu.panel.state not in ('built','open')):
             return
+        progress=getattr(self.registry,'_startup_progress',None)
+        if (self.menu.panel.state=='built' and type(progress) is dict
+                and progress.get('finished') is False):
+            # Coalesce activation changes into one detached repaint. An open
+            # menu still renders progress and explicit open always validates
+            # and refreshes its current frame before accepting input.
+            return
         try:
             # Other mods' metadata preparation invalidates this shared cache.
             # Repair before readiness consumers can attach, even if presenter
@@ -285,7 +292,8 @@ class NativeMenuService:
             registry_changed = self._snapshot() != self._observed
             if self.menu.panel.state == 'built':
                 prepared_state=getattr(self.menu,'prepared_view_state',None)
-                view_changed = (callable(prepared_state) and
+                current_state=prepared_state() if callable(prepared_state) else None
+                view_changed = (current_state is not None and
                     (self._prepared_view_state is None or self._prepared_view_state != prepared_state()))
                 if registry_changed or view_changed:self._refresh_detached()
             elif registry_changed:self.refresh()

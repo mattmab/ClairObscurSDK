@@ -17,6 +17,12 @@ class LoadingPreparation:
             views={v['folder']:v for v in self.loader.registry.views()}
             for name in tuple(self.loader._startup_preparations):
                 previous=self.owners.get(name)
+                title_observer=getattr(previous,'observe_title',None)
+                if callable(title_observer):
+                    try:title_observer(context)
+                    except Exception:
+                        self.failed.add(name);LOG.exception('Loading owner retirement held: %s',name)
+                        continue
                 if previous is not None and getattr(previous,'released',False) is True:
                     previous.close();del self.owners[name]
                 if name in self.owners or name in self.failed:continue

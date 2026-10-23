@@ -273,6 +273,10 @@ class PauseMenuEntry:
                 raise RuntimeError('Pause inventory belongs to another process')
             current = self.current_entry(catalog)
             if current is None: return False
+            expected=getattr(self,'_expected_controller',None)
+            if expected is not None:
+                player=current[0]
+                if (player.pid,player.index,player.serial,player.address)!=expected:return False
             self.timings['current_entry_ms']=(time.perf_counter()-started)*1000-self.timings['catalog_ms']
             self.player, self.pause = current
             self.scope = SessionScope(self.parent_scope)

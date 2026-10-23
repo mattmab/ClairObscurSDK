@@ -28,7 +28,7 @@ class Mod:
         self._world_retiring=False;self._retirement_result=None
         self._disable_preparing=False
     def management(self):
-        return ModDefinition('e33.worldbuilder-map-loader','WorldBuilder Map Loader',version='0.2.1',
+        return ModDefinition('e33.worldbuilder-map-loader','WorldBuilder Map Loader',version='0.2.2',
             description='Load finished WorldBuilder maps during exploration. F2: choose one map per vanilla world. No editor required.',
             actions=(Action('open','Choose map for current world',self.open_menu),Action('status','Map loader status',self.status),Action('unload','Unload placed map',self.unload)),
             keybinds=(Keybind('open','Choose WorldBuilder map','F2',self.open_menu),))
@@ -58,6 +58,14 @@ class Mod:
         prepared=getattr(self,'_startup_store',None)
         self.store=prepared if prepared is not None and prepared.root==root else PreparedMapStore(root)
         self.runtime=MapRuntime(session)
+        prepared_context=getattr(self,'_loading_context',None)
+        if prepared_context is not None and not prepared_context.released:
+            self._context_monitor=prepared_context.take()
+            observation=self._context_monitor.snapshot()
+            if observation is not None and observation.admission is not None:
+                token=session.mods._loader.world_lifecycle.current_token
+                value=observation.admission
+                if token is not None and value.visit==token[0][1:]:self.current=value.copy()
         session.console.expose('worldbuilder_map_loader',self)
         session.actions.register('worldbuilder_map_loader.status',self.status,mutates=False)
         session.actions.register('worldbuilder_map_loader.open',self.open_menu)
@@ -66,6 +74,9 @@ class Mod:
         session.actions.register('worldbuilder_map_loader.unload',self.unload)
         session.actions.register('worldbuilder_map_loader.clear',self.clear)
         self._mark('enable',started)
+    def prepare_loading_ui(self,session):
+        from .loading_context import LoadingContext
+        return LoadingContext(self,session)
     def _mark(self,stage,started):
         elapsed=(time.perf_counter()-started)*1000
         row=self.timings.setdefault(stage,dict(calls=0,total_ms=0.,max_ms=0.))

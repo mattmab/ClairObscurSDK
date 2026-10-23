@@ -254,6 +254,7 @@ def main():
                 from expedition33.ui_admission import UiAdmissionObserver
                 from expedition33.console_startup import ConsoleReadiness
                 admission_observer = WarmAdmissionObserver(session.pid)
+                admission_observer.prepare()
                 admission_monitor = ReadOnlyAdmissionMonitor(lambda pid=session.pid:UiAdmissionObserver(pid))
                 title_ui = process_ui
                 console_readiness = ConsoleReadiness(session.pid)
@@ -278,11 +279,17 @@ def main():
                 while not loader.stop_requested and kernel.WaitForSingleObject(handle, 0) == 258:
                     if args.early_init:
                         observation = admission_monitor.snapshot()
+                        # Loading preparers need the current copied pause-widget
+                        # observation before they run, rather than last turn's
+                        # readiness value after gameplay activation has begun.
+                        ui_ready=(observation.admission.menu_ready if observation is not None else None)
                         if observation is None:
                             world_lifecycle.observe(None)
                         elif observation.sequence != last_lifecycle_sequence:
                             last_lifecycle_sequence = observation.sequence
                             packet = observation.admission
+                            selectors=getattr(packet,'activation_selectors',None)
+                            if selectors is not None:admission_observer.seed_activation(selectors)
                             # Confirm a new gameplay token before revoking old
                             # owners. Repeated old mailbox slots cannot overwrite
                             # a newer token already observed at an enable gate.
@@ -374,12 +381,14 @@ def main():
                                 late_core_pending = False
                             else:
                                 activation_candidate = False
-                    if not args.early_init or runtime_polling_started:
+                    if ((not args.early_init or runtime_polling_started) and
+                            not (args.early_init and activation_candidate and restoration is not None
+                                 and not startup_gate.pending(time.monotonic()))):
                         loader.poll()
-                    if restoration is not None and not loader.stop_requested and time.monotonic() >= next_restore and (not args.early_init or activation_candidate) and not startup_gate.pending(time.monotonic()):
+                    while restoration is not None and not loader.stop_requested and time.monotonic() >= next_restore and (not args.early_init or activation_candidate) and not startup_gate.pending(time.monotonic()):
                         management = loader._loaded['SDKManagement'][1]
                         # Restore saved mods even while Pause/Mods is open.
-                        # Keep polling between enables, but never initialize a
+                        # Keep transport responsive, but never initialize a
                         # gameplay mod during SDK-owned travel/recovery.
                         busy = management.native.travel_recovery_pending
                         if busy:
@@ -444,10 +453,15 @@ def main():
                                     loaded=loader._loaded.get(folder)
                                     if loaded:startup_gate.arm(loaded[1],time.monotonic())
                                     logging.info('Saved mod initialized: %s', result[0])
-                        # Yield through the owner loop between mods; their
-                        # readiness contracts and fresh admission gate the next
-                        # enable. An extra fixed 250 ms adds latency per mod.
-                        next_restore = time.monotonic() + .005
+                        # Drain synchronous activations without repainting the
+                        # same detached menu or polling every earlier mod after
+                        # each enable. Fresh admission still gates EVERY enable;
+                        # asynchronous readiness yields to the ordinary loop.
+                        # Console commands can change pending preferences.
+                        session.console.poll()
+                        session.poll()
+                        if busy or not gameplay_confirmed:break
+                        next_restore = time.monotonic()
                     if args.early_init:
                         title_service=getattr(title_ui,'service',None)
                         frontend_failed=bool(getattr(title_ui,'frontend_failed',None) or

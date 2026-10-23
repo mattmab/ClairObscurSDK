@@ -32,6 +32,26 @@ class FlightCleanupTests(unittest.TestCase):
                         mod.enable(session)
                     session.console.expose.assert_not_called()
 
+    def test_loading_preparation_is_consumed_once_and_rechecks_possession(self):
+        mod=flight.Mod();mod.session=SimpleNamespace(pid=7)
+        catalog=object();metadata=object();snapshot=(catalog,object(),object())
+        mod._loading_flight=('world',(snapshot,metadata))
+        mod._prepare_calls=Mock()
+        with patch.object(flight,'discover_snapshot',return_value=snapshot) as discover:
+            mod._prepare(use_cache=True)
+        discover.assert_called_once_with(7,catalog)
+        mod._prepare_calls.assert_called_once_with(None,snapshot,metadata=metadata)
+        self.assertIsNone(mod._loading_flight)
+
+    def test_changed_possession_cannot_use_loading_plans(self):
+        mod=flight.Mod();mod.session=SimpleNamespace(pid=7)
+        mod._loading_flight=('world',((object(),object(),object()),object()))
+        mod._prepare_calls=Mock()
+        with patch.object(flight,'discover_snapshot',side_effect=flight.ExplorationNotReady('changed')):
+            with self.assertRaises(flight.ExplorationNotReady):mod._prepare(use_cache=True)
+        mod._prepare_calls.assert_not_called()
+        self.assertIsNone(mod._loading_flight)
+
     def test_toggle_restores_observed_area_movement_mode(self):
         for mode, custom in ((1, 0), (3, 0), (6, 2)):
             mod = flight.Mod()

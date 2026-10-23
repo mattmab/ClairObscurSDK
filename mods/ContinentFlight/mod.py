@@ -23,6 +23,8 @@ MAX_ACCELERATION = 12000.0
 FLIGHT_TUNING = {'MaxFlySpeed': HORIZONTAL_SPEED,
                  'MaxAcceleration': 6000.0, 'BrakingDecelerationFlying': 12000.0}
 VERTICAL_TUNING = {'MaxAcceleration': 18000.0, 'BrakingDecelerationFlying': 0.0}
+FLIGHT_FUNCTIONS=('SetMovementMode','K2_GetActorLocation','IsFlying','GetLastInputVector',
+                 'GetVelocity','AddImpulse','StopMovementImmediately','IsLocallyControlled','AddInputVector')
 
 
 class ExplorationNotReady(RuntimeError):
@@ -61,9 +63,7 @@ class DoubleTap:
 
 def discover_snapshot(pid, cached=None):
     """Pure reflection reads; never accesses a scope or prepares engine calls."""
-    names = ('CharMoveComp', 'SetMovementMode', 'K2_GetActorLocation', 'IsFlying',
-             'GetLastInputVector', 'GetVelocity', 'AddImpulse', 'StopMovementImmediately',
-             'IsLocallyControlled', 'AddInputVector', 'Vector', 'EMovementMode')
+    names = ('CharMoveComp',*FLIGHT_FUNCTIONS,'Vector','EMovementMode')
     catalog = cached if cached is not None else capture_matching(pid,
         names=names, classes=('BP_jRPG_Character_WorldMap_pawn_C', 'BP_jRPG_Character_World_C', 'PlayerController'))
     controller_class = catalog.find_class('Controller').index
@@ -71,7 +71,7 @@ def discover_snapshot(pid, cached=None):
     candidates = []
     for controller in catalog.select('PlayerController'):
         if controller.object_flags & 0x10: continue
-        values = read_values(catalog, controller).values
+        values = read_values(catalog, controller, fields=('bIsLocalPlayerController','Pawn')).values
         if values.get((player_class, 'bIsLocalPlayerController')) is not True: continue
         current = values.get((controller_class, 'Pawn'))
         if current is not None and current.class_name in (
@@ -93,6 +93,26 @@ def discover_worker(pid):
         return discover_snapshot(pid)
 
 
+def flight_calls(catalog,pawn,movement,prepare):
+    functions = {catalog.path_name(o): o for o in catalog.objects if o.class_name == 'Function'}
+    def call(path,target=pawn,**arguments):
+        return prepare(target,functions[path],**arguments)
+    return {
+        'enter': call('/Script/Engine.CharacterMovementComponent:SetMovementMode', target=movement, NewMovementMode=5, NewCustomMode=0),
+        'exit': call('/Script/Engine.CharacterMovementComponent:SetMovementMode', target=movement, NewMovementMode=0, NewCustomMode=0),
+        'location': call('/Script/Engine.Actor:K2_GetActorLocation'),
+        'is_flying': call('/Script/Engine.NavMovementComponent:IsFlying', target=movement),
+        'input': call('/Script/Engine.PawnMovementComponent:GetLastInputVector', target=movement),
+        'velocity': call('/Script/Engine.Actor:GetVelocity'),
+        'impulse': call('/Script/Engine.CharacterMovementComponent:AddImpulse', target=movement, Impulse={'X':0.0,'Y':0.0,'Z':0.0}, bVelocityChange=True),
+        'stop': call('/Script/Engine.MovementComponent:StopMovementImmediately', target=movement),
+        'controlled': call('/Script/Engine.Pawn:IsLocallyControlled'),
+        'vertical_input': call('/Script/Engine.PawnMovementComponent:AddInputVector', target=movement,
+                                  WorldVector={'X':0.0,'Y':0.0,'Z':0.0}, bForce=True),
+    }
+
+
+
 class Mod:
     def __init__(self):
         self.session = self.planner = None
@@ -105,6 +125,7 @@ class Mod:
         self.last_poll = time.monotonic()
         self.input_state = {}
         self.cached_observations = None
+        self._loading_flight = None
         self.enable_ms = None
         self.next_discovery = 0.
         self.next_identity_check = 0.
@@ -161,7 +182,7 @@ class Mod:
             raise
 
     def management(self):
-        return ModDefinition('continent-flight', 'Continent Flight', version='0.4-fast-smooth2-test',
+        return ModDefinition('continent-flight', 'Continent Flight', version='0.4.1',
             description='Toggle flight on the current exploration character, then hold the configured ascend or descend key. Space remains jump. Travel resets flight. Bindings can be changed in Mod keybinds.',
             actions=(Action('status', 'Flight status', self.status),
                      Action('refresh', 'Find current exploration character', self.refresh),
@@ -170,12 +191,18 @@ class Mod:
                       Keybind('rise', 'Hold to ascend', 'E', self.rise),
                       Keybind('descend', 'Hold to descend', 'Q', self.descend)))
 
+    def prepare_loading_ui(self,session):
+        from .loading import LoadingFlight
+        return LoadingFlight(self,session)
+
     def enable(self, session):
         if not getattr(session, 'supports_vector_values', False):
             raise RuntimeError('Continent Flight requires Vector support. Use the native Mods launcher (unified pause-menu runtime).')
         if not getattr(session, 'supports_scalar_assignment', False):
             raise RuntimeError('Fast flight requires the SDK scalar assignment runtime')
         self.session = session
+        owner=getattr(self,'_loading_owner',None)
+        if self.reader is None and owner is not None:self.reader=owner.take_reader()
         self.disabled = False
         self.user32 = ctypes.WinDLL('user32', use_last_error=True)
         self.user32.GetAsyncKeyState.argtypes = [ctypes.c_int]
@@ -211,7 +238,15 @@ class Mod:
         failure = None
         try:
             with self.operation():
-                self._prepare_calls(cached)
+                prepared=self._loading_flight
+                self._loading_flight=None
+                if prepared is not None:
+                    snapshot,metadata=prepared[1]
+                    # Validate possession anew against exact captured identities.
+                    # All prepared calls still pass the native schema/target gates.
+                    fresh=discover_snapshot(self.session.pid,snapshot[0])
+                    self._prepare_calls(None,fresh,metadata=metadata)
+                else:self._prepare_calls(cached,metadata=getattr(self,'_loading_static',None))
         except Exception as error:
             # The next explicit enable rediscovers; never reuse rejected data or
             # retry an invocation whose dispatch outcome could be uncertain.
@@ -221,7 +256,7 @@ class Mod:
         finally:
             self._diagnose_slow('prepare', started, failure)
 
-    def _prepare_calls(self, cached, snapshot=None):
+    def _prepare_calls(self, cached, snapshot=None, *, metadata=None):
         catalog, pawn, movement = snapshot if snapshot is not None else discover_snapshot(
             self.session.pid, cached.catalog if cached else None)
         self.movement = movement
@@ -231,21 +266,8 @@ class Mod:
             self.planner.close()
         self.planner = self.session.invocation_planner(selected_results=True,
             **({'observations': cached} if cached else {'catalog': catalog}))
-        def prepare(path, target=pawn, **args):
-            return self.planner.prepare(target, functions[path], **args)
-        self.calls = {
-            'enter': prepare('/Script/Engine.CharacterMovementComponent:SetMovementMode', target=movement, NewMovementMode=5, NewCustomMode=0),
-            'exit': prepare('/Script/Engine.CharacterMovementComponent:SetMovementMode', target=movement, NewMovementMode=0, NewCustomMode=0),
-            'location': prepare('/Script/Engine.Actor:K2_GetActorLocation'),
-            'is_flying': prepare('/Script/Engine.NavMovementComponent:IsFlying', target=movement),
-            'input': prepare('/Script/Engine.PawnMovementComponent:GetLastInputVector', target=movement),
-            'velocity': prepare('/Script/Engine.Actor:GetVelocity'),
-            'impulse': prepare('/Script/Engine.CharacterMovementComponent:AddImpulse', target=movement, Impulse={'X':0.0,'Y':0.0,'Z':0.0}, bVelocityChange=True),
-            'stop': prepare('/Script/Engine.MovementComponent:StopMovementImmediately', target=movement),
-            'controlled': prepare('/Script/Engine.Pawn:IsLocallyControlled'),
-            'vertical_input': prepare('/Script/Engine.PawnMovementComponent:AddInputVector', target=movement,
-                                      WorldVector={'X':0.0,'Y':0.0,'Z':0.0}, bForce=True),
-        }
+        if metadata is not None:self.planner._metadata._entries=dict(metadata._entries)
+        self.calls = flight_calls(catalog,pawn,movement,self.planner.prepare)
         self.pawn = catalog.path_name(pawn)
         self.error = None
         self.restore_mode = None

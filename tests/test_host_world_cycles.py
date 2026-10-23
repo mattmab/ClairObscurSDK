@@ -84,6 +84,7 @@ class HostTests(unittest.TestCase):
             def __init__(self, **kwargs):
                 self.owner=threading.get_ident()
                 self.console = N(_enabled=False,write=lambda text:events.append('console.info'),
+                    poll=lambda:events.append('console.poll'),
                     register=lambda name,callback,owner:events.append('console.register.'+name))
                 def enable():
                     self.console._enabled = True
@@ -175,6 +176,7 @@ class HostTests(unittest.TestCase):
             return readiness(calls[0])
         class Observer:
             def __init__(self,pid):events.append('observer.open')
+            def prepare(self):events.append('observer.worker.prepare')
             def observe(self):
                 events.append('foreground.observe')
                 calls[0]+=1

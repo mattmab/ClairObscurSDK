@@ -171,7 +171,7 @@ def build(output, *, source_only=False):
         for result in (sdk, builder):
             shutil.copy2(result['archive'], output / Path(result['archive']).name)
         build_all(ROOT / 'mods', output / 'optional', include=OPTIONAL)
-        for folder, filename in (('MapTravel', 'MapTravel-0.2.2.zip'),
+        for folder, filename in (('MapTravel', 'MapTravel-0.2.3.zip'),
                                  ('WorldBuilderMapLoader', 'WorldBuilderMapLoader-RC18.zip')):
             with zipfile.ZipFile(output / filename, 'w', zipfile.ZIP_DEFLATED) as archive:
                 archive.write(output / 'optional' / (folder + '.sdkmod'), 'SDK_Mods/' + folder + '.sdkmod')

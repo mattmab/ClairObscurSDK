@@ -43,7 +43,7 @@ SDKManagement, IntrospectionHarness and LiveObjectViewer are bundled in `SDK_Mod
 Enable LiveObjectViewer in Pause → Mods, then choose **Open Live Object Viewer**
 or enter `lov` in the native console. Existing saved enable choices are preserved.
 Download optional mods separately from the repository's Mods catalog and releases.
-World Builder 0.32.1 requires RC16 or later and is a separate optional download.
+World Builder 0.32.3 requires RC18 with runtime210 and is a separate optional download.
 Extract its ZIP beside `Sandfall` and enable World Builder in Pause → Mods.
 It needs no second controller or native DLL; preserve `SDK/settings/E33WorldBuilder`
 for maps, camera preferences and thumbnail caches.
