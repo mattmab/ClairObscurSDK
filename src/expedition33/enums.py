@@ -40,7 +40,7 @@ def describe_enums(catalog, observed):
     """Read native UEnum members selected by catalog identity.
 
     Values may alias and may include sentinels such as _MAX. Membership does not
-    prove a valid function argument. Native subclasses are currently unsupported.
+    prove a valid function argument. Registered UEnum subclasses, including UserDefinedEnum, are readable.
     Double-read checks detect changes; they do not provide an atomic GC snapshot.
     """
     targets = tuple(catalog.resolve(obj) for obj in observed)

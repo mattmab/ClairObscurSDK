@@ -1,5 +1,9 @@
+AI building: Maps > Export for AI, then Maps > Import AI Scene. See AI_WORKFLOW.md.
+
+F6: Play from builder camera. P remains mouse pitch rotation.
+
 H: Hide / show the entire World Builder HUD (remappable).
-P: Play from camera (remappable in Mods > World Builder keybinds).
+F6: Play from camera (remappable in Mods > World Builder keybinds).
 F7 shows Building Widgets... in the HUD while constructing its menu.
 
 RC14: Holding built-in scenery through a level-streaming unload now releases
@@ -216,3 +220,6 @@ move the camera. The menu and current preview remain open.
 
 Placement navigation: hold left mouse over the open world view and drag to look; while held, WASD flies, Space/E rises, Ctrl/Q lowers, and Shift boosts speed. Works in template, duplication and bounds menus. Release to edit fields. Requires the matching native SDK menu-flight update.
 Large template previews start at most 5,000 units ahead of the camera. Bring preview here repositions the unapplied group near your current view, preserving its yaw and resetting XYZ offsets.
+
+Hold Y and move mouse horizontally for yaw; hold P and move vertically for pitch; hold R and move horizontally for roll. Camera look pauses during rotation. Release the key to finish one Alt+Z/Alt+Y undo/redo gesture. Current Selection shows the active world axis and signed gesture angle. Play from camera remains available in the menu; P is reserved for pitch. Rotation applies to the selected prop, preserving translation and scale.
+Hold the main keyboard +/= key (Shift optional) or numpad + and move the mouse up/down to uniformly grow/shrink the current selection. Camera look pauses during the gesture. Current Selection shows the scale multiplier relative to the start of the gesture; Alt+Z/Alt+Y undo/redo the complete gesture. Proportions and mirrored axes are preserved. G (Camp) and Z (mount) are blocked during builder-camera gameplay; Alt+Z undo remains available. Menu text entry is unaffected.

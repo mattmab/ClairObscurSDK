@@ -6,6 +6,21 @@ from expedition33._pod_values import VECTOR, COLOR, MARGIN, ANCHORS, PROFILES, e
 
 
 class PodValueTests(unittest.TestCase):
+    def test_guid_signed_words_and_exact_schema(self):
+        from expedition33._pod_values import GUID
+        value = dict(A=1339984714,B=1236766104,C=-1170703726,D=625081477)
+        self.assertEqual(encode(GUID,value),struct.pack('<4i',*value.values()))
+        self.assertEqual(dict(decode(GUID,encode(GUID,value))),value)
+        for bad in (True,1.5,2**31,-2**31-1):
+            with self.assertRaises(ValueError):encode(GUID,dict(value,A=bad))
+        obj=SimpleNamespace(index=1,class_name='ScriptStruct')
+        catalog=SimpleNamespace(resolve=lambda _:obj,path_name=lambda _:GUID)
+        rows=[dict(owner_index=1,name=n,offset=o,element_size=4,dimension=1,type=k,flags=6755469251052033,vtable_rva='0x6e10a98') for n,o,k in PROFILES[GUID].fields]
+        descriptor=SimpleNamespace(object=obj,owners=[dict(index=1,size=16,super='0x0')],properties=rows)
+        self.assertEqual(validate_profile(catalog,descriptor,{}),PROFILES[GUID])
+        rows[0]['flags'] ^= 1
+        with self.assertRaises(ValueError):validate_profile(catalog,descriptor,{})
+
     def test_vector3_uses_three_doubles_and_rejects_bad_shape(self):
         from expedition33._pod_values import VECTOR3
         value = {'X': 10.25, 'Y': -100.5, 'Z': 4096.125}

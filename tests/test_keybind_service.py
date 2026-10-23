@@ -12,7 +12,7 @@ class Transport:
             setattr(self, name, 1)
         self.button_action_session = 123
         self.multi_button_capacity = self.trace_capacity = 16
-        self.keybind_capacity = 64
+        self.keybind_capacity = 96
         self.key_capture_protocol = 1
         self.events = []
         self.dropped = 0
@@ -75,6 +75,23 @@ class KeyServiceTests(unittest.TestCase):
         self.transport.events=[(1,117)]
         self.service.poll()
         self.assertEqual(self.instance.calls,1)
+
+    def test_punctuation_capture_and_remapped_delivery(self):
+        from expedition33.keys import VIRTUAL_KEYS
+        for key in (',', '.'):
+            with self.subTest(key=key):
+                captured=[];owner=object()
+                self.service.begin_capture(owner,captured.append)
+                token=list(VIRTUAL_KEYS).index(key)+1
+                self.transport.events=[(token,VIRTUAL_KEYS[key])]
+                self.assertEqual(self.service.poll(),1)
+                self.assertEqual(captured,[key])
+                self.registry.set_keybind(self.registry.select('specimen'),'read-key',key)
+                self.service.poll()
+                before=self.instance.calls
+                self.transport.events=[(1,VIRTUAL_KEYS[key])]
+                self.assertEqual(self.service.poll(),1)
+                self.assertEqual(self.instance.calls,before+1)
 
     def test_cancel_owns_capture_and_discards_pending_press(self):
         captured=[];owner=object()
@@ -162,4 +179,3 @@ class KeyServiceTests(unittest.TestCase):
 
 
 if __name__ == '__main__': unittest.main()
-

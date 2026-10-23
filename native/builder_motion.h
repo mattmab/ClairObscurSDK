@@ -2,7 +2,7 @@
         if(!selected_.address || (call_identity(b,selected_) && call_identity(b,selected_actor_)))return false;
         // Streaming can retire a held level actor. Do not stop the camera or
         // restore scene edits; require a fresh click before grabbing again.
-        selected_={};selected_actor_={};hover_={};hover_actor_={};
+        mouse_rotation_.reset();selected_={};selected_actor_={};hover_={};hover_actor_={};
         dragging_=false;carrying_=false;nudging_=false;want_grab_=false;
         duplicate_requested_=false;left_was_=true;gpu_end_click();return true;
     }
@@ -23,4 +23,22 @@
                     refresh_candidate(b,selected_);
                 }
         return true;
+    }
+
+    bool rotate_mouse(uint64_t b,double delta) {
+        if(!mouse_rotation_.axis||!delta)return true;
+        if(discard_unloaded_selection(b)||!selected_.address){mouse_rotation_.reset();return true;}
+        if(!mouse_rotation_.changed){
+            if(!track_component(b,selected_)||!checkpoint(b,selected_))return false;
+            clear();args_[0]=2;if(!call(b,selected_,16))return false;
+            mouse_rotation_.changed=true;
+        }
+        clear();if(!call(b,selected_,19))return discard_unloaded_selection(b);
+        uint8_t pose[96];std::memcpy(pose,args_,96);double q[4];std::memcpy(q,pose,32);
+        double factor=1.;
+        if(mouse_rotation_.axis==4){double scale[3];std::memcpy(scale,pose+64,24);factor=mouse_uniform_scale(scale,delta);std::memcpy(pose+64,scale,24);}
+        else {mouse_axis_quaternion(q,mouse_rotation_.axis,delta);std::memcpy(pose,q,32);}
+        if(!component_pose(b,selected_,pose))return discard_unloaded_selection(b);
+        if(mouse_rotation_.axis==4)mouse_rotation_.angle*=factor;else mouse_rotation_.angle+=delta;
+        refresh_candidate(b,selected_);return true;
     }

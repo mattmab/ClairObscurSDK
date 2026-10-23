@@ -1,0 +1,97 @@
+{
+  "schema": 1,
+  "evidence": "standard-authored-route-links.json",
+  "routes": [
+    {
+      "route": 3,
+      "recipe_id": "50de025be71dccc5",
+      "class_path": "/Game/Characters/Enemies/AncientSanctuary/PotatoBagRanger/BP_EnemyWorld_AS_DpsPotatobag.BP_EnemyWorld_AS_DpsPotatobag_C",
+      "encounter_row": "AS_PotatoBagRanger*1",
+      "name_base": "AS_PotatoBagRanger*1",
+      "name_number": 0
+    },
+    {
+      "route": 4,
+      "recipe_id": "7fe6425b04e172c1",
+      "class_path": "/Game/Characters/Enemies/YellowForest/Gault/BP_jRPG_EnemyWorld_GaultB.BP_jRPG_EnemyWorld_GaultB_C",
+      "encounter_row": "YF_GaultB*1",
+      "name_base": "YF_GaultB*1",
+      "name_number": 0
+    },
+    {
+      "route": 5,
+      "recipe_id": "0dedb820487d92dc",
+      "class_path": "/Game/Characters/Enemies/SpringMeadows/Lancelier/BP_EnemyWorld_Lancelier_Unique.BP_EnemyWorld_Lancelier_Unique_C",
+      "encounter_row": "SM_Lancelier_Alpha",
+      "name_base": "SM_Lancelier_Alpha",
+      "name_number": 0
+    },
+    {
+      "route": 6,
+      "recipe_id": "3d66d6b366d5dc17",
+      "class_path": "/Game/Characters/Enemies/YellowForest/Sapling/BP_jRPG_EnemyWorld_Sapling_Alternative_CrushingWall.BP_jRPG_EnemyWorld_Sapling_Alternative_CrushingWall_C",
+      "encounter_row": "SL_Sapling_CrushingWalls_0",
+      "name_base": "SL_Sapling_CrushingWalls",
+      "name_number": 1
+    },
+    {
+      "route": 7,
+      "recipe_id": "742a23b11cc52afa",
+      "class_path": "/Game/Characters/Enemies/Goblu_Ennemies/Luster/BP_EnemyWorld_UniqueLusterAlpha.BP_EnemyWorld_UniqueLusterAlpha_C",
+      "encounter_row": "GO_LusterAlpha",
+      "name_base": "GO_LusterAlpha",
+      "name_number": 0,
+      "evidence": "alpha-route-evidence.json"
+    },
+    {
+      "route": 8,
+      "recipe_id": "c85509b90a9c8d80",
+      "class_path": "/Game/Characters/Enemies/Goblu_Ennemies/Goblu/BP_EnemyWorld_Goblu.BP_EnemyWorld_Goblu_C",
+      "encounter_row": "GO_Goblu",
+      "name_base": "GO_Goblu",
+      "name_number": 0,
+      "evidence": "boss-authored-route-links.json",
+      "limitation": "Hidden preparation only; individual combat, victory, camera/framing and original map arena/sequence behavior remain unverified. Isolated standalone route using the original encounter row."
+    },
+    {
+      "route": 9,
+      "recipe_id": "37a4c9ec68d4dcee",
+      "class_path": "/Game/Characters/Enemies/SpringMeadows/Eveque_Boss/BP_EnemyWorld_BossEveque.BP_EnemyWorld_BossEveque_C",
+      "encounter_row": "SM_Eveque*1",
+      "name_base": "SM_Eveque*1",
+      "name_number": 0,
+      "evidence": "boss-authored-route-links.json",
+      "limitation": "Hidden preparation only; individual combat, victory, camera/framing and original map arena/sequence behavior remain unverified. Isolated standalone route using the original encounter row."
+    },
+    {
+      "route": 10,
+      "recipe_id": "3a9e13a736c3d0ee",
+      "class_path": "/Game/Characters/Enemies/SpringMeadows/Eveque_Boss/BP_EnemyWorld_BossEveque_Monolith.BP_EnemyWorld_BossEveque_Monolith_C",
+      "encounter_row": "ML_Eveque*1",
+      "name_base": "ML_Eveque*1",
+      "name_number": 0,
+      "evidence": "boss-authored-route-links.json",
+      "limitation": "Hidden preparation only; individual combat, victory, camera/framing and original map arena/sequence behavior remain unverified. Isolated standalone route using the original encounter row."
+    },
+    {
+      "route": 11,
+      "recipe_id": "7ac1b6a3946f93d2",
+      "class_path": "/Game/Characters/Enemies/Sea_Cliff/Lampmaster/BP_EnemyWorld_LampMaster.BP_EnemyWorld_LampMaster_C",
+      "encounter_row": "SC_LampMaster",
+      "name_base": "SC_LampMaster",
+      "name_number": 0,
+      "evidence": "boss-authored-route-links.json",
+      "limitation": "Hidden preparation only; individual combat, victory, camera/framing and original map arena/sequence behavior remain unverified. Isolated standalone route using the original encounter row."
+    },
+    {
+      "route": 12,
+      "recipe_id": "fce36e688f455825",
+      "class_path": "/Game/Characters/Enemies/Verso_Draft/Franctale/BP_EnemyWorld_Franctale_Alpha.BP_EnemyWorld_Franctale_Alpha_C",
+      "encounter_row": "VD_FranctaleAlpha*1",
+      "name_base": "VD_FranctaleAlpha*1",
+      "name_number": 0,
+      "evidence": "franctale-authored-route-links.json",
+      "limitation": "Standalone isolated authored singleton; both original row payloads match all reflected settings. Working fight user-confirmed and owned cleanup verified. Original placed-map row/parameters, victory and framing are not explicitly verified."
+    }
+  ]
+}

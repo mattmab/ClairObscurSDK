@@ -85,8 +85,9 @@ class BuilderHUD(OwnedMenuPanel):
         self.set_text(self.controls_label, "(F1) Help" if minimized else
             'CONTROLS (F1: Minimize help)\n'
             'F7: Open / close menu | Esc: Back / close\n'
-            'F8: Enter / leave builder camera\n'
-            'P: Play from camera\n'
+            'F8: Enter / leave builder camera | F6: Play from camera\n'
+            'Hold Y/P/R + mouse: Yaw / Pitch / Roll\n'
+            'Hold +/= or numpad +: Mouse up/down scales\n'
             'H: Hide / show builder HUD\n'
             'WASD: Fly | Mouse: Look\n'
             'Space / E: Up | Ctrl / Q: Down\n'
@@ -107,9 +108,10 @@ class BuilderHUD(OwnedMenuPanel):
             'F9: Restore edits / clear spawned props\n'
             'Menu > Directional copies: Count / spacing')
 
-    def show_selection(self,name):
+    def show_selection(self,name,axis='',angle=0.):
         import textwrap
-        self.set_text(self.selection_label,'CURRENT SELECTION\n'+textwrap.fill(name,width=42))
+        detail=f'\nScale: {angle:.3f}x (this gesture)' if axis=='Scale' else f'\n{axis}: {angle:+.1f} degrees' if axis else ''
+        self.set_text(self.selection_label,'CURRENT SELECTION\n'+textwrap.fill(name,width=42)+detail)
 
     def set_hidden(self, hidden):
         self._render_call(self.widget,'Widget','SetRenderOpacity',InOpacity=0. if hidden else 1.)

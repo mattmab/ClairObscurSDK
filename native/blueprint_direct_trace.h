@@ -12,6 +12,8 @@ class BlueprintDirectTrace {
     inline static void* originals_[256]{};
     inline static void* wrappers_[256]{};
     inline static uint64_t damage_name_{};
+    inline static uint64_t external_names_[2]{};
+    inline static bool external_{};
     inline static unsigned count_{};
     static void __fastcall body(void* object, void* frame, void* result) {
         uint64_t function{};
@@ -50,9 +52,9 @@ class BlueprintDirectTrace {
         if (address && address<=UINT64_MAX-0x28 &&
             target_trace_read(address+0x20,&code,8) && code && code<=UINT64_MAX-12 &&
             target_trace_read(code,name,12) &&
-            (uint64_t(name[0]) | (uint64_t(name[2])<<32))==damage_name_) {
+            matches_name(uint64_t(name[0]) | (uint64_t(name[2])<<32))) {
             using Find=uint64_t(__fastcall*)(void*,uint64_t);
-            const auto function=reinterpret_cast<Find>(base_+0x1391a40)(object,damage_name_);
+            const auto function=reinterpret_cast<Find>(base_+0x1391a40)(object,uint64_t(name[0]) | (uint64_t(name[2])<<32));
             if (function && function<=UINT64_MAX-0xd8 &&
                 e33_trace::TraceSlots<>::observes_entry(reinterpret_cast<void* volatile*>(function+0xd8))) {
                 const auto next=code+12;
@@ -65,12 +67,30 @@ class BlueprintDirectTrace {
         reinterpret_cast<e33_trace::Entry>(base_+0x1398850)(object,frame,result);
     }
 public:
+    static bool matches_name(uint64_t name){return name&&((damage_name_&&damage_name_==name)||
+        (external_&&(external_names_[0]==name||external_names_[1]==name)));}
+    // Separate SDK owner for the two bounded encounter callbacks. Trace expiry
+    // must not detach this owner's shared opcode routing.
+    static bool retain_encounter(uint64_t base,uint64_t spawn,uint64_t difficulty){
+        if(external_||!spawn||!difficulty)return false;
+        const auto old=damage_name_;
+        if(!count_&&!install(base,spawn))return false;
+        if(base_!=base)return false;
+        external_names_[0]=local_read<uint64_t>(spawn+24);
+        external_names_[1]=local_read<uint64_t>(difficulty+24);
+        external_=true;damage_name_=old;
+        return true;
+    }
+    static bool release_encounter(){external_=false;external_names_[0]=external_names_[1]=0;return damage_name_?true:close();}
+    static bool original_direct_or_owned(uint64_t base,uint64_t pointer){
+        return pointer==base+0x13986b0||(base_==base&&count_&&pointer==reinterpret_cast<uint64_t>(&route));
+    }
     static bool install(uint64_t base, uint64_t function) {
         if (base_ && base_!=base) return false;
         uint64_t name{};
         if (!function || function>UINT64_MAX-0x20 ||
             !target_trace_read(function+0x18,&name,8) || !name) return false;
-        if (count_) return damage_name_==name;
+        if (count_) {if(damage_name_&&damage_name_!=name)return false;damage_name_=name;return true;}
         HMODULE pinned{};
         if (!GetModuleHandleExW(GET_MODULE_HANDLE_EX_FLAG_FROM_ADDRESS|GET_MODULE_HANDLE_EX_FLAG_PIN,
             reinterpret_cast<LPCWSTR>(&route),&pinned)) return false;
@@ -92,6 +112,8 @@ public:
         close(); return false;
     }
     static bool close() {
+        damage_name_=0;
+        if(external_)return true;
         bool ok=true;
         while(count_) {
             auto slot=slots_[--count_];

@@ -9,10 +9,12 @@ VIRTUAL_KEYS = {
     **{f'F{number}': 111 + number for number in range(1, 13)},
     'Backspace': 8, 'Tab': 9, 'Enter': 13, 'Escape': 27, 'Space': 32,
     'PageUp': 33, 'PageDown': 34, 'End': 35, 'Home': 36,
+    ',': 188, '.': 190,
     'Left': 37, 'Up': 38, 'Right': 39, 'Down': 40, 'Insert': 45, 'Delete': 46,
 }
 KEY_NAMES = tuple(VIRTUAL_KEYS)
 _NAMES = {name.casefold(): name for name in KEY_NAMES}
+_NAMES.update({'comma': ',', 'period': '.', 'dot': '.'})
 
 
 def normalize_key(value):

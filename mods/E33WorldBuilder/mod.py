@@ -154,9 +154,11 @@ class Mod:
             actions=(Action('catalog', 'Open asset catalog', self.open_catalog),Action('toggle', 'Enter / leave builder camera', self.toggle),
                      Action('restore', 'Restore all edited geometry', self.restore),
                      Action('undo', 'Undo last prop edit', self.undo),
-                     Action('status', 'Builder status', self.status)),
+                     Action('status', 'Builder status', self.status),
+                     Action('ai_export','Export for AI',lambda _:self.ai.export(reveal=True)),
+                     Action('ai_import','Import AI Scene',lambda _:self.ai.choose_import())),
             keybinds=(Keybind('toggle_help','Minimize / expand builder help','F1',self.toggle_help),Keybind('region_point1','Region corner 1 at camera','F3',lambda _:self.templates.mark(1)),Keybind('region_point2','Region corner 2 at camera','F4',self.region_corner2),Keybind('directional','Open live duplication for selected prop','F5',self.open_directional),Keybind('catalog', 'Open asset catalog', 'F7', self.open_catalog),Keybind('toggle', 'Toggle builder camera', 'F8', self.toggle),
-                      Keybind('play_from_camera', 'Play from camera', 'P', self.play_from_camera),
+                      Keybind('play_from_camera', 'Play from camera', 'F6', self.play_from_camera),
                       Keybind('hide_hud', 'Hide / show World Builder HUD', 'H', self.toggle_hud),
                       Keybind('restore', 'Restore all geometry edits', 'F9', self.restore),
                       Keybind('duplicate_to_hand','Duplicate selected prop to hand','F10',self.duplicate_to_hand),
@@ -170,6 +172,8 @@ class Mod:
         self.directional=DuplicationDraft(self.library)
         from .templates import Templates
         self.templates=Templates(self.library)
+        from .ai_scene import AIWorkflow
+        self.ai=AIWorkflow(self.library)
         self.current_selection='None'
         from .camera_settings import CameraSettings
         self.camera_settings=CameraSettings(self.library.store.root.parent)
@@ -182,6 +186,9 @@ class Mod:
         session.actions.register('world_builder.template_corner',self.templates.mark,schema={'type':'object','properties':{'number':{'type':'integer'}},'required':['number'],'additionalProperties':False})
         session.actions.register('world_builder.template_save',self.templates.save,schema={'type':'object','properties':{'name':{'type':'string'}},'required':['name'],'additionalProperties':False})
         session.actions.register('world_builder.templates',self.templates.store.list,mutates=False)
+        session.actions.register('world_builder.ai_export',self.ai.export)
+        session.actions.register('world_builder.ai_status',self.ai.status,mutates=False)
+        session.actions.register('world_builder.ai_import',self.ai.import_file,schema={'type':'object','properties':{'path':{'type':'string'}},'required':['path'],'additionalProperties':False})
         session.actions.register('world_builder.toggle', self.toggle)
         session.actions.register('world_builder.stop', self.stop)
         session.actions.register('world_builder.restore', self.restore)
@@ -235,7 +242,7 @@ class Mod:
             struct.pack_into('<6d',packet,2016,*low,*high)
             for i,obj in enumerate(bulk):struct.pack_into('<iiQ',packet,4096+16*i,obj.index,obj.serial,obj.address)
         if op==50:
-            if not bulk or len(bulk)>64:raise ValueError('Expected 1–64 spawn rows')
+            if not bulk or len(bulk)>64:raise ValueError('Expected 1â€“64 spawn rows')
             struct.pack_into('<I',packet,2000,len(bulk))
             for i,(index,flags,pose) in enumerate(bulk):struct.pack_into('<II12d',packet,4096+192*i,index,flags,*pose)
         if op==66:
@@ -243,7 +250,7 @@ class Mod:
             struct.pack_into('<I',packet,2000,len(bulk))
             for i,(identity,pose) in enumerate(bulk):struct.pack_into('<iiQ12d',packet,4096+112*i,*identity,*pose)
         if op==53:
-            if not bulk or len(bulk)>128:raise ValueError('Expected 1–128 deletion rows')
+            if not bulk or len(bulk)>128:raise ValueError('Expected 1â€“128 deletion rows')
             struct.pack_into('<I',packet,2000,len(bulk))
             for i,identity in enumerate(bulk):struct.pack_into('<iiQ',packet,4096+16*i,*identity)
         if values:
@@ -253,7 +260,7 @@ class Mod:
         with self.session._lease_context():
             reply = self.session._session._transport.command('mesh', bytes(packet))
         raw = bytes.fromhex(reply['mesh_packet'])
-        if len(raw) != len(packet) or raw[:8] != packet[:8] or raw[16:24] != packet[16:24] or raw[88:3000] != packet[88:3000] or raw[3392:3400] != packet[3392:3400] or (raw[3544:3560] != packet[3544:3560] or raw[4080:4096] != packet[4080:4096] or raw[20480:] != packet[20480:] or (op not in (29,35,50,51,54,60,65) and raw[4096:20480] != packet[4096:20480])):
+        if len(raw) != len(packet) or raw[:8] != packet[:8] or raw[16:24] != packet[16:24] or raw[88:3000] != packet[88:3000] or raw[3392:3400] != packet[3392:3400] or (raw[3544:3560] != packet[3544:3560] or raw[20480:] != packet[20480:] or (op not in (29,35,50,51,54,60,65) and raw[4096:20480] != packet[4096:20480])):
             raise RuntimeError('Builder acknowledgement mismatch; outcome uncertain')
         self.last_raw = raw
         _, _, error, state, _ = struct.unpack_from('<4IQ', raw)
@@ -271,6 +278,9 @@ class Mod:
         self.last['rotation']=list(struct.unpack_from('<3d',raw,3356))
         stats = struct.unpack_from('<8d',raw,3000)
         self.last.update(native_ticks=int(stats[0]), mean_tick_ms=stats[1], mean_work_ms=stats[2], max_work_ms=stats[3], tick_error=int(stats[4]), undo_count=int(stats[5]), hovered_component_index=int(stats[6]), dragging=bool(stats[7]), label=raw[3100:3356].split(b'\0')[0].decode('utf8',errors='replace'))
+        axis,angle=struct.unpack_from('<2d',raw,4080)
+        if axis not in (0.,1.,2.,3.,4.) or not math.isfinite(angle):raise RuntimeError('Invalid builder gesture status')
+        self.last.update(rotation_axis={1:'Yaw',2:'Pitch',3:'Roll',4:'Scale'}.get(int(axis),''),rotation_angle=angle)
         self.last["ray_center_error_px"] = struct.unpack_from("<d",raw,3064)[0]
         self.last["gpu_diagnostics"] = list(struct.unpack_from("<12Q",raw,3400))
         sample_depth,latency,hits,ready_component,candidates,next_candidate = struct.unpack_from('<6d',raw,3496)
@@ -680,6 +690,7 @@ class Mod:
         # Python only reads diagnostics twice a second; other mods cannot throttle flight.
         now = time.monotonic()
         self.templates.poll()
+        self.ai.poll()
         # Enabling from Mods leaves that menu focused. Wait until it closes;
         # preparing a second menu's focus plan while it owns input is rejected.
         menu_busy = any(menu.active for menu in self.session._session._menus)
@@ -705,6 +716,7 @@ class Mod:
         if self.catalog_menu and self.catalog_menu.state=='open' and self.catalog_menu.image_queue:self.next_status=min(self.next_status,now+.02)
         if self.catalog_menu and self.catalog_menu.state=='open' and self.catalog_menu.workspace=='Bounds':self.next_status=min(self.next_status,now+.04)
         if self.active and self.camera_settings.values.get('duplicate_click',False):self.next_status=min(self.next_status,now+.05)
+        if self.last.get('rotation_axis'):self.next_status=min(self.next_status,now+.05)
         try:
             self.command(26)
             self.sync_undone_copies()
@@ -712,7 +724,7 @@ class Mod:
             self.sync_catalog_selection()
             if self.active and not self.booth_pending:
                 self.directional.poll()
-                if self.hud:self.hud.show_selection(self.current_selection)
+                if self.hud:self.hud.show_selection(self.current_selection,self.last.get('rotation_axis',''),self.last.get('rotation_angle',0.))
             if self.booth_pending and not self.last.get('booth_active'):self.end_booth()
             if self.catalog_menu is not None:
                 with self.menu_reads():
@@ -737,6 +749,8 @@ class Mod:
 
     def disable(self):
         failures=[]
+        try:self.ai.close()
+        except Exception as exc:failures.append(str(exc))
         try:self.templates.close()
         except Exception as exc:failures.append(str(exc))
         if self.catalog_menu is not None:
@@ -754,5 +768,3 @@ class Mod:
         if self._menu_reader is not None:
             self._menu_reader.close();self._menu_reader=None
         if failures:raise RuntimeError('; '.join(failures))
-
-

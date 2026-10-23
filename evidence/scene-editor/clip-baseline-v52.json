@@ -1,0 +1,2423 @@
+[
+  {
+    "id": "lune_attack",
+    "path": "/Game/Characters/Heros/Lune/Animations/Skills/Lune_Thunder_Kick_IP.Lune_Thunder_Kick_IP",
+    "label": "Lune - Thunder Kick",
+    "group": "Sample",
+    "skeleton": "/Game/Characters/Mannequins/Meshes/SK_UE5_Mannequin.SK_UE5_Mannequin"
+  },
+  {
+    "id": "maelle_attack",
+    "path": "/Game/Characters/Heros/Maelle/Animations/Skills/Maelle_Skill_DancingFury_B_Inplace.Maelle_Skill_DancingFury_B_Inplace",
+    "label": "Maelle - Dancing Fury",
+    "group": "Sample",
+    "skeleton": "/Game/Characters/Mannequins/Meshes/SK_UE5_Mannequin.SK_UE5_Mannequin"
+  },
+  {
+    "id": "target_idle",
+    "path": "/Game/Animations/AnimPacks/Idles/MC_Idles_Pack/Shift/Pack_MCIdlesPack_am_Stand_Idle_ShiftL_Loop_01_UE5.Pack_MCIdlesPack_am_Stand_Idle_ShiftL_Loop_01_UE5",
+    "label": "Idle - weight shift",
+    "group": "Sample",
+    "skeleton": "/Game/Characters/Mannequins/Meshes/SK_UE5_Mannequin.SK_UE5_Mannequin"
+  },
+  {
+    "id": "clip-befc337cad915506",
+    "path": "/Game/Animations/ALS_UE5/ALS_UE5_N_FallLoop.ALS_UE5_N_FallLoop",
+    "label": "ALS UE5 N FallLoop",
+    "group": "Locomotion",
+    "skeleton": "/Game/Characters/Mannequins/Meshes/SK_UE5_Mannequin.SK_UE5_Mannequin",
+    "length": 1.0
+  },
+  {
+    "id": "clip-e8735029bdb545bf",
+    "path": "/Game/Animations/ALS_UE5/ALS_UE5_N_Run_LB.ALS_UE5_N_Run_LB",
+    "label": "ALS UE5 N Run LB",
+    "group": "Locomotion",
+    "skeleton": "/Game/Characters/Mannequins/Meshes/SK_UE5_Mannequin.SK_UE5_Mannequin",
+    "length": 0.666666687
+  },
+  {
+    "id": "clip-9e9e5f967666933c",
+    "path": "/Game/Animations/ALS_UE5/ALS_UE5_N_Run_LF.ALS_UE5_N_Run_LF",
+    "label": "ALS UE5 N Run LF",
+    "group": "Locomotion",
+    "skeleton": "/Game/Characters/Mannequins/Meshes/SK_UE5_Mannequin.SK_UE5_Mannequin",
+    "length": 0.800000012
+  },
+  {
+    "id": "clip-934873175a351315",
+    "path": "/Game/Animations/ALS_UE5/ALS_UE5_N_Run_RB.ALS_UE5_N_Run_RB",
+    "label": "ALS UE5 N Run RB",
+    "group": "Locomotion",
+    "skeleton": "/Game/Characters/Mannequins/Meshes/SK_UE5_Mannequin.SK_UE5_Mannequin",
+    "length": 0.666666687
+  },
+  {
+    "id": "clip-21a82c97197b265b",
+    "path": "/Game/Animations/ALS_UE5/ALS_UE5_N_Run_RF.ALS_UE5_N_Run_RF",
+    "label": "ALS UE5 N Run RF",
+    "group": "Locomotion",
+    "skeleton": "/Game/Characters/Mannequins/Meshes/SK_UE5_Mannequin.SK_UE5_Mannequin",
+    "length": 0.800000012
+  },
+  {
+    "id": "clip-a1ca0176ede93880",
+    "path": "/Game/Animations/ALS_UE5/ALS_UE5_Props_Barrel_Poses.ALS_UE5_Props_Barrel_Poses",
+    "label": "ALS UE5 Props Barrel Poses",
+    "group": "Locomotion",
+    "skeleton": "/Game/Characters/Mannequins/Meshes/SK_UE5_Mannequin.SK_UE5_Mannequin",
+    "length": 0.100000001
+  },
+  {
+    "id": "clip-9a30a329970b4a1b",
+    "path": "/Game/Animations/ALS_UE5/ALS_UE5_Props_Binoculars_Poses.ALS_UE5_Props_Binoculars_Poses",
+    "label": "ALS UE5 Props Binoculars Poses",
+    "group": "Locomotion",
+    "skeleton": "/Game/Characters/Mannequins/Meshes/SK_UE5_Mannequin.SK_UE5_Mannequin",
+    "length": 0.200000003
+  },
+  {
+    "id": "clip-45fe89c487f0f398",
+    "path": "/Game/Animations/ALS_UE5/ALS_UE5_Props_Binoculars_Poses_NoCurves.ALS_UE5_Props_Binoculars_Poses_NoCurves",
+    "label": "ALS UE5 Props Binoculars Poses NoCurves",
+    "group": "Locomotion",
+    "skeleton": "/Game/Characters/Mannequins/Meshes/SK_UE5_Mannequin.SK_UE5_Mannequin",
+    "length": 0.200000003
+  },
+  {
+    "id": "clip-457186d2312c4d54",
+    "path": "/Game/Animations/ALS_UE5/ALS_UE5_Props_Bow_Poses.ALS_UE5_Props_Bow_Poses",
+    "label": "ALS UE5 Props Bow Poses",
+    "group": "Locomotion",
+    "skeleton": "/Game/Characters/Mannequins/Meshes/SK_UE5_Mannequin.SK_UE5_Mannequin",
+    "length": 0.366666675
+  },
+  {
+    "id": "clip-27949e66ec69b7c0",
+    "path": "/Game/Animations/ALS_UE5/ALS_UE5_Props_Bow_Poses_NoCurves.ALS_UE5_Props_Bow_Poses_NoCurves",
+    "label": "ALS UE5 Props Bow Poses NoCurves",
+    "group": "Locomotion",
+    "skeleton": "/Game/Characters/Mannequins/Meshes/SK_UE5_Mannequin.SK_UE5_Mannequin",
+    "length": 0.366666675
+  },
+  {
+    "id": "clip-0d016f7bcfe65071",
+    "path": "/Game/Animations/ALS_UE5/ALS_UE5_Props_Box_Poses.ALS_UE5_Props_Box_Poses",
+    "label": "ALS UE5 Props Box Poses",
+    "group": "Locomotion",
+    "skeleton": "/Game/Characters/Mannequins/Meshes/SK_UE5_Mannequin.SK_UE5_Mannequin",
+    "length": 0.100000001
+  },
+  {
+    "id": "clip-b45dffa59b7e1a66",
+    "path": "/Game/Animations/ALS_UE5/ALS_UE5_Props_LightBall_Poses.ALS_UE5_Props_LightBall_Poses",
+    "label": "ALS UE5 Props LightBall Poses",
+    "group": "Locomotion",
+    "skeleton": "/Game/Characters/Mannequins/Meshes/SK_UE5_Mannequin.SK_UE5_Mannequin",
+    "length": 0.200000003
+  },
+  {
+    "id": "clip-315e1c04d0a3c589",
+    "path": "/Game/Animations/ALS_UE5/ALS_UE5_Props_M4A1_Poses.ALS_UE5_Props_M4A1_Poses",
+    "label": "ALS UE5 Props M4A1 Poses",
+    "group": "Locomotion",
+    "skeleton": "/Game/Characters/Mannequins/Meshes/SK_UE5_Mannequin.SK_UE5_Mannequin",
+    "length": 0.400000006
+  },
+  {
+    "id": "clip-c2adb8d1d29ac727",
+    "path": "/Game/Animations/ALS_UE5/ALS_UE5_Props_M4A1_Poses_NoCurves.ALS_UE5_Props_M4A1_Poses_NoCurves",
+    "label": "ALS UE5 Props M4A1 Poses NoCurves",
+    "group": "Locomotion",
+    "skeleton": "/Game/Characters/Mannequins/Meshes/SK_UE5_Mannequin.SK_UE5_Mannequin",
+    "length": 0.400000006
+  },
+  {
+    "id": "clip-3cffdb6cee61f618",
+    "path": "/Game/Animations/ALS_UE5/ALS_UE5_Props_M4A1_Run_F_Arms.ALS_UE5_Props_M4A1_Run_F_Arms",
+    "label": "ALS UE5 Props M4A1 Run F Arms",
+    "group": "Locomotion",
+    "skeleton": "/Game/Characters/Mannequins/Meshes/SK_UE5_Mannequin.SK_UE5_Mannequin",
+    "length": 0.800000012
+  },
+  {
+    "id": "clip-1396648d480115f5",
+    "path": "/Game/Animations/ALS_UE5/ALS_UE5_Props_M4A1_Sprint_F_Arms.ALS_UE5_Props_M4A1_Sprint_F_Arms",
+    "label": "ALS UE5 Props M4A1 Sprint F Arms",
+    "group": "Locomotion",
+    "skeleton": "/Game/Characters/Mannequins/Meshes/SK_UE5_Mannequin.SK_UE5_Mannequin",
+    "length": 0.600000024
+  },
+  {
+    "id": "clip-62dee4fda85c3916",
+    "path": "/Game/Animations/ALS_UE5/ALS_UE5_Props_M4A1_Sprint_F_Impulse_Arms.ALS_UE5_Props_M4A1_Sprint_F_Impulse_Arms",
+    "label": "ALS UE5 Props M4A1 Sprint F Impulse Arms",
+    "group": "Locomotion",
+    "skeleton": "/Game/Characters/Mannequins/Meshes/SK_UE5_Mannequin.SK_UE5_Mannequin",
+    "length": 0.600000024
+  },
+  {
+    "id": "clip-8670bcdcdb0b7505",
+    "path": "/Game/Animations/ALS_UE5/ALS_UE5_Props_Pistol_1H_Poses.ALS_UE5_Props_Pistol_1H_Poses",
+    "label": "ALS UE5 Props Pistol 1H Poses",
+    "group": "Locomotion",
+    "skeleton": "/Game/Characters/Mannequins/Meshes/SK_UE5_Mannequin.SK_UE5_Mannequin",
+    "length": 0.300000012
+  },
+  {
+    "id": "clip-9eab6ad4f4ed463d",
+    "path": "/Game/Animations/ALS_UE5/ALS_UE5_Props_Pistol_1H_Poses_NoCurves.ALS_UE5_Props_Pistol_1H_Poses_NoCurves",
+    "label": "ALS UE5 Props Pistol 1H Poses NoCurves",
+    "group": "Locomotion",
+    "skeleton": "/Game/Characters/Mannequins/Meshes/SK_UE5_Mannequin.SK_UE5_Mannequin",
+    "length": 0.300000012
+  },
+  {
+    "id": "clip-0d4bb9413d4c35eb",
+    "path": "/Game/Animations/ALS_UE5/ALS_UE5_Props_Pistol_2H_Poses.ALS_UE5_Props_Pistol_2H_Poses",
+    "label": "ALS UE5 Props Pistol 2H Poses",
+    "group": "Locomotion",
+    "skeleton": "/Game/Characters/Mannequins/Meshes/SK_UE5_Mannequin.SK_UE5_Mannequin",
+    "length": 0.333333343
+  },
+  {
+    "id": "clip-94112f770e68e016",
+    "path": "/Game/Animations/ALS_UE5/ALS_UE5_Props_Pistol_2H_Poses_NoCurves.ALS_UE5_Props_Pistol_2H_Poses_NoCurves",
+    "label": "ALS UE5 Props Pistol 2H Poses NoCurves",
+    "group": "Locomotion",
+    "skeleton": "/Game/Characters/Mannequins/Meshes/SK_UE5_Mannequin.SK_UE5_Mannequin",
+    "length": 0.333333343
+  },
+  {
+    "id": "clip-0876fffe62ddb74a",
+    "path": "/Game/Animations/ALS_UE5/ALS_UE5_Props_Torch_Poses_NoCurves.ALS_UE5_Props_Torch_Poses_NoCurves",
+    "label": "ALS UE5 Props Torch Poses NoCurves",
+    "group": "Locomotion",
+    "skeleton": "/Game/Characters/Mannequins/Meshes/SK_UE5_Mannequin.SK_UE5_Mannequin",
+    "length": 0.200000003
+  },
+  {
+    "id": "clip-cd450c6b6bac7926",
+    "path": "/Game/Animations/ALS_UE5/ALS_UE5_StanceVariation_HandsTied.ALS_UE5_StanceVariation_HandsTied",
+    "label": "ALS UE5 StanceVariation HandsTied",
+    "group": "Locomotion",
+    "skeleton": "/Game/Characters/Mannequins/Meshes/SK_UE5_Mannequin.SK_UE5_Mannequin",
+    "length": 0.100000001
+  },
+  {
+    "id": "clip-d1ecacf618855f48",
+    "path": "/Game/Animations/ALS_UE5/ALS_UE5_StanceVariation_Injured.ALS_UE5_StanceVariation_Injured",
+    "label": "ALS UE5 StanceVariation Injured",
+    "group": "Locomotion",
+    "skeleton": "/Game/Characters/Mannequins/Meshes/SK_UE5_Mannequin.SK_UE5_Mannequin",
+    "length": 0.100000001
+  },
+  {
+    "id": "clip-7f8b79138890e95c",
+    "path": "/Game/Animations/ALS_UE5/ALS_UE5_StanceVariation_Masculine.ALS_UE5_StanceVariation_Masculine",
+    "label": "ALS UE5 StanceVariation Masculine",
+    "group": "Locomotion",
+    "skeleton": "/Game/Characters/Mannequins/Meshes/SK_UE5_Mannequin.SK_UE5_Mannequin",
+    "length": 0.100000001
+  },
+  {
+    "id": "clip-1c3cf02147f9ead4",
+    "path": "/Game/Animations/ALS_UE5/ALS_UE5_StanceVariation_Normal.ALS_UE5_StanceVariation_Normal",
+    "label": "ALS UE5 StanceVariation Normal",
+    "group": "Locomotion",
+    "skeleton": "/Game/Characters/Mannequins/Meshes/SK_UE5_Mannequin.SK_UE5_Mannequin",
+    "length": 0.100000001
+  },
+  {
+    "id": "clip-21cdd41599ad4a38",
+    "path": "/Game/Animations/ALS_UE5/ALS_UE5_StanceVariation_ProtectingSnow.ALS_UE5_StanceVariation_ProtectingSnow",
+    "label": "ALS UE5 StanceVariation ProtectingSnow",
+    "group": "Locomotion",
+    "skeleton": "/Game/Characters/Mannequins/Meshes/SK_UE5_Mannequin.SK_UE5_Mannequin",
+    "length": 0.100000001
+  },
+  {
+    "id": "clip-3f2ccc3f32f1d021",
+    "path": "/Game/Animations/AnimNPC/AnimNPC_HandOnHip_Idle.AnimNPC_HandOnHip_Idle",
+    "label": "AnimNPC HandOnHip Idle",
+    "group": "NPC gestures",
+    "skeleton": "/Game/Characters/Mannequins/Meshes/SK_UE5_Mannequin.SK_UE5_Mannequin",
+    "length": 6.98171329
+  },
+  {
+    "id": "clip-985b43aad90de40b",
+    "path": "/Game/Animations/AnimNPC/AnimNPC_HandOnHip_Trans_In.AnimNPC_HandOnHip_Trans_In",
+    "label": "AnimNPC HandOnHip Trans In",
+    "group": "NPC gestures",
+    "skeleton": "/Game/Characters/Mannequins/Meshes/SK_UE5_Mannequin.SK_UE5_Mannequin",
+    "length": 2.30496764
+  },
+  {
+    "id": "clip-7c4c98e33ed5e636",
+    "path": "/Game/Animations/AnimNPC/AnimNPC_HandOnHip_Trans_Out.AnimNPC_HandOnHip_Trans_Out",
+    "label": "AnimNPC HandOnHip Trans Out",
+    "group": "NPC gestures",
+    "skeleton": "/Game/Characters/Mannequins/Meshes/SK_UE5_Mannequin.SK_UE5_Mannequin",
+    "length": 2.57221031
+  },
+  {
+    "id": "clip-ad85e4a655805ae7",
+    "path": "/Game/Animations/AnimNPC/RD_Idles/Lune/A_RD_ArmInHand_Idle_Lune.A_RD_ArmInHand_Idle_Lune",
+    "label": "A RD ArmInHand Idle Lune",
+    "group": "Lune",
+    "skeleton": "/Game/Characters/Mannequins/Meshes/SK_UE5_Mannequin.SK_UE5_Mannequin",
+    "length": 5.9666667
+  },
+  {
+    "id": "clip-b37723f8512904e8",
+    "path": "/Game/Animations/AnimNPC/RD_Idles/Lune/A_RD_ArmInHand_TransIn_Lune_V4.A_RD_ArmInHand_TransIn_Lune_V4",
+    "label": "A RD ArmInHand TransIn Lune V4",
+    "group": "Lune",
+    "skeleton": "/Game/Characters/Mannequins/Meshes/SK_UE5_Mannequin.SK_UE5_Mannequin",
+    "length": 1.60000002
+  },
+  {
+    "id": "clip-224e69fc85ae05ec",
+    "path": "/Game/Animations/AnimNPC/RD_Idles/Lune/A_RD_ArmInHand_TransOut_Lune_V2.A_RD_ArmInHand_TransOut_Lune_V2",
+    "label": "A RD ArmInHand TransOut Lune V2",
+    "group": "Lune",
+    "skeleton": "/Game/Characters/Mannequins/Meshes/SK_UE5_Mannequin.SK_UE5_Mannequin",
+    "length": 1.33333337
+  },
+  {
+    "id": "clip-3717240229118652",
+    "path": "/Game/Animations/AnimNPC/RD_Idles/Lune/A_RD_ArmsCrossed_Idle_Lune.A_RD_ArmsCrossed_Idle_Lune",
+    "label": "A RD ArmsCrossed Idle Lune",
+    "group": "Lune",
+    "skeleton": "/Game/Characters/Mannequins/Meshes/SK_UE5_Mannequin.SK_UE5_Mannequin",
+    "length": 1.70000005
+  },
+  {
+    "id": "clip-b38fa06ebbf4950b",
+    "path": "/Game/Animations/AnimNPC/RD_Idles/Lune/A_RD_ArmsCrossed_TransIn_Lune.A_RD_ArmsCrossed_TransIn_Lune",
+    "label": "A RD ArmsCrossed TransIn Lune",
+    "group": "Lune",
+    "skeleton": "/Game/Characters/Mannequins/Meshes/SK_UE5_Mannequin.SK_UE5_Mannequin",
+    "length": 2.0
+  },
+  {
+    "id": "clip-c011dd84276e24d9",
+    "path": "/Game/Animations/AnimNPC/RD_Idles/Lune/A_RD_ArmsCrossed_TransOut_Lune.A_RD_ArmsCrossed_TransOut_Lune",
+    "label": "A RD ArmsCrossed TransOut Lune",
+    "group": "Lune",
+    "skeleton": "/Game/Characters/Mannequins/Meshes/SK_UE5_Mannequin.SK_UE5_Mannequin",
+    "length": 2.0
+  },
+  {
+    "id": "clip-8767cd045067fc9f",
+    "path": "/Game/Animations/AnimNPC/RD_Idles/Lune/A_RD_Base_Idle_Lune.A_RD_Base_Idle_Lune",
+    "label": "A RD Base Idle Lune",
+    "group": "Lune",
+    "skeleton": "/Game/Characters/Mannequins/Meshes/SK_UE5_Mannequin.SK_UE5_Mannequin",
+    "length": 9.30000019
+  },
+  {
+    "id": "clip-d6160b35b9f68f55",
+    "path": "/Game/Animations/AnimNPC/RD_Idles/Lune/A_RD_HandsBehindBack_Idle_Lune.A_RD_HandsBehindBack_Idle_Lune",
+    "label": "A RD HandsBehindBack Idle Lune",
+    "group": "Lune",
+    "skeleton": "/Game/Characters/Mannequins/Meshes/SK_UE5_Mannequin.SK_UE5_Mannequin",
+    "length": 5.9666667
+  },
+  {
+    "id": "clip-0b194037b7777975",
+    "path": "/Game/Animations/AnimNPC/RD_Idles/Lune/A_RD_HandsBehindBack_TransIn_Lune.A_RD_HandsBehindBack_TransIn_Lune",
+    "label": "A RD HandsBehindBack TransIn Lune",
+    "group": "Lune",
+    "skeleton": "/Game/Characters/Mannequins/Meshes/SK_UE5_Mannequin.SK_UE5_Mannequin",
+    "length": 1.5
+  },
+  {
+    "id": "clip-7e0b34f5df67323c",
+    "path": "/Game/Animations/AnimNPC/RD_Idles/Lune/A_RD_HandsBehindBack_TransOut_Lune.A_RD_HandsBehindBack_TransOut_Lune",
+    "label": "A RD HandsBehindBack TransOut Lune",
+    "group": "Lune",
+    "skeleton": "/Game/Characters/Mannequins/Meshes/SK_UE5_Mannequin.SK_UE5_Mannequin",
+    "length": 1.5
+  },
+  {
+    "id": "clip-8a10329086c743bf",
+    "path": "/Game/Animations/AnimNPC/RD_Idles/Lune/A_RD_HandsOnHipsToThinking_Lune.A_RD_HandsOnHipsToThinking_Lune",
+    "label": "A RD HandsOnHipsToThinking Lune",
+    "group": "Lune",
+    "skeleton": "/Game/Characters/Mannequins/Meshes/SK_UE5_Mannequin.SK_UE5_Mannequin",
+    "length": 1.63333333
+  },
+  {
+    "id": "clip-79c962ef0fbf2fa7",
+    "path": "/Game/Animations/AnimNPC/RD_Idles/Lune/A_RD_HandsOnHips_Idle_Lune.A_RD_HandsOnHips_Idle_Lune",
+    "label": "A RD HandsOnHips Idle Lune",
+    "group": "Lune",
+    "skeleton": "/Game/Characters/Mannequins/Meshes/SK_UE5_Mannequin.SK_UE5_Mannequin",
+    "length": 3.16666675
+  },
+  {
+    "id": "clip-77ca753962a82c7a",
+    "path": "/Game/Animations/AnimNPC/RD_Idles/Lune/A_RD_HandsOnHips_TransIn_Lune.A_RD_HandsOnHips_TransIn_Lune",
+    "label": "A RD HandsOnHips TransIn Lune",
+    "group": "Lune",
+    "skeleton": "/Game/Characters/Mannequins/Meshes/SK_UE5_Mannequin.SK_UE5_Mannequin",
+    "length": 1.06666672
+  },
+  {
+    "id": "clip-06dfb0342b8ac6b0",
+    "path": "/Game/Animations/AnimNPC/RD_Idles/Lune/A_RD_HandsOnHips_TransOut_Lune.A_RD_HandsOnHips_TransOut_Lune",
+    "label": "A RD HandsOnHips TransOut Lune",
+    "group": "Lune",
+    "skeleton": "/Game/Characters/Mannequins/Meshes/SK_UE5_Mannequin.SK_UE5_Mannequin",
+    "length": 1.26666665
+  },
+  {
+    "id": "clip-a33f331492fb8e55",
+    "path": "/Game/Animations/AnimNPC/RD_Idles/Lune/A_RD_OneHandOnHips_Idle_Lune.A_RD_OneHandOnHips_Idle_Lune",
+    "label": "A RD OneHandOnHips Idle Lune",
+    "group": "Lune",
+    "skeleton": "/Game/Characters/Mannequins/Meshes/SK_UE5_Mannequin.SK_UE5_Mannequin",
+    "length": 3.16666675
+  },
+  {
+    "id": "clip-182a88c102b80ac3",
+    "path": "/Game/Animations/AnimNPC/RD_Idles/Lune/A_RD_OneHandOnHips_TransIn_Lune.A_RD_OneHandOnHips_TransIn_Lune",
+    "label": "A RD OneHandOnHips TransIn Lune",
+    "group": "Lune",
+    "skeleton": "/Game/Characters/Mannequins/Meshes/SK_UE5_Mannequin.SK_UE5_Mannequin",
+    "length": 1.26666665
+  },
+  {
+    "id": "clip-80b28f7253e84293",
+    "path": "/Game/Animations/AnimNPC/RD_Idles/Lune/A_RD_OneHandOnHips_TransOut_Lune.A_RD_OneHandOnHips_TransOut_Lune",
+    "label": "A RD OneHandOnHips TransOut Lune",
+    "group": "Lune",
+    "skeleton": "/Game/Characters/Mannequins/Meshes/SK_UE5_Mannequin.SK_UE5_Mannequin",
+    "length": 1.36666667
+  },
+  {
+    "id": "clip-f99baf2c23ee8e09",
+    "path": "/Game/Animations/AnimNPC/RD_Idles/Lune/A_RD_ThinkingToHandsOnHips_Lune.A_RD_ThinkingToHandsOnHips_Lune",
+    "label": "A RD ThinkingToHandsOnHips Lune",
+    "group": "Lune",
+    "skeleton": "/Game/Characters/Mannequins/Meshes/SK_UE5_Mannequin.SK_UE5_Mannequin",
+    "length": 1.63333333
+  },
+  {
+    "id": "clip-97d7e1e5557ef8e2",
+    "path": "/Game/Animations/AnimNPC/RD_Idles/Lune/A_RD_Thinking_Idle_Lune.A_RD_Thinking_Idle_Lune",
+    "label": "A RD Thinking Idle Lune",
+    "group": "Lune",
+    "skeleton": "/Game/Characters/Mannequins/Meshes/SK_UE5_Mannequin.SK_UE5_Mannequin",
+    "length": 7.26666689
+  },
+  {
+    "id": "clip-ecd10f680be52948",
+    "path": "/Game/Animations/AnimNPC/RD_Idles/Lune/A_RD_Thinking_TransIn_Lune.A_RD_Thinking_TransIn_Lune",
+    "label": "A RD Thinking TransIn Lune",
+    "group": "Lune",
+    "skeleton": "/Game/Characters/Mannequins/Meshes/SK_UE5_Mannequin.SK_UE5_Mannequin",
+    "length": 1.66666663
+  },
+  {
+    "id": "clip-98c3fa696e6d922f",
+    "path": "/Game/Animations/AnimNPC/RD_Idles/Lune/A_RD_Thinking_TransOut_Lune.A_RD_Thinking_TransOut_Lune",
+    "label": "A RD Thinking TransOut Lune",
+    "group": "Lune",
+    "skeleton": "/Game/Characters/Mannequins/Meshes/SK_UE5_Mannequin.SK_UE5_Mannequin",
+    "length": 1.63333333
+  },
+  {
+    "id": "clip-973f3f0b251a2305",
+    "path": "/Game/Animations/AnimNPC/RD_Idles/Lune/A_RD_WeightShift_Idle_Lune.A_RD_WeightShift_Idle_Lune",
+    "label": "A RD WeightShift Idle Lune",
+    "group": "Lune",
+    "skeleton": "/Game/Characters/Mannequins/Meshes/SK_UE5_Mannequin.SK_UE5_Mannequin",
+    "length": 7.13333321
+  },
+  {
+    "id": "clip-595bc88552d3fc58",
+    "path": "/Game/Animations/AnimNPC/RD_Idles/Lune/A_RD_WeightShift_TransIn_Lune.A_RD_WeightShift_TransIn_Lune",
+    "label": "A RD WeightShift TransIn Lune",
+    "group": "Lune",
+    "skeleton": "/Game/Characters/Mannequins/Meshes/SK_UE5_Mannequin.SK_UE5_Mannequin",
+    "length": 2.63333344
+  },
+  {
+    "id": "clip-5433b818af52d672",
+    "path": "/Game/Animations/AnimNPC/RD_Idles/Lune/A_RD_WeightShift_TransOut_Lune.A_RD_WeightShift_TransOut_Lune",
+    "label": "A RD WeightShift TransOut Lune",
+    "group": "Lune",
+    "skeleton": "/Game/Characters/Mannequins/Meshes/SK_UE5_Mannequin.SK_UE5_Mannequin",
+    "length": 2.9666667
+  },
+  {
+    "id": "clip-cbb843b8ed722631",
+    "path": "/Game/Animations/AnimNPC/RD_Idles/Maelle/A_RD_ArmInHandToHandsBehindBack_Maelle.A_RD_ArmInHandToHandsBehindBack_Maelle",
+    "label": "A RD ArmInHandToHandsBehindBack Maelle",
+    "group": "Maelle",
+    "skeleton": "/Game/Characters/Mannequins/Meshes/SK_UE5_Mannequin.SK_UE5_Mannequin",
+    "length": 2.0666666
+  },
+  {
+    "id": "clip-115a688816ed3266",
+    "path": "/Game/Animations/AnimNPC/RD_Idles/Maelle/A_RD_ArmInHand_Idle_Maelle.A_RD_ArmInHand_Idle_Maelle",
+    "label": "A RD ArmInHand Idle Maelle",
+    "group": "Maelle",
+    "skeleton": "/Game/Characters/Mannequins/Meshes/SK_UE5_Mannequin.SK_UE5_Mannequin",
+    "length": 5.9666667
+  },
+  {
+    "id": "clip-7df86433af863143",
+    "path": "/Game/Animations/AnimNPC/RD_Idles/Maelle/A_RD_ArmInHand_TransIn_Maelle_V3.A_RD_ArmInHand_TransIn_Maelle_V3",
+    "label": "A RD ArmInHand TransIn Maelle V3",
+    "group": "Maelle",
+    "skeleton": "/Game/Characters/Mannequins/Meshes/SK_UE5_Mannequin.SK_UE5_Mannequin",
+    "length": 1.60000002
+  },
+  {
+    "id": "clip-20d0030da137f6f5",
+    "path": "/Game/Animations/AnimNPC/RD_Idles/Maelle/A_RD_ArmInHand_TransOut_Maelle.A_RD_ArmInHand_TransOut_Maelle",
+    "label": "A RD ArmInHand TransOut Maelle",
+    "group": "Maelle",
+    "skeleton": "/Game/Characters/Mannequins/Meshes/SK_UE5_Mannequin.SK_UE5_Mannequin",
+    "length": 1.33333337
+  },
+  {
+    "id": "clip-5b9eb11d7644c89f",
+    "path": "/Game/Animations/AnimNPC/RD_Idles/Maelle/A_RD_ArmsCrossed_Idle_Maelle.A_RD_ArmsCrossed_Idle_Maelle",
+    "label": "A RD ArmsCrossed Idle Maelle",
+    "group": "Maelle",
+    "skeleton": "/Game/Characters/Mannequins/Meshes/SK_UE5_Mannequin.SK_UE5_Mannequin",
+    "length": 1.70000005
+  },
+  {
+    "id": "clip-116481636a28f3e7",
+    "path": "/Game/Animations/AnimNPC/RD_Idles/Maelle/A_RD_ArmsCrossed_TransIn_Maelle.A_RD_ArmsCrossed_TransIn_Maelle",
+    "label": "A RD ArmsCrossed TransIn Maelle",
+    "group": "Maelle",
+    "skeleton": "/Game/Characters/Mannequins/Meshes/SK_UE5_Mannequin.SK_UE5_Mannequin",
+    "length": 2.0
+  },
+  {
+    "id": "clip-ea47009ffc0b1f68",
+    "path": "/Game/Animations/AnimNPC/RD_Idles/Maelle/A_RD_ArmsCrossed_TransOut_Maelle.A_RD_ArmsCrossed_TransOut_Maelle",
+    "label": "A RD ArmsCrossed TransOut Maelle",
+    "group": "Maelle",
+    "skeleton": "/Game/Characters/Mannequins/Meshes/SK_UE5_Mannequin.SK_UE5_Mannequin",
+    "length": 2.0
+  },
+  {
+    "id": "clip-051bf941a938e6e0",
+    "path": "/Game/Animations/AnimNPC/RD_Idles/Maelle/A_RD_Base_Idle_Maelle.A_RD_Base_Idle_Maelle",
+    "label": "A RD Base Idle Maelle",
+    "group": "Maelle",
+    "skeleton": "/Game/Characters/Mannequins/Meshes/SK_UE5_Mannequin.SK_UE5_Mannequin",
+    "length": 9.30000019
+  },
+  {
+    "id": "clip-3f1cc31437829c4c",
+    "path": "/Game/Animations/AnimNPC/RD_Idles/Maelle/A_RD_HandsBehindBackToArmInHand_Maelle.A_RD_HandsBehindBackToArmInHand_Maelle",
+    "label": "A RD HandsBehindBackToArmInHand Maelle",
+    "group": "Maelle",
+    "skeleton": "/Game/Characters/Mannequins/Meshes/SK_UE5_Mannequin.SK_UE5_Mannequin",
+    "length": 1.83333337
+  },
+  {
+    "id": "clip-b42d5adca6007996",
+    "path": "/Game/Animations/AnimNPC/RD_Idles/Maelle/A_RD_HandsBehindBack_Idle_Maelle.A_RD_HandsBehindBack_Idle_Maelle",
+    "label": "A RD HandsBehindBack Idle Maelle",
+    "group": "Maelle",
+    "skeleton": "/Game/Characters/Mannequins/Meshes/SK_UE5_Mannequin.SK_UE5_Mannequin",
+    "length": 5.9666667
+  },
+  {
+    "id": "clip-7af5f4f8780d944d",
+    "path": "/Game/Animations/AnimNPC/RD_Idles/Maelle/A_RD_HandsBehindBack_TransIn_Maelle.A_RD_HandsBehindBack_TransIn_Maelle",
+    "label": "A RD HandsBehindBack TransIn Maelle",
+    "group": "Maelle",
+    "skeleton": "/Game/Characters/Mannequins/Meshes/SK_UE5_Mannequin.SK_UE5_Mannequin",
+    "length": 1.5
+  },
+  {
+    "id": "clip-437b017d2181a544",
+    "path": "/Game/Animations/AnimNPC/RD_Idles/Maelle/A_RD_HandsBehindBack_TransOut_Maelle.A_RD_HandsBehindBack_TransOut_Maelle",
+    "label": "A RD HandsBehindBack TransOut Maelle",
+    "group": "Maelle",
+    "skeleton": "/Game/Characters/Mannequins/Meshes/SK_UE5_Mannequin.SK_UE5_Mannequin",
+    "length": 1.5
+  },
+  {
+    "id": "clip-ce929d1d38697d62",
+    "path": "/Game/Animations/AnimNPC/RD_Idles/Maelle/A_RD_HandsOnHips_Idle_Maelle.A_RD_HandsOnHips_Idle_Maelle",
+    "label": "A RD HandsOnHips Idle Maelle",
+    "group": "Maelle",
+    "skeleton": "/Game/Characters/Mannequins/Meshes/SK_UE5_Mannequin.SK_UE5_Mannequin",
+    "length": 3.16666675
+  },
+  {
+    "id": "clip-97088436835e9b63",
+    "path": "/Game/Animations/AnimNPC/RD_Idles/Maelle/A_RD_HandsOnHips_TransIn_Maelle.A_RD_HandsOnHips_TransIn_Maelle",
+    "label": "A RD HandsOnHips TransIn Maelle",
+    "group": "Maelle",
+    "skeleton": "/Game/Characters/Mannequins/Meshes/SK_UE5_Mannequin.SK_UE5_Mannequin",
+    "length": 1.06666672
+  },
+  {
+    "id": "clip-d17e66aa7a4f0aa3",
+    "path": "/Game/Animations/AnimNPC/RD_Idles/Maelle/A_RD_HandsOnHips_TransOut_Maelle.A_RD_HandsOnHips_TransOut_Maelle",
+    "label": "A RD HandsOnHips TransOut Maelle",
+    "group": "Maelle",
+    "skeleton": "/Game/Characters/Mannequins/Meshes/SK_UE5_Mannequin.SK_UE5_Mannequin",
+    "length": 1.26666665
+  },
+  {
+    "id": "clip-73b7cc68c6feae24",
+    "path": "/Game/Animations/AnimNPC/RD_Idles/Maelle/A_RD_OneHandOnHips_Idle_Maelle.A_RD_OneHandOnHips_Idle_Maelle",
+    "label": "A RD OneHandOnHips Idle Maelle",
+    "group": "Maelle",
+    "skeleton": "/Game/Characters/Mannequins/Meshes/SK_UE5_Mannequin.SK_UE5_Mannequin",
+    "length": 3.16666675
+  },
+  {
+    "id": "clip-ffeb3c99d303426d",
+    "path": "/Game/Animations/AnimNPC/RD_Idles/Maelle/A_RD_OneHandOnHips_TransIn_Maelle.A_RD_OneHandOnHips_TransIn_Maelle",
+    "label": "A RD OneHandOnHips TransIn Maelle",
+    "group": "Maelle",
+    "skeleton": "/Game/Characters/Mannequins/Meshes/SK_UE5_Mannequin.SK_UE5_Mannequin",
+    "length": 1.26666665
+  },
+  {
+    "id": "clip-36a630e1b712c67e",
+    "path": "/Game/Animations/AnimNPC/RD_Idles/Maelle/A_RD_OneHandOnHips_TransOut_Maelle.A_RD_OneHandOnHips_TransOut_Maelle",
+    "label": "A RD OneHandOnHips TransOut Maelle",
+    "group": "Maelle",
+    "skeleton": "/Game/Characters/Mannequins/Meshes/SK_UE5_Mannequin.SK_UE5_Mannequin",
+    "length": 1.36666667
+  },
+  {
+    "id": "clip-854f0cd0ea3d802a",
+    "path": "/Game/Animations/AnimNPC/RD_Idles/Maelle/A_RD_Thinking_Idle_Maelle.A_RD_Thinking_Idle_Maelle",
+    "label": "A RD Thinking Idle Maelle",
+    "group": "Maelle",
+    "skeleton": "/Game/Characters/Mannequins/Meshes/SK_UE5_Mannequin.SK_UE5_Mannequin",
+    "length": 7.26666689
+  },
+  {
+    "id": "clip-9861ebf018ee22da",
+    "path": "/Game/Animations/AnimNPC/RD_Idles/Maelle/A_RD_Thinking_TransIn_Maelle.A_RD_Thinking_TransIn_Maelle",
+    "label": "A RD Thinking TransIn Maelle",
+    "group": "Maelle",
+    "skeleton": "/Game/Characters/Mannequins/Meshes/SK_UE5_Mannequin.SK_UE5_Mannequin",
+    "length": 1.63333333
+  },
+  {
+    "id": "clip-d32b4f61c4c2fd70",
+    "path": "/Game/Animations/AnimNPC/RD_Idles/Maelle/A_RD_Thinking_TransOut_Maelle.A_RD_Thinking_TransOut_Maelle",
+    "label": "A RD Thinking TransOut Maelle",
+    "group": "Maelle",
+    "skeleton": "/Game/Characters/Mannequins/Meshes/SK_UE5_Mannequin.SK_UE5_Mannequin",
+    "length": 1.63333333
+  },
+  {
+    "id": "clip-c46bd87c1a661e32",
+    "path": "/Game/Animations/AnimNPC/RD_Idles/Maelle/A_RD_WeightShift_Idle_Maelle.A_RD_WeightShift_Idle_Maelle",
+    "label": "A RD WeightShift Idle Maelle",
+    "group": "Maelle",
+    "skeleton": "/Game/Characters/Mannequins/Meshes/SK_UE5_Mannequin.SK_UE5_Mannequin",
+    "length": 7.13333321
+  },
+  {
+    "id": "clip-d9df6bfab58ed57d",
+    "path": "/Game/Animations/AnimNPC/RD_Idles/Maelle/A_RD_WeightShift_TransIn_Maelle.A_RD_WeightShift_TransIn_Maelle",
+    "label": "A RD WeightShift TransIn Maelle",
+    "group": "Maelle",
+    "skeleton": "/Game/Characters/Mannequins/Meshes/SK_UE5_Mannequin.SK_UE5_Mannequin",
+    "length": 2.63333344
+  },
+  {
+    "id": "clip-75213b59a0b819c9",
+    "path": "/Game/Animations/AnimNPC/RD_Idles/Maelle/A_RD_WeightShift_TransOut_Maelle.A_RD_WeightShift_TransOut_Maelle",
+    "label": "A RD WeightShift TransOut Maelle",
+    "group": "Maelle",
+    "skeleton": "/Game/Characters/Mannequins/Meshes/SK_UE5_Mannequin.SK_UE5_Mannequin",
+    "length": 2.9666667
+  },
+  {
+    "id": "clip-b52ff57fb2abf132",
+    "path": "/Game/Animations/AnimNPC/RD_Idles/Monoco/A_RD_ArmInHand_Idle_Monoco.A_RD_ArmInHand_Idle_Monoco",
+    "label": "A RD ArmInHand Idle Monoco",
+    "group": "Monoco",
+    "skeleton": "/Game/Characters/Mannequins/Meshes/SK_UE5_Mannequin.SK_UE5_Mannequin",
+    "length": 5.9333334
+  },
+  {
+    "id": "clip-8ff4da87edda2ddd",
+    "path": "/Game/Animations/AnimNPC/RD_Idles/Monoco/A_RD_ArmInHand_TransIn_Monoco.A_RD_ArmInHand_TransIn_Monoco",
+    "label": "A RD ArmInHand TransIn Monoco",
+    "group": "Monoco",
+    "skeleton": "/Game/Characters/Mannequins/Meshes/SK_UE5_Mannequin.SK_UE5_Mannequin",
+    "length": 1.36666667
+  },
+  {
+    "id": "clip-40dbf0d690b2c1b8",
+    "path": "/Game/Animations/AnimNPC/RD_Idles/Monoco/A_RD_ArmInHand_TransOut_Monoco.A_RD_ArmInHand_TransOut_Monoco",
+    "label": "A RD ArmInHand TransOut Monoco",
+    "group": "Monoco",
+    "skeleton": "/Game/Characters/Mannequins/Meshes/SK_UE5_Mannequin.SK_UE5_Mannequin",
+    "length": 1.36666667
+  },
+  {
+    "id": "clip-9b16f224f4fb0512",
+    "path": "/Game/Animations/AnimNPC/RD_Idles/Monoco/A_RD_ArmsCrossed_Idle_Monoco.A_RD_ArmsCrossed_Idle_Monoco",
+    "label": "A RD ArmsCrossed Idle Monoco",
+    "group": "Monoco",
+    "skeleton": "/Game/Characters/Mannequins/Meshes/SK_UE5_Mannequin.SK_UE5_Mannequin",
+    "length": 7.5
+  },
+  {
+    "id": "clip-1317fbf6d9f2aa08",
+    "path": "/Game/Animations/AnimNPC/RD_Idles/Monoco/A_RD_ArmsCrossed_TransIn_Monoco.A_RD_ArmsCrossed_TransIn_Monoco",
+    "label": "A RD ArmsCrossed TransIn Monoco",
+    "group": "Monoco",
+    "skeleton": "/Game/Characters/Mannequins/Meshes/SK_UE5_Mannequin.SK_UE5_Mannequin",
+    "length": 3.0333333
+  },
+  {
+    "id": "clip-3064d0f7d43f1699",
+    "path": "/Game/Animations/AnimNPC/RD_Idles/Monoco/A_RD_ArmsCrossed_TransOut_Monoco.A_RD_ArmsCrossed_TransOut_Monoco",
+    "label": "A RD ArmsCrossed TransOut Monoco",
+    "group": "Monoco",
+    "skeleton": "/Game/Characters/Mannequins/Meshes/SK_UE5_Mannequin.SK_UE5_Mannequin",
+    "length": 3.0333333
+  },
+  {
+    "id": "clip-9f695c833c8fd121",
+    "path": "/Game/Animations/AnimNPC/RD_Idles/Monoco/A_RD_Base_Idle_Monoco.A_RD_Base_Idle_Monoco",
+    "label": "A RD Base Idle Monoco",
+    "group": "Monoco",
+    "skeleton": "/Game/Characters/Mannequins/Meshes/SK_UE5_Mannequin.SK_UE5_Mannequin",
+    "length": 2.13333344
+  },
+  {
+    "id": "clip-06e2b83666284b01",
+    "path": "/Game/Animations/AnimNPC/RD_Idles/Monoco/A_RD_HandsBehindBack_Idle_Monoco_V2.A_RD_HandsBehindBack_Idle_Monoco_V2",
+    "label": "A RD HandsBehindBack Idle Monoco V2",
+    "group": "Monoco",
+    "skeleton": "/Game/Characters/Mannequins/Meshes/SK_UE5_Mannequin.SK_UE5_Mannequin",
+    "length": 5.9666667
+  },
+  {
+    "id": "clip-10336afe0098b546",
+    "path": "/Game/Animations/AnimNPC/RD_Idles/Monoco/A_RD_HandsBehindBack_TransIn_Monoco_V2.A_RD_HandsBehindBack_TransIn_Monoco_V2",
+    "label": "A RD HandsBehindBack TransIn Monoco V2",
+    "group": "Monoco",
+    "skeleton": "/Game/Characters/Mannequins/Meshes/SK_UE5_Mannequin.SK_UE5_Mannequin",
+    "length": 1.86666667
+  },
+  {
+    "id": "clip-005efa2de68ac276",
+    "path": "/Game/Animations/AnimNPC/RD_Idles/Monoco/A_RD_HandsBehindBack_TransOut_Monoco_V2.A_RD_HandsBehindBack_TransOut_Monoco_V2",
+    "label": "A RD HandsBehindBack TransOut Monoco V2",
+    "group": "Monoco",
+    "skeleton": "/Game/Characters/Mannequins/Meshes/SK_UE5_Mannequin.SK_UE5_Mannequin",
+    "length": 1.83333337
+  },
+  {
+    "id": "clip-cd718bfdfb54fbca",
+    "path": "/Game/Animations/AnimNPC/RD_Idles/Monoco/A_RD_HandsOnHips_Idle_Monoco.A_RD_HandsOnHips_Idle_Monoco",
+    "label": "A RD HandsOnHips Idle Monoco",
+    "group": "Monoco",
+    "skeleton": "/Game/Characters/Mannequins/Meshes/SK_UE5_Mannequin.SK_UE5_Mannequin",
+    "length": 6.9666667
+  },
+  {
+    "id": "clip-02c00dde09355f83",
+    "path": "/Game/Animations/AnimNPC/RD_Idles/Monoco/A_RD_HandsOnHips_TransIn_Monoco.A_RD_HandsOnHips_TransIn_Monoco",
+    "label": "A RD HandsOnHips TransIn Monoco",
+    "group": "Monoco",
+    "skeleton": "/Game/Characters/Mannequins/Meshes/SK_UE5_Mannequin.SK_UE5_Mannequin",
+    "length": 1.66666663
+  },
+  {
+    "id": "clip-2eb0694b47b4f9a5",
+    "path": "/Game/Animations/AnimNPC/RD_Idles/Monoco/A_RD_HandsOnHips_TransOut_Monoco.A_RD_HandsOnHips_TransOut_Monoco",
+    "label": "A RD HandsOnHips TransOut Monoco",
+    "group": "Monoco",
+    "skeleton": "/Game/Characters/Mannequins/Meshes/SK_UE5_Mannequin.SK_UE5_Mannequin",
+    "length": 1.66666663
+  },
+  {
+    "id": "clip-94d6e2561e0bcc55",
+    "path": "/Game/Animations/AnimNPC/RD_Idles/Monoco/A_RD_Kneeling_Idle_Monoco.A_RD_Kneeling_Idle_Monoco",
+    "label": "A RD Kneeling Idle Monoco",
+    "group": "Monoco",
+    "skeleton": "/Game/Characters/Mannequins/Meshes/SK_UE5_Mannequin.SK_UE5_Mannequin",
+    "length": 4.66666651
+  },
+  {
+    "id": "clip-c263baf3c6e5f178",
+    "path": "/Game/Animations/AnimNPC/RD_Idles/Monoco/A_RD_Kneeling_TransIn_Monoco.A_RD_Kneeling_TransIn_Monoco",
+    "label": "A RD Kneeling TransIn Monoco",
+    "group": "Monoco",
+    "skeleton": "/Game/Characters/Mannequins/Meshes/SK_UE5_Mannequin.SK_UE5_Mannequin",
+    "length": 1.79999995
+  },
+  {
+    "id": "clip-265d2f1b34241962",
+    "path": "/Game/Animations/AnimNPC/RD_Idles/Monoco/A_RD_Kneeling_TransOut_Monoco.A_RD_Kneeling_TransOut_Monoco",
+    "label": "A RD Kneeling TransOut Monoco",
+    "group": "Monoco",
+    "skeleton": "/Game/Characters/Mannequins/Meshes/SK_UE5_Mannequin.SK_UE5_Mannequin",
+    "length": 1.79999995
+  },
+  {
+    "id": "clip-35f503de583523c2",
+    "path": "/Game/Animations/AnimNPC/RD_Idles/Monoco/A_RD_OneHandOnHips_Idle_Monoco.A_RD_OneHandOnHips_Idle_Monoco",
+    "label": "A RD OneHandOnHips Idle Monoco",
+    "group": "Monoco",
+    "skeleton": "/Game/Characters/Mannequins/Meshes/SK_UE5_Mannequin.SK_UE5_Mannequin",
+    "length": 5.0
+  },
+  {
+    "id": "clip-2432629e851366a8",
+    "path": "/Game/Animations/AnimNPC/RD_Idles/Monoco/A_RD_OneHandOnHips_TransIn_Monoco.A_RD_OneHandOnHips_TransIn_Monoco",
+    "label": "A RD OneHandOnHips TransIn Monoco",
+    "group": "Monoco",
+    "skeleton": "/Game/Characters/Mannequins/Meshes/SK_UE5_Mannequin.SK_UE5_Mannequin",
+    "length": 1.66666663
+  },
+  {
+    "id": "clip-f73b466b283e9459",
+    "path": "/Game/Animations/AnimNPC/RD_Idles/Monoco/A_RD_OneHandOnHips_TransOut_Monoco.A_RD_OneHandOnHips_TransOut_Monoco",
+    "label": "A RD OneHandOnHips TransOut Monoco",
+    "group": "Monoco",
+    "skeleton": "/Game/Characters/Mannequins/Meshes/SK_UE5_Mannequin.SK_UE5_Mannequin",
+    "length": 1.70000005
+  },
+  {
+    "id": "clip-a06ebb452c669ae1",
+    "path": "/Game/Animations/AnimNPC/RD_Idles/Monoco/A_RD_Thinking_Idle_Monoco_V2.A_RD_Thinking_Idle_Monoco_V2",
+    "label": "A RD Thinking Idle Monoco V2",
+    "group": "Monoco",
+    "skeleton": "/Game/Characters/Mannequins/Meshes/SK_UE5_Mannequin.SK_UE5_Mannequin",
+    "length": 2.0333333
+  },
+  {
+    "id": "clip-166946c24c641b4f",
+    "path": "/Game/Animations/AnimNPC/RD_Idles/Monoco/A_RD_Thinking_TransIn_Monoco_V2.A_RD_Thinking_TransIn_Monoco_V2",
+    "label": "A RD Thinking TransIn Monoco V2",
+    "group": "Monoco",
+    "skeleton": "/Game/Characters/Mannequins/Meshes/SK_UE5_Mannequin.SK_UE5_Mannequin",
+    "length": 1.60000002
+  },
+  {
+    "id": "clip-74a12d5a207ebdeb",
+    "path": "/Game/Animations/AnimNPC/RD_Idles/Monoco/A_RD_Thinking_TransOut_Monoco_V2.A_RD_Thinking_TransOut_Monoco_V2",
+    "label": "A RD Thinking TransOut Monoco V2",
+    "group": "Monoco",
+    "skeleton": "/Game/Characters/Mannequins/Meshes/SK_UE5_Mannequin.SK_UE5_Mannequin",
+    "length": 1.60000002
+  },
+  {
+    "id": "clip-734b01b3a8282b5e",
+    "path": "/Game/Animations/AnimNPC/RD_Idles/Monoco/A_RD_WeightShift_Idle_Monoco_V2.A_RD_WeightShift_Idle_Monoco_V2",
+    "label": "A RD WeightShift Idle Monoco V2",
+    "group": "Monoco",
+    "skeleton": "/Game/Characters/Mannequins/Meshes/SK_UE5_Mannequin.SK_UE5_Mannequin",
+    "length": 2.13333344
+  },
+  {
+    "id": "clip-1a2dc2b77ff364ae",
+    "path": "/Game/Animations/AnimNPC/RD_Idles/Monoco/A_RD_WeightShift_TransIn_Monoco_V2.A_RD_WeightShift_TransIn_Monoco_V2",
+    "label": "A RD WeightShift TransIn Monoco V2",
+    "group": "Monoco",
+    "skeleton": "/Game/Characters/Mannequins/Meshes/SK_UE5_Mannequin.SK_UE5_Mannequin",
+    "length": 1.70000005
+  },
+  {
+    "id": "clip-e2e289d2bc2180b8",
+    "path": "/Game/Animations/AnimNPC/RD_Idles/Monoco/A_RD_WeightShift_TransOut_Monoco_V2.A_RD_WeightShift_TransOut_Monoco_V2",
+    "label": "A RD WeightShift TransOut Monoco V2",
+    "group": "Monoco",
+    "skeleton": "/Game/Characters/Mannequins/Meshes/SK_UE5_Mannequin.SK_UE5_Mannequin",
+    "length": 1.70000005
+  },
+  {
+    "id": "clip-f57d00d7a3fd0c2c",
+    "path": "/Game/Animations/AnimNPC/RD_Idles/Sciel/A_RD_ArmInHand_Idle_Sciel.A_RD_ArmInHand_Idle_Sciel",
+    "label": "A RD ArmInHand Idle Sciel",
+    "group": "Sciel",
+    "skeleton": "/Game/Characters/Mannequins/Meshes/SK_UE5_Mannequin.SK_UE5_Mannequin",
+    "length": 5.9666667
+  },
+  {
+    "id": "clip-ad590955747fc74f",
+    "path": "/Game/Animations/AnimNPC/RD_Idles/Sciel/A_RD_ArmInHand_TransIn_Sciel_V3.A_RD_ArmInHand_TransIn_Sciel_V3",
+    "label": "A RD ArmInHand TransIn Sciel V3",
+    "group": "Sciel",
+    "skeleton": "/Game/Characters/Mannequins/Meshes/SK_UE5_Mannequin.SK_UE5_Mannequin",
+    "length": 1.60000002
+  },
+  {
+    "id": "clip-268911af7af3f947",
+    "path": "/Game/Animations/AnimNPC/RD_Idles/Sciel/A_RD_ArmInHand_TransOut_Sciel.A_RD_ArmInHand_TransOut_Sciel",
+    "label": "A RD ArmInHand TransOut Sciel",
+    "group": "Sciel",
+    "skeleton": "/Game/Characters/Mannequins/Meshes/SK_UE5_Mannequin.SK_UE5_Mannequin",
+    "length": 1.33333337
+  },
+  {
+    "id": "clip-d524d9dcfd1f6d7f",
+    "path": "/Game/Animations/AnimNPC/RD_Idles/Sciel/A_RD_ArmsCrossed_Idle_Sciel.A_RD_ArmsCrossed_Idle_Sciel",
+    "label": "A RD ArmsCrossed Idle Sciel",
+    "group": "Sciel",
+    "skeleton": "/Game/Characters/Mannequins/Meshes/SK_UE5_Mannequin.SK_UE5_Mannequin",
+    "length": 1.70000005
+  },
+  {
+    "id": "clip-27c6a473792d1a76",
+    "path": "/Game/Animations/AnimNPC/RD_Idles/Sciel/A_RD_ArmsCrossed_TransIn_Sciel.A_RD_ArmsCrossed_TransIn_Sciel",
+    "label": "A RD ArmsCrossed TransIn Sciel",
+    "group": "Sciel",
+    "skeleton": "/Game/Characters/Mannequins/Meshes/SK_UE5_Mannequin.SK_UE5_Mannequin",
+    "length": 2.0
+  },
+  {
+    "id": "clip-8e05600a4470d4bd",
+    "path": "/Game/Animations/AnimNPC/RD_Idles/Sciel/A_RD_ArmsCrossed_TransOut_Sciel.A_RD_ArmsCrossed_TransOut_Sciel",
+    "label": "A RD ArmsCrossed TransOut Sciel",
+    "group": "Sciel",
+    "skeleton": "/Game/Characters/Mannequins/Meshes/SK_UE5_Mannequin.SK_UE5_Mannequin",
+    "length": 2.0
+  },
+  {
+    "id": "clip-5cadeeee5e551a93",
+    "path": "/Game/Animations/AnimNPC/RD_Idles/Sciel/A_RD_Base_Idle_Sciel.A_RD_Base_Idle_Sciel",
+    "label": "A RD Base Idle Sciel",
+    "group": "Sciel",
+    "skeleton": "/Game/Characters/Mannequins/Meshes/SK_UE5_Mannequin.SK_UE5_Mannequin",
+    "length": 9.30000019
+  },
+  {
+    "id": "clip-3e09818cde452552",
+    "path": "/Game/Animations/AnimNPC/RD_Idles/Sciel/A_RD_HandsBehindBack_Idle_Sciel.A_RD_HandsBehindBack_Idle_Sciel",
+    "label": "A RD HandsBehindBack Idle Sciel",
+    "group": "Sciel",
+    "skeleton": "/Game/Characters/Mannequins/Meshes/SK_UE5_Mannequin.SK_UE5_Mannequin",
+    "length": 5.9666667
+  },
+  {
+    "id": "clip-789c68047fefd0ba",
+    "path": "/Game/Animations/AnimNPC/RD_Idles/Sciel/A_RD_HandsBehindBack_TransIn_Sciel.A_RD_HandsBehindBack_TransIn_Sciel",
+    "label": "A RD HandsBehindBack TransIn Sciel",
+    "group": "Sciel",
+    "skeleton": "/Game/Characters/Mannequins/Meshes/SK_UE5_Mannequin.SK_UE5_Mannequin",
+    "length": 1.5
+  },
+  {
+    "id": "clip-eb193330fbfcb631",
+    "path": "/Game/Animations/AnimNPC/RD_Idles/Sciel/A_RD_HandsBehindBack_TransOut_Sciel.A_RD_HandsBehindBack_TransOut_Sciel",
+    "label": "A RD HandsBehindBack TransOut Sciel",
+    "group": "Sciel",
+    "skeleton": "/Game/Characters/Mannequins/Meshes/SK_UE5_Mannequin.SK_UE5_Mannequin",
+    "length": 1.5
+  },
+  {
+    "id": "clip-0406a163fdad2da2",
+    "path": "/Game/Animations/AnimNPC/RD_Idles/Sciel/A_RD_HandsOnHips_Idle_Sciel.A_RD_HandsOnHips_Idle_Sciel",
+    "label": "A RD HandsOnHips Idle Sciel",
+    "group": "Sciel",
+    "skeleton": "/Game/Characters/Mannequins/Meshes/SK_UE5_Mannequin.SK_UE5_Mannequin",
+    "length": 3.16666675
+  },
+  {
+    "id": "clip-a942534761e77233",
+    "path": "/Game/Animations/AnimNPC/RD_Idles/Sciel/A_RD_HandsOnHips_TransIn_Sciel.A_RD_HandsOnHips_TransIn_Sciel",
+    "label": "A RD HandsOnHips TransIn Sciel",
+    "group": "Sciel",
+    "skeleton": "/Game/Characters/Mannequins/Meshes/SK_UE5_Mannequin.SK_UE5_Mannequin",
+    "length": 1.0333333
+  },
+  {
+    "id": "clip-80910a04e62156ae",
+    "path": "/Game/Animations/AnimNPC/RD_Idles/Sciel/A_RD_HandsOnHips_TransOut_Sciel.A_RD_HandsOnHips_TransOut_Sciel",
+    "label": "A RD HandsOnHips TransOut Sciel",
+    "group": "Sciel",
+    "skeleton": "/Game/Characters/Mannequins/Meshes/SK_UE5_Mannequin.SK_UE5_Mannequin",
+    "length": 1.26666665
+  },
+  {
+    "id": "clip-6968d91f15a65d4f",
+    "path": "/Game/Animations/AnimNPC/RD_Idles/Sciel/A_RD_OneHandOnHips_Idle_Sciel.A_RD_OneHandOnHips_Idle_Sciel",
+    "label": "A RD OneHandOnHips Idle Sciel",
+    "group": "Sciel",
+    "skeleton": "/Game/Characters/Mannequins/Meshes/SK_UE5_Mannequin.SK_UE5_Mannequin",
+    "length": 3.16666675
+  },
+  {
+    "id": "clip-ab078d191d801c66",
+    "path": "/Game/Animations/AnimNPC/RD_Idles/Sciel/A_RD_OneHandOnHips_TransIn_Sciel.A_RD_OneHandOnHips_TransIn_Sciel",
+    "label": "A RD OneHandOnHips TransIn Sciel",
+    "group": "Sciel",
+    "skeleton": "/Game/Characters/Mannequins/Meshes/SK_UE5_Mannequin.SK_UE5_Mannequin",
+    "length": 1.26666665
+  },
+  {
+    "id": "clip-c1304a65dee8bbb6",
+    "path": "/Game/Animations/AnimNPC/RD_Idles/Sciel/A_RD_OneHandOnHips_TransOut_Sciel.A_RD_OneHandOnHips_TransOut_Sciel",
+    "label": "A RD OneHandOnHips TransOut Sciel",
+    "group": "Sciel",
+    "skeleton": "/Game/Characters/Mannequins/Meshes/SK_UE5_Mannequin.SK_UE5_Mannequin",
+    "length": 1.36666667
+  },
+  {
+    "id": "clip-89d98c1cc900b824",
+    "path": "/Game/Animations/AnimNPC/RD_Idles/Sciel/A_RD_Thinking_Idle_Sciel.A_RD_Thinking_Idle_Sciel",
+    "label": "A RD Thinking Idle Sciel",
+    "group": "Sciel",
+    "skeleton": "/Game/Characters/Mannequins/Meshes/SK_UE5_Mannequin.SK_UE5_Mannequin",
+    "length": 7.26666689
+  },
+  {
+    "id": "clip-fc149c66820a4597",
+    "path": "/Game/Animations/AnimNPC/RD_Idles/Sciel/A_RD_Thinking_TransIn_Sciel.A_RD_Thinking_TransIn_Sciel",
+    "label": "A RD Thinking TransIn Sciel",
+    "group": "Sciel",
+    "skeleton": "/Game/Characters/Mannequins/Meshes/SK_UE5_Mannequin.SK_UE5_Mannequin",
+    "length": 1.70000005
+  },
+  {
+    "id": "clip-f98690721a6fcfe1",
+    "path": "/Game/Animations/AnimNPC/RD_Idles/Sciel/A_RD_Thinking_TransOut_Sciel.A_RD_Thinking_TransOut_Sciel",
+    "label": "A RD Thinking TransOut Sciel",
+    "group": "Sciel",
+    "skeleton": "/Game/Characters/Mannequins/Meshes/SK_UE5_Mannequin.SK_UE5_Mannequin",
+    "length": 1.60000002
+  },
+  {
+    "id": "clip-cbc952be4ae17f9b",
+    "path": "/Game/Animations/AnimNPC/RD_Idles/Sciel/A_RD_WeightShift_Idle_Sciel.A_RD_WeightShift_Idle_Sciel",
+    "label": "A RD WeightShift Idle Sciel",
+    "group": "Sciel",
+    "skeleton": "/Game/Characters/Mannequins/Meshes/SK_UE5_Mannequin.SK_UE5_Mannequin",
+    "length": 7.13333321
+  },
+  {
+    "id": "clip-228e9b0ef2214fb6",
+    "path": "/Game/Animations/AnimNPC/RD_Idles/Sciel/A_RD_WeightShift_TransIn_Sciel.A_RD_WeightShift_TransIn_Sciel",
+    "label": "A RD WeightShift TransIn Sciel",
+    "group": "Sciel",
+    "skeleton": "/Game/Characters/Mannequins/Meshes/SK_UE5_Mannequin.SK_UE5_Mannequin",
+    "length": 2.63333344
+  },
+  {
+    "id": "clip-a29bd06d6ac01eb7",
+    "path": "/Game/Animations/AnimNPC/RD_Idles/Sciel/A_RD_WeightShift_TransOut_Sciel.A_RD_WeightShift_TransOut_Sciel",
+    "label": "A RD WeightShift TransOut Sciel",
+    "group": "Sciel",
+    "skeleton": "/Game/Characters/Mannequins/Meshes/SK_UE5_Mannequin.SK_UE5_Mannequin",
+    "length": 2.9666667
+  },
+  {
+    "id": "clip-53f4fcfb02e374ab",
+    "path": "/Game/Animations/AnimNPC/RD_Idles/Verso/A_RD_ArmInHand_Idle_Verso_V2.A_RD_ArmInHand_Idle_Verso_V2",
+    "label": "A RD ArmInHand Idle Verso V2",
+    "group": "Verso",
+    "skeleton": "/Game/Characters/Mannequins/Meshes/SK_UE5_Mannequin.SK_UE5_Mannequin",
+    "length": 5.80000019
+  },
+  {
+    "id": "clip-5df78a93b7a43f49",
+    "path": "/Game/Animations/AnimNPC/RD_Idles/Verso/A_RD_ArmInHand_TransIn_Verso_V4.A_RD_ArmInHand_TransIn_Verso_V4",
+    "label": "A RD ArmInHand TransIn Verso V4",
+    "group": "Verso",
+    "skeleton": "/Game/Characters/Mannequins/Meshes/SK_UE5_Mannequin.SK_UE5_Mannequin",
+    "length": 1.60000002
+  },
+  {
+    "id": "clip-3b4ddaa71a8ea3c8",
+    "path": "/Game/Animations/AnimNPC/RD_Idles/Verso/A_RD_ArmInHand_TransOut_Verso_V2.A_RD_ArmInHand_TransOut_Verso_V2",
+    "label": "A RD ArmInHand TransOut Verso V2",
+    "group": "Verso",
+    "skeleton": "/Game/Characters/Mannequins/Meshes/SK_UE5_Mannequin.SK_UE5_Mannequin",
+    "length": 1.60000002
+  },
+  {
+    "id": "clip-92aa49b49cc8cad9",
+    "path": "/Game/Animations/AnimNPC/RD_Idles/Verso/A_RD_ArmsCrossedToShift_Verso.A_RD_ArmsCrossedToShift_Verso",
+    "label": "A RD ArmsCrossedToShift Verso",
+    "group": "Verso",
+    "skeleton": "/Game/Characters/Mannequins/Meshes/SK_UE5_Mannequin.SK_UE5_Mannequin",
+    "length": 1.4666667
+  },
+  {
+    "id": "clip-0f13c5201c7e4f62",
+    "path": "/Game/Animations/AnimNPC/RD_Idles/Verso/A_RD_ArmsCrossed_Idle_Verso_V2.A_RD_ArmsCrossed_Idle_Verso_V2",
+    "label": "A RD ArmsCrossed Idle Verso V2",
+    "group": "Verso",
+    "skeleton": "/Game/Characters/Mannequins/Meshes/SK_UE5_Mannequin.SK_UE5_Mannequin",
+    "length": 7.4333334
+  },
+  {
+    "id": "clip-091240161f88525f",
+    "path": "/Game/Animations/AnimNPC/RD_Idles/Verso/A_RD_ArmsCrossed_TransIn_Verso.A_RD_ArmsCrossed_TransIn_Verso",
+    "label": "A RD ArmsCrossed TransIn Verso",
+    "group": "Verso",
+    "skeleton": "/Game/Characters/Mannequins/Meshes/SK_UE5_Mannequin.SK_UE5_Mannequin",
+    "length": 1.63333333
+  },
+  {
+    "id": "clip-d12950f44ecb85da",
+    "path": "/Game/Animations/AnimNPC/RD_Idles/Verso/A_RD_ArmsCrossed_TransIn_Verso_V2.A_RD_ArmsCrossed_TransIn_Verso_V2",
+    "label": "A RD ArmsCrossed TransIn Verso V2",
+    "group": "Verso",
+    "skeleton": "/Game/Characters/Mannequins/Meshes/SK_UE5_Mannequin.SK_UE5_Mannequin",
+    "length": 1.63333333
+  },
+  {
+    "id": "clip-d260650f46387038",
+    "path": "/Game/Animations/AnimNPC/RD_Idles/Verso/A_RD_ArmsCrossed_TransOut_Verso_V2.A_RD_ArmsCrossed_TransOut_Verso_V2",
+    "label": "A RD ArmsCrossed TransOut Verso V2",
+    "group": "Verso",
+    "skeleton": "/Game/Characters/Mannequins/Meshes/SK_UE5_Mannequin.SK_UE5_Mannequin",
+    "length": 1.63333333
+  },
+  {
+    "id": "clip-7e009269c8ba96a4",
+    "path": "/Game/Animations/AnimNPC/RD_Idles/Verso/A_RD_Base_Idle_Verso_V2.A_RD_Base_Idle_Verso_V2",
+    "label": "A RD Base Idle Verso V2",
+    "group": "Verso",
+    "skeleton": "/Game/Characters/Mannequins/Meshes/SK_UE5_Mannequin.SK_UE5_Mannequin",
+    "length": 6.16666651
+  },
+  {
+    "id": "clip-df540dc36bb52a17",
+    "path": "/Game/Animations/AnimNPC/RD_Idles/Verso/A_RD_HandsBehindBack_Idle_Verso_V2.A_RD_HandsBehindBack_Idle_Verso_V2",
+    "label": "A RD HandsBehindBack Idle Verso V2",
+    "group": "Verso",
+    "skeleton": "/Game/Characters/Mannequins/Meshes/SK_UE5_Mannequin.SK_UE5_Mannequin",
+    "length": 5.9333334
+  },
+  {
+    "id": "clip-cd261390070014f7",
+    "path": "/Game/Animations/AnimNPC/RD_Idles/Verso/A_RD_HandsBehindBack_TransIn_Verso_V2.A_RD_HandsBehindBack_TransIn_Verso_V2",
+    "label": "A RD HandsBehindBack TransIn Verso V2",
+    "group": "Verso",
+    "skeleton": "/Game/Characters/Mannequins/Meshes/SK_UE5_Mannequin.SK_UE5_Mannequin",
+    "length": 1.5
+  },
+  {
+    "id": "clip-865281ea81d1983a",
+    "path": "/Game/Animations/AnimNPC/RD_Idles/Verso/A_RD_HandsBehindBack_TransOut_Verso_V2.A_RD_HandsBehindBack_TransOut_Verso_V2",
+    "label": "A RD HandsBehindBack TransOut Verso V2",
+    "group": "Verso",
+    "skeleton": "/Game/Characters/Mannequins/Meshes/SK_UE5_Mannequin.SK_UE5_Mannequin",
+    "length": 1.5
+  },
+  {
+    "id": "clip-27d5ca734edb740a",
+    "path": "/Game/Animations/AnimNPC/RD_Idles/Verso/A_RD_HandsOnHips_Idle_Verso_V2.A_RD_HandsOnHips_Idle_Verso_V2",
+    "label": "A RD HandsOnHips Idle Verso V2",
+    "group": "Verso",
+    "skeleton": "/Game/Characters/Mannequins/Meshes/SK_UE5_Mannequin.SK_UE5_Mannequin",
+    "length": 6.9333334
+  },
+  {
+    "id": "clip-4451538c7a4639ac",
+    "path": "/Game/Animations/AnimNPC/RD_Idles/Verso/A_RD_HandsOnHips_TransIn_Verso.A_RD_HandsOnHips_TransIn_Verso",
+    "label": "A RD HandsOnHips TransIn Verso",
+    "group": "Verso",
+    "skeleton": "/Game/Characters/Mannequins/Meshes/SK_UE5_Mannequin.SK_UE5_Mannequin",
+    "length": 1.0333333
+  },
+  {
+    "id": "clip-c9aa321fbabccd4b",
+    "path": "/Game/Animations/AnimNPC/RD_Idles/Verso/A_RD_HandsOnHips_TransOut_Verso.A_RD_HandsOnHips_TransOut_Verso",
+    "label": "A RD HandsOnHips TransOut Verso",
+    "group": "Verso",
+    "skeleton": "/Game/Characters/Mannequins/Meshes/SK_UE5_Mannequin.SK_UE5_Mannequin",
+    "length": 1.26666665
+  },
+  {
+    "id": "clip-6019679719110c2d",
+    "path": "/Game/Animations/AnimNPC/RD_Idles/Verso/A_RD_OneHandOnHips_Idle_Verso.A_RD_OneHandOnHips_Idle_Verso",
+    "label": "A RD OneHandOnHips Idle Verso",
+    "group": "Verso",
+    "skeleton": "/Game/Characters/Mannequins/Meshes/SK_UE5_Mannequin.SK_UE5_Mannequin",
+    "length": 6.4666667
+  },
+  {
+    "id": "clip-fa270c750c59c9bf",
+    "path": "/Game/Animations/AnimNPC/RD_Idles/Verso/A_RD_OneHandOnHips_TransIn_Verso.A_RD_OneHandOnHips_TransIn_Verso",
+    "label": "A RD OneHandOnHips TransIn Verso",
+    "group": "Verso",
+    "skeleton": "/Game/Characters/Mannequins/Meshes/SK_UE5_Mannequin.SK_UE5_Mannequin",
+    "length": 1.60000002
+  },
+  {
+    "id": "clip-2e1ba993af60b624",
+    "path": "/Game/Animations/AnimNPC/RD_Idles/Verso/A_RD_OneHandOnHips_TransOut_Verso.A_RD_OneHandOnHips_TransOut_Verso",
+    "label": "A RD OneHandOnHips TransOut Verso",
+    "group": "Verso",
+    "skeleton": "/Game/Characters/Mannequins/Meshes/SK_UE5_Mannequin.SK_UE5_Mannequin",
+    "length": 1.60000002
+  },
+  {
+    "id": "clip-c865bf765ac8532b",
+    "path": "/Game/Animations/AnimNPC/RD_Idles/Verso/A_RD_ShiftToArmsCrossed_Verso.A_RD_ShiftToArmsCrossed_Verso",
+    "label": "A RD ShiftToArmsCrossed Verso",
+    "group": "Verso",
+    "skeleton": "/Game/Characters/Mannequins/Meshes/SK_UE5_Mannequin.SK_UE5_Mannequin",
+    "length": 1.56666672
+  },
+  {
+    "id": "clip-bd57c8d3447b9a88",
+    "path": "/Game/Animations/AnimNPC/RD_Idles/Verso/A_RD_Thinking_Idle_Verso_V2.A_RD_Thinking_Idle_Verso_V2",
+    "label": "A RD Thinking Idle Verso V2",
+    "group": "Verso",
+    "skeleton": "/Game/Characters/Mannequins/Meshes/SK_UE5_Mannequin.SK_UE5_Mannequin",
+    "length": 7.23333311
+  },
+  {
+    "id": "clip-bac3a874a1bac12b",
+    "path": "/Game/Animations/AnimNPC/RD_Idles/Verso/A_RD_Thinking_TransIn_Verso_V2.A_RD_Thinking_TransIn_Verso_V2",
+    "label": "A RD Thinking TransIn Verso V2",
+    "group": "Verso",
+    "skeleton": "/Game/Characters/Mannequins/Meshes/SK_UE5_Mannequin.SK_UE5_Mannequin",
+    "length": 1.63333333
+  },
+  {
+    "id": "clip-dcfffd0aad467c5b",
+    "path": "/Game/Animations/AnimNPC/RD_Idles/Verso/A_RD_Thinking_TransOut_Verso_V2.A_RD_Thinking_TransOut_Verso_V2",
+    "label": "A RD Thinking TransOut Verso V2",
+    "group": "Verso",
+    "skeleton": "/Game/Characters/Mannequins/Meshes/SK_UE5_Mannequin.SK_UE5_Mannequin",
+    "length": 1.63333333
+  },
+  {
+    "id": "clip-cccee7cb5a103416",
+    "path": "/Game/Animations/AnimNPC/RD_Idles/Verso/A_RD_WeightShift_Idle_Verso.A_RD_WeightShift_Idle_Verso",
+    "label": "A RD WeightShift Idle Verso",
+    "group": "Verso",
+    "skeleton": "/Game/Characters/Mannequins/Meshes/SK_UE5_Mannequin.SK_UE5_Mannequin",
+    "length": 2.79999995
+  },
+  {
+    "id": "clip-1f681b6e879fea9a",
+    "path": "/Game/Animations/AnimNPC/RD_Idles/Verso/A_RD_WeightShift_TransIn_Verso.A_RD_WeightShift_TransIn_Verso",
+    "label": "A RD WeightShift TransIn Verso",
+    "group": "Verso",
+    "skeleton": "/Game/Characters/Mannequins/Meshes/SK_UE5_Mannequin.SK_UE5_Mannequin",
+    "length": 2.9333334
+  },
+  {
+    "id": "clip-c0a66dadcc0c2525",
+    "path": "/Game/Animations/AnimNPC/RD_Idles/Verso/A_RD_WeightShift_TransOut_Verso.A_RD_WeightShift_TransOut_Verso",
+    "label": "A RD WeightShift TransOut Verso",
+    "group": "Verso",
+    "skeleton": "/Game/Characters/Mannequins/Meshes/SK_UE5_Mannequin.SK_UE5_Mannequin",
+    "length": 2.9333334
+  },
+  {
+    "id": "clip-01f65e6c7acb6e1b",
+    "path": "/Game/Animations/AnimPacks/AdventureAnimset/Anim_IN_CF_sit_E_UE5.Anim_IN_CF_sit_E_UE5",
+    "label": "Anim IN CF sit E UE5",
+    "group": "Movement and actions",
+    "skeleton": "/Game/Characters/Mannequins/Meshes/SK_UE5_Mannequin.SK_UE5_Mannequin",
+    "length": 2.0
+  },
+  {
+    "id": "clip-5470351a6fcc6125",
+    "path": "/Game/Animations/AnimPacks/AdventureAnimset/Anim_IN_CF_sit_ST_UE5.Anim_IN_CF_sit_ST_UE5",
+    "label": "Anim IN CF sit ST UE5",
+    "group": "Movement and actions",
+    "skeleton": "/Game/Characters/Mannequins/Meshes/SK_UE5_Mannequin.SK_UE5_Mannequin",
+    "length": 2.0
+  },
+  {
+    "id": "clip-612a8753a3ba9735",
+    "path": "/Game/Animations/AnimPacks/Deaths/Deaths_Hit_Dazed_UE5.Deaths_Hit_Dazed_UE5",
+    "label": "Deaths Hit Dazed UE5",
+    "group": "Movement and actions",
+    "skeleton": "/Game/Characters/Mannequins/Meshes/SK_UE5_Mannequin.SK_UE5_Mannequin",
+    "length": 3.16666675
+  },
+  {
+    "id": "clip-adcc3cad53210f93",
+    "path": "/Game/Animations/AnimPacks/Dialogue_mocap/IP/Serious/IP_Dialogue_Serious_talk_low_01.IP_Dialogue_Serious_talk_low_01",
+    "label": "IP Dialogue Serious talk low 01",
+    "group": "Movement and actions",
+    "skeleton": "/Game/Characters/Mannequins/Meshes/SK_UE5_Mannequin.SK_UE5_Mannequin",
+    "length": 88.6666641
+  },
+  {
+    "id": "clip-14177f49f4c54ce5",
+    "path": "/Game/Animations/AnimPacks/Dialogue_mocap/IP/Serious/IP_Dialogue_Serious_talk_low_04.IP_Dialogue_Serious_talk_low_04",
+    "label": "IP Dialogue Serious talk low 04",
+    "group": "Movement and actions",
+    "skeleton": "/Game/Characters/Mannequins/Meshes/SK_UE5_Mannequin.SK_UE5_Mannequin",
+    "length": 78.1666641
+  },
+  {
+    "id": "clip-329a3d3f0ff4100b",
+    "path": "/Game/Animations/AnimPacks/Dialogue_mocap/IP/Serious/IP_Dialogue_Serious_talk_up_01.IP_Dialogue_Serious_talk_up_01",
+    "label": "IP Dialogue Serious talk up 01",
+    "group": "Movement and actions",
+    "skeleton": "/Game/Characters/Mannequins/Meshes/SK_UE5_Mannequin.SK_UE5_Mannequin",
+    "length": 71.1999969
+  },
+  {
+    "id": "clip-141c46e26fc5ec21",
+    "path": "/Game/Animations/AnimPacks/Dialogue_mocap/IP/Serious/IP_Dialogue_Serious_talk_up_03.IP_Dialogue_Serious_talk_up_03",
+    "label": "IP Dialogue Serious talk up 03",
+    "group": "Movement and actions",
+    "skeleton": "/Game/Characters/Mannequins/Meshes/SK_UE5_Mannequin.SK_UE5_Mannequin",
+    "length": 90.3333359
+  },
+  {
+    "id": "clip-8ade31e11b772b36",
+    "path": "/Game/Animations/AnimPacks/DynamicArcherSet/Proto_JumpCounter.Proto_JumpCounter",
+    "label": "Proto JumpCounter",
+    "group": "Movement and actions",
+    "skeleton": "/Game/Characters/Mannequins/Meshes/SK_UE5_Mannequin.SK_UE5_Mannequin",
+    "length": 1.13333333
+  },
+  {
+    "id": "clip-19e92ee4e6201543",
+    "path": "/Game/Animations/AnimPacks/DynamicArcherSet/Proto_JumpEvade.Proto_JumpEvade",
+    "label": "Proto JumpEvade",
+    "group": "Movement and actions",
+    "skeleton": "/Game/Characters/Mannequins/Meshes/SK_UE5_Mannequin.SK_UE5_Mannequin",
+    "length": 0.666666687
+  },
+  {
+    "id": "clip-3ec4cbf4f4c9a909",
+    "path": "/Game/Animations/AnimPacks/DynamicSwordAnimset/Block_Damage_UE5.Block_Damage_UE5",
+    "label": "Block Damage UE5",
+    "group": "Movement and actions",
+    "skeleton": "/Game/Characters/Mannequins/Meshes/SK_UE5_Mannequin.SK_UE5_Mannequin",
+    "length": 0.933333337
+  },
+  {
+    "id": "clip-0793fbc70a9eee79",
+    "path": "/Game/Animations/AnimPacks/Exploration/ClimbLedge_Anim_Pack/Char_climb_hang_idle_UE5.Char_climb_hang_idle_UE5",
+    "label": "Char climb hang idle UE5",
+    "group": "Movement and actions",
+    "skeleton": "/Game/Characters/Mannequins/Meshes/SK_UE5_Mannequin.SK_UE5_Mannequin",
+    "length": 4.80000019
+  },
+  {
+    "id": "clip-5141f9ee6df5a00d",
+    "path": "/Game/Animations/AnimPacks/Exploration/ClimbLedge_Anim_Pack/Char_climb_leap_down_to_ledge_reach_loop_UE5.Char_climb_leap_down_to_ledge_reach_loop_UE5",
+    "label": "Char climb leap down to ledge reach loop UE5",
+    "group": "Movement and actions",
+    "skeleton": "/Game/Characters/Mannequins/Meshes/SK_UE5_Mannequin.SK_UE5_Mannequin",
+    "length": 3.0
+  },
+  {
+    "id": "clip-e21fa227718cf431",
+    "path": "/Game/Animations/AnimPacks/Exploration/ClimbLedge_Anim_Pack/Char_climb_leap_left_to_ledge_reach_loop_UE5.Char_climb_leap_left_to_ledge_reach_loop_UE5",
+    "label": "Char climb leap left to ledge reach loop UE5",
+    "group": "Movement and actions",
+    "skeleton": "/Game/Characters/Mannequins/Meshes/SK_UE5_Mannequin.SK_UE5_Mannequin",
+    "length": 3.0
+  },
+  {
+    "id": "clip-a7babe98b66dcbde",
+    "path": "/Game/Animations/AnimPacks/Exploration/ClimbLedge_Anim_Pack/Char_climb_leap_right_to_ledge_reach_loop_UE5.Char_climb_leap_right_to_ledge_reach_loop_UE5",
+    "label": "Char climb leap right to ledge reach loop UE5",
+    "group": "Movement and actions",
+    "skeleton": "/Game/Characters/Mannequins/Meshes/SK_UE5_Mannequin.SK_UE5_Mannequin",
+    "length": 3.0
+  },
+  {
+    "id": "clip-03c3aaf919322925",
+    "path": "/Game/Animations/AnimPacks/Exploration/ClimbLedge_Anim_Pack/Char_climb_leap_up_to_ledge_reach_loop_UE5.Char_climb_leap_up_to_ledge_reach_loop_UE5",
+    "label": "Char climb leap up to ledge reach loop UE5",
+    "group": "Movement and actions",
+    "skeleton": "/Game/Characters/Mannequins/Meshes/SK_UE5_Mannequin.SK_UE5_Mannequin",
+    "length": 2.83333325
+  },
+  {
+    "id": "clip-8481aed8087c0433",
+    "path": "/Game/Animations/AnimPacks/Exploration/NPCs/FemaleAnimationsPack/Anim_Idle_01_UE5_.Anim_Idle_01_UE5_",
+    "label": "Anim Idle 01 UE5 ",
+    "group": "NPC gestures",
+    "skeleton": "/Game/Characters/Mannequins/Meshes/SK_UE5_Mannequin.SK_UE5_Mannequin",
+    "length": 10.0
+  },
+  {
+    "id": "clip-aa382bb41d0fc756",
+    "path": "/Game/Animations/AnimPacks/Exploration/NPCs/FemaleAnimationsPack/Anim_Idle_02_UE5_.Anim_Idle_02_UE5_",
+    "label": "Anim Idle 02 UE5 ",
+    "group": "NPC gestures",
+    "skeleton": "/Game/Characters/Mannequins/Meshes/SK_UE5_Mannequin.SK_UE5_Mannequin",
+    "length": 13.3666668
+  },
+  {
+    "id": "clip-c5ffaebf42aecf36",
+    "path": "/Game/Animations/AnimPacks/GERTAnimationPackVol01/A_Enemy_Zombie_Idle_UE5.A_Enemy_Zombie_Idle_UE5",
+    "label": "A Enemy Zombie Idle UE5",
+    "group": "Movement and actions",
+    "skeleton": "/Game/Characters/Mannequins/Meshes/SK_UE5_Mannequin.SK_UE5_Mannequin",
+    "length": 41.0333328
+  },
+  {
+    "id": "clip-018e387cb14e9dfd",
+    "path": "/Game/Animations/AnimPacks/GenericNPCAnimPack/Anim_Crowd_Cheer_1_UE5.Anim_Crowd_Cheer_1_UE5",
+    "label": "Anim Crowd Cheer 1 UE5",
+    "group": "Movement and actions",
+    "skeleton": "/Game/Characters/Mannequins/Meshes/SK_UE5_Mannequin.SK_UE5_Mannequin",
+    "length": 3.4666667
+  },
+  {
+    "id": "clip-55284b4ea9e91088",
+    "path": "/Game/Animations/AnimPacks/Idles/MC_Idles_Pack/ArmsCrossed/Pack_MCIdlesPack_am_ArmsCrossed_Idle_01_UE5.Pack_MCIdlesPack_am_ArmsCrossed_Idle_01_UE5",
+    "label": "Pack MCIdlesPack am ArmsCrossed Idle 01 UE5",
+    "group": "Idles",
+    "skeleton": "/Game/Characters/Mannequins/Meshes/SK_UE5_Mannequin.SK_UE5_Mannequin",
+    "length": 7.5
+  },
+  {
+    "id": "clip-e0f00941ece6d4b5",
+    "path": "/Game/Animations/AnimPacks/Idles/MC_Idles_Pack/ArmsCrossed/Pack_MCIdlesPack_am_ArmsCrossed_Trans_Stand_Idle_UE5.Pack_MCIdlesPack_am_ArmsCrossed_Trans_Stand_Idle_UE5",
+    "label": "Pack MCIdlesPack am ArmsCrossed Trans Stand Idle UE5",
+    "group": "Idles",
+    "skeleton": "/Game/Characters/Mannequins/Meshes/SK_UE5_Mannequin.SK_UE5_Mannequin",
+    "length": 3.33333325
+  },
+  {
+    "id": "clip-3d439ea64070d1b9",
+    "path": "/Game/Animations/AnimPacks/Idles/MC_Idles_Pack/ArmsCrossed/Pack_MCIdlesPack_am_Stand_Idle_Trans_ArmsCrossed_UE5.Pack_MCIdlesPack_am_Stand_Idle_Trans_ArmsCrossed_UE5",
+    "label": "Pack MCIdlesPack am Stand Idle Trans ArmsCrossed UE5",
+    "group": "Idles",
+    "skeleton": "/Game/Characters/Mannequins/Meshes/SK_UE5_Mannequin.SK_UE5_Mannequin",
+    "length": 4.0
+  },
+  {
+    "id": "clip-69f7dfc917f619d6",
+    "path": "/Game/Animations/AnimPacks/Idles/MC_Idles_Pack/BrushOff/Pack_MCIdlesPack_am_Stand_Idle_BrushOff_06_Arm_UE5.Pack_MCIdlesPack_am_Stand_Idle_BrushOff_06_Arm_UE5",
+    "label": "Pack MCIdlesPack am Stand Idle BrushOff 06 Arm UE5",
+    "group": "Idles",
+    "skeleton": "/Game/Characters/Mannequins/Meshes/SK_UE5_Mannequin.SK_UE5_Mannequin",
+    "length": 3.66666675
+  },
+  {
+    "id": "clip-9a3668b0bc474d33",
+    "path": "/Game/Animations/AnimPacks/Idles/MC_Idles_Pack/BrushOff/Pack_MCIdlesPack_am_Stand_Idle_BrushOff_07_Arm_UE5.Pack_MCIdlesPack_am_Stand_Idle_BrushOff_07_Arm_UE5",
+    "label": "Pack MCIdlesPack am Stand Idle BrushOff 07 Arm UE5",
+    "group": "Idles",
+    "skeleton": "/Game/Characters/Mannequins/Meshes/SK_UE5_Mannequin.SK_UE5_Mannequin",
+    "length": 3.16666675
+  },
+  {
+    "id": "clip-5b8ea217beb6d0c5",
+    "path": "/Game/Animations/AnimPacks/Idles/MC_Idles_Pack/Fidget/Pack_MCIdlesPack_am_Stand_Idle_Fidget_01_ScratchHead_UE5.Pack_MCIdlesPack_am_Stand_Idle_Fidget_01_ScratchHead_UE5",
+    "label": "Pack MCIdlesPack am Stand Idle Fidget 01 ScratchHead UE5",
+    "group": "Idles",
+    "skeleton": "/Game/Characters/Mannequins/Meshes/SK_UE5_Mannequin.SK_UE5_Mannequin",
+    "length": 3.66666675
+  },
+  {
+    "id": "clip-24af5639b9edc20f",
+    "path": "/Game/Animations/AnimPacks/Idles/MC_Idles_Pack/Fidget/Pack_MCIdlesPack_am_Stand_Idle_Fidget_02_RubNeck_UE5.Pack_MCIdlesPack_am_Stand_Idle_Fidget_02_RubNeck_UE5",
+    "label": "Pack MCIdlesPack am Stand Idle Fidget 02 RubNeck UE5",
+    "group": "Idles",
+    "skeleton": "/Game/Characters/Mannequins/Meshes/SK_UE5_Mannequin.SK_UE5_Mannequin",
+    "length": 3.83333325
+  },
+  {
+    "id": "clip-23d3256b174127ec",
+    "path": "/Game/Animations/AnimPacks/Idles/MC_Idles_Pack/Fidget/Pack_MCIdlesPack_am_Stand_Idle_Fidget_03_RubNeck_UE5.Pack_MCIdlesPack_am_Stand_Idle_Fidget_03_RubNeck_UE5",
+    "label": "Pack MCIdlesPack am Stand Idle Fidget 03 RubNeck UE5",
+    "group": "Idles",
+    "skeleton": "/Game/Characters/Mannequins/Meshes/SK_UE5_Mannequin.SK_UE5_Mannequin",
+    "length": 4.5
+  },
+  {
+    "id": "clip-486a02ed68c19107",
+    "path": "/Game/Animations/AnimPacks/Idles/MC_Idles_Pack/Fidget/Pack_MCIdlesPack_am_Stand_Idle_Fidget_06_ScratchFace_UE5.Pack_MCIdlesPack_am_Stand_Idle_Fidget_06_ScratchFace_UE5",
+    "label": "Pack MCIdlesPack am Stand Idle Fidget 06 ScratchFace UE5",
+    "group": "Idles",
+    "skeleton": "/Game/Characters/Mannequins/Meshes/SK_UE5_Mannequin.SK_UE5_Mannequin",
+    "length": 3.0
+  },
+  {
+    "id": "clip-bc154eb2b0a58d2f",
+    "path": "/Game/Animations/AnimPacks/Idles/MC_Idles_Pack/Hot/Pack_MCIdlesPack_am_Stand_Idle_Hot_03_FanLHand_UE5.Pack_MCIdlesPack_am_Stand_Idle_Hot_03_FanLHand_UE5",
+    "label": "Pack MCIdlesPack am Stand Idle Hot 03 FanLHand UE5",
+    "group": "Idles",
+    "skeleton": "/Game/Characters/Mannequins/Meshes/SK_UE5_Mannequin.SK_UE5_Mannequin",
+    "length": 4.5
+  },
+  {
+    "id": "clip-18850918200f2dab",
+    "path": "/Game/Animations/AnimPacks/Idles/MC_Idles_Pack/Hot/Pack_MCIdlesPack_am_Stand_Idle_Hot_06_NeckRHand_UE5.Pack_MCIdlesPack_am_Stand_Idle_Hot_06_NeckRHand_UE5",
+    "label": "Pack MCIdlesPack am Stand Idle Hot 06 NeckRHand UE5",
+    "group": "Idles",
+    "skeleton": "/Game/Characters/Mannequins/Meshes/SK_UE5_Mannequin.SK_UE5_Mannequin",
+    "length": 6.0
+  },
+  {
+    "id": "clip-3fc5980a578823f7",
+    "path": "/Game/Animations/AnimPacks/Idles/MC_Idles_Pack/Hot/Pack_MCIdlesPack_am_Stand_Idle_Hot_09_SunShadeLHand_UE5.Pack_MCIdlesPack_am_Stand_Idle_Hot_09_SunShadeLHand_UE5",
+    "label": "Pack MCIdlesPack am Stand Idle Hot 09 SunShadeLHand UE5",
+    "group": "Idles",
+    "skeleton": "/Game/Characters/Mannequins/Meshes/SK_UE5_Mannequin.SK_UE5_Mannequin",
+    "length": 4.0
+  },
+  {
+    "id": "clip-b7324ac39be09da6",
+    "path": "/Game/Animations/AnimPacks/Idles/MC_Idles_Pack/ListenMusic/Pack_MCIdlesPack_am_Stand_Idle_ListenMusic_Loop_04_UE5.Pack_MCIdlesPack_am_Stand_Idle_ListenMusic_Loop_04_UE5",
+    "label": "Pack MCIdlesPack am Stand Idle ListenMusic Loop 04 UE5",
+    "group": "Idles",
+    "skeleton": "/Game/Characters/Mannequins/Meshes/SK_UE5_Mannequin.SK_UE5_Mannequin",
+    "length": 5.66666651
+  },
+  {
+    "id": "clip-6c43fb66784724c2",
+    "path": "/Game/Animations/AnimPacks/Idles/MC_Idles_Pack/LookAtNails/Pack_MCIdlesPack_am_Stand_Idle_LookAtNails_01_UE5.Pack_MCIdlesPack_am_Stand_Idle_LookAtNails_01_UE5",
+    "label": "Pack MCIdlesPack am Stand Idle LookAtNails 01 UE5",
+    "group": "Idles",
+    "skeleton": "/Game/Characters/Mannequins/Meshes/SK_UE5_Mannequin.SK_UE5_Mannequin",
+    "length": 5.5
+  },
+  {
+    "id": "clip-a11b497d73375f3a",
+    "path": "/Game/Animations/AnimPacks/Idles/MC_Idles_Pack/Shift/Pack_MCIdlesPack_am_Stand_Idle_ShiftL_Loop_02_UE5.Pack_MCIdlesPack_am_Stand_Idle_ShiftL_Loop_02_UE5",
+    "label": "Pack MCIdlesPack am Stand Idle ShiftL Loop 02 UE5",
+    "group": "Idles",
+    "skeleton": "/Game/Characters/Mannequins/Meshes/SK_UE5_Mannequin.SK_UE5_Mannequin",
+    "length": 4.83333349
+  },
+  {
+    "id": "clip-0ab5ae51c60138d9",
+    "path": "/Game/Animations/AnimPacks/Idles/MC_Idles_Pack/Shift/Pack_MCIdlesPack_am_Stand_Idle_ShiftL_Start_UE5.Pack_MCIdlesPack_am_Stand_Idle_ShiftL_Start_UE5",
+    "label": "Pack MCIdlesPack am Stand Idle ShiftL Start UE5",
+    "group": "Idles",
+    "skeleton": "/Game/Characters/Mannequins/Meshes/SK_UE5_Mannequin.SK_UE5_Mannequin",
+    "length": 3.0
+  },
+  {
+    "id": "clip-57d2ad23bb2508c5",
+    "path": "/Game/Animations/AnimPacks/Idles/MC_Idles_Pack/Shift/Pack_MCIdlesPack_am_Stand_Idle_ShiftL_Stop_UE5.Pack_MCIdlesPack_am_Stand_Idle_ShiftL_Stop_UE5",
+    "label": "Pack MCIdlesPack am Stand Idle ShiftL Stop UE5",
+    "group": "Idles",
+    "skeleton": "/Game/Characters/Mannequins/Meshes/SK_UE5_Mannequin.SK_UE5_Mannequin",
+    "length": 2.83333325
+  },
+  {
+    "id": "clip-e497704d38123146",
+    "path": "/Game/Animations/AnimPacks/Idles/MC_Idles_Pack/Shift/Pack_MCIdlesPack_am_Stand_Idle_ShiftR_Loop_02_UE5.Pack_MCIdlesPack_am_Stand_Idle_ShiftR_Loop_02_UE5",
+    "label": "Pack MCIdlesPack am Stand Idle ShiftR Loop 02 UE5",
+    "group": "Idles",
+    "skeleton": "/Game/Characters/Mannequins/Meshes/SK_UE5_Mannequin.SK_UE5_Mannequin",
+    "length": 7.16666651
+  },
+  {
+    "id": "clip-a7b977914f0c47bf",
+    "path": "/Game/Animations/AnimPacks/Idles/MC_Idles_Pack/Shift/Pack_MCIdlesPack_am_Stand_Idle_ShiftR_Start_UE5.Pack_MCIdlesPack_am_Stand_Idle_ShiftR_Start_UE5",
+    "label": "Pack MCIdlesPack am Stand Idle ShiftR Start UE5",
+    "group": "Idles",
+    "skeleton": "/Game/Characters/Mannequins/Meshes/SK_UE5_Mannequin.SK_UE5_Mannequin",
+    "length": 2.66666675
+  },
+  {
+    "id": "clip-4f62825690ca96af",
+    "path": "/Game/Animations/AnimPacks/Idles/MC_Idles_Pack/Shift/Pack_MCIdlesPack_am_Stand_Idle_ShiftR_Stop_UE5.Pack_MCIdlesPack_am_Stand_Idle_ShiftR_Stop_UE5",
+    "label": "Pack MCIdlesPack am Stand Idle ShiftR Stop UE5",
+    "group": "Idles",
+    "skeleton": "/Game/Characters/Mannequins/Meshes/SK_UE5_Mannequin.SK_UE5_Mannequin",
+    "length": 3.0
+  },
+  {
+    "id": "clip-cef46353e3c0b84e",
+    "path": "/Game/Animations/AnimPacks/Idles/MC_Idles_Pack/Stretch/Pack_MCIdlesPack_am_StandWide_Stretch_01_SideBend_UE5_Sciel.Pack_MCIdlesPack_am_StandWide_Stretch_01_SideBend_UE5_Sciel",
+    "label": "Pack MCIdlesPack am StandWide Stretch 01 SideBend UE5 Sciel",
+    "group": "Idles",
+    "skeleton": "/Game/Characters/Mannequins/Meshes/SK_UE5_Mannequin.SK_UE5_Mannequin",
+    "length": 8.9333334
+  },
+  {
+    "id": "clip-605f0477d688cc8b",
+    "path": "/Game/Animations/AnimPacks/Idles/MC_Idles_Pack/Stretch/Pack_MCIdlesPack_am_StandWide_Stretch_02_BackBend_UE5.Pack_MCIdlesPack_am_StandWide_Stretch_02_BackBend_UE5",
+    "label": "Pack MCIdlesPack am StandWide Stretch 02 BackBend UE5",
+    "group": "Idles",
+    "skeleton": "/Game/Characters/Mannequins/Meshes/SK_UE5_Mannequin.SK_UE5_Mannequin",
+    "length": 8.33333302
+  },
+  {
+    "id": "clip-4c0c4c760372fd6a",
+    "path": "/Game/Animations/AnimPacks/Idles/MC_Idles_Pack/Stretch/Pack_MCIdlesPack_am_StandWide_Stretch_03_Quad_UE5.Pack_MCIdlesPack_am_StandWide_Stretch_03_Quad_UE5",
+    "label": "Pack MCIdlesPack am StandWide Stretch 03 Quad UE5",
+    "group": "Idles",
+    "skeleton": "/Game/Characters/Mannequins/Meshes/SK_UE5_Mannequin.SK_UE5_Mannequin",
+    "length": 16.166666
+  },
+  {
+    "id": "clip-085bd0df5128ffdc",
+    "path": "/Game/Animations/AnimPacks/Idles/MC_Idles_Pack/Stretch/Pack_MCIdlesPack_am_StandWide_Stretch_10_WarmUp_UE5.Pack_MCIdlesPack_am_StandWide_Stretch_10_WarmUp_UE5",
+    "label": "Pack MCIdlesPack am StandWide Stretch 10 WarmUp UE5",
+    "group": "Idles",
+    "skeleton": "/Game/Characters/Mannequins/Meshes/SK_UE5_Mannequin.SK_UE5_Mannequin",
+    "length": 5.0
+  },
+  {
+    "id": "clip-b2b20921d70021d2",
+    "path": "/Game/Animations/AnimPacks/Idles/MC_Idles_Pack/Stretch/Pack_MCIdlesPack_am_StandWide_Stretch_11_Shoulders_UE5.Pack_MCIdlesPack_am_StandWide_Stretch_11_Shoulders_UE5",
+    "label": "Pack MCIdlesPack am StandWide Stretch 11 Shoulders UE5",
+    "group": "Idles",
+    "skeleton": "/Game/Characters/Mannequins/Meshes/SK_UE5_Mannequin.SK_UE5_Mannequin",
+    "length": 4.66666651
+  },
+  {
+    "id": "clip-a65193b75b622c27",
+    "path": "/Game/Animations/AnimPacks/Idles/MC_Idles_Pack/Stretch/Pack_MCIdlesPack_am_StandWide_Stretch_12_Shoulders_UE5.Pack_MCIdlesPack_am_StandWide_Stretch_12_Shoulders_UE5",
+    "label": "Pack MCIdlesPack am StandWide Stretch 12 Shoulders UE5",
+    "group": "Idles",
+    "skeleton": "/Game/Characters/Mannequins/Meshes/SK_UE5_Mannequin.SK_UE5_Mannequin",
+    "length": 5.83333349
+  },
+  {
+    "id": "clip-023a6ba72b509f27",
+    "path": "/Game/Animations/AnimPacks/Idles/MC_Idles_Pack/Waiting/Pack_MCIdlesPack_am_Stand_Idle_Waiting_04_LookAround_UE5.Pack_MCIdlesPack_am_Stand_Idle_Waiting_04_LookAround_UE5",
+    "label": "Pack MCIdlesPack am Stand Idle Waiting 04 LookAround UE5",
+    "group": "Idles",
+    "skeleton": "/Game/Characters/Mannequins/Meshes/SK_UE5_Mannequin.SK_UE5_Mannequin",
+    "length": 4.83333349
+  },
+  {
+    "id": "clip-4a19ac07500b422b",
+    "path": "/Game/Animations/AnimPacks/Idles/MC_Idles_Pack/Waiting/Pack_MCIdlesPack_am_Stand_Idle_Waiting_07_LookAround_UE5.Pack_MCIdlesPack_am_Stand_Idle_Waiting_07_LookAround_UE5",
+    "label": "Pack MCIdlesPack am Stand Idle Waiting 07 LookAround UE5",
+    "group": "Idles",
+    "skeleton": "/Game/Characters/Mannequins/Meshes/SK_UE5_Mannequin.SK_UE5_Mannequin",
+    "length": 5.5
+  },
+  {
+    "id": "clip-1a64651d544d983d",
+    "path": "/Game/Animations/AnimPacks/Rapier_AnimSet/Animation/rise3_UE5.rise3_UE5",
+    "label": "rise3 UE5",
+    "group": "Movement and actions",
+    "skeleton": "/Game/Characters/Mannequins/Meshes/SK_UE5_Mannequin.SK_UE5_Mannequin",
+    "length": 1.33333337
+  },
+  {
+    "id": "clip-74a631981e4c3264",
+    "path": "/Game/Animations/Enemies/Default/A_DefaultRun.A_DefaultRun",
+    "label": "A DefaultRun",
+    "group": "Enemies",
+    "skeleton": "/Game/Characters/Mannequins/Meshes/SK_UE5_Mannequin.SK_UE5_Mannequin",
+    "length": 0.800000012
+  },
+  {
+    "id": "clip-77fc0ddac3ca2f98",
+    "path": "/Game/Animations/Enemies/Default/A_DefaultWalk.A_DefaultWalk",
+    "label": "A DefaultWalk",
+    "group": "Enemies",
+    "skeleton": "/Game/Characters/Mannequins/Meshes/SK_UE5_Mannequin.SK_UE5_Mannequin",
+    "length": 1.20000005
+  },
+  {
+    "id": "clip-570117e677667291",
+    "path": "/Game/Animations/Heroes/Generic/IdleFreeAim_LoopingWorld_UE5.IdleFreeAim_LoopingWorld_UE5",
+    "label": "IdleFreeAim LoopingWorld UE5",
+    "group": "Movement and actions",
+    "skeleton": "/Game/Characters/Mannequins/Meshes/SK_UE5_Mannequin.SK_UE5_Mannequin",
+    "length": 3.8285718
+  },
+  {
+    "id": "clip-e83ddeaf8898a3b8",
+    "path": "/Game/Animations/Heroes/Lune/Stances/Mocap/Lune_FreeAimShoot_World_UE5.Lune_FreeAimShoot_World_UE5",
+    "label": "Lune FreeAimShoot World UE5",
+    "group": "Lune",
+    "skeleton": "/Game/Characters/Mannequins/Meshes/SK_UE5_Mannequin.SK_UE5_Mannequin",
+    "length": 0.571397126
+  },
+  {
+    "id": "clip-201dc39ae93c3cff",
+    "path": "/Game/Animations/Idles/Idles_Lune/IdleBreaks/Idles_Lune_Break_HandOnHips_01.Idles_Lune_Break_HandOnHips_01",
+    "label": "Idles Lune Break HandOnHips 01",
+    "group": "Idles",
+    "skeleton": "/Game/Characters/Mannequins/Meshes/SK_UE5_Mannequin.SK_UE5_Mannequin",
+    "length": 10.2333336
+  },
+  {
+    "id": "clip-97a59d36d9d9f15d",
+    "path": "/Game/Animations/Idles/Idles_Lune/IdleBreaks/Idles_Lune_Break_LookAround_02.Idles_Lune_Break_LookAround_02",
+    "label": "Idles Lune Break LookAround 02",
+    "group": "Idles",
+    "skeleton": "/Game/Characters/Mannequins/Meshes/SK_UE5_Mannequin.SK_UE5_Mannequin",
+    "length": 22.2000008
+  },
+  {
+    "id": "clip-87b18dcf60e729ce",
+    "path": "/Game/Animations/Idles/Idles_Lune/Idles_dust_off_Lune_UE5.Idles_dust_off_Lune_UE5",
+    "label": "Idles dust off Lune UE5",
+    "group": "Idles",
+    "skeleton": "/Game/Characters/Mannequins/Meshes/SK_UE5_Mannequin.SK_UE5_Mannequin",
+    "length": 6.30000019
+  },
+  {
+    "id": "clip-2d419aa330bf7364",
+    "path": "/Game/Animations/Idles/Idles_Lune/Idles_stand_Lune_UE5.Idles_stand_Lune_UE5",
+    "label": "Idles stand Lune UE5",
+    "group": "Idles",
+    "skeleton": "/Game/Characters/Mannequins/Meshes/SK_UE5_Mannequin.SK_UE5_Mannequin",
+    "length": 6.30000019
+  },
+  {
+    "id": "clip-5ebaa20dab06082d",
+    "path": "/Game/Animations/Idles/Idles_Lune/Idles_thinking_Lune_UE5_GameMenu.Idles_thinking_Lune_UE5_GameMenu",
+    "label": "Idles thinking Lune UE5 GameMenu",
+    "group": "Idles",
+    "skeleton": "/Game/Characters/Mannequins/Meshes/SK_UE5_Mannequin.SK_UE5_Mannequin",
+    "length": 5.63333321
+  },
+  {
+    "id": "clip-24033df491f9e47b",
+    "path": "/Game/Animations/Idles/Idles_Lune/Idles_thinking_Lune_UE5_TempPictosMenu.Idles_thinking_Lune_UE5_TempPictosMenu",
+    "label": "Idles thinking Lune UE5 TempPictosMenu",
+    "group": "Idles",
+    "skeleton": "/Game/Characters/Mannequins/Meshes/SK_UE5_Mannequin.SK_UE5_Mannequin",
+    "length": 5.63333321
+  },
+  {
+    "id": "clip-6e1c461d0ac0d88e",
+    "path": "/Game/Animations/Idles/Idles_Maelle/Idles_Maelle_Break_HandsOnHips.Idles_Maelle_Break_HandsOnHips",
+    "label": "Idles Maelle Break HandsOnHips",
+    "group": "Idles",
+    "skeleton": "/Game/Characters/Mannequins/Meshes/SK_UE5_Mannequin.SK_UE5_Mannequin",
+    "length": 13.3000002
+  },
+  {
+    "id": "clip-82430888fc3b0aa9",
+    "path": "/Game/Animations/Idles/Idles_Maelle/Idles_Maelle_Break_HandsOnHips_ActeIII.Idles_Maelle_Break_HandsOnHips_ActeIII",
+    "label": "Idles Maelle Break HandsOnHips ActeIII",
+    "group": "Idles",
+    "skeleton": "/Game/Characters/Mannequins/Meshes/SK_UE5_Mannequin.SK_UE5_Mannequin",
+    "length": 13.3000002
+  },
+  {
+    "id": "clip-8f605d49514c0340",
+    "path": "/Game/Animations/Idles/Idles_Maelle/Idles_dust_off_Maelle_UE5.Idles_dust_off_Maelle_UE5",
+    "label": "Idles dust off Maelle UE5",
+    "group": "Idles",
+    "skeleton": "/Game/Characters/Mannequins/Meshes/SK_UE5_Mannequin.SK_UE5_Mannequin",
+    "length": 5.13333321
+  },
+  {
+    "id": "clip-b29a2c52ff1c69bb",
+    "path": "/Game/Animations/Idles/Idles_Maelle/Idles_look_around_Maelle_02_UE5.Idles_look_around_Maelle_02_UE5",
+    "label": "Idles look around Maelle 02 UE5",
+    "group": "Idles",
+    "skeleton": "/Game/Characters/Mannequins/Meshes/SK_UE5_Mannequin.SK_UE5_Mannequin",
+    "length": 13.5333338
+  },
+  {
+    "id": "clip-c8f165873f749ab0",
+    "path": "/Game/Animations/Idles/Idles_Sciel/IdleBreaks/Idles_Sciel_Break_ArmsInFront_01.Idles_Sciel_Break_ArmsInFront_01",
+    "label": "Idles Sciel Break ArmsInFront 01",
+    "group": "Idles",
+    "skeleton": "/Game/Characters/Mannequins/Meshes/SK_UE5_Mannequin.SK_UE5_Mannequin",
+    "length": 11.666667
+  },
+  {
+    "id": "clip-5bc1d1de89e4a9ab",
+    "path": "/Game/Animations/Idles/Idles_Sciel/IdleBreaks/Idles_Sciel_Break_HandsOnHips_01.Idles_Sciel_Break_HandsOnHips_01",
+    "label": "Idles Sciel Break HandsOnHips 01",
+    "group": "Idles",
+    "skeleton": "/Game/Characters/Mannequins/Meshes/SK_UE5_Mannequin.SK_UE5_Mannequin",
+    "length": 8.16666698
+  },
+  {
+    "id": "clip-3497cf4fb3d69ed4",
+    "path": "/Game/Animations/Idles/Idles_Sciel/IdleBreaks/Idles_Sciel_Break_LookBehind_02.Idles_Sciel_Break_LookBehind_02",
+    "label": "Idles Sciel Break LookBehind 02",
+    "group": "Idles",
+    "skeleton": "/Game/Characters/Mannequins/Meshes/SK_UE5_Mannequin.SK_UE5_Mannequin",
+    "length": 7.19999981
+  },
+  {
+    "id": "clip-8343b76a69fe70da",
+    "path": "/Game/Animations/Idles/Idles_Sciel/IdleBreaks/Idles_Sciel_Break_RotateArms_02.Idles_Sciel_Break_RotateArms_02",
+    "label": "Idles Sciel Break RotateArms 02",
+    "group": "Idles",
+    "skeleton": "/Game/Characters/Mannequins/Meshes/SK_UE5_Mannequin.SK_UE5_Mannequin",
+    "length": 7.36666679
+  },
+  {
+    "id": "clip-5e30689cbcd1025a",
+    "path": "/Game/Animations/Idles/Npc_Lumiere_Intro/A_Idle_NPC_Grandis.A_Idle_NPC_Grandis",
+    "label": "A Idle NPC Grandis",
+    "group": "Idles",
+    "skeleton": "/Game/Characters/Mannequins/Meshes/SK_UE5_Mannequin.SK_UE5_Mannequin",
+    "length": 4.16666651
+  },
+  {
+    "id": "clip-3784e62f66b5b022",
+    "path": "/Game/Animations/NPC_Crowd/A_NPC_Back_on_wall_Variation_1.A_NPC_Back_on_wall_Variation_1",
+    "label": "A NPC Back on wall Variation 1",
+    "group": "Movement and actions",
+    "skeleton": "/Game/Characters/Mannequins/Meshes/SK_UE5_Mannequin.SK_UE5_Mannequin",
+    "length": 6.66666651
+  },
+  {
+    "id": "clip-da45260324376efa",
+    "path": "/Game/Animations/WorldInteractions/Rope/Maelle_ClimbingRope_Loop.Maelle_ClimbingRope_Loop",
+    "label": "Maelle ClimbingRope Loop",
+    "group": "Movement and actions",
+    "skeleton": "/Game/Characters/Mannequins/Meshes/SK_UE5_Mannequin.SK_UE5_Mannequin",
+    "length": 0.466666669
+  },
+  {
+    "id": "clip-e2a23b3bcfb18073",
+    "path": "/Game/Characters/Enemies/Forgotten_BattleField/Chalier/Animations/Keyframe/Chalier_Stun.Chalier_Stun",
+    "label": "Chalier Stun",
+    "group": "Enemies",
+    "skeleton": "/Game/Characters/Mannequins/Meshes/SK_UE5_Mannequin.SK_UE5_Mannequin",
+    "length": 2.0
+  },
+  {
+    "id": "clip-006f1a99558ffa02",
+    "path": "/Game/Characters/Enemies/Forgotten_BattleField/Ramasseur/Animations/Keyframe/Ramasseur_Idle.Ramasseur_Idle",
+    "label": "Ramasseur Idle",
+    "group": "Enemies",
+    "skeleton": "/Game/Characters/Mannequins/Meshes/SK_UE5_Mannequin.SK_UE5_Mannequin",
+    "length": 10.0
+  },
+  {
+    "id": "clip-7866a41f59707c88",
+    "path": "/Game/Characters/Enemies/Forgotten_BattleField/Ramasseur/Animations/Keyframe/Ramasseur_Skill.Ramasseur_Skill",
+    "label": "Ramasseur Skill",
+    "group": "Enemies",
+    "skeleton": "/Game/Characters/Mannequins/Meshes/SK_UE5_Mannequin.SK_UE5_Mannequin",
+    "length": 4.16666651
+  },
+  {
+    "id": "clip-287e85e0094e545f",
+    "path": "/Game/Characters/Enemies/Forgotten_BattleField/Ramasseur/Animations/Keyframe/Ramasseur_Stun.Ramasseur_Stun",
+    "label": "Ramasseur Stun",
+    "group": "Enemies",
+    "skeleton": "/Game/Characters/Mannequins/Meshes/SK_UE5_Mannequin.SK_UE5_Mannequin",
+    "length": 2.33333325
+  },
+  {
+    "id": "clip-ddcfc34e3c0a194b",
+    "path": "/Game/Characters/Enemies/Forgotten_BattleField/Troubadour/Animations/Keyframe/Troubadour_Idle_Trumpet.Troubadour_Idle_Trumpet",
+    "label": "Troubadour Idle Trumpet",
+    "group": "Enemies",
+    "skeleton": "/Game/Characters/Mannequins/Meshes/SK_UE5_Mannequin.SK_UE5_Mannequin",
+    "length": 1.66666663
+  },
+  {
+    "id": "clip-e436b6ff4a49edf6",
+    "path": "/Game/Characters/Enemies/Forgotten_BattleField/Troubadour/Animations/Keyframe/Troubadour_stun.Troubadour_stun",
+    "label": "Troubadour stun",
+    "group": "Enemies",
+    "skeleton": "/Game/Characters/Mannequins/Meshes/SK_UE5_Mannequin.SK_UE5_Mannequin",
+    "length": 1.33333337
+  },
+  {
+    "id": "clip-7604dac76b579f9e",
+    "path": "/Game/Characters/Enemies/Goblu_Ennemies/Bourgeon/Anims/Bourgeon_Stun.Bourgeon_Stun",
+    "label": "Bourgeon Stun",
+    "group": "Enemies",
+    "skeleton": "/Game/Characters/Mannequins/Meshes/SK_UE5_Mannequin.SK_UE5_Mannequin",
+    "length": 6.66666651
+  },
+  {
+    "id": "clip-e20553e2e084b41c",
+    "path": "/Game/Characters/Enemies/Goblu_Ennemies/Cruler/Animations/Cruler_Stun.Cruler_Stun",
+    "label": "Cruler Stun",
+    "group": "Enemies",
+    "skeleton": "/Game/Characters/Mannequins/Meshes/SK_UE5_Mannequin.SK_UE5_Mannequin",
+    "length": 2.0
+  },
+  {
+    "id": "clip-5347aba9d82d0edc",
+    "path": "/Game/Characters/Enemies/Hexga/Animations/Hexga_Idle02.Hexga_Idle02",
+    "label": "Hexga Idle02",
+    "group": "Enemies",
+    "skeleton": "/Game/Characters/Mannequins/Meshes/SK_UE5_Mannequin.SK_UE5_Mannequin",
+    "length": 2.36666656
+  },
+  {
+    "id": "clip-4ad4c6cb6db5e2b3",
+    "path": "/Game/Characters/Enemies/ManyFaces/Moissonneuse/Animations/Moissonneuse_stun.Moissonneuse_stun",
+    "label": "Moissonneuse stun",
+    "group": "Enemies",
+    "skeleton": "/Game/Characters/Mannequins/Meshes/SK_UE5_Mannequin.SK_UE5_Mannequin",
+    "length": 1.33333337
+  },
+  {
+    "id": "clip-8b873c809c727c04",
+    "path": "/Game/Characters/Enemies/MonocoMountain/Braseleur/Animations/Braseleur_Stun.Braseleur_Stun",
+    "label": "Braseleur Stun",
+    "group": "Enemies",
+    "skeleton": "/Game/Characters/Mannequins/Meshes/SK_UE5_Mannequin.SK_UE5_Mannequin",
+    "length": 2.66666675
+  },
+  {
+    "id": "clip-8011e6785550e29c",
+    "path": "/Game/Characters/Enemies/MonocoMountain/Stalact/Animations/Stalac_Hit.Stalac_Hit",
+    "label": "Stalac Hit",
+    "group": "Enemies",
+    "skeleton": "/Game/Characters/Mannequins/Meshes/SK_UE5_Mannequin.SK_UE5_Mannequin",
+    "length": 1.13333333
+  },
+  {
+    "id": "clip-2fffbae28a71cb95",
+    "path": "/Game/Characters/Enemies/MonocoMountain/Stalact/Animations/Stalac_Hit_Heavy.Stalac_Hit_Heavy",
+    "label": "Stalac Hit Heavy",
+    "group": "Enemies",
+    "skeleton": "/Game/Characters/Mannequins/Meshes/SK_UE5_Mannequin.SK_UE5_Mannequin",
+    "length": 1.13333333
+  },
+  {
+    "id": "clip-bba71c0a27e2e031",
+    "path": "/Game/Characters/Enemies/MonocoMountain/Stalact/Animations/Stalac_Idle.Stalac_Idle",
+    "label": "Stalac Idle",
+    "group": "Enemies",
+    "skeleton": "/Game/Characters/Mannequins/Meshes/SK_UE5_Mannequin.SK_UE5_Mannequin",
+    "length": 7.19999981
+  },
+  {
+    "id": "clip-21bceb3742e5ff3c",
+    "path": "/Game/Characters/Enemies/MonocoMountain/Stalact/Animations/Stalac_Skill03_Loop.Stalac_Skill03_Loop",
+    "label": "Stalac Skill03 Loop",
+    "group": "Enemies",
+    "skeleton": "/Game/Characters/Mannequins/Meshes/SK_UE5_Mannequin.SK_UE5_Mannequin",
+    "length": 5.0
+  },
+  {
+    "id": "clip-b16ff556311ccace",
+    "path": "/Game/Characters/Enemies/MonocoMountain/Stalact/Animations/Stalac_Stun_Loop.Stalac_Stun_Loop",
+    "label": "Stalac Stun Loop",
+    "group": "Enemies",
+    "skeleton": "/Game/Characters/Mannequins/Meshes/SK_UE5_Mannequin.SK_UE5_Mannequin",
+    "length": 1.66666663
+  },
+  {
+    "id": "clip-d268eecffbe8a9c9",
+    "path": "/Game/Characters/Enemies/MonocoMountain/Swordman/Anims/Keyframe/Pelerin_Idle_2.Pelerin_Idle_2",
+    "label": "Pelerin Idle 2",
+    "group": "Enemies",
+    "skeleton": "/Game/Characters/Mannequins/Meshes/SK_UE5_Mannequin.SK_UE5_Mannequin",
+    "length": 2.36666656
+  },
+  {
+    "id": "clip-73c4bad40e66567f",
+    "path": "/Game/Characters/Enemies/MonocoMountain/Swordman/Anims/Keyframe/Pelerin_stun.Pelerin_stun",
+    "label": "Pelerin stun",
+    "group": "Enemies",
+    "skeleton": "/Game/Characters/Mannequins/Meshes/SK_UE5_Mannequin.SK_UE5_Mannequin",
+    "length": 1.66666663
+  },
+  {
+    "id": "clip-878e92318d8d2894",
+    "path": "/Game/Characters/Enemies/Reacher/Orphelin/Animations/MM_Idle_Orphelin.MM_Idle_Orphelin",
+    "label": "MM Idle Orphelin",
+    "group": "Enemies",
+    "skeleton": "/Game/Characters/Mannequins/Meshes/SK_UE5_Mannequin.SK_UE5_Mannequin",
+    "length": 7.5666666
+  },
+  {
+    "id": "clip-fb324f9d2426ed84",
+    "path": "/Game/Characters/Enemies/Reacher/Orphelin/Animations/Orphelin_Idle.Orphelin_Idle",
+    "label": "Orphelin Idle",
+    "group": "Enemies",
+    "skeleton": "/Game/Characters/Mannequins/Meshes/SK_UE5_Mannequin.SK_UE5_Mannequin",
+    "length": 2.0
+  },
+  {
+    "id": "clip-5163e1664c949cb0",
+    "path": "/Game/Characters/Enemies/Reacher/Orphelin/Animations/Orphelin_Stun.Orphelin_Stun",
+    "label": "Orphelin Stun",
+    "group": "Enemies",
+    "skeleton": "/Game/Characters/Mannequins/Meshes/SK_UE5_Mannequin.SK_UE5_Mannequin",
+    "length": 5.5
+  },
+  {
+    "id": "clip-07326209a1380211",
+    "path": "/Game/Characters/Enemies/Sea_Cliff/Cultist_Heavy/Animations/CultistHeavy_Idle.CultistHeavy_Idle",
+    "label": "CultistHeavy Idle",
+    "group": "Enemies",
+    "skeleton": "/Game/Characters/Mannequins/Meshes/SK_UE5_Mannequin.SK_UE5_Mannequin",
+    "length": 2.33333325
+  },
+  {
+    "id": "clip-cbc8d5aec733f82b",
+    "path": "/Game/Characters/Enemies/SpringMeadows/Lancelier/Animations/KeyFrame/Lancelier_Hit_Light.Lancelier_Hit_Light",
+    "label": "Lancelier Hit Light",
+    "group": "Enemies",
+    "skeleton": "/Game/Characters/Mannequins/Meshes/SK_UE5_Mannequin.SK_UE5_Mannequin",
+    "length": 0.899999976
+  },
+  {
+    "id": "clip-3243efe510f271de",
+    "path": "/Game/Characters/Enemies/YellowForest/Jar/Animations/Jar_Idle_Stun.Jar_Idle_Stun",
+    "label": "Jar Idle Stun",
+    "group": "Enemies",
+    "skeleton": "/Game/Characters/Mannequins/Meshes/SK_UE5_Mannequin.SK_UE5_Mannequin",
+    "length": 2.4333334
+  },
+  {
+    "id": "clip-d50a6952505526d9",
+    "path": "/Game/Characters/Heros/Lune/Animations/BattleTurn/Lune_Idle_Base.Lune_Idle_Base",
+    "label": "Lune Idle Base",
+    "group": "Lune",
+    "skeleton": "/Game/Characters/Mannequins/Meshes/SK_UE5_Mannequin.SK_UE5_Mannequin",
+    "length": 7.33333349
+  },
+  {
+    "id": "clip-f9fc76a9edf2d2eb",
+    "path": "/Game/Characters/Heros/Lune/Animations/BattleTurn/Lune_Idle_Base_GameMenu.Lune_Idle_Base_GameMenu",
+    "label": "Lune Idle Base GameMenu",
+    "group": "Lune",
+    "skeleton": "/Game/Characters/Mannequins/Meshes/SK_UE5_Mannequin.SK_UE5_Mannequin",
+    "length": 7.33333349
+  },
+  {
+    "id": "clip-f559f6dfabc1f29f",
+    "path": "/Game/Characters/Heros/Lune/Animations/BattleTurn/Lune_Idle_Base_to_Ultimate_Transition.Lune_Idle_Base_to_Ultimate_Transition",
+    "label": "Lune Idle Base to Ultimate Transition",
+    "group": "Lune",
+    "skeleton": "/Game/Characters/Mannequins/Meshes/SK_UE5_Mannequin.SK_UE5_Mannequin",
+    "length": 1.16666663
+  },
+  {
+    "id": "clip-eb86fef59ef2d5e5",
+    "path": "/Game/Characters/Heros/Lune/Animations/BattleTurn/Lune_Idle_Skill.Lune_Idle_Skill",
+    "label": "Lune Idle Skill",
+    "group": "Lune",
+    "skeleton": "/Game/Characters/Mannequins/Meshes/SK_UE5_Mannequin.SK_UE5_Mannequin",
+    "length": 5.33333349
+  },
+  {
+    "id": "clip-fc1dcf96e836165b",
+    "path": "/Game/Characters/Heros/Lune/Animations/BattleTurn/Lune_Weapon_Menu_Idle.Lune_Weapon_Menu_Idle",
+    "label": "Lune Weapon Menu Idle",
+    "group": "Lune",
+    "skeleton": "/Game/Characters/Mannequins/Meshes/SK_UE5_Mannequin.SK_UE5_Mannequin",
+    "length": 3.63333344
+  },
+  {
+    "id": "clip-b0cae10c1674814f",
+    "path": "/Game/Characters/Heros/Monoco/Animations/KeyFrame/BattleTurn/Monoco_Idle_Base.Monoco_Idle_Base",
+    "label": "Monoco Idle Base",
+    "group": "Monoco",
+    "skeleton": "/Game/Characters/Mannequins/Meshes/SK_UE5_Mannequin.SK_UE5_Mannequin",
+    "length": 2.33333325
+  },
+  {
+    "id": "clip-9751997d13a4f165",
+    "path": "/Game/Characters/Heros/Monoco/Animations/KeyFrame/BattleTurn/Monoco_TurnStart.Monoco_TurnStart",
+    "label": "Monoco TurnStart",
+    "group": "Monoco",
+    "skeleton": "/Game/Characters/Mannequins/Meshes/SK_UE5_Mannequin.SK_UE5_Mannequin",
+    "length": 1.0
+  },
+  {
+    "id": "clip-787bfdaf45d656ad",
+    "path": "/Game/Characters/Heros/Noah/Animations/Locomotion/Noah_Idle_World.Noah_Idle_World",
+    "label": "Noah Idle World",
+    "group": "Gustave",
+    "skeleton": "/Game/Characters/Mannequins/Meshes/SK_UE5_Mannequin.SK_UE5_Mannequin",
+    "length": 3.33333325
+  },
+  {
+    "id": "clip-7df335b32ceec716",
+    "path": "/Game/Characters/Heros/Noah/PhysicsSetup/MM_Idle_CoatLeft.MM_Idle_CoatLeft",
+    "label": "MM Idle CoatLeft",
+    "group": "Gustave",
+    "skeleton": "/Game/Characters/Mannequins/Meshes/SK_UE5_Mannequin.SK_UE5_Mannequin",
+    "length": 7.5666666
+  },
+  {
+    "id": "clip-c564142c64528d53",
+    "path": "/Game/Characters/Heros/Noah/PhysicsSetup/MM_Idle_CoatRight.MM_Idle_CoatRight",
+    "label": "MM Idle CoatRight",
+    "group": "Gustave",
+    "skeleton": "/Game/Characters/Mannequins/Meshes/SK_UE5_Mannequin.SK_UE5_Mannequin",
+    "length": 7.5666666
+  },
+  {
+    "id": "clip-64eb5aadab18a16b",
+    "path": "/Game/Characters/Heros/Noah/PhysicsSetup/MM_Idle_CoatUp.MM_Idle_CoatUp",
+    "label": "MM Idle CoatUp",
+    "group": "Gustave",
+    "skeleton": "/Game/Characters/Mannequins/Meshes/SK_UE5_Mannequin.SK_UE5_Mannequin",
+    "length": 7.5666666
+  },
+  {
+    "id": "clip-2bf90291f0bcb818",
+    "path": "/Game/Characters/Heros/Sciel/Animation/Turn/Keyframe/Sciel_Idle_Skill.Sciel_Idle_Skill",
+    "label": "Sciel Idle Skill",
+    "group": "Sciel",
+    "skeleton": "/Game/Characters/Mannequins/Meshes/SK_UE5_Mannequin.SK_UE5_Mannequin",
+    "length": 3.33333325
+  },
+  {
+    "id": "clip-377a142b925aefd4",
+    "path": "/Game/Characters/Heros/Verso/Animations/Battle/BattleTurn/Verso_Base_to_Item_Transition.Verso_Base_to_Item_Transition",
+    "label": "Verso Base to Item Transition",
+    "group": "Verso",
+    "skeleton": "/Game/Characters/Mannequins/Meshes/SK_UE5_Mannequin.SK_UE5_Mannequin",
+    "length": 0.899999976
+  },
+  {
+    "id": "clip-5015a5622315ed13",
+    "path": "/Game/Characters/Heros/Verso/Animations/Battle/BattleTurn/Verso_Idle_Item.Verso_Idle_Item",
+    "label": "Verso Idle Item",
+    "group": "Verso",
+    "skeleton": "/Game/Characters/Mannequins/Meshes/SK_UE5_Mannequin.SK_UE5_Mannequin",
+    "length": 3.33333325
+  },
+  {
+    "id": "clip-62e37126fc1b4eb4",
+    "path": "/Game/Characters/Heros/Verso/Animations/Battle/BattleTurn/Verso_Idle_Item_WeaponMenu.Verso_Idle_Item_WeaponMenu",
+    "label": "Verso Idle Item WeaponMenu",
+    "group": "Verso",
+    "skeleton": "/Game/Characters/Mannequins/Meshes/SK_UE5_Mannequin.SK_UE5_Mannequin",
+    "length": 3.33333325
+  },
+  {
+    "id": "clip-2a92ff91f5f9b900",
+    "path": "/Game/Characters/Heros/Verso/Animations/Battle/BattleTurn/Verso_Stun.Verso_Stun",
+    "label": "Verso Stun",
+    "group": "Verso",
+    "skeleton": "/Game/Characters/Mannequins/Meshes/SK_UE5_Mannequin.SK_UE5_Mannequin",
+    "length": 5.33333349
+  },
+  {
+    "id": "clip-3b5ff7191c903bca",
+    "path": "/Game/Characters/Heros/Verso/Animations/Battle/BattleTurn/Verso_Stun_to_Waiting_Transition.Verso_Stun_to_Waiting_Transition",
+    "label": "Verso Stun to Waiting Transition",
+    "group": "Verso",
+    "skeleton": "/Game/Characters/Mannequins/Meshes/SK_UE5_Mannequin.SK_UE5_Mannequin",
+    "length": 2.0666666
+  },
+  {
+    "id": "clip-538de542005d21ce",
+    "path": "/Game/Characters/Heros/Verso/Animations/Battle/BattleTurn/Verso_Waiting_to_Stun_Transition.Verso_Waiting_to_Stun_Transition",
+    "label": "Verso Waiting to Stun Transition",
+    "group": "Verso",
+    "skeleton": "/Game/Characters/Mannequins/Meshes/SK_UE5_Mannequin.SK_UE5_Mannequin",
+    "length": 1.33333337
+  },
+  {
+    "id": "clip-eca18dd09fa34788",
+    "path": "/Game/Characters/Mannequins/Animations/Manny/MM_Idle.MM_Idle",
+    "label": "MM Idle",
+    "group": "Movement and actions",
+    "skeleton": "/Game/Characters/Mannequins/Meshes/SK_UE5_Mannequin.SK_UE5_Mannequin",
+    "length": 7.5666666
+  },
+  {
+    "id": "clip-ab63fe98f203f522",
+    "path": "/Game/Characters/NPCs/Animations/Animation_Baby_Gestral_Idle_World.Animation_Baby_Gestral_Idle_World",
+    "label": "Animation Baby Gestral Idle World",
+    "group": "NPC gestures",
+    "skeleton": "/Game/Characters/Mannequins/Meshes/SK_UE5_Mannequin.SK_UE5_Mannequin",
+    "length": 3.33333325
+  },
+  {
+    "id": "clip-4facb903c0310956",
+    "path": "/Game/Characters/NPCs/Animations/Animation_Buff_Gestral_Idle_World.Animation_Buff_Gestral_Idle_World",
+    "label": "Animation Buff Gestral Idle World",
+    "group": "NPC gestures",
+    "skeleton": "/Game/Characters/Mannequins/Meshes/SK_UE5_Mannequin.SK_UE5_Mannequin",
+    "length": 3.33333325
+  },
+  {
+    "id": "clip-865c3a436b1c6b64",
+    "path": "/Game/Characters/NPCs/Animations/Animation_Chad_Gestral_Idle_World.Animation_Chad_Gestral_Idle_World",
+    "label": "Animation Chad Gestral Idle World",
+    "group": "NPC gestures",
+    "skeleton": "/Game/Characters/Mannequins/Meshes/SK_UE5_Mannequin.SK_UE5_Mannequin",
+    "length": 3.33333325
+  },
+  {
+    "id": "clip-b221656873c25fca",
+    "path": "/Game/Characters/NPCs/Animations/Animation_Sumo_Gestral_Idle_World.Animation_Sumo_Gestral_Idle_World",
+    "label": "Animation Sumo Gestral Idle World",
+    "group": "NPC gestures",
+    "skeleton": "/Game/Characters/Mannequins/Meshes/SK_UE5_Mannequin.SK_UE5_Mannequin",
+    "length": 3.33333325
+  },
+  {
+    "id": "clip-de104364e146b84f",
+    "path": "/Game/Characters/NPCs/Esquie/animation/Locomotion/Esquie_FlytoIdle_Loop.Esquie_FlytoIdle_Loop",
+    "label": "Esquie FlytoIdle Loop",
+    "group": "NPC gestures",
+    "skeleton": "/Game/Characters/Mannequins/Meshes/SK_UE5_Mannequin.SK_UE5_Mannequin",
+    "length": 0.733333349
+  },
+  {
+    "id": "clip-b0a6caf01743c6bd",
+    "path": "/Game/Characters/NPCs/Esquie/animation/Locomotion/Esquie_Idle.Esquie_Idle",
+    "label": "Esquie Idle",
+    "group": "NPC gestures",
+    "skeleton": "/Game/Characters/Mannequins/Meshes/SK_UE5_Mannequin.SK_UE5_Mannequin",
+    "length": 8.33333302
+  },
+  {
+    "id": "clip-527cc6f025054e95",
+    "path": "/Game/Characters/NPCs/Esquie/animation/Locomotion/Esquie_Idle_Car.Esquie_Idle_Car",
+    "label": "Esquie Idle Car",
+    "group": "NPC gestures",
+    "skeleton": "/Game/Characters/Mannequins/Meshes/SK_UE5_Mannequin.SK_UE5_Mannequin",
+    "length": 4.0
+  },
+  {
+    "id": "clip-1c157d0fc5f7b586",
+    "path": "/Game/Characters/NPCs/Esquie/animation/Locomotion/Esquie_Idle_Fly.Esquie_Idle_Fly",
+    "label": "Esquie Idle Fly",
+    "group": "NPC gestures",
+    "skeleton": "/Game/Characters/Mannequins/Meshes/SK_UE5_Mannequin.SK_UE5_Mannequin",
+    "length": 3.0
+  },
+  {
+    "id": "clip-e1fbe9dde78e4754",
+    "path": "/Game/Characters/NPCs/Esquie/animation/Locomotion/Esquie_MovingLeft_Fly.Esquie_MovingLeft_Fly",
+    "label": "Esquie MovingLeft Fly",
+    "group": "NPC gestures",
+    "skeleton": "/Game/Characters/Mannequins/Meshes/SK_UE5_Mannequin.SK_UE5_Mannequin",
+    "length": 3.0333333
+  },
+  {
+    "id": "clip-1fe9f6279e5c325e",
+    "path": "/Game/Characters/NPCs/Esquie/animation/Locomotion/Esquie_MovingRight_Fly.Esquie_MovingRight_Fly",
+    "label": "Esquie MovingRight Fly",
+    "group": "NPC gestures",
+    "skeleton": "/Game/Characters/Mannequins/Meshes/SK_UE5_Mannequin.SK_UE5_Mannequin",
+    "length": 3.0333333
+  },
+  {
+    "id": "clip-c6779a1172f5d419",
+    "path": "/Game/Characters/NPCs/Esquie/animation/Locomotion/Esquie_Movingdown_Fly.Esquie_Movingdown_Fly",
+    "label": "Esquie Movingdown Fly",
+    "group": "NPC gestures",
+    "skeleton": "/Game/Characters/Mannequins/Meshes/SK_UE5_Mannequin.SK_UE5_Mannequin",
+    "length": 3.0333333
+  },
+  {
+    "id": "clip-675eaab244e9922a",
+    "path": "/Game/Characters/NPCs/Esquie/animation/Locomotion/Esquie_Movingforward_Fly.Esquie_Movingforward_Fly",
+    "label": "Esquie Movingforward Fly",
+    "group": "NPC gestures",
+    "skeleton": "/Game/Characters/Mannequins/Meshes/SK_UE5_Mannequin.SK_UE5_Mannequin",
+    "length": 3.0333333
+  },
+  {
+    "id": "clip-3664cfd732e16b51",
+    "path": "/Game/Characters/NPCs/Esquie/animation/Locomotion/Esquie_Movingup_Fly.Esquie_Movingup_Fly",
+    "label": "Esquie Movingup Fly",
+    "group": "NPC gestures",
+    "skeleton": "/Game/Characters/Mannequins/Meshes/SK_UE5_Mannequin.SK_UE5_Mannequin",
+    "length": 3.0333333
+  },
+  {
+    "id": "clip-8d9fddc1dc675b0c",
+    "path": "/Game/Characters/NPCs/Esquie/animation/Locomotion/Esquie_TurningLeft_Fly.Esquie_TurningLeft_Fly",
+    "label": "Esquie TurningLeft Fly",
+    "group": "NPC gestures",
+    "skeleton": "/Game/Characters/Mannequins/Meshes/SK_UE5_Mannequin.SK_UE5_Mannequin",
+    "length": 1.33333337
+  },
+  {
+    "id": "clip-9bb53c7a55fa9777",
+    "path": "/Game/Characters/NPCs/Esquie/animation/Locomotion/Esquie_Turningright_Fly.Esquie_Turningright_Fly",
+    "label": "Esquie Turningright Fly",
+    "group": "NPC gestures",
+    "skeleton": "/Game/Characters/Mannequins/Meshes/SK_UE5_Mannequin.SK_UE5_Mannequin",
+    "length": 1.33333337
+  },
+  {
+    "id": "clip-0fc28d39ed2102dc",
+    "path": "/Game/Characters/NPCs/Esquie/animation/Locomotion/Esquie_Unmount.Esquie_Unmount",
+    "label": "Esquie Unmount",
+    "group": "NPC gestures",
+    "skeleton": "/Game/Characters/Mannequins/Meshes/SK_UE5_Mannequin.SK_UE5_Mannequin",
+    "length": 1.9666667
+  },
+  {
+    "id": "clip-efdfc237d55d10af",
+    "path": "/Game/Characters/NPCs/Esquie/animation/Locomotion/IdleBreak/Esquie_Car_R_Idle01_esquie_Anim.Esquie_Car_R_Idle01_esquie_Anim",
+    "label": "Esquie Car R Idle01 esquie Anim",
+    "group": "NPC gestures",
+    "skeleton": "/Game/Characters/Mannequins/Meshes/SK_UE5_Mannequin.SK_UE5_Mannequin",
+    "length": 4.19999981
+  },
+  {
+    "id": "clip-29ef138b91ca39b0",
+    "path": "/Game/Characters/NPCs/Esquie/animation/Locomotion/IdleBreak/Esquie_Car_R_Idle02_esquie_Anim.Esquie_Car_R_Idle02_esquie_Anim",
+    "label": "Esquie Car R Idle02 esquie Anim",
+    "group": "NPC gestures",
+    "skeleton": "/Game/Characters/Mannequins/Meshes/SK_UE5_Mannequin.SK_UE5_Mannequin",
+    "length": 2.70000005
+  },
+  {
+    "id": "clip-e1fc28ef8972fbd0",
+    "path": "/Game/Characters/NPCs/Esquie/animation/Locomotion/IdleBreak/Esquie_Car_R_Idle03_esquie_Anim.Esquie_Car_R_Idle03_esquie_Anim",
+    "label": "Esquie Car R Idle03 esquie Anim",
+    "group": "NPC gestures",
+    "skeleton": "/Game/Characters/Mannequins/Meshes/SK_UE5_Mannequin.SK_UE5_Mannequin",
+    "length": 3.9333334
+  },
+  {
+    "id": "clip-1e549db1b3932be2",
+    "path": "/Game/Characters/NPCs/Esquie/animation/Locomotion/IdleBreak/Esquie_Car_R_Idle04_esquie_Anim.Esquie_Car_R_Idle04_esquie_Anim",
+    "label": "Esquie Car R Idle04 esquie Anim",
+    "group": "NPC gestures",
+    "skeleton": "/Game/Characters/Mannequins/Meshes/SK_UE5_Mannequin.SK_UE5_Mannequin",
+    "length": 5.4333334
+  },
+  {
+    "id": "clip-482fa12fa5c907d8",
+    "path": "/Game/Characters/NPCs/Esquie/animation/Locomotion/IdleBreak/Esquie_Fly_R_Idle01_esquie_Anim.Esquie_Fly_R_Idle01_esquie_Anim",
+    "label": "Esquie Fly R Idle01 esquie Anim",
+    "group": "NPC gestures",
+    "skeleton": "/Game/Characters/Mannequins/Meshes/SK_UE5_Mannequin.SK_UE5_Mannequin",
+    "length": 4.19999981
+  },
+  {
+    "id": "clip-3f255e703de07cad",
+    "path": "/Game/Characters/NPCs/Esquie/animation/Locomotion/IdleBreak/Esquie_Fly_R_Idle02_esquie_Anim.Esquie_Fly_R_Idle02_esquie_Anim",
+    "label": "Esquie Fly R Idle02 esquie Anim",
+    "group": "NPC gestures",
+    "skeleton": "/Game/Characters/Mannequins/Meshes/SK_UE5_Mannequin.SK_UE5_Mannequin",
+    "length": 3.33333325
+  },
+  {
+    "id": "clip-3b261a31ef6c4646",
+    "path": "/Game/Characters/NPCs/Esquie/animation/Locomotion/IdleBreak/Esquie_Fly_R_Idle03_esquie_Anim.Esquie_Fly_R_Idle03_esquie_Anim",
+    "label": "Esquie Fly R Idle03 esquie Anim",
+    "group": "NPC gestures",
+    "skeleton": "/Game/Characters/Mannequins/Meshes/SK_UE5_Mannequin.SK_UE5_Mannequin",
+    "length": 4.0
+  },
+  {
+    "id": "clip-7629cf22e3628f78",
+    "path": "/Game/Characters/NPCs/Esquie/animation/Locomotion/IdleBreak/Esquie_Fly_R_Idle04_esquie_Anim.Esquie_Fly_R_Idle04_esquie_Anim",
+    "label": "Esquie Fly R Idle04 esquie Anim",
+    "group": "NPC gestures",
+    "skeleton": "/Game/Characters/Mannequins/Meshes/SK_UE5_Mannequin.SK_UE5_Mannequin",
+    "length": 6.36666679
+  },
+  {
+    "id": "clip-f5ec59b65f4f9b42",
+    "path": "/Game/Characters/NPCs/Esquie/animation/Locomotion/IdleBreak/Esquie_Normal_R_Idle01_esquie_Anim.Esquie_Normal_R_Idle01_esquie_Anim",
+    "label": "Esquie Normal R Idle01 esquie Anim",
+    "group": "NPC gestures",
+    "skeleton": "/Game/Characters/Mannequins/Meshes/SK_UE5_Mannequin.SK_UE5_Mannequin",
+    "length": 7.5333333
+  },
+  {
+    "id": "clip-2f48ed86676187be",
+    "path": "/Game/Characters/NPCs/Esquie/animation/Locomotion/IdleBreak/Esquie_Normal_R_Idle02_esquie_Anim.Esquie_Normal_R_Idle02_esquie_Anim",
+    "label": "Esquie Normal R Idle02 esquie Anim",
+    "group": "NPC gestures",
+    "skeleton": "/Game/Characters/Mannequins/Meshes/SK_UE5_Mannequin.SK_UE5_Mannequin",
+    "length": 6.9333334
+  },
+  {
+    "id": "clip-9575138da5409b05",
+    "path": "/Game/Characters/NPCs/Esquie/animation/Locomotion/IdleBreak/Esquie_Normal_R_Idle03_esquie_Anim.Esquie_Normal_R_Idle03_esquie_Anim",
+    "label": "Esquie Normal R Idle03 esquie Anim",
+    "group": "NPC gestures",
+    "skeleton": "/Game/Characters/Mannequins/Meshes/SK_UE5_Mannequin.SK_UE5_Mannequin",
+    "length": 2.5666666
+  },
+  {
+    "id": "clip-fa0b256024bd81b4",
+    "path": "/Game/Characters/NPCs/Esquie/animation/Locomotion/IdleBreak/Esquie_Normal_R_Idle04_esquie_Anim.Esquie_Normal_R_Idle04_esquie_Anim",
+    "label": "Esquie Normal R Idle04 esquie Anim",
+    "group": "NPC gestures",
+    "skeleton": "/Game/Characters/Mannequins/Meshes/SK_UE5_Mannequin.SK_UE5_Mannequin",
+    "length": 5.73333311
+  },
+  {
+    "id": "clip-de5c35260982c448",
+    "path": "/Game/Characters/Enemies/Axons/Many_faces/Faces/Animations/JoyIntro_MaskJoy_Idle.JoyIntro_MaskJoy_Idle",
+    "label": "JoyIntro MaskJoy Idle",
+    "group": "Masks",
+    "skeleton": "/Game/Animations/EmptySkeleton.EmptySkeleton",
+    "length": 10.1000004
+  },
+  {
+    "id": "clip-2afa157625da8570",
+    "path": "/Game/Characters/Enemies/Axons/Many_faces/Faces/Animations/JoyOutro_mask_Joy_Idle.JoyOutro_mask_Joy_Idle",
+    "label": "JoyOutro mask Joy Idle",
+    "group": "Masks",
+    "skeleton": "/Game/Animations/EmptySkeleton.EmptySkeleton",
+    "length": 15.2333336
+  },
+  {
+    "id": "clip-14636d1f5742c3c2",
+    "path": "/Game/Characters/Enemies/Axons/Many_faces/Faces/Animations/Mask_Anger_Idle_02.Mask_Anger_Idle_02",
+    "label": "Mask Anger Idle 02",
+    "group": "Masks",
+    "skeleton": "/Game/Animations/EmptySkeleton.EmptySkeleton",
+    "length": 1.66666663
+  },
+  {
+    "id": "clip-b19e00ba4f07557e",
+    "path": "/Game/Characters/Enemies/Axons/Many_faces/Faces/Animations/Mask_Base_Empty.Mask_Base_Empty",
+    "label": "Mask Base Empty",
+    "group": "Masks",
+    "skeleton": "/Game/Animations/EmptySkeleton.EmptySkeleton",
+    "length": 14.9666662
+  },
+  {
+    "id": "clip-38a16a74f1bad428",
+    "path": "/Game/Characters/Enemies/Axons/Many_faces/Faces/Animations/Mask_Hit_2.Mask_Hit_2",
+    "label": "Mask Hit 2",
+    "group": "Masks",
+    "skeleton": "/Game/Animations/EmptySkeleton.EmptySkeleton",
+    "length": 0.433333337
+  },
+  {
+    "id": "clip-adc413e4d0936455",
+    "path": "/Game/Characters/Enemies/Axons/Many_faces/Faces/Animations/Mask_Joy_Attack1.Mask_Joy_Attack1",
+    "label": "Mask Joy Attack1",
+    "group": "Masks",
+    "skeleton": "/Game/Animations/EmptySkeleton.EmptySkeleton",
+    "length": 14.9666662
+  },
+  {
+    "id": "clip-a6e472f7b131d1ce",
+    "path": "/Game/Characters/Enemies/Axons/Many_faces/Faces/Animations/Mask_Joy_Idle.Mask_Joy_Idle",
+    "label": "Mask Joy Idle",
+    "group": "Masks",
+    "skeleton": "/Game/Animations/EmptySkeleton.EmptySkeleton",
+    "length": 14.9666662
+  },
+  {
+    "id": "clip-9f3f82813f3f9690",
+    "path": "/Game/Characters/Enemies/Axons/Many_faces/Faces/Animations/Mask_Joy_Scream.Mask_Joy_Scream",
+    "label": "Mask Joy Scream",
+    "group": "Masks",
+    "skeleton": "/Game/Animations/EmptySkeleton.EmptySkeleton",
+    "length": 14.9666662
+  },
+  {
+    "id": "clip-806a57c4eb6bb84f",
+    "path": "/Game/Characters/Enemies/ManyFaces/Masks/Anims/Sequences/Animation_Mask/Anger_Sequence_01.Anger_Sequence_01",
+    "label": "Anger Sequence 01",
+    "group": "Masks",
+    "skeleton": "/Game/Animations/EmptySkeleton.EmptySkeleton",
+    "length": 4.7833333
+  },
+  {
+    "id": "clip-a7747e502f3836b0",
+    "path": "/Game/Characters/Enemies/ManyFaces/Masks/Anims/Sequences/Animation_Mask/Joy_Sequence_01.Joy_Sequence_01",
+    "label": "Joy Sequence 01",
+    "group": "Masks",
+    "skeleton": "/Game/Animations/EmptySkeleton.EmptySkeleton",
+    "length": 6.61666679
+  }
+]

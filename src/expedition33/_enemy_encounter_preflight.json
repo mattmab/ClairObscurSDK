@@ -1,0 +1,1386 @@
+{
+  "schema": 1,
+  "inputs": [
+    {
+      "path": "S:\\SteamLibrary\\steamapps\\common\\Expedition 33\\SDK-capability-review\\full-native-candidate\\python\\expedition33\\_enemy_catalog.json",
+      "sha256": "17d32bb9752a026353f7892a722ee1614aeb42f183a4de9d7fa5bf33b44c2feb"
+    },
+    {
+      "path": "S:\\SteamLibrary\\steamapps\\common\\Expedition 33\\SDK-capability-review\\sapling-live-encounter-table-check.json",
+      "sha256": "b7fc7c2de1f80e006fd34cb15395f0133a74e1749eb32a7c502650ed92c62655"
+    },
+    {
+      "path": "S:\\SteamLibrary\\steamapps\\common\\Expedition 33\\SDK\\actor-discovery\\enemy-definition-class-references.json",
+      "sha256": "fee525f9427556ed93d3345fd3daaaa95183207da812bae5187045efbc560c34"
+    },
+    {
+      "path": "S:\\SteamLibrary\\steamapps\\common\\Expedition 33\\SDK-capability-review\\additional-encounter-table-evidence.json",
+      "sha256": "1ccf0ea7568b58b3ca68afbc2fdb2ce6d6276e344a1f5b40f8763b7ab538a7e6"
+    }
+  ],
+  "recipes": {
+    "e10dbb2c12a0d139": {
+      "class_path": "/Game/Characters/Enemies/AncientSanctuary/PotatoBagBoss/BP_EnemyWorld_AS_Potatobag_Boss.BP_EnemyWorld_AS_Potatobag_Boss_C",
+      "default_handles": [
+        "AS_PotatoBag_Boss"
+      ],
+      "status": "structurally_resolved"
+    },
+    "1507f343c4b4d302": {
+      "class_path": "/Game/Characters/Enemies/AncientSanctuary/PotatoBagBoss/BP_EnemyWorld_AS_Potatobag_Boss_Monolith.BP_EnemyWorld_AS_Potatobag_Boss_Monolith_C",
+      "default_handles": [
+        "AS_PotatoBag_Boss"
+      ],
+      "status": "structurally_resolved"
+    },
+    "c1d25c65a74a1b0a": {
+      "class_path": "/Game/Characters/Enemies/AncientSanctuary/PotatoBagMage/BP_EnemyWorld_AS_Potatobag_Mage.BP_EnemyWorld_AS_Potatobag_Mage_C",
+      "default_handles": [
+        "AS_PotatoBagMage*1"
+      ],
+      "status": "structurally_resolved"
+    },
+    "934363d73bd59262": {
+      "class_path": "/Game/Characters/Enemies/AncientSanctuary/PotatoBagMage/BP_EnemyWorld_AS_Potatobag_Mage_Alt_Twilight.BP_EnemyWorld_AS_Potatobag_Mage_Alt_Twilight_C",
+      "default_handles": [
+        "TS_PotatoBagMageTwilight*1"
+      ],
+      "status": "structurally_resolved"
+    },
+    "6a45e1f5b6ace42b": {
+      "class_path": "/Game/Characters/Enemies/AncientSanctuary/PotatoBagMage/BP_EnemyWorld_AS_Potatobag_Mage_Monolith.BP_EnemyWorld_AS_Potatobag_Mage_Monolith_C",
+      "default_handles": [
+        "ML_PotatoBagMage*1"
+      ],
+      "status": "structurally_resolved"
+    },
+    "50de025be71dccc5": {
+      "class_path": "/Game/Characters/Enemies/AncientSanctuary/PotatoBagRanger/BP_EnemyWorld_AS_DpsPotatobag.BP_EnemyWorld_AS_DpsPotatobag_C",
+      "default_handles": [
+        "PotatoBag_Dps*1"
+      ],
+      "status": "needs_review"
+    },
+    "2cae864e93de75e0": {
+      "class_path": "/Game/Characters/Enemies/AncientSanctuary/PotatoBagRanger/BP_EnemyWorld_AS_DpsPotatobag_Monolith.BP_EnemyWorld_AS_DpsPotatobag_Monolith_C",
+      "default_handles": [
+        "ML_PotatoBagRanger*1"
+      ],
+      "status": "structurally_resolved"
+    },
+    "75a53769e6135cc8": {
+      "class_path": "/Game/Characters/Enemies/AncientSanctuary/PotatoBagRanger/BP_EnemyWorld_AS_DpsPotatobag_Twilight.BP_EnemyWorld_AS_DpsPotatobag_Twilight_C",
+      "default_handles": [
+        "TS_PotatoBagRangerTwilight*1"
+      ],
+      "status": "structurally_resolved"
+    },
+    "cd8d0e2104b2162b": {
+      "class_path": "/Game/Characters/Enemies/AncientSanctuary/PotatoBag_Tank/BP_EnemyWorld_AS_Potatobag1_tank.BP_EnemyWorld_AS_Potatobag1_tank_C",
+      "default_handles": [
+        "AS_PotatoBagTank*1"
+      ],
+      "status": "structurally_resolved"
+    },
+    "b6c26cc68ba07843": {
+      "class_path": "/Game/Characters/Enemies/AncientSanctuary/PotatoBag_Tank/BP_EnemyWorld_AS_Potatobag1_tank_Monolith.BP_EnemyWorld_AS_Potatobag1_tank_Monolith_C",
+      "default_handles": [
+        "ML_PotatoBagTank*1"
+      ],
+      "status": "structurally_resolved"
+    },
+    "791826ec699b5f51": {
+      "class_path": "/Game/Characters/Enemies/AncientSanctuary/PotatoBag_Tank/BP_EnemyWorld_AS_Potatobag1_tank_Twilight.BP_EnemyWorld_AS_Potatobag1_tank_Twilight_C",
+      "default_handles": [
+        "TS_PotatoBagTankTwilight*1"
+      ],
+      "status": "structurally_resolved"
+    },
+    "2a7a2f52ac7461a5": {
+      "class_path": "/Game/Characters/Enemies/Chevaliere/BP_jRPG_EnemyWorld_Chevaliere.BP_jRPG_EnemyWorld_Chevaliere_C",
+      "default_handles": [
+        "YF_ChevaliereWhite*1"
+      ],
+      "status": "structurally_resolved"
+    },
+    "b27191afb5788d4f": {
+      "class_path": "/Game/Characters/Enemies/Chevaliere/BP_jRPG_EnemyWorld_ChevaliereB.BP_jRPG_EnemyWorld_ChevaliereB_C",
+      "default_handles": [
+        "YF_ChevaliereB*1"
+      ],
+      "status": "structurally_resolved"
+    },
+    "6e11d73f3624f2c7": {
+      "class_path": "/Game/Characters/Enemies/Chevaliere/BP_jRPG_EnemyWorld_ChevaliereB__Monolith.BP_jRPG_EnemyWorld_ChevaliereB__Monolith_C",
+      "default_handles": [
+        "YF_ChevaliereB*1"
+      ],
+      "status": "structurally_resolved"
+    },
+    "c528bdfe6fc853e1": {
+      "class_path": "/Game/Characters/Enemies/Chevaliere/BP_jRPG_EnemyWorld_ChevaliereC.BP_jRPG_EnemyWorld_ChevaliereC_C",
+      "default_handles": [
+        "YF_ChevaliereC*1"
+      ],
+      "status": "structurally_resolved"
+    },
+    "ec5481f4a9bd0d99": {
+      "class_path": "/Game/Characters/Enemies/Chevaliere/BP_jRPG_EnemyWorld_ChevaliereC_Monolith.BP_jRPG_EnemyWorld_ChevaliereC_Monolith_C",
+      "default_handles": [
+        "YF_ChevaliereC*1"
+      ],
+      "status": "structurally_resolved"
+    },
+    "999798459103b758": {
+      "class_path": "/Game/Characters/Enemies/Chevaliere/BP_jRPG_EnemyWorld_Chevaliere_Monolith.BP_jRPG_EnemyWorld_Chevaliere_Monolith_C",
+      "default_handles": [
+        "YF_ChevaliereWhite*1"
+      ],
+      "status": "structurally_resolved"
+    },
+    "3dd71b64dbb116ec": {
+      "class_path": "/Game/Characters/Enemies/Dark_Shores/Noire/BP_EnemyWorld_Noire.BP_EnemyWorld_Noire_C",
+      "default_handles": [
+        "DS_Noire*1"
+      ],
+      "status": "structurally_resolved"
+    },
+    "62aa443a55fd30bf": {
+      "class_path": "/Game/Characters/Enemies/Forgotten_BattleField/Benisseur/BP_EnemyWorld_Benisseur.BP_EnemyWorld_Benisseur_C",
+      "default_handles": [
+        "FB_Benisseur*1"
+      ],
+      "status": "structurally_resolved"
+    },
+    "5012991d013f2f76": {
+      "class_path": "/Game/Characters/Enemies/Forgotten_BattleField/Benisseur/BP_EnemyWorld_Benisseur_Alpha.BP_EnemyWorld_Benisseur_Alpha_C",
+      "default_handles": [
+        "FB_Benisseur*1_Alpha"
+      ],
+      "status": "structurally_resolved"
+    },
+    "7802ff8c1578e573": {
+      "class_path": "/Game/Characters/Enemies/Forgotten_BattleField/Benisseur/BP_EnemyWorld_Benisseur_RenoirDraft.BP_EnemyWorld_Benisseur_RenoirDraft_C",
+      "default_handles": [
+        "RD_Echassier*1_Boucheclier*1_Benisseur*1"
+      ],
+      "status": "structurally_resolved"
+    },
+    "235a3915b7f58794": {
+      "class_path": "/Game/Characters/Enemies/Forgotten_BattleField/Benisseur/BP_EnemyWorld_Benisseur_SireneVersion.BP_EnemyWorld_Benisseur_SireneVersion_C",
+      "default_handles": [
+        "SI_Benisseur*1"
+      ],
+      "status": "structurally_resolved"
+    },
+    "412e0d684e79b66f": {
+      "class_path": "/Game/Characters/Enemies/Forgotten_BattleField/Chalier/BP_EnemyWorldChalier.BP_EnemyWorldChalier_C",
+      "default_handles": [
+        "FB_ChalierSword*1"
+      ],
+      "status": "structurally_resolved"
+    },
+    "8cb7be363e902b3d": {
+      "class_path": "/Game/Characters/Enemies/Forgotten_BattleField/Chalier/BP_EnemyWorldChalier_Monolith.BP_EnemyWorldChalier_Monolith_C",
+      "default_handles": [
+        "ML_ChalierSword*2_Troubadour*1"
+      ],
+      "status": "structurally_resolved"
+    },
+    "e14bbcd4505ee65a": {
+      "class_path": "/Game/Characters/Enemies/Forgotten_BattleField/Chalier/BP_EnemyWorld_Chalier_Dagger.BP_EnemyWorld_Chalier_Dagger_C",
+      "default_handles": [
+        "FB_ChalierSword*1"
+      ],
+      "status": "structurally_resolved"
+    },
+    "84dcf2a7bb79652d": {
+      "class_path": "/Game/Characters/Enemies/Forgotten_BattleField/Chalier/BP_EnemyWorld_Chalier_Hammer.BP_EnemyWorld_Chalier_Hammer_C",
+      "default_handles": [
+        "FB_ChalierHammer*1"
+      ],
+      "status": "structurally_resolved"
+    },
+    "fcdbce5318d00711": {
+      "class_path": "/Game/Characters/Enemies/Forgotten_BattleField/Chalier/BP_EnemyWorld_Chalier_Lancelier.BP_EnemyWorld_Chalier_Lancelier_C",
+      "default_handles": [
+        "FB_ChalierSpear*1"
+      ],
+      "status": "structurally_resolved"
+    },
+    "431d1ae0048acce0": {
+      "class_path": "/Game/Characters/Enemies/Forgotten_BattleField/Chalier/BP_EnemyWorld_Chalier_Sword.BP_EnemyWorld_Chalier_Sword_C",
+      "default_handles": [
+        "FB_ChalierSword*1"
+      ],
+      "status": "structurally_resolved"
+    },
+    "3abdd115ea684348": {
+      "class_path": "/Game/Characters/Enemies/Forgotten_BattleField/Chalier/BP_EnemyWorld_Chalier_Sword_Alpha.BP_EnemyWorld_Chalier_Sword_Alpha_C",
+      "default_handles": [
+        "FB_ChalierSwordAlpha*1"
+      ],
+      "status": "structurally_resolved"
+    },
+    "92bdeb79a5df50f5": {
+      "class_path": "/Game/Characters/Enemies/Forgotten_BattleField/Duelliste/BP_EnemyWorld_Duelliste_CleaFlyingHouse.BP_EnemyWorld_Duelliste_CleaFlyingHouse_C",
+      "default_handles": [
+        "CFH_Boss_Dualliste"
+      ],
+      "status": "structurally_resolved"
+    },
+    "9752d4b5f68cad45": {
+      "class_path": "/Game/Characters/Enemies/Forgotten_BattleField/Duelliste/BP_EnemyWorld_Duelliste_Final.BP_EnemyWorld_Duelliste_Final_C",
+      "default_handles": [
+        "FB_Duallist_Phase2*1"
+      ],
+      "status": "structurally_resolved"
+    },
+    "707b5d482f10ced7": {
+      "class_path": "/Game/Characters/Enemies/Forgotten_BattleField/Ramasseur/BP_EnemyWorld_Ramasseur.BP_EnemyWorld_Ramasseur_C",
+      "default_handles": [
+        "FB_Ramasseur*1"
+      ],
+      "status": "structurally_resolved"
+    },
+    "5585f71b15e58f47": {
+      "class_path": "/Game/Characters/Enemies/Forgotten_BattleField/Ramasseur/BP_EnemyWorld_Ramasseur_ALPHA.BP_EnemyWorld_Ramasseur_ALPHA_C",
+      "default_handles": [
+        "FB_Ramasseur*1"
+      ],
+      "status": "structurally_resolved"
+    },
+    "da866e7ad71b14af": {
+      "class_path": "/Game/Characters/Enemies/Forgotten_BattleField/Ramasseur/BP_EnemyWorld_Ramasseur_Monolith.BP_EnemyWorld_Ramasseur_Monolith_C",
+      "default_handles": [
+        "ML_Troubadour*1_Ramasseur*2"
+      ],
+      "status": "structurally_resolved"
+    },
+    "c1f8a1ac5b0fc986": {
+      "class_path": "/Game/Characters/Enemies/Forgotten_BattleField/Troubadour/BP_EnemyWorld_Troubadour.BP_EnemyWorld_Troubadour_C",
+      "default_handles": [
+        "FB_Troubadour*1"
+      ],
+      "status": "structurally_resolved"
+    },
+    "2ce8b9099e050479": {
+      "class_path": "/Game/Characters/Enemies/Forgotten_BattleField/Troubadour/BP_EnemyWorld_TroubadourAlpha.BP_EnemyWorld_TroubadourAlpha_C",
+      "default_handles": [
+        "FB_TroubadourAlpha"
+      ],
+      "status": "structurally_resolved"
+    },
+    "ed0409f07e26219b": {
+      "class_path": "/Game/Characters/Enemies/Forgotten_BattleField/Troubadour/BP_EnemyWorld_Troubadour_Monolith.BP_EnemyWorld_Troubadour_Monolith_C",
+      "default_handles": [
+        "ML_ChalierSword*2_Troubadour*1"
+      ],
+      "status": "structurally_resolved"
+    },
+    "fc3465870323120e": {
+      "class_path": "/Game/Characters/Enemies/Goblu_Ennemies/Bourgeon/BP_EnemyWorld_Bourgeon.BP_EnemyWorld_Bourgeon_C",
+      "default_handles": [
+        "GO_Bourgeon*1"
+      ],
+      "status": "structurally_resolved"
+    },
+    "2d6b02b1f8bc5923": {
+      "class_path": "/Game/Characters/Enemies/Goblu_Ennemies/Bourgeon/BP_EnemyWorld_Bourgeon_ALPHA.BP_EnemyWorld_Bourgeon_ALPHA_C",
+      "default_handles": [
+        "GO_Bourgeon*1"
+      ],
+      "status": "structurally_resolved"
+    },
+    "de5edf22f18fb758": {
+      "class_path": "/Game/Characters/Enemies/Goblu_Ennemies/Cruler/BP_EnemyWorld_Cruler.BP_EnemyWorld_Cruler_C",
+      "default_handles": [
+        "GO_Cruler*1"
+      ],
+      "status": "structurally_resolved"
+    },
+    "bca5e8c35cfc9e7c": {
+      "class_path": "/Game/Characters/Enemies/Goblu_Ennemies/Cruler/BP_EnemyWorld_Cruler_ALPHA.BP_EnemyWorld_Cruler_ALPHA_C",
+      "default_handles": [
+        "GO_CrulerALPHA*1_0"
+      ],
+      "status": "structurally_resolved"
+    },
+    "de29adcc722068bb": {
+      "class_path": "/Game/Characters/Enemies/Goblu_Ennemies/Cruler/BP_EnemyWorld_Cruler_Monolith.BP_EnemyWorld_Cruler_Monolith_C",
+      "default_handles": [
+        "ML_Bruler*1_Cruler*1_Demineur*1"
+      ],
+      "status": "structurally_resolved"
+    },
+    "0c7e3931d86b403b": {
+      "class_path": "/Game/Characters/Enemies/Goblu_Ennemies/Demineur/BP_EnemyWorld_Demineur.BP_EnemyWorld_Demineur_C",
+      "default_handles": [
+        "GO_Demineur*1"
+      ],
+      "status": "structurally_resolved"
+    },
+    "813eabdb8f23bbae": {
+      "class_path": "/Game/Characters/Enemies/Goblu_Ennemies/Demineur/BP_EnemyWorld_Demineur_ALPHA.BP_EnemyWorld_Demineur_ALPHA_C",
+      "default_handles": [
+        "GO_DemineurALPHA"
+      ],
+      "status": "structurally_resolved"
+    },
+    "ed84b9cc22845972": {
+      "class_path": "/Game/Characters/Enemies/Goblu_Ennemies/Demineur/BP_EnemyWorld_Demineur_Monolith.BP_EnemyWorld_Demineur_Monolith_C",
+      "default_handles": [
+        "ML_Cruler*1_Demineur*2"
+      ],
+      "status": "structurally_resolved"
+    },
+    "c85509b90a9c8d80": {
+      "class_path": "/Game/Characters/Enemies/Goblu_Ennemies/Goblu/BP_EnemyWorld_Goblu.BP_EnemyWorld_Goblu_C",
+      "default_handles": [
+        "Goblu"
+      ],
+      "status": "needs_review"
+    },
+    "f666a44c05bf3b86": {
+      "class_path": "/Game/Characters/Enemies/Goblu_Ennemies/Goblu/BP_EnemyWorld_Goblu_ALPHA.BP_EnemyWorld_Goblu_ALPHA_C",
+      "default_handles": [
+        "GO_GobluALPHA"
+      ],
+      "status": "structurally_resolved"
+    },
+    "d86ff6b4e987edd6": {
+      "class_path": "/Game/Characters/Enemies/Goblu_Ennemies/Goblu/BP_EnemyWorld_Goblu_CleaFlyingHouse.BP_EnemyWorld_Goblu_CleaFlyingHouse_C",
+      "default_handles": [
+        "CFH_Boss_Goblu"
+      ],
+      "status": "structurally_resolved"
+    },
+    "4d162eb5f3a3b741": {
+      "class_path": "/Game/Characters/Enemies/Goblu_Ennemies/Luster/BP_EnemyWorld_Luster.BP_EnemyWorld_Luster_C",
+      "default_handles": [
+        "GO_Luster*1"
+      ],
+      "status": "structurally_resolved"
+    },
+    "742a23b11cc52afa": {
+      "class_path": "/Game/Characters/Enemies/Goblu_Ennemies/Luster/BP_EnemyWorld_UniqueLusterAlpha.BP_EnemyWorld_UniqueLusterAlpha_C",
+      "default_handles": [
+        "Luster*1"
+      ],
+      "status": "needs_review"
+    },
+    "e7ca8390f599db7b": {
+      "class_path": "/Game/Characters/Enemies/Goblu_Ennemies/bruler/BP_EnemyWorld_Bruler.BP_EnemyWorld_Bruler_C",
+      "default_handles": [
+        "GO_Bruler*1"
+      ],
+      "status": "structurally_resolved"
+    },
+    "8a4cbaab59ada45a": {
+      "class_path": "/Game/Characters/Enemies/Goblu_Ennemies/bruler/BP_EnemyWorld_Bruler_ALPHA.BP_EnemyWorld_Bruler_ALPHA_C",
+      "default_handles": [
+        "GO_BrulerALPHA"
+      ],
+      "status": "structurally_resolved"
+    },
+    "950ce062b88da79a": {
+      "class_path": "/Game/Characters/Enemies/Goblu_Ennemies/bruler/BP_EnemyWorld_Bruler_Monolith.BP_EnemyWorld_Bruler_Monolith_C",
+      "default_handles": [
+        "ML_Bruler*1Luster*2"
+      ],
+      "status": "structurally_resolved"
+    },
+    "2596f5869fb87858": {
+      "class_path": "/Game/Characters/Enemies/Goblu_Ennemies/serpenphare/BP_EnemyWorld_Serpenphare.BP_EnemyWorld_Serpenphare_C",
+      "default_handles": [
+        "WM_Serpenphare"
+      ],
+      "status": "structurally_resolved",
+      "default_table_handles": [
+        {
+          "table": "/Game/jRPGTemplate/Datatables/Encounters_Datatables/DT_Encounters_Composite.DT_Encounters_Composite",
+          "row": "WM_Serpenphare"
+        }
+      ]
+    },
+    "aa964330468a87b0": {
+      "class_path": "/Game/Characters/Enemies/Hexga/BP_EnemyWorld_Hexga.BP_EnemyWorld_Hexga_C",
+      "default_handles": [
+        "SC_Hexga*1"
+      ],
+      "status": "structurally_resolved"
+    },
+    "ea32789a4537c5e1": {
+      "class_path": "/Game/Characters/Enemies/Hexga/BP_EnemyWorld_Hexga_Alpha.BP_EnemyWorld_Hexga_Alpha_C",
+      "default_handles": [
+        "SC_Hexga_Alpha*1"
+      ],
+      "status": "structurally_resolved"
+    },
+    "a8425a9168e75e8f": {
+      "class_path": "/Game/Characters/Enemies/Hexga/BP_EnemyWorld_Hexga_Monolith.BP_EnemyWorld_Hexga_Monolith_C",
+      "default_handles": [
+        "ML_Rocher*2_Hexga*1"
+      ],
+      "status": "structurally_resolved"
+    },
+    "e9ef75fcc55ae697": {
+      "class_path": "/Game/Characters/Enemies/Lumiere/ACTE_3/Aberration/BP_EnemyWorld_Aberration.BP_EnemyWorld_Aberration_C",
+      "default_handles": [
+        "L_Aberration"
+      ],
+      "status": "structurally_resolved"
+    },
+    "8b0255307ec6a159": {
+      "class_path": "/Game/Characters/Enemies/Lumiere/ACTE_3/Aberration/BP_EnemyWorld_Aberration_ALPHA.BP_EnemyWorld_Aberration_ALPHA_C",
+      "default_handles": [
+        "L_Aberration_Alpha"
+      ],
+      "status": "structurally_resolved"
+    },
+    "269027e641a6f139": {
+      "class_path": "/Game/Characters/Enemies/Lumiere/ACTE_3/Aberration/BP_EnemyWorld_Aberration_RenoirDraft.BP_EnemyWorld_Aberration_RenoirDraft_C",
+      "default_handles": [
+        "RD_Aberration*1_Chapelier*2"
+      ],
+      "status": "structurally_resolved"
+    },
+    "77686df9d6870433": {
+      "class_path": "/Game/Characters/Enemies/Lumiere/ACTE_3/Creation/BP_EnemyWorld_Creation.BP_EnemyWorld_Creation_C",
+      "default_handles": [
+        "L_Creation"
+      ],
+      "status": "structurally_resolved"
+    },
+    "708e4047fdf22bc3": {
+      "class_path": "/Game/Characters/Enemies/Lumiere/ACTE_3/Creation/BP_EnemyWorld_Creation_ALPHA.BP_EnemyWorld_Creation_Alpha_C",
+      "default_handles": [
+        "RD_CreationAlpha"
+      ],
+      "status": "structurally_resolved"
+    },
+    "a33f635ea34a22c2": {
+      "class_path": "/Game/Characters/Enemies/Lumiere/ACTE_3/Creation/BP_EnemyWorld_Creation_RenoirDraft.BP_EnemyWorld_Creation_RenoirDraft_C",
+      "default_handles": [
+        "RD_Creation*2"
+      ],
+      "status": "structurally_resolved"
+    },
+    "13e4320683617067": {
+      "class_path": "/Game/Characters/Enemies/Lumiere/BP_EnemyWorld_LumiereCitizen.BP_EnemyWorld_LumiereCitizen_C",
+      "default_handles": [
+        "L_LumiereCitizenGunSword_Female*1_GunSwordFemale*1_MageFemale*1"
+      ],
+      "status": "structurally_resolved"
+    },
+    "b6f674b8f547b382": {
+      "class_path": "/Game/Characters/Enemies/Lumiere/BP_EnemyWorld_LumiereCitizen_Fleuret_Female.BP_EnemyWorld_LumiereCitizen_Fleuret_Female_C",
+      "default_handles": [
+        "L_LumiereCitizenFleuret_Female"
+      ],
+      "status": "structurally_resolved"
+    },
+    "ab008e7aeb5217e4": {
+      "class_path": "/Game/Characters/Enemies/Lumiere/BP_EnemyWorld_LumiereCitizen_Fleuret_Male.BP_EnemyWorld_LumiereCitizen_Fleuret_Male_C",
+      "default_handles": [
+        "L_LumiereCitizenFleuret_Female"
+      ],
+      "status": "structurally_resolved"
+    },
+    "e69cbc403d643231": {
+      "class_path": "/Game/Characters/Enemies/Lumiere/BP_EnemyWorld_LumiereCitizen_GunSword_Female.BP_EnemyWorld_LumiereCitizen_GunSword_Female_C",
+      "default_handles": [
+        "L_LumiereCitizenGunSword_Female*1_GunSwordFemale*1_MageFemale*1"
+      ],
+      "status": "structurally_resolved"
+    },
+    "7f315680d90835fa": {
+      "class_path": "/Game/Characters/Enemies/Lumiere/BP_EnemyWorld_LumiereCitizen_GunSword_Male.BP_EnemyWorld_LumiereCitizen_GunSword_Male_C",
+      "default_handles": [
+        "L_LumiereCitizenGunSword_Female*1_GunSwordFemale*1_MageFemale*1"
+      ],
+      "status": "structurally_resolved"
+    },
+    "8f726c4130e668c7": {
+      "class_path": "/Game/Characters/Enemies/Lumiere/BP_EnemyWorld_LumiereCitizen_Mage_Female.BP_EnemyWorld_LumiereCitizen_Mage_Female_C",
+      "default_handles": [
+        "L_LumiereCitizenGunSword_Female*1_GunSwordFemale*1_MageFemale*1"
+      ],
+      "status": "structurally_resolved"
+    },
+    "56057317b8fd7834": {
+      "class_path": "/Game/Characters/Enemies/ManyFaces/Boucheclier/BP_EnemyWorld_Boucheclier.BP_EnemyWorld_Boucheclier_C",
+      "default_handles": [
+        "MF_Boucheclier"
+      ],
+      "status": "structurally_resolved"
+    },
+    "4987a4904d3bf3ac": {
+      "class_path": "/Game/Characters/Enemies/ManyFaces/Boucheclier/BP_EnemyWorld_Boucheclier_ALPHA.BP_EnemyWorld_Boucheclier_ALPHA_C",
+      "default_handles": [
+        "MF_BoucheclierALPHA"
+      ],
+      "status": "structurally_resolved"
+    },
+    "64915617fae95d99": {
+      "class_path": "/Game/Characters/Enemies/ManyFaces/Boucheclier/BP_EnemyWorld_Boucheclier_RenoirDraft.BP_EnemyWorld_Boucheclier_RenoirDraft_C",
+      "default_handles": [
+        "RD_Echassier*1_Boucheclier*1_Benisseur*1"
+      ],
+      "status": "structurally_resolved"
+    },
+    "399ee68c08031fba": {
+      "class_path": "/Game/Characters/Enemies/ManyFaces/Chapelier/BP_EnemyWorld_Chapelier.BP_EnemyWorld_Chapelier_C",
+      "default_handles": [
+        "MF_Chapelier*1"
+      ],
+      "status": "structurally_resolved"
+    },
+    "00ff3f1f5feadad7": {
+      "class_path": "/Game/Characters/Enemies/ManyFaces/Chapelier/BP_EnemyWorld_Chapelier_Alpha.BP_EnemyWorld_Chapelier_Alpha_C",
+      "default_handles": [
+        "MF_ChapelieALPHA"
+      ],
+      "status": "structurally_resolved"
+    },
+    "a63ca0f5dbc13251": {
+      "class_path": "/Game/Characters/Enemies/ManyFaces/Chapelier/BP_EnemyWorld_Chapelier_RenoirDraft.BP_EnemyWorld_Chapelier_RenoirDraft_C",
+      "default_handles": [
+        "RD_Aberration*1_Chapelier*2"
+      ],
+      "status": "structurally_resolved"
+    },
+    "e2f662df40239919": {
+      "class_path": "/Game/Characters/Enemies/ManyFaces/Contorsionniste/BP_EnemyWorld_Contorsionniste.BP_EnemyWorld_Contorsionniste_C",
+      "default_handles": [
+        "MF_Contorsionniste"
+      ],
+      "status": "structurally_resolved"
+    },
+    "f56b3a66cf6992ba": {
+      "class_path": "/Game/Characters/Enemies/ManyFaces/Contorsionniste/BP_EnemyWorld_Contorsionniste_RenoirDraft.BP_EnemyWorld_Contorsionniste_RenoirDraft_C",
+      "default_handles": [
+        "RD_Contorsionniste*3"
+      ],
+      "status": "structurally_resolved"
+    },
+    "7d778f5a944678b1": {
+      "class_path": "/Game/Characters/Enemies/ManyFaces/Grosstete/BP_EnemyWorld_GrossTete.BP_EnemyWorld_GrossTete_C",
+      "default_handles": [
+        "MF_GrossTete*1"
+      ],
+      "status": "structurally_resolved"
+    },
+    "76776d6dfb267203": {
+      "class_path": "/Game/Characters/Enemies/ManyFaces/Moissonneuse/BP_Enemy_World_Moissonneuse.BP_Enemy_World_Moissonneuse_C",
+      "default_handles": [
+        "MF_Moissoneuse*1"
+      ],
+      "status": "structurally_resolved"
+    },
+    "c702e2aa47649cb6": {
+      "class_path": "/Game/Characters/Enemies/ManyFaces/Moissonneuse/BP_Enemy_World_Moissonneuse_Alpha.BP_Enemy_World_Moissonneuse_Alpha_C",
+      "default_handles": [
+        "MF_MoissoneuseALPHA"
+      ],
+      "status": "structurally_resolved"
+    },
+    "99365558617d3210": {
+      "class_path": "/Game/Characters/Enemies/ManyFaces/Moissonneuse/BP_Enemy_World_Moissonneuse_RenoirDraft.BP_Enemy_World_Moissonneuse_RenoirDraft_C",
+      "default_handles": [
+        "RD_Echassier*2_Moissoneuse*1"
+      ],
+      "status": "structurally_resolved"
+    },
+    "9fbf0d72a5e2428f": {
+      "class_path": "/Game/Characters/Enemies/MonocoMountain/Braseleur/BP_EnemyWorld_BlackSmith.BP_EnemyWorld_BlackSmith_C",
+      "default_handles": [
+        "MM_Braseleur*1"
+      ],
+      "status": "structurally_resolved"
+    },
+    "446ad972f6766d07": {
+      "class_path": "/Game/Characters/Enemies/MonocoMountain/Braseleur/BP_EnemyWorld_BlackSmith_ALPHA.BP_EnemyWorld_BlackSmith_ALPHA_C",
+      "default_handles": [
+        "MM_BraseleurALPHA*1"
+      ],
+      "status": "structurally_resolved"
+    },
+    "8775e8b686f11cd1": {
+      "class_path": "/Game/Characters/Enemies/MonocoMountain/Braseleur/BP_EnemyWorld_BlackSmith_Monolith.BP_EnemyWorld_BlackSmith_Monolith_C",
+      "default_handles": [
+        "ML_Danseuse*1_Braseleur*1_Stalact*1"
+      ],
+      "status": "structurally_resolved"
+    },
+    "a3341004f99654e7": {
+      "class_path": "/Game/Characters/Enemies/MonocoMountain/Dancer/BP_EnemyWorld_Dancer.BP_EnemyWorld_Dancer_C",
+      "default_handles": [
+        "MM_Danseuse*1"
+      ],
+      "status": "structurally_resolved"
+    },
+    "21f9a6013ad3251e": {
+      "class_path": "/Game/Characters/Enemies/MonocoMountain/Dancer/BP_EnemyWorld_Dancer_Alpha.BP_EnemyWorld_Dancer_Alpha_C",
+      "default_handles": [
+        "MM_DanseuseAlpha*1"
+      ],
+      "status": "structurally_resolved"
+    },
+    "857906fd99ccc47c": {
+      "class_path": "/Game/Characters/Enemies/MonocoMountain/Dancer/BP_EnemyWorld_Dancer_Monolith.BP_EnemyWorld_Dancer_Monolith_C",
+      "default_handles": [
+        "ML_Danseuse*1_Braseleur*2"
+      ],
+      "status": "structurally_resolved"
+    },
+    "389745b4eebd93f5": {
+      "class_path": "/Game/Characters/Enemies/MonocoMountain/Gargant/BP_EnemyWorld_MM_Gargant.BP_EnemyWorld_MM_Gargant_C",
+      "default_handles": [
+        "MM_Gargant"
+      ],
+      "status": "structurally_resolved"
+    },
+    "0efcf6a425dfbdcb": {
+      "class_path": "/Game/Characters/Enemies/MonocoMountain/Gargant/BP_EnemyWorld_MM_Gargant_Monolith.BP_EnemyWorld_MM_Gargant_Monolith_C",
+      "default_handles": [
+        "ML_Gargant"
+      ],
+      "status": "structurally_resolved"
+    },
+    "63f0c4f6ab600a64": {
+      "class_path": "/Game/Characters/Enemies/MonocoMountain/Golem/BP_EnemyWorld_Golem.BP_EnemyWorld_Golem_C",
+      "default_handles": [
+        "MM_Stalact"
+      ],
+      "status": "structurally_resolved"
+    },
+    "25a4bf79865ca4fb": {
+      "class_path": "/Game/Characters/Enemies/MonocoMountain/MirrorRenoir/BP_jRPG_Enemy_World_MM_MirrorRenoir.BP_jRPG_Enemy_World_MM_MirrorRenoir_C",
+      "default_handles": [
+        "YellowForest_Gault*1"
+      ],
+      "status": "needs_review"
+    },
+    "0091bd211a29e273": {
+      "class_path": "/Game/Characters/Enemies/MonocoMountain/Swordman/BP_EnemyWorld_Swordman.BP_EnemyWorld_Swordman_C",
+      "default_handles": [
+        "MM_Pelerin*1"
+      ],
+      "status": "structurally_resolved"
+    },
+    "aa68fe08defab862": {
+      "class_path": "/Game/Characters/Enemies/MonocoMountain/Swordman/BP_EnemyWorld_Swordman_Monolith.BP_EnemyWorld_Swordman_Monolith_C",
+      "default_handles": [
+        "ML_Pelerin*1_Danseuse*1_Braseleur*1"
+      ],
+      "status": "structurally_resolved"
+    },
+    "d756229f02213c31": {
+      "class_path": "/Game/Characters/Enemies/Monolith/Obscure/BP_EnemyWorld_Clair.BP_EnemyWorld_Clair_C",
+      "default_handles": [
+        "ML_Clair"
+      ],
+      "status": "structurally_resolved"
+    },
+    "b0e6cea44ccdbedc": {
+      "class_path": "/Game/Characters/Enemies/Monolith/Obscure/BP_EnemyWorld_ClairObscur.BP_EnemyWorld_ClairObscur_C",
+      "default_handles": [
+        "ML_ClairObscur"
+      ],
+      "status": "structurally_resolved"
+    },
+    "f8dd40d8a9f49279": {
+      "class_path": "/Game/Characters/Enemies/Monolith/Obscure/BP_EnemyWorld_ClairObscur_Alpha.BP_EnemyWorld_ClairObscur_Alpha_C",
+      "default_handles": [
+        "MM_ClairObscurAlpha"
+      ],
+      "status": "structurally_resolved"
+    },
+    "346fe5d557b690fa": {
+      "class_path": "/Game/Characters/Enemies/Monolith/Obscure/BP_EnemyWorld_Obscur.BP_EnemyWorld_Obscur_C",
+      "default_handles": [
+        "ML_Obscur"
+      ],
+      "status": "structurally_resolved"
+    },
+    "2cbc7e282dff205f": {
+      "class_path": "/Game/Characters/Enemies/Petank/EnemyWorld/BP_EnemyWorld_Petank_Alpha.BP_EnemyWorld_Petank_Alpha_C",
+      "default_handles": [
+        "WM_PetankAlpha"
+      ],
+      "status": "structurally_resolved"
+    },
+    "1d68e07f834b42ab": {
+      "class_path": "/Game/Characters/Enemies/Petank/EnemyWorld/BP_EnemyWorld_Petank_Blue.BP_EnemyWorld_Petank_Blue_C",
+      "default_handles": [
+        "Petank_Blue"
+      ],
+      "status": "structurally_resolved"
+    },
+    "11960a50696da4ff": {
+      "class_path": "/Game/Characters/Enemies/Petank/EnemyWorld/BP_EnemyWorld_Petank_Green.BP_EnemyWorld_Petank_Green_C",
+      "default_handles": [
+        "Petank_Green"
+      ],
+      "status": "structurally_resolved"
+    },
+    "c3ee7f91c165221d": {
+      "class_path": "/Game/Characters/Enemies/Petank/EnemyWorld/BP_EnemyWorld_Petank_Orange.BP_EnemyWorld_Petank_Orange_C",
+      "default_handles": [
+        "Petank_Orange"
+      ],
+      "status": "structurally_resolved"
+    },
+    "0e65a866cdf44511": {
+      "class_path": "/Game/Characters/Enemies/Petank/EnemyWorld/BP_EnemyWorld_Petank_Parent.BP_EnemyWorld_Petank_Parent_C",
+      "default_handles": [
+        "YellowForest_Gault*1"
+      ],
+      "status": "needs_review"
+    },
+    "b4a6905719c28d0c": {
+      "class_path": "/Game/Characters/Enemies/Petank/EnemyWorld/BP_EnemyWorld_Petank_Red.BP_EnemyWorld_Petank_Red_C",
+      "default_handles": [
+        "Petank_Red"
+      ],
+      "status": "structurally_resolved"
+    },
+    "37d24a1ee792a269": {
+      "class_path": "/Game/Characters/Enemies/Petank/EnemyWorld/BP_EnemyWorld_Petank_Violet.BP_EnemyWorld_Petank_Violet_C",
+      "default_handles": [
+        "Petank_Violet"
+      ],
+      "status": "structurally_resolved"
+    },
+    "42d4213f8b254591": {
+      "class_path": "/Game/Characters/Enemies/Petank/EnemyWorld/BP_EnemyWorld_Petank_Yellow.BP_EnemyWorld_Petank_Yellow_C",
+      "default_handles": [
+        "Petank_Yellow"
+      ],
+      "status": "structurally_resolved"
+    },
+    "c7979697fbbd7406": {
+      "class_path": "/Game/Characters/Enemies/Reacher/Echassier/BP_EnemyWorld_Echassier.BP_EnemyWorld_Echassier_C",
+      "default_handles": [
+        "RE_Echassier*1"
+      ],
+      "status": "structurally_resolved"
+    },
+    "a34941fa7aa39557": {
+      "class_path": "/Game/Characters/Enemies/Reacher/Echassier/BP_EnemyWorld_Echassier_ALPHA.BP_EnemyWorld_Echassier_ALPHA_C",
+      "default_handles": [
+        "LU_EchassierAlpha*1"
+      ],
+      "status": "structurally_resolved"
+    },
+    "ec62ff97bd01b4b3": {
+      "class_path": "/Game/Characters/Enemies/Reacher/Echassier/BP_EnemyWorld_Echassier_RenoirDraft.BP_EnemyWorld_Echassier_RenoirDraft_C",
+      "default_handles": [
+        "RD_Echassier*2_Moissoneuse*1"
+      ],
+      "status": "structurally_resolved"
+    },
+    "7357f05804c94a20": {
+      "class_path": "/Game/Characters/Enemies/Reacher/Orphelin/BP_EnemyWorld_OrphelinHammer.BP_EnemyWorld_OrphelinHammer_C",
+      "default_handles": [
+        "RE_OrphelinHammer*1"
+      ],
+      "status": "structurally_resolved"
+    },
+    "495730f48b62dd26": {
+      "class_path": "/Game/Characters/Enemies/Reacher/Orphelin/BP_EnemyWorld_OrphelinHammer_Alpha.BP_EnemyWorld_OrphelinHammer_Alpha_C",
+      "default_handles": [
+        "RE_OrphelinAlpha"
+      ],
+      "status": "structurally_resolved"
+    },
+    "32324d5d2d2372c0": {
+      "class_path": "/Game/Characters/Enemies/Reacher/Orphelin/BP_EnemyWorld_OrphelinHammer_Big.BP_EnemyWorld_OrphelinHammer_Big_C",
+      "default_handles": [
+        "RE_OrphelinHammerBig*1"
+      ],
+      "status": "structurally_resolved"
+    },
+    "45ecc21818923cad": {
+      "class_path": "/Game/Characters/Enemies/Reacher/Orphelin/BP_EnemyWorld_OrphelinHammer_RenoirDraft.BP_EnemyWorld_OrphelinHammer_RenoirDraft_C",
+      "default_handles": [
+        "RD_OrphelinHammer*1_OrphelinSpoon*1_Boucheclier*1"
+      ],
+      "status": "structurally_resolved"
+    },
+    "c14842d3b5164519": {
+      "class_path": "/Game/Characters/Enemies/Reacher/Orphelin/BP_EnemyWorld_OrphelinNail.BP_EnemyWorld_OrphelinNail_C",
+      "default_handles": [
+        "RE_OrphelinNail*1"
+      ],
+      "status": "structurally_resolved"
+    },
+    "fc0fd150d46d1383": {
+      "class_path": "/Game/Characters/Enemies/Reacher/Orphelin/BP_EnemyWorld_OrphelinNail_Alpha.BP_EnemyWorld_OrphelinNail_Alpha_C",
+      "default_handles": [
+        "RE_OrphelinAlpha"
+      ],
+      "status": "structurally_resolved"
+    },
+    "a9698fa0c2c814eb": {
+      "class_path": "/Game/Characters/Enemies/Reacher/Orphelin/BP_EnemyWorld_OrphelinNail_Big.BP_EnemyWorld_OrphelinNail_Big_C",
+      "default_handles": [
+        "RE_OrphelinNailBig*1"
+      ],
+      "status": "structurally_resolved"
+    },
+    "3f8b32ea791c68f1": {
+      "class_path": "/Game/Characters/Enemies/Reacher/Orphelin/BP_EnemyWorld_OrphelinSpoon.BP_EnemyWorld_OrphelinSpoon_C",
+      "default_handles": [
+        "RE_OrphelinSpoon*1"
+      ],
+      "status": "structurally_resolved"
+    },
+    "acd069247983f89b": {
+      "class_path": "/Game/Characters/Enemies/Reacher/Orphelin/BP_EnemyWorld_OrphelinSpoon_Alpha.BP_EnemyWorld_OrphelinSpoon_Alpha_C",
+      "default_handles": [
+        "RE_OrphelinAlpha"
+      ],
+      "status": "structurally_resolved"
+    },
+    "a3e56daaf542b431": {
+      "class_path": "/Game/Characters/Enemies/Reacher/Orphelin/BP_EnemyWorld_OrphelinSpoon_Big.BP_EnemyWorld_OrphelinSpoon_Big_C",
+      "default_handles": [
+        "RE_OrphelinSpoonBig*1"
+      ],
+      "status": "structurally_resolved"
+    },
+    "61d67789104acc3a": {
+      "class_path": "/Game/Characters/Enemies/Reacher/Orphelin/BP_EnemyWorld_OrphelinSpoon_RenoirDraft.BP_EnemyWorld_OrphelinSpoon_RenoirDraft_C",
+      "default_handles": [
+        "RD_OrphelinHammer*1_OrphelinSpoon*1_Boucheclier*1"
+      ],
+      "status": "structurally_resolved"
+    },
+    "50c9392c1240b73b": {
+      "class_path": "/Game/Characters/Enemies/Reacher/Veilleur/BP_EnemyWorld_Veilleur.BP_EnemyWorld_Veilleur_C",
+      "default_handles": [
+        "RE_Veilleur*1"
+      ],
+      "status": "structurally_resolved"
+    },
+    "d5b92dc6cce14348": {
+      "class_path": "/Game/Characters/Enemies/Reacher/Veilleur/BP_EnemyWorld_Veilleur_Alpha.BP_EnemyWorld_Veilleur_Alpha_C",
+      "default_handles": [
+        "RE_VeilleurAlpha"
+      ],
+      "status": "structurally_resolved"
+    },
+    "190ae426356b1cf4": {
+      "class_path": "/Game/Characters/Enemies/Reacher/Veilleur/BP_EnemyWorld_Veilleur_RenoirDraft.BP_EnemyWorld_Veilleur_RenoirDraft_C",
+      "default_handles": [
+        "RE_Veilleur*1"
+      ],
+      "status": "structurally_resolved"
+    },
+    "d6bbea06bf65de98": {
+      "class_path": "/Game/Characters/Enemies/Sea_Cliff/Cultist_Flying/BP_EnemyWorld_CultistFlying.BP_EnemyWorld_CultistFlying_C",
+      "default_handles": [
+        "SC_CultistFlying*1"
+      ],
+      "status": "structurally_resolved"
+    },
+    "24f547d81b4d51a8": {
+      "class_path": "/Game/Characters/Enemies/Sea_Cliff/Cultist_Flying/BP_EnemyWorld_CultistFlying_ALPHA.BP_EnemyWorld_CultistFlying_ALPHA_C",
+      "default_handles": [
+        "SC_CultistFlyingALPHA"
+      ],
+      "status": "structurally_resolved"
+    },
+    "5f72484593c2156a": {
+      "class_path": "/Game/Characters/Enemies/Sea_Cliff/Cultist_Flying/BP_EnemyWorld_CultistFlying_Monolith.BP_EnemyWorld_CultistFlying_Monolith_C",
+      "default_handles": [
+        "ML_Rocher*1_CultistFlying*1_CultistHeavy*1"
+      ],
+      "status": "structurally_resolved"
+    },
+    "c01ad407fae47e8b": {
+      "class_path": "/Game/Characters/Enemies/Sea_Cliff/Cultist_Heavy/BP_EnemyWorld_CultistHeavy.BP_EnemyWorld_CultistHeavy_C",
+      "default_handles": [
+        "SC_CultistHeavy*1"
+      ],
+      "status": "structurally_resolved"
+    },
+    "22845d06e8649204": {
+      "class_path": "/Game/Characters/Enemies/Sea_Cliff/Cultist_Heavy/BP_EnemyWorld_CultistHeavy_Alpha.BP_EnemyWorld_CultistHeavy_Alpha_C",
+      "default_handles": [
+        "SC_CultistHeavy_Alpha"
+      ],
+      "status": "structurally_resolved"
+    },
+    "9066101dd759d031": {
+      "class_path": "/Game/Characters/Enemies/Sea_Cliff/Cultist_Heavy/BP_EnemyWorld_CultistHeavy_Monolith.BP_EnemyWorld_CultistHeavy_Monolith_C",
+      "default_handles": [
+        "ML_CultistHeavy*1_Rocher*2"
+      ],
+      "status": "structurally_resolved"
+    },
+    "7ac1b6a3946f93d2": {
+      "class_path": "/Game/Characters/Enemies/Sea_Cliff/Lampmaster/BP_EnemyWorld_LampMaster.BP_EnemyWorld_LampMaster_C",
+      "default_handles": [
+        "YellowForest_Gault*1"
+      ],
+      "status": "needs_review"
+    },
+    "47a6d56fb6963e13": {
+      "class_path": "/Game/Characters/Enemies/Sea_Cliff/Lampmaster/BP_EnemyWorld_LampMaster_Alpha.BP_EnemyWorld_LampMaster_Alpha_C",
+      "default_handles": [
+        "CW_Boss_LampmasterAlpha"
+      ],
+      "status": "structurally_resolved"
+    },
+    "a61fdedad24a07f4": {
+      "class_path": "/Game/Characters/Enemies/Sea_Cliff/Lampmaster/BP_EnemyWorld_LampMaster_CleaFlyingHouse.BP_EnemyWorld_LampMaster_CleaFlyingHouse_C",
+      "default_handles": [
+        "CFH_Boss_Lampmaster"
+      ],
+      "status": "structurally_resolved"
+    },
+    "759274ac75f68624": {
+      "class_path": "/Game/Characters/Enemies/Sea_Cliff/Rocher/BP_EnemyWorld_Rocher.BP_EnemyWorld_Rocher_C",
+      "default_handles": [
+        "SC_Rocher*1"
+      ],
+      "status": "structurally_resolved"
+    },
+    "7c8a5a5b79624404": {
+      "class_path": "/Game/Characters/Enemies/Sea_Cliff/Rocher/BP_EnemyWorld_Rocher_HexgaQuest.BP_EnemyWorld_Rocher_HexgaQuest_C",
+      "default_handles": [
+        "QUEST_Rocher_HexgaQuest*1"
+      ],
+      "status": "structurally_resolved"
+    },
+    "7182b93a9784121c": {
+      "class_path": "/Game/Characters/Enemies/Sirene/Ballet/BP_EnemyWorld_Ballet.BP_EnemyWorld_Ballet_C",
+      "default_handles": [
+        "SI_Ballet*1",
+        "SI_Ballet*2",
+        "SI_Ballet*3"
+      ],
+      "status": "structurally_resolved"
+    },
+    "424dcec961298159": {
+      "class_path": "/Game/Characters/Enemies/Sirene/Ballet/BP_EnemyWorld_Ballet_ALPHA_Charm.BP_EnemyWorld_Ballet_ALPHA_Charm_C",
+      "default_handles": [
+        "OF_BalletAlpha"
+      ],
+      "status": "structurally_resolved"
+    },
+    "f1bd858514a518b4": {
+      "class_path": "/Game/Characters/Enemies/Sirene/Ballet/BP_EnemyWorld_Ballet_ALPHA_Melee.BP_EnemyWorld_Ballet_ALPHA_Melee_C",
+      "default_handles": [
+        "OF_BalletAlpha"
+      ],
+      "status": "structurally_resolved"
+    },
+    "1777de5377876ed8": {
+      "class_path": "/Game/Characters/Enemies/Sirene/Ballet/BP_EnemyWorld_Ballet_ALPHA_Range.BP_EnemyWorld_Ballet_ALPHA_Range_C",
+      "default_handles": [
+        "OF_BalletAlpha"
+      ],
+      "status": "structurally_resolved"
+    },
+    "8e7c110fcb2ea848": {
+      "class_path": "/Game/Characters/Enemies/Sirene/Ballet/BP_EnemyWorld_Ballet_Melee.BP_EnemyWorld_Ballet_Melee_C",
+      "default_handles": [
+        "SI_Ballet*1",
+        "SI_Ballet*2",
+        "SI_Ballet*3"
+      ],
+      "status": "structurally_resolved"
+    },
+    "3566dfcfbeed01cb": {
+      "class_path": "/Game/Characters/Enemies/Sirene/Ballet/BP_EnemyWorld_Ballet_RenoirDraft.BP_EnemyWorld_Ballet_RenoirDraft_C",
+      "default_handles": [
+        "RD_Aberration*1_BalletRange*1_Benisseur*1"
+      ],
+      "status": "structurally_resolved"
+    },
+    "a711aa2c6153ff17": {
+      "class_path": "/Game/Characters/Enemies/Sirene/Chorale/BP_jRPG_Enemy_World_Chorale.BP_jRPG_Enemy_World_Chorale_C",
+      "default_handles": [
+        "SI_Chorale*1_Ballet*2"
+      ],
+      "status": "structurally_resolved"
+    },
+    "2a10d0a4c09e3d5b": {
+      "class_path": "/Game/Characters/Enemies/Sirene/Glissando/BP_EnemyWorld_Glissando.BP_EnemyWorld_Glissando_C",
+      "default_handles": [
+        "SI_Glissando*1"
+      ],
+      "status": "structurally_resolved"
+    },
+    "62be7bf1fed9841b": {
+      "class_path": "/Game/Characters/Enemies/Sirene/Glissando/BP_EnemyWorld_Glissando_ALPHA.BP_EnemyWorld_Glissando_ALPHA_C",
+      "default_handles": [
+        "SL_GlissandoAlpha*1"
+      ],
+      "status": "structurally_resolved"
+    },
+    "256dc2385036aae8": {
+      "class_path": "/Game/Characters/Enemies/SpringMeadows/Abbest/BP_EnemyWorld_SM_Abbest_Alpha.BP_EnemyWorld_SM_Abbest_Alpha_C",
+      "default_handles": [
+        "SM_Abbest_Alpha*1"
+      ],
+      "status": "structurally_resolved"
+    },
+    "aa996ffc6030e1f3": {
+      "class_path": "/Game/Characters/Enemies/SpringMeadows/Abbest/BP_EnemyWorld_SpringMeadowElementalGrunt.BP_EnemyWorld_SpringMeadowElementalGrunt_C",
+      "default_handles": [
+        "SM_Abbest*2"
+      ],
+      "status": "structurally_resolved"
+    },
+    "37a4c9ec68d4dcee": {
+      "class_path": "/Game/Characters/Enemies/SpringMeadows/Eveque_Boss/BP_EnemyWorld_BossEveque.BP_EnemyWorld_BossEveque_C",
+      "default_handles": [
+        "SpringMeadow_Eveque*1"
+      ],
+      "status": "needs_review"
+    },
+    "8e54a5736d91d2d5": {
+      "class_path": "/Game/Characters/Enemies/SpringMeadows/Eveque_Boss/BP_EnemyWorld_BossEveque_Fire_ALPHA.BP_EnemyWorld_BossEveque_Fire_ALPHA_C",
+      "default_handles": [
+        "SM_EvequeFireALPHA*1"
+      ],
+      "status": "structurally_resolved"
+    },
+    "f96708e07adc828e": {
+      "class_path": "/Game/Characters/Enemies/SpringMeadows/Eveque_Boss/BP_EnemyWorld_BossEveque_Ice_ALPHA.BP_EnemyWorld_BossEveque_Ice_ALPHA_C",
+      "default_handles": [
+        "SM_EvequeIceALPHA*1"
+      ],
+      "status": "structurally_resolved"
+    },
+    "2c97cb26fa361907": {
+      "class_path": "/Game/Characters/Enemies/SpringMeadows/Eveque_Boss/BP_EnemyWorld_BossEveque_Lightning_ALPHA.BP_EnemyWorld_BossEveque_Lightning_ALPHA_C",
+      "default_handles": [
+        "SM_EvequeLightningALPHA*1"
+      ],
+      "status": "structurally_resolved"
+    },
+    "3a9e13a736c3d0ee": {
+      "class_path": "/Game/Characters/Enemies/SpringMeadows/Eveque_Boss/BP_EnemyWorld_BossEveque_Monolith.BP_EnemyWorld_BossEveque_Monolith_C",
+      "default_handles": [
+        "SpringMeadow_Eveque*1"
+      ],
+      "status": "needs_review"
+    },
+    "32ad95029a9b24f3": {
+      "class_path": "/Game/Characters/Enemies/SpringMeadows/Lancelier/BP_EnemyWorld_Lancelier.BP_EnemyWorld_Lancelier_C",
+      "default_handles": [
+        "SM_Lancelier*1"
+      ],
+      "status": "structurally_resolved"
+    },
+    "713158809cb80d4f": {
+      "class_path": "/Game/Characters/Enemies/SpringMeadows/Lancelier/BP_EnemyWorld_Lancelier_Monolith.BP_EnemyWorld_Lancelier_Monolith_C",
+      "default_handles": [
+        "ML_Portier*1_Lancelier*2"
+      ],
+      "status": "structurally_resolved"
+    },
+    "0dedb820487d92dc": {
+      "class_path": "/Game/Characters/Enemies/SpringMeadows/Lancelier/BP_EnemyWorld_Lancelier_Unique.BP_EnemyWorld_Lancelier_Unique_C",
+      "default_handles": [
+        "SpringMeadow_UniqueLancelier*1"
+      ],
+      "status": "needs_review"
+    },
+    "87dfcd3bdcd5d302": {
+      "class_path": "/Game/Characters/Enemies/SpringMeadows/Portier/BP_EnemyWorld_Portier_ALPHA.BP_EnemyWorld_Portier_ALPHA_C",
+      "default_handles": [
+        "SM_PortierALPHA"
+      ],
+      "status": "structurally_resolved"
+    },
+    "268aa217ea8f2e36": {
+      "class_path": "/Game/Characters/Enemies/SpringMeadows/Portier/BP_EnemyWorld_Portier_Monolith_.BP_EnemyWorld_Portier_Monolith__C",
+      "default_handles": [
+        "ML_Portier*1_Lancelier*1_Volester*1",
+        "ML_Portier*1_Lancelier*2",
+        "ML_Portier*1_Lancelier*2"
+      ],
+      "status": "structurally_resolved"
+    },
+    "e4e5b6ded8009963": {
+      "class_path": "/Game/Characters/Enemies/SpringMeadows/Portier/BP_EnemyWorld_SpringMeadowTank.BP_EnemyWorld_SpringMeadowTank_C",
+      "default_handles": [
+        "SM_Portier*1"
+      ],
+      "status": "structurally_resolved"
+    },
+    "d85b762b2231d734": {
+      "class_path": "/Game/Characters/Enemies/SpringMeadows/Sprong/BP_EnemyWorld_Sprong.BP_EnemyWorld_Sprong_C",
+      "default_handles": [
+        "YellowForest_Gault*1"
+      ],
+      "status": "needs_review"
+    },
+    "f127492f84703011": {
+      "class_path": "/Game/Characters/Enemies/SpringMeadows/Volester/BP_EnemyWorld_Volester.BP_EnemyWorld_Volester_C",
+      "default_handles": [
+        "SM_Volester*1"
+      ],
+      "status": "structurally_resolved"
+    },
+    "c2bc4e356d733eb5": {
+      "class_path": "/Game/Characters/Enemies/SpringMeadows/Volester/BP_EnemyWorld_Volester_Monolith.BP_EnemyWorld_Volester_Monolith_C",
+      "default_handles": [
+        "ML_Portier*1_Lancelier*1_Volester*1"
+      ],
+      "status": "structurally_resolved"
+    },
+    "8cb8af5d5048e1d4": {
+      "class_path": "/Game/Characters/Enemies/Verso_Draft/Barbasucette/BP_EnemyWorld_Barbasucette.BP_EnemyWorld_Barbasucette_C",
+      "default_handles": [
+        "VD_Barbasucette*1"
+      ],
+      "status": "structurally_resolved"
+    },
+    "b1d209b05974385c": {
+      "class_path": "/Game/Characters/Enemies/Verso_Draft/Barbasucette/BP_EnemyWorld_Barbasucette_Alpha.BP_EnemyWorld_Barbasucette_Alpha_C",
+      "default_handles": [
+        "VD_BarbasucetteAlpha*1"
+      ],
+      "status": "structurally_resolved"
+    },
+    "7ab4e88084450600": {
+      "class_path": "/Game/Characters/Enemies/Verso_Draft/Franctale/BP_EnemyWorld_Franctale.BP_EnemyWorld_Franctale_C",
+      "default_handles": [
+        "VD_Franctale*1"
+      ],
+      "status": "structurally_resolved"
+    },
+    "fce36e688f455825": {
+      "class_path": "/Game/Characters/Enemies/Verso_Draft/Franctale/BP_EnemyWorld_Franctale_Alpha.BP_EnemyWorld_Franctale_Alpha_C",
+      "default_handles": [
+        "VD_FranctaleAlpha*3"
+      ],
+      "status": "needs_review"
+    },
+    "68c57cbd6f6f3eed": {
+      "class_path": "/Game/Characters/Enemies/Verso_Draft/Licornapied/BP_EnemyWorld_Licornapied.BP_EnemyWorld_Licornapied_C",
+      "default_handles": [
+        "VD_licornapieds*1"
+      ],
+      "status": "structurally_resolved"
+    },
+    "f03c947913c1b2a0": {
+      "class_path": "/Game/Characters/Enemies/Verso_Draft/Licorne/BP_EnemyWorld_Licorne.BP_EnemyWorld_Licorne_C",
+      "default_handles": [
+        "VD_Licorne*1"
+      ],
+      "status": "structurally_resolved"
+    },
+    "036f96d51ab63907": {
+      "class_path": "/Game/Characters/Enemies/Verso_Draft/Licorne/BP_EnemyWorld_Licorne_NoAttack.BP_EnemyWorld_Licorne_NoAttack_C",
+      "default_handles": [
+        "VD_Licorne*1"
+      ],
+      "status": "structurally_resolved"
+    },
+    "369fc2bb618735bf": {
+      "class_path": "/Game/Characters/Enemies/Verso_Draft/Machinapied/BP_EnemyWorld_Machinapied.BP_EnemyWorld_Machinapied_C",
+      "default_handles": [
+        "VD_Machinapieds*1"
+      ],
+      "status": "structurally_resolved"
+    },
+    "c66f60eccb0d109d": {
+      "class_path": "/Game/Characters/Enemies/Verso_Draft/Machinapied/BP_EnemyWorld_Machinapied_Alpha.BP_EnemyWorld_Machinapied_Alpha_C",
+      "default_handles": [
+        "VD_MachinapiedsAlpha*1"
+      ],
+      "status": "structurally_resolved"
+    },
+    "46477e3952ad5200": {
+      "class_path": "/Game/Characters/Enemies/YellowForest/Gault/BP_jRPG_EnemyWorld_Gault.BP_jRPG_EnemyWorld_Gault_C",
+      "default_handles": [
+        "YF_Gault*1"
+      ],
+      "status": "structurally_resolved"
+    },
+    "7fe6425b04e172c1": {
+      "class_path": "/Game/Characters/Enemies/YellowForest/Gault/BP_jRPG_EnemyWorld_GaultB.BP_jRPG_EnemyWorld_GaultB_C",
+      "default_handles": [
+        "YellowForest_GaultB*1"
+      ],
+      "status": "needs_review"
+    },
+    "e3de020a114b94c1": {
+      "class_path": "/Game/Characters/Enemies/YellowForest/Gault/BP_jRPG_EnemyWorld_GaultB_Unique.BP_jRPG_EnemyWorld_GaultB_Unique_C",
+      "default_handles": [
+        "YF_GaultB_Alpha"
+      ],
+      "status": "structurally_resolved"
+    },
+    "ed8ee55a835b6136": {
+      "class_path": "/Game/Characters/Enemies/YellowForest/Glaise/BP_jRPG_EnemyWorld_Glaise.BP_jRPG_EnemyWorld_Glaise_C",
+      "default_handles": [
+        "YF_Glaise*1"
+      ],
+      "status": "structurally_resolved"
+    },
+    "898b35e9947989fd": {
+      "class_path": "/Game/Characters/Enemies/YellowForest/Glaise/BP_jRPG_EnemyWorld_Glaise_ALPHA.BP_jRPG_EnemyWorld_Glaise_ALPHA_C",
+      "default_handles": [
+        "YF_GlaiseALPHA"
+      ],
+      "status": "structurally_resolved"
+    },
+    "d289d4782498e771": {
+      "class_path": "/Game/Characters/Enemies/YellowForest/Jar/BP_jRPG_EnemyWorld_Jar.BP_jRPG_EnemyWorld_Jar_C",
+      "default_handles": [
+        "YF_Jar*1"
+      ],
+      "status": "structurally_resolved"
+    },
+    "469876e3cca11e34": {
+      "class_path": "/Game/Characters/Enemies/YellowForest/Jar/BP_jRPG_EnemyWorld_Jar_ALPHA.BP_jRPG_EnemyWorld_Jar_ALPHA_C",
+      "default_handles": [
+        "YF_JarALPHA"
+      ],
+      "status": "structurally_resolved"
+    },
+    "7b01d1e166c177fd": {
+      "class_path": "/Game/Characters/Enemies/YellowForest/Potier/BP_jRPG_EnemyWorld_Potier.BP_jRPG_EnemyWorld_Potier_C",
+      "default_handles": [
+        "YF_Potier*1"
+      ],
+      "status": "structurally_resolved"
+    },
+    "4b18373320792d9a": {
+      "class_path": "/Game/Characters/Enemies/YellowForest/Sapling/BP_jRPG_EnemyWorld_Sapling.BP_jRPG_EnemyWorld_Sapling_C",
+      "default_handles": [
+        "YellowForest_Sapling*1"
+      ],
+      "status": "needs_review"
+    },
+    "3d66d6b366d5dc17": {
+      "class_path": "/Game/Characters/Enemies/YellowForest/Sapling/BP_jRPG_EnemyWorld_Sapling_Alternative_CrushingWall.BP_jRPG_EnemyWorld_Sapling_Alternative_CrushingWall_C",
+      "default_handles": [
+        "SL_Sapling_CrushingWalls"
+      ],
+      "status": "needs_review"
+    },
+    "c090e12de01ce0f7": {
+      "class_path": "/Game/Characters/Gestrals/Mime/BP_EnemyWorld_Mime.BP_EnemyWorld_Mime_C",
+      "default_handles": [
+        "Mime*1"
+      ],
+      "status": "structurally_resolved"
+    },
+    "505c05fab54a3e26": {
+      "class_path": "/Game/Characters/Gestrals/Mime/MimeVersions/BP_EnemyWorld_Mime_AS.BP_EnemyWorld_Mime_AS_C",
+      "default_handles": [
+        "AS_Mime*1"
+      ],
+      "status": "structurally_resolved"
+    },
+    "22d905d4f4dada31": {
+      "class_path": "/Game/Characters/Gestrals/Mime/MimeVersions/BP_EnemyWorld_Mime_CFH.BP_EnemyWorld_Mime_CFH_C",
+      "default_handles": [
+        "CFH_Mime*1"
+      ],
+      "status": "structurally_resolved"
+    },
+    "697f3ec8c6d8fd69": {
+      "class_path": "/Game/Characters/Gestrals/Mime/MimeVersions/BP_EnemyWorld_Mime_EN.BP_EnemyWorld_Mime_EN_C",
+      "default_handles": [
+        "EN_Mime*1"
+      ],
+      "status": "structurally_resolved"
+    },
+    "226ca7b4b65ffa0a": {
+      "class_path": "/Game/Characters/Gestrals/Mime/MimeVersions/BP_EnemyWorld_Mime_GO.BP_EnemyWorld_Mime_GO_C",
+      "default_handles": [
+        "GO_Mime*1"
+      ],
+      "status": "structurally_resolved"
+    },
+    "07626837ed7676be": {
+      "class_path": "/Game/Characters/Gestrals/Mime/MimeVersions/BP_EnemyWorld_Mime_MF.BP_EnemyWorld_Mime_MF_C",
+      "default_handles": [
+        "MF_Mime*1"
+      ],
+      "status": "structurally_resolved"
+    },
+    "1cd2e86ab6db20d5": {
+      "class_path": "/Game/Characters/Gestrals/Mime/MimeVersions/BP_EnemyWorld_Mime_ML.BP_EnemyWorld_Mime_ML_C",
+      "default_handles": [
+        "GO_Mime*1"
+      ],
+      "status": "structurally_resolved"
+    },
+    "6f57f6b1e5a61604": {
+      "class_path": "/Game/Characters/Gestrals/Mime/MimeVersions/BP_EnemyWorld_Mime_MM.BP_EnemyWorld_Mime_MM_C",
+      "default_handles": [
+        "MM_Mime*1"
+      ],
+      "status": "structurally_resolved"
+    },
+    "0465a1a3879c533a": {
+      "class_path": "/Game/Characters/Gestrals/Mime/MimeVersions/BP_EnemyWorld_Mime_OL.BP_EnemyWorld_Mime_OL_C",
+      "default_handles": [
+        "OL_Mime*1"
+      ],
+      "status": "structurally_resolved"
+    },
+    "c7dc16ddf8d1a1ea": {
+      "class_path": "/Game/Characters/Gestrals/Mime/MimeVersions/BP_EnemyWorld_Mime_RE.BP_EnemyWorld_Mime_RE_C",
+      "default_handles": [
+        "RE_Mime*1"
+      ],
+      "status": "structurally_resolved"
+    },
+    "fee08431356fd4d5": {
+      "class_path": "/Game/Characters/Gestrals/Mime/MimeVersions/BP_EnemyWorld_Mime_SI.BP_EnemyWorld_Mime_SI_C",
+      "default_handles": [
+        "SI_Mime*1"
+      ],
+      "status": "structurally_resolved"
+    },
+    "a3415f07a08aefa6": {
+      "class_path": "/Game/Characters/Gestrals/Mime/MimeVersions/BP_EnemyWorld_Mime_SM.BP_EnemyWorld_Mime_SM_C",
+      "default_handles": [
+        "Mime*1"
+      ],
+      "status": "structurally_resolved"
+    },
+    "3238477fc65dddda": {
+      "class_path": "/Game/Characters/Gestrals/Mime/MimeVersions/BP_EnemyWorld_Mime_VD.BP_EnemyWorld_Mime_VD_C",
+      "default_handles": [
+        "VD_Mime*1"
+      ],
+      "status": "structurally_resolved"
+    },
+    "260d5c7edfcff33f": {
+      "class_path": "/Game/Characters/Gestrals/Mime/MimeVersions/BP_EnemyWorld_Mime_WM_01.BP_EnemyWorld_Mime_WM_01_C",
+      "default_handles": [
+        "YF_Mime*1"
+      ],
+      "status": "structurally_resolved"
+    },
+    "7c9fdf115531ec9c": {
+      "class_path": "/Game/Characters/Gestrals/Mime/MimeVersions/BP_EnemyWorld_Mime_WM_02.BP_EnemyWorld_Mime_WM_02_C",
+      "default_handles": [
+        "YF_Mime*1"
+      ],
+      "status": "structurally_resolved"
+    },
+    "25725dd42e30d240": {
+      "class_path": "/Game/Characters/Gestrals/Mime/MimeVersions/BP_EnemyWorld_Mime_YF.BP_EnemyWorld_Mime_YF_C",
+      "default_handles": [
+        "YF_Mime*1"
+      ],
+      "status": "structurally_resolved"
+    }
+  }
+}

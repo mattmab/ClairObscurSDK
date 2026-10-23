@@ -139,6 +139,8 @@ class SessionScope:
         self._sequence_owners = []
         self._reference_owners = []
         self._audio_owners = []
+        self._enemy_spawn_owners = []
+        self._native_owners = []
         self.console = ScopedConsole(self)
         self.actions = None
 
@@ -163,6 +165,14 @@ class SessionScope:
             if parent is None or parent._closed:
                 raise RuntimeError('Parent resource scope is closed')
         self._session._check()
+
+    def _register_native_owner(self, owner):
+        """Register cleanup for a same-scope native service, without granting authority."""
+        self._check()
+        if getattr(owner, '_scope', None) is not self or not callable(getattr(owner, 'close', None)):
+            raise ValueError('Native owner must belong to this scope and provide close()')
+        if not any(item is owner for item in self._native_owners):
+            self._native_owners.append(owner)
 
     @property
     def supports_traces(self):
@@ -389,6 +399,24 @@ class SessionScope:
                 errors.append('mesh cleanup: ' + type(error).__name__)
         if hasattr(self, '_mesh_models'):
             self._mesh_models.clear()
+        for owner in reversed(tuple(self._native_owners)):
+            try:
+                if not owner.close():
+                    menus_closed = False
+                    errors.append('native service cleanup deferred')
+            except BaseException as error:
+                menus_closed = False
+                errors.append('native service cleanup: ' + type(error).__name__)
+        self._native_owners.clear()
+        for owner in reversed(tuple(self._enemy_spawn_owners)):
+            try:
+                if not owner.close():
+                    menus_closed = False
+                    errors.append('native enemy cleanup deferred')
+            except BaseException as error:
+                menus_closed = False
+                errors.append('enemy cleanup: ' + type(error).__name__)
+        self._enemy_spawn_owners.clear()
         for owner in reversed(self._sequence_owners):
             try:
                 if not owner.close():

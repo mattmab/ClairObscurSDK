@@ -1,6 +1,7 @@
 #pragma once
 #include "mesh_protocol.h"
 #include "mesh_profile.h"
+#include "surface_query.h"
 #include <vector>
 #include <algorithm>
 #include <string>
@@ -400,16 +401,16 @@ public:
                 for(int attempt=0;attempt<2 && !grounded;++attempt) {
                     if(attempt)for(int i=0;i<2;++i)position_[i]-=forward[i]*175.;
                     const Vec start{position_[0],position_[1],position_[2]+300.},end{position_[0],position_[1],position_[2]-900.};
-                    clear_args();std::memcpy(args_,&pawn,8);std::memcpy(args_+8,&start,24);std::memcpy(args_+32,&end,24);
-                    const Array ignored{&pawn,1,1};std::memcpy(args_+64,&ignored,16);args_[336]=1;
-                    if(!call(b,p.material_inputs[0],17)){p.error=1814;return;}
-                    if(!args_[376])continue;
-                    uint8_t hit[248];std::memcpy(hit,args_+88,248);clear_args();std::memcpy(args_,hit,248);
-                    if(!call(b,p.inputs[1],18)){p.error=1814;return;}
-                    Vec point{},normal{};std::memcpy(&point,args_+288,24);std::memcpy(&normal,args_+336,24);
-                    if(!args_[248] || args_[249] || !std::isfinite(normal.z) || normal.z<.75 ||
-                       !std::isfinite(point.x) || !std::isfinite(point.y) || !std::isfinite(point.z))continue;
-                    position_[0]=point.x;position_[1]=point.y;position_[2]=point.z+1.;grounded=true;
+                    const double trace_start[]={start.x,start.y,start.z},trace_end[]={end.x,end.y,end.z};
+                    e33_surface_query::Sample surface{};
+                    const auto result=e33_surface_query::sample([&](unsigned stage,uint8_t* values){
+                        std::memcpy(args_,values,sizeof(args_));
+                        const bool ok=stage?call(b,p.inputs[1],18):call(b,p.material_inputs[0],17);
+                        std::memcpy(values,args_,sizeof(args_));return ok;
+                    },pawn,trace_start,trace_end,&pawn,1,surface);
+                    if(result==e33_surface_query::Result::Rejected){p.error=1814;return;}
+                    if(result!=e33_surface_query::Result::Hit)continue;
+                    position_[0]=surface.point[0];position_[1]=surface.point[1];position_[2]=surface.point[2]+1.;grounded=true;
                 }
                 if(!grounded){p.error=1814;return;}
             }

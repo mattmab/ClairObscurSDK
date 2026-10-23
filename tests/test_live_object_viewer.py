@@ -129,7 +129,7 @@ class ViewerTests(unittest.TestCase):
         from expedition33.management_view import ManagementView
         from test_management_native import FakePanel
         registry = Mock()
-        registry.views.return_value = []
+        registry._startup_progress = {};registry.views.return_value = [];registry.keys.return_value = []
         registry.installed.return_value = []
         scope = Mock(supports_multi_controls=True)
         shared = NativeMenuService(scope, registry)

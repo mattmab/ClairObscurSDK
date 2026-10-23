@@ -1,6 +1,6 @@
 // Generated from the exact shipping-build observations in dist/mesh-feasibility.
 #pragma once
-struct MeshField {const char* name;const char* type;int offset,width;uint64_t flags,table;const char* structure;const char* inner;int inner_width;const char* inner_structure;uint32_t boolean;const char* constraint;};
+#include "engine_profiles.h"
 inline const MeshField mesh_fields_0[]={{"WorldContextObject","ObjectProperty",0,8,0x18001000000282ULL,0x6e11d38ULL,"","",0,"",0U,"Object"},
 {"ActorClass","ClassProperty",8,8,0x1c001000000280ULL,0x6e12ac8ULL,"","",0,"",0U,"Actor"},
 {"SpawnTransform","StructProperty",16,96,0x18001048000182ULL,0x6e136a0ULL,"Transform","",0,"",0U,""},
@@ -117,27 +117,26 @@ inline const MeshField hair_transform_fields_1[]={{"ReturnValue","StructProperty
 inline const MeshField hair_world_fields_0[]={{"ReturnValue","StructProperty",0,96,0x18001040000580ULL,0x6e136a0ULL,"Transform","",0,"",0U,""}};
 inline const MeshField hair_world_fields_1[]={{"NewTransform","StructProperty",0,96,0x18001048000182ULL,0x6e136a0ULL,"Transform","",0,"",0U,""},{"bSweep","BoolProperty",96,1,0x18001040000280ULL,0x6e119b0ULL,"","",0,"",0xff010001U,""},{"SweepHitResult","StructProperty",104,248,0x10009040000180ULL,0x6e136a0ULL,"HitResult","",0,"",0U,""},{"bTeleport","BoolProperty",352,1,0x18001040000280ULL,0x6e119b0ULL,"","",0,"",0xff010001U,""}};
 inline const MeshField hair_world_fields_2[]={{"bNewAbsoluteLocation","BoolProperty",0,1,0x18001040000280ULL,0x6e119b0ULL,"","",0,"",0xff010001U,""},{"bNewAbsoluteRotation","BoolProperty",1,1,0x18001040000280ULL,0x6e119b0ULL,"","",0,"",0xff010001U,""},{"bNewAbsoluteScale","BoolProperty",2,1,0x18001040000280ULL,0x6e119b0ULL,"","",0,"",0xff010001U,""}};
-struct MeshFunction {const char* owner;const char* name;uint32_t flags,params,extent,returned;uint64_t entry;const MeshField* fields;size_t count;};
 inline const MeshFunction mesh_functions[]={
-{"GameplayStatics","BeginDeferredActorSpawnFromClass",0x4c22403,144,144,136,0x37336c0,mesh_fields_0,7},
-{"GameplayStatics","FinishSpawningActor",0x4c22403,128,128,120,0x37372f0,mesh_fields_1,4},
+e33_engine_profiles::profiles[0],
+e33_engine_profiles::profiles[1],
 {"Actor","AddComponentByClass",0x4c20403,128,128,120,0x3338bf0,mesh_fields_2,5},
 {"Actor","FinishAddComponent",0x4c20403,112,112,65535,0x3339610,mesh_fields_3,3},
 {"ProceduralMeshComponent","CreateMeshSection_LinearColor",0x4420401,154,160,65535,0x5ab6e30,mesh_fields_4,12},
-{"Actor","K2_DestroyActor",0x4020402,0,0,65535,0x333dcd0,nullptr,0},
-{"Actor","K2_GetActorLocation",0x54820403,24,24,0,0x333de20,mesh_fields_6,1},
+e33_engine_profiles::profiles[2],
+e33_engine_profiles::profiles[3],
 {"Actor","GetActorForwardVector",0x54820403,24,24,0,0x3339b80,mesh_fields_7,1},
-{"Actor","SetActorEnableCollision",0x4020403,1,1,65535,0x333fc30,mesh_fields_8,1},
-{"SceneComponent","SetMobility",0x4020402,1,1,65535,0x32da020,mesh_fields_9,1},
+e33_engine_profiles::profiles[47],
+e33_engine_profiles::profiles[16],
 {"ProceduralMeshComponent","GetNumSections",0x54020401,4,4,0,0x5ab75d0,mesh_fields_10,1},
 {"Actor","IsActorBeingDestroyed",0x54020401,1,1,0,0x333be80,mesh_fields_11,1},
 {"PrimitiveComponent","CreateDynamicMaterialInstance",0x4020402,32,32,24,0x32c71f0,mesh_fields_12,4},
 {"MaterialInstanceDynamic","SetTextureParameterValue",0x4020403,16,16,65535,0x391f420,mesh_fields_13,2},
 {"MaterialInstanceDynamic","K2_GetTextureParameterValue",0x4020403,16,16,8,0x391e550,mesh_fields_14,2},
 {"KismetStringLibrary","Conv_StringToName",0x14022403,24,24,16,0x383b800,mesh_fields_15,2},
-{"KismetRenderingLibrary","ImportFileAsTexture2D",0x4022403,32,32,24,0x3854c30,mesh_fields_16,3},
-{"KismetSystemLibrary","LineTraceSingle",0x4c22403,377,384,376,0x385db00,mesh_fields_17,13},
-{"GameplayStatics","BreakHitResult",0x14c22403,464,464,65535,0x3734ed0,mesh_fields_18,19},
+e33_engine_profiles::profiles[51],
+e33_engine_profiles::profiles[14],
+e33_engine_profiles::profiles[15],
 {"MaterialInstanceDynamic","SetVectorParameterValue",0x4820403,24,24,65535,0x391f980,mesh_fields_19,2},
 {"SkinnedMeshComponent","GetNumBones",0x54020403,4,4,0,0x32dddd0,mesh_fields_20,1},
 {"SkinnedMeshComponent","GetBoneName",0x54020403,12,12,4,0x32dda50,mesh_fields_21,2},
@@ -147,13 +146,13 @@ inline const MeshFunction mesh_functions[]={
 {"ProceduralMeshComponent","UpdateMeshSection_LinearColor",0x4420401,137,144,65535,0x5ab8450,mesh_fields_25,10},
 {"SceneComponent","SetHiddenInGame",0x4020401,2,2,65535,0x32d9f50,mesh_fields_26,2},
 {"Pawn","IsPlayerControlled",0x54020402,1,1,0,0x3a9c1a0,mesh_fields_27,1},
-{"ActorComponent","GetOwner",0x54020403,8,8,0,0x3539df0,mesh_fields_28,1},
+e33_engine_profiles::profiles[18],
 {"SkinnedMeshComponent","GetBoneIndex",0x54020403,12,12,8,0x32dd9b0,mesh_fields_29,2},
 {"SceneComponent","K2_SetRelativeLocation",0x4c20403,281,288,65535,0x32d8a90,hair_location_fields,4},
 {"SceneComponent","K2_SetRelativeTransform",0x4c20403,353,368,65535,0x32d90b0,hair_transform_fields_0,4},
 {"SceneComponent","GetRelativeTransform",0x54820403,96,96,0,0x32d6c70,hair_transform_fields_1,1},
-{"SceneComponent","K2_GetComponentToWorld",0x54820403,96,96,0,0x32d8a00,hair_world_fields_0,1},
-{"SceneComponent","K2_SetWorldTransform",0x4c20403,353,368,65535,0x32d9930,hair_world_fields_1,4},
+e33_engine_profiles::profiles[19],
+e33_engine_profiles::profiles[20],
 {"SceneComponent","SetAbsolute",0x4020403,3,3,65535,0x32d9e20,hair_world_fields_2,3},
 };
 inline const MeshField mesh_Transform[]={{"Rotation","StructProperty",0,32,0x18001041000005ULL,0x6e136a0ULL,"Quat","",0,"",0U,""},

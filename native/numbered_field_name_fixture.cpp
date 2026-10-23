@@ -12,6 +12,9 @@ int main() {
     assert(!exact_field_name(0,at,"GeneratedLocal"));
     assert(!exact_field_name(0,at,"GeneratedLocal",1));
     assert(!exact_field_name(0,at,"GeneratedLocal_1",2));
+    words[1]=1;assert(exact_field_name(0,at,"GeneratedLocal",1));
+    assert(!exact_field_name(0,at,"GeneratedLocal_0",1));
+    words[1]=2;
     words[0]=124;assert(!exact_field_name(0,at,"GeneratedLocal",2));
     words[0]=123;words[1]=0;assert(exact_field_name(0,at,"GeneratedLocal"));
     assert(!exact_field_name(0,at,"GeneratedLocal",2));

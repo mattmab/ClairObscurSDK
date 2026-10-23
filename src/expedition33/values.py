@@ -60,7 +60,7 @@ class StoredMapEntries:
 
 def _map_value(metadata, value, catalog=None):
     kinds = metadata.get('map_key_type'), metadata.get('map_value_type')
-    if kinds not in (('NameProperty', 'BoolProperty'), ('ByteProperty', 'StructProperty'),
+    if kinds not in (('NameProperty', 'BoolProperty'), ('NameProperty', 'ByteProperty'), ('ByteProperty', 'StructProperty'),
                      ('NameProperty', 'StructProperty'), ('ByteProperty', 'DoubleProperty'), ('ByteProperty', 'IntProperty'),
                      ('NameProperty', 'ObjectProperty'), ('StructProperty', 'ObjectProperty'), ('StructProperty', 'StructProperty')):
         raise ValueError('Unsupported map element types')
@@ -102,6 +102,9 @@ def _map_value(metadata, value, catalog=None):
             entry = _struct_value(catalog, entry, budget=budget)
             if entry.type_object != expected:
                 raise ValueError('Map struct type mismatch')
+        elif kinds[1] == 'ByteProperty':
+            if type(entry) is not int or not 0 <= entry <= 255:
+                raise ValueError('Invalid map byte value')
         elif kinds[1] == 'BoolProperty':
             if type(entry) is not bool:
                 raise ValueError('Invalid map entry')
@@ -174,7 +177,7 @@ def _struct_value(catalog, value, depth=0, budget=None):
     fields, errors, types = {}, {}, {}
     for row in rows:
         budget[0] -= 1
-        if budget[0] < 0 or type(row) is not dict or set(row) not in ({'name', 'type', 'value'}, {'name', 'type', 'error'}):
+        if budget[0] < 0 or type(row) is not dict or set(row) not in ({'name', 'type', 'value'}, {'name', 'type', 'error'}, {'name', 'type', 'value', 'map_key_type', 'map_value_type'}):
             raise ValueError('Invalid struct member')
         name, kind = row['name'], row['type']
         if type(name) is not str or not name or len(name) > 1024 or name in types or type(kind) is not str:
@@ -186,7 +189,13 @@ def _struct_value(catalog, value, depth=0, budget=None):
             errors[name] = row['error']
             continue
         item = row['value']
-        if kind == 'StructProperty':
+        if kind == 'MapProperty':
+            if set(row) != {'name', 'type', 'value', 'map_key_type', 'map_value_type'} or (row['map_key_type'],row['map_value_type']) != ('NameProperty','ByteProperty'):
+                raise ValueError('Unsupported nested map schema')
+            item = _map_value(row,item,catalog)
+            budget[0] -= len(item.items)
+            if budget[0] < 0:raise ValueError('Struct node limit')
+        elif kind == 'StructProperty':
             item = _struct_value(catalog, item, depth + 1, budget)
         elif kind in ('ObjectProperty', 'ClassProperty'):
             if item is not None:
@@ -517,5 +526,3 @@ def _decode_values(catalog, obj, start, rows):
         values[key] = sequence[0] if meta['dimension'] == 1 else sequence
     return StoredValues(obj, MappingProxyType(values), MappingProxyType(errors),
                         MappingProxyType({key: meta['type'] for key, meta in metadata.items()}), frozenset(truncated))
-
-

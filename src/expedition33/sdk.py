@@ -297,6 +297,12 @@ class Session:
         return (getattr(self._transport, 'retained_protocol', 0) == 1 and
                 self.supports_object_leases and self.supports_reflected_invocation)
 
+    @property
+    def supports_blueprint_invocation(self):
+        return (self.supports_retained_invocation and self.supports_pod_values and
+                type(getattr(self._transport, "blueprint_invocation_protocol", None)) is int and
+                self._transport.blueprint_invocation_protocol == 1)
+
     def _abort_ownership(self):
         for trace in getattr(self, '_traces', ()):
             trace._state = 'unknown'
@@ -392,6 +398,10 @@ class Session:
             from . import _text_wire as wire
         elif plan.wire_version == 4:
             from . import _enum_wire as wire
+        elif plan.wire_version == 8:
+            if not self.supports_blueprint_invocation:
+                raise UnsupportedInvocation("Typed Blueprint invocation capability is unavailable")
+            from . import _blueprint_wire as wire
         elif plan.wire_version == 6:
             if getattr(self._transport,'asset_load_protocol',0)!=1:
                 raise UnsupportedInvocation('Verified asset loading is unavailable')
@@ -657,4 +667,3 @@ class Session:
 
     def __exit__(self, *_exc):
         self.close()
-

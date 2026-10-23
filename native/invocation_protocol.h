@@ -7,7 +7,7 @@
 constexpr uint32_t kCallVersion = 1, kCallBytes = 4096, kCallFields = 128, kCallObjects = 128;
 constexpr uint32_t kPodCallVersion = 2;
 enum CallKind : uint32_t { CallBool=1, CallByte, CallUInt16, CallInt32, CallFloat, CallDouble, CallObject, CallClass,
-                          CallVector2D, CallLinearColor, CallMargin, CallAnchors, CallVector=15, CallQualifiedFrameTime=19, CallTimespan=20 };
+                          CallVector2D, CallLinearColor, CallMargin, CallAnchors, CallVector=15, CallQualifiedFrameTime=19, CallTimespan=20, CallGuid=22 };
 inline bool frame_time_call_enabled(uint32_t kind) {
 #ifdef E33_FRAME_TIME_SESSION
     return kind==CallQualifiedFrameTime;
@@ -22,8 +22,8 @@ inline bool timespan_call_enabled(uint32_t kind) {
     (void)kind; return false;
 #endif
 }
-inline bool call_pod_kind(uint32_t kind) { return (kind>=CallVector2D && kind<=CallAnchors) || kind==CallVector || kind==CallQualifiedFrameTime || kind==CallTimespan; }
-inline PodValueKind call_pod_profile(uint32_t kind) { return kind==CallTimespan ? PodValueKind::Timespan : kind==CallQualifiedFrameTime ? PodValueKind::QualifiedFrameTime : kind==CallVector ? PodValueKind::Vector : static_cast<PodValueKind>(kind-CallVector2D+1); }
+inline bool call_pod_kind(uint32_t kind) { return kind==CallGuid || (kind>=CallVector2D && kind<=CallAnchors) || kind==CallVector || kind==CallQualifiedFrameTime || kind==CallTimespan; }
+inline PodValueKind call_pod_profile(uint32_t kind) { return kind==CallGuid ? PodValueKind::Guid : kind==CallTimespan ? PodValueKind::Timespan : kind==CallQualifiedFrameTime ? PodValueKind::QualifiedFrameTime : kind==CallVector ? PodValueKind::Vector : static_cast<PodValueKind>(kind-CallVector2D+1); }
 enum CallOutcome : uint32_t { CallNotDispatched=0, CallDispatchReturned=1, CallOutcomeUnknown=2 };
 #pragma pack(push, 1)
 struct CallIdentity { int32_t index, serial; uint64_t address; };
@@ -65,7 +65,7 @@ inline uint32_t validate_call_packet(const CallPacket& p,bool allow_pod=false) {
     unsigned returns=0;
     for(unsigned f=0;f<p.field_count;++f) {
         const auto& field=p.fields[f];
-        if(field.kind<CallBool || (field.kind>(pod_packet ? CallAnchors : CallClass) && !(pod_packet && (field.kind==CallVector || frame_time_call_enabled(field.kind) || timespan_call_enabled(field.kind)))) || !field.name[0] || field.name[95] || !(field.flags&0x80) ||
+        if(field.kind<CallBool || (field.kind>(pod_packet ? CallAnchors : CallClass) && !(pod_packet && (field.kind==CallGuid || field.kind==CallVector || frame_time_call_enabled(field.kind) || timespan_call_enabled(field.kind)))) || !field.name[0] || field.name[95] || !(field.flags&0x80) ||
            !field.dimension || field.dimension>64 || !field.width ||
            uint64_t(field.offset)+uint64_t(field.dimension)*field.width>p.parameter_size) return 301;
         for(unsigned i=0;i<96 && field.name[i];++i) if(static_cast<unsigned char>(field.name[i])>=128) return 301;

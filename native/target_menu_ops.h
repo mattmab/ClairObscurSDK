@@ -148,7 +148,8 @@ struct TargetMenuOps {
     }
     MenuResult capture_baseline() {
         auto result=data.focus.capture(data.base,data.engine);
-        if(result!=SlateReferenceResult::Ok) data.preparation_diagnostic=902;
+        if(result!=SlateReferenceResult::Ok)
+            data.preparation_diagnostic=data.focus.capture_diagnostic ? data.focus.capture_diagnostic : 902;
         return result==SlateReferenceResult::Ok ? MenuResult::Ok : MenuResult::Invalid;
     }
     MenuResult release_prepared_baseline() {

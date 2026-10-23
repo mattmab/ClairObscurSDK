@@ -18,6 +18,7 @@ class Profile:
     fields: tuple  # name, byte offset, primitive kind or nested profile path
 
 
+GUID = '/Script/CoreUObject.Guid'
 VECTOR = '/Script/CoreUObject.Vector2D'
 COLOR = '/Script/CoreUObject.LinearColor'
 MARGIN = '/Script/SlateCore.Margin'
@@ -30,6 +31,7 @@ QUALIFIED_FRAME_TIME = '/Script/CoreUObject.QualifiedFrameTime'
 TIMESPAN = '/Script/CoreUObject.Timespan'
 FRAME_PROFILES = (FRAME_NUMBER, FRAME_TIME, FRAME_RATE, QUALIFIED_FRAME_TIME)
 PROFILES = MappingProxyType({
+    GUID: Profile(GUID, 16, tuple((name, i*4, 'IntProperty') for i,name in enumerate('ABCD'))),
     TIMESPAN: Profile(TIMESPAN, 8, ()),
     FRAME_NUMBER: Profile(FRAME_NUMBER, 4, (('Value', 0, 'IntProperty'),)),
     FRAME_TIME: Profile(FRAME_TIME, 8, (('FrameNumber', 0, FRAME_NUMBER), ('SubFrame', 4, 'FloatProperty'))),
@@ -115,6 +117,8 @@ def validate_profile(catalog, descriptor, descriptors):
                 row['offset'] != offset or row['element_size'] != width or row['dimension'] != 1 or
                 row['type'] != ('StructProperty' if nested else kind)):
             raise ValueError('POD struct field layout changed')
+        if path == GUID and (row['flags'] != 6755469251052033 or int(row['vtable_rva'],16) != 0x6e10a98):
+            raise ValueError('Guid field flags or native type changed')
         if path in FRAME_PROFILES:
             table = 0x6e136a0 if nested else 0x6e10a98 if kind == 'IntProperty' else 0x6e11560
             if row['flags'] != _FRAME_FLAGS[path][field_index] or int(row['vtable_rva'], 16) != table:

@@ -38,12 +38,9 @@ def build(destination, version):
     for source in sorted((ROOT / 'licenses').rglob('*')):
         if source.is_file():
             copy(source.relative_to(ROOT), source.relative_to(ROOT))
-    for directory in ('research-probe', 'readonly-worker', 'research-probe-picto-v4'):
-        copy('build/release/research-probe-worldbuilder-v65-selection/research_probe.exe', f'build/{directory}/research_probe.exe')
-    copy('build/release/research-probe-worldbuilder-v65-selection/research_probe.exe', 'build/research-probe-worldbuilder-v65-selection/research_probe.exe')
-    copy('build/release/runtime-session-worldbuilder-v65-selection/runtime_session_worldbuilder_v65_selection.dll', 'build/runtime-session-worldbuilder-v65-selection/runtime_session_worldbuilder_v65_selection.dll')
-    copy('build/release/research-probe-zone-v68/research_probe.exe', 'build/research-probe-zone-v68/research_probe.exe')
-    copy('build/release/runtime-session-zone-v68/runtime_session_zone_v68.dll', 'build/runtime-session-zone-v68/runtime_session_zone_v68.dll')
+    for directory in ('research-probe', 'readonly-worker', 'research-probe-picto-v4', 'research-probe-cinematic-v202-extra-spots'):
+        copy('build/release/research-probe-cinematic-v202-extra-spots/research_probe.exe', f'build/{directory}/research_probe.exe')
+    copy('build/release/runtime-session-cinematic-v202/runtime_session_cinematic_v202.dll', 'build/runtime-session-cinematic-v202/runtime_session_cinematic_v202.dll')
     copy('build/readonly-worker-strings-v1/research_probe.exe', 'build/readonly-worker-strings-v1/research_probe.exe')
     copy('build/release/thumbnail-worker-v2/thumbnail_worker.dll', 'build/thumbnail-worker-v2/thumbnail_worker.dll')
     # Launchers inside SDK are install-relative and never search a dev checkout.

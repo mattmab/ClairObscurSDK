@@ -65,6 +65,8 @@ static uint64_t runtime_base = 0, target_object = 0, target_function = 0;
 static PictoBatch session_picto_batch;
 #ifdef E33_ZONE_TRAVEL_SESSION
 #include "zone_travel.h"
+#include "qa_encounter.h"
+#include "qa_mime.h"
 #endif
 #endif
 #ifdef E33_MESH_SESSION
@@ -73,6 +75,45 @@ static PictoBatch session_picto_batch;
 #include "builder_owner.h"
 static e33_builder::Owner session_builder;
 static e33_mesh::Owner session_mesh;
+#include "map_runtime_owner.h"
+static e33_map_runtime::Owner session_map_runtime;
+#ifdef E33_ENEMY_SPAWN_SESSION
+#include "enemy_spawn_owner.h"
+#include "npc_original_admission.h"
+#include "npc_membership_observation.h"
+#ifdef E33_NPC_PRESENTATION_RESEARCH
+#include "npc_research_service.h"
+static e33_npc_presentation::ResearchService session_npc_research;
+#endif
+static e33_enemy_spawn::Owner session_enemy_spawn;
+#if E33_RUNTIME_CINEMATIC_VERSION>=186
+#include "encounter_tuning_owner.h"
+static e33_encounter_tuning::Owner session_encounter_tuning;
+#endif
+#if E33_RUNTIME_CINEMATIC_VERSION>=177
+#include "owned_battle_arena_channel.h"
+#if E33_RUNTIME_CINEMATIC_VERSION>=191
+#include "owned_arena_slots.h"
+static e33_enemy_spawn::Owner session_owned_battle_arenas[2]={e33_enemy_spawn::Owner{true},e33_enemy_spawn::Owner{true}};
+static e33_owned_arena::Slots session_owned_arena_slots{};
+#else
+static e33_enemy_spawn::Owner session_owned_battle_arena{true};
+#endif
+#endif
+#ifdef E33_BATTLE_PARAMETER_FRAME_RESEARCH
+#include "battle_parameter_research_owner.h"
+static e33_enemy_spawn::ParameterResearchOwner session_parameter_research;
+#endif
+#endif
+#ifdef E33_RUNTIME_CINEMATIC_SESSION
+#ifdef E33_RUNTIME_SCENE_EDITOR_SESSION
+#include "runtime_scene_owner.h"
+static e33_runtime_scene::Owner session_runtime_cinematic;
+#else
+#include "runtime_cinematic_owner.h"
+static e33_runtime_cinematic::Owner session_runtime_cinematic;
+#endif
+#endif
 #endif
 
 #ifdef E33_KEYBIND_SESSION
@@ -214,7 +255,8 @@ static MenuResult menu_command(MenuPacket& wire) {
 #endif
         s.menu.stop_actions();
         auto result=close_menu_actions();
-        return result==MenuResult::Ok ? s.menu.close(ops,lease_session,wire.owner) : result;
+        if(result==MenuResult::Ok)result=s.menu.close(ops,lease_session,wire.owner);
+        return result;
     }
     case MenuOperation::Status: return MenuResult::Ok;
     default: return MenuResult::Invalid;
@@ -527,6 +569,277 @@ uint32_t backend_command(SessionPacket* packet) {
 #ifdef E33_MESH_SESSION
     case SessionMesh: {
         auto& p=*reinterpret_cast<MeshPacket*>(packet->console_text);
+#if E33_RUNTIME_CINEMATIC_VERSION>=186
+        if(p.operation>=157&&p.operation<=159){
+            __try {session_encounter_tuning.command(runtime_base,lease_session,session_leases,p,session_enemy_spawn,session_npc_research);}
+            __except(EXCEPTION_EXECUTE_HANDLER){p.error=3637;}
+            return 0;
+        }
+#endif
+#if defined(E33_ENEMY_SPAWN_SESSION) && E33_RUNTIME_CINEMATIC_VERSION>=177
+        if(p.operation>=e33_owned_arena::prepare&&p.operation<=e33_owned_arena::qualify_helper){
+            p.error=e33_owned_arena::validate(p);if(p.error)return 0;
+#if E33_RUNTIME_CINEMATIC_VERSION>=192
+            if(p.operation==e33_owned_arena::component_pose&&reinterpret_cast<const uint8_t*>(&p)[24]==1){
+                if(!session_enemy_spawn.has_work()||!session_enemy_spawn.token_matches(p.owner)){p.error=3644;return 0;}
+                __try {
+                    CallIdentity query[3]{};double pose[12]{};e33_component_pose::Report report{};
+                    const auto* bytes=reinterpret_cast<const uint8_t*>(&p);
+                    std::memcpy(query,bytes+88,sizeof(query));std::memcpy(pose,bytes+2000,sizeof(pose));
+                    p.error=session_enemy_spawn.set_owned_component_pose(runtime_base,lease_session,session_leases,query,pose,report,true);
+                    std::memcpy(reinterpret_cast<uint8_t*>(&p)+4096,&report,sizeof(report));
+                    if(!p.error)p.state=1;
+                }__except(EXCEPTION_EXECUTE_HANDLER){p.error=3602;}
+                return 0;
+            }
+#endif
+#if E33_RUNTIME_CINEMATIC_VERSION>=191
+            const int arena_slot=p.operation==e33_owned_arena::prepare?
+                session_owned_arena_slots.reserve(p.owner):session_owned_arena_slots.find(p.owner);
+            if(arena_slot<0){
+                if(p.operation==e33_owned_arena::status)p.state=1;
+                else if(p.operation!=e33_owned_arena::retire)p.error=3640;
+                return 0; // never fall back to another owner's arena
+            }
+            auto& session_owned_battle_arena=session_owned_battle_arenas[arena_slot];
+#endif
+            if(!session_owned_battle_arena.token_matches(p.owner)){p.error=3601;return 0;}
+            const auto operation=p.operation;
+            __try {
+                if(operation==e33_owned_arena::qualify_helper){
+#if E33_RUNTIME_CINEMATIC_VERSION>=181
+                    CallIdentity query[4]{};double relative[12]{};e33_enemy_spawn::HelperSourceFrameReport report{};
+                    std::memcpy(query,reinterpret_cast<uint8_t*>(&p)+88,sizeof(query));
+                    std::memcpy(relative,reinterpret_cast<uint8_t*>(&p)+2000,sizeof(relative));
+                    p.error=session_owned_battle_arena.qualify_owned_helper(runtime_base,lease_session,session_leases,session_enemy_spawn,query,relative,report);
+                    std::memcpy(reinterpret_cast<uint8_t*>(&p)+4096,&report,sizeof(report));if(!p.error)p.state=1;
+#else
+                    p.error=3600;
+#endif
+                }else if(operation==e33_owned_arena::ground){
+#if E33_RUNTIME_CINEMATIC_VERSION>=180
+                    CallIdentity query[9]{};e33_enemy_spawn::ArenaGroundReport report{};
+                    std::memcpy(query,reinterpret_cast<uint8_t*>(&p)+88,sizeof(query));
+                    const auto flags=reinterpret_cast<uint8_t*>(&p)[24];
+                    const bool approach=(flags&1)!=0;const bool detailed=(flags&2)!=0;
+                    const bool advisory=(flags&4)!=0;
+                    e33_enemy_spawn::ArenaGroundDiagnostics diagnostics{};
+#if E33_RUNTIME_CINEMATIC_VERSION<184
+                    if(advisory)p.error=3600;
+                    else
+#endif
+#if E33_RUNTIME_CINEMATIC_VERSION<183
+                    if(detailed)p.error=3600;
+                    else
+#endif
+#if E33_RUNTIME_CINEMATIC_VERSION<182
+                    if(approach)p.error=3600;
+                    else
+#endif
+                    p.error=session_owned_battle_arena.ground_owned_arena(runtime_base,lease_session,session_leases,query,report,approach,detailed?&diagnostics:nullptr,!advisory);
+                    std::memcpy(reinterpret_cast<uint8_t*>(&p)+4096,&report,sizeof(report));if(!p.error)p.state=1;
+#if E33_RUNTIME_CINEMATIC_VERSION>=183
+                    if(detailed)std::memcpy(reinterpret_cast<uint8_t*>(&p)+4448,&diagnostics,sizeof(diagnostics));
+#endif
+#else
+                    p.error=3600;
+#endif
+                }else if(operation==e33_owned_arena::component_pose){
+#if E33_RUNTIME_CINEMATIC_VERSION>=178
+                    CallIdentity query[3]{};double pose[12]{};e33_component_pose::Report report{};
+                    const auto* bytes=reinterpret_cast<const uint8_t*>(&p);
+                    std::memcpy(query,bytes+88,sizeof(query));std::memcpy(pose,bytes+2000,sizeof(pose));
+                    p.error=session_owned_battle_arena.set_owned_component_pose(runtime_base,lease_session,session_leases,query,pose,report);
+                    std::memcpy(reinterpret_cast<uint8_t*>(&p)+4096,&report,sizeof(report));
+                    if(!p.error)p.state=1;
+#else
+                    p.error=3600;
+#endif
+                }else if(operation==e33_owned_arena::status){
+                    const auto actor=session_owned_battle_arena.staged_actor();
+                    std::memcpy(reinterpret_cast<uint8_t*>(&p)+4096,&actor,sizeof(actor));
+#if E33_RUNTIME_CINEMATIC_VERSION>=191
+                    p.state=2; // a reservation is pending work, including failed prepare
+#else
+                    p.state=session_owned_battle_arena.has_work()?2:1;
+#endif
+                }else{
+                    p.operation=operation==e33_owned_arena::prepare?120:111;
+                    session_owned_battle_arena.command(runtime_base,lease_session,session_leases,p);
+                }
+            }__except(EXCEPTION_EXECUTE_HANDLER){p.error=3602;}
+#if E33_RUNTIME_CINEMATIC_VERSION>=191
+            if(operation==e33_owned_arena::retire&&!p.error&&
+               !session_owned_arena_slots.retired(static_cast<unsigned>(arena_slot),p.error,session_owned_battle_arena.has_work()))p.error=3641;
+#endif
+            p.operation=operation;return 0;
+        }
+#endif
+#ifdef E33_ENEMY_SPAWN_SESSION
+#ifdef E33_BATTLE_PARAMETER_FRAME_RESEARCH
+        if(p.operation>=124 && p.operation<=130) {
+            __try {
+                e33_enemy_spawn::ParameterInstanceAuthority<StrongLeasePool<>> authority{};
+#ifdef E33_NPC_PRESENTATION_RESEARCH
+                if(session_npc_research.has_work()&&p.operation>=127){
+                    authority.owner=&session_npc_research;
+                    authority.owns=[](void* owner,uint64_t base,uint64_t session,StrongLeasePool<>& pool,uint64_t token,
+                            const CallIdentity& actor,uint64_t& name){
+                        return static_cast<e33_npc_presentation::ResearchService*>(owner)->owned_parameter_instance_name(base,session,pool,token,actor,name);
+                    };
+                    authority.entry=[](void* owner,uint64_t base,uint64_t session,StrongLeasePool<>& pool,uint64_t token,
+                            const CallIdentity& actor,const CallIdentity& manager,const CallIdentity& function,uint64_t& name){
+                        return static_cast<e33_npc_presentation::ResearchService*>(owner)->owned_entry_context(base,session,pool,token,actor,manager,function,name);
+                    };
+                    authority.arena=[](void* owner,uint64_t base,uint64_t session,StrongLeasePool<>& pool,uint64_t token,const CallIdentity& actor,CallIdentity& arena){
+                        return static_cast<e33_npc_presentation::ResearchService*>(owner)->owned_entry_arena(base,session,pool,token,actor,arena);
+                    };
+                    authority.copy_arena=[](void* owner,uint64_t base,uint64_t session,StrongLeasePool<>& pool,uint64_t token,
+                            const CallIdentity& actor,const CallIdentity& arena,void* destination){
+                        return static_cast<e33_npc_presentation::ResearchService*>(owner)->copy_entry_arena(base,session,pool,token,actor,arena,destination);
+                    };
+                    authority.dispatch=[](void* owner,uint64_t base,uint64_t session,StrongLeasePool<>& pool,uint64_t token,
+                            const CallIdentity& actor,const CallIdentity& manager,const CallIdentity& function){
+                        return static_cast<e33_npc_presentation::ResearchService*>(owner)->note_entry_dispatch(base,session,pool,token,actor,manager,function);
+                    };
+                }
+#if defined(E33_RUNTIME_SCENE_EDITOR_SESSION) && E33_RUNTIME_CINEMATIC_VERSION >= 172
+                if(!authority.owner && session_runtime_cinematic.visual_stage_active() && p.operation>=127){
+                    authority.owner=&session_runtime_cinematic;
+                    authority.owns=[](void* owner,uint64_t base,uint64_t,StrongLeasePool<>&,uint64_t token,
+                            const CallIdentity& actor,uint64_t& name){
+                        return static_cast<e33_runtime_scene::Owner*>(owner)->visual_parameter_instance(base,token,actor,name);
+                    };
+                    authority.entry=[](void* owner,uint64_t base,uint64_t,StrongLeasePool<>&,uint64_t token,
+                            const CallIdentity& actor,const CallIdentity& manager,const CallIdentity& function,uint64_t& name){
+                        return static_cast<e33_runtime_scene::Owner*>(owner)->visual_parameter_context(base,token,actor,manager,function,name);
+                    };
+                    authority.arena=[](void* owner,uint64_t base,uint64_t,StrongLeasePool<>&,uint64_t token,const CallIdentity& actor,CallIdentity& arena){
+                        return static_cast<e33_runtime_scene::Owner*>(owner)->visual_parameter_arena(base,token,actor,arena);
+                    };
+                    authority.copy_arena=[](void* owner,uint64_t base,uint64_t,StrongLeasePool<>&,uint64_t token,
+                            const CallIdentity& actor,const CallIdentity& arena,void* destination){
+                        return static_cast<e33_runtime_scene::Owner*>(owner)->visual_parameter_copy_arena(base,token,actor,arena,destination);
+                    };
+                    // No dispatch callback in v172: preflight proves only the
+                    // owned arena/parameter connection, never combat readiness.
+                }
+#endif
+#endif
+#if E33_RUNTIME_CINEMATIC_VERSION >= 195
+                if(!authority.owner&&session_enemy_spawn.is_trigger_anchor()&&p.operation>=128){
+                    authority.owner=&session_enemy_spawn;
+                    authority.owns=[](void* owner,uint64_t base,uint64_t session,StrongLeasePool<>& pool,uint64_t token,
+                            const CallIdentity& actor,uint64_t& name){
+                        return static_cast<e33_enemy_spawn::Owner*>(owner)->owned_instance_name(base,session,pool,token,actor,name);
+                    };
+                    authority.entry=[](void* owner,uint64_t base,uint64_t session,StrongLeasePool<>& pool,uint64_t token,
+                            const CallIdentity& actor,const CallIdentity& manager,const CallIdentity& function,uint64_t& name){
+                        return static_cast<e33_enemy_spawn::Owner*>(owner)->owned_entry_context(base,session,pool,token,actor,manager,function,name);
+                    };
+                    authority.arena=[](void* owner,uint64_t base,uint64_t session,StrongLeasePool<>& pool,uint64_t token,const CallIdentity& actor,CallIdentity& arena){
+                        return static_cast<e33_enemy_spawn::Owner*>(owner)->owned_entry_arena(base,session,pool,token,actor,arena);
+                    };
+                    authority.copy_arena=[](void* owner,uint64_t base,uint64_t session,StrongLeasePool<>& pool,uint64_t token,
+                            const CallIdentity& actor,const CallIdentity& arena,void* destination){
+                        return static_cast<e33_enemy_spawn::Owner*>(owner)->copy_entry_arena(base,session,pool,token,actor,arena,destination);
+                    };
+                    authority.dispatch=[](void* owner,uint64_t base,uint64_t session,StrongLeasePool<>& pool,uint64_t token,
+                            const CallIdentity& actor,const CallIdentity& manager,const CallIdentity& function){
+                        auto& trigger=*static_cast<e33_enemy_spawn::Owner*>(owner);CallIdentity bound{};
+                        if(!trigger.owned_entry_arena(base,session,pool,token,actor,bound))return false;
+                        for(auto& arena:session_owned_battle_arenas){
+                            const auto selected=arena.staged_actor();
+                            if(selected.index==bound.index&&selected.serial==bound.serial&&selected.address==bound.address)
+                                return trigger.note_trigger_entry_dispatch(base,session,pool,token,actor,manager,function,arena);
+                        }
+                        return false;
+                    };
+                }
+#endif
+                session_parameter_research.command(runtime_base,lease_session,session_leases,p,session_enemy_spawn,authority);
+            }
+            __except(EXCEPTION_EXECUTE_HANDLER) {p.error=3056;}
+            return 0;
+        }
+#endif
+#ifdef E33_NPC_PRESENTATION_RESEARCH
+        if(p.operation>=136&&p.operation<=147){
+#ifdef E33_BATTLE_PARAMETER_FRAME_RESEARCH
+            if(session_parameter_research.holds_resources()&&p.operation!=137&&p.operation!=140&&p.operation!=144){p.error=3495;session_npc_research.snapshot(p);return 0;}
+#endif
+            __try {session_npc_research.command(runtime_base,lease_session,session_leases,p,session_enemy_spawn.has_work());}
+            __except(EXCEPTION_EXECUTE_HANDLER){p.error=3453;session_npc_research.snapshot(p);}
+            return 0;
+        }
+        if(p.operation==135){
+            auto* raw=reinterpret_cast<uint8_t*>(&p);bool padding=true;
+            for(size_t i=24;i<sizeof(p);++i)if((i<88||i>=136)&&raw[i])padding=false;
+            if(p.version!=3||p.error||p.state||!p.owner||!padding){p.error=3420;return 0;}
+            e33_npc_presentation::MembershipObservation observation{};bool observed=false;
+            __try {observed=e33_npc_presentation::observe_memberships(runtime_base,p.inputs[0],p.inputs[1],p.inputs[2],observation);}
+            __except(EXCEPTION_EXECUTE_HANDLER){p.error=3422;return 0;}
+            if(!observed){p.error=3421;return 0;}
+            static_assert(sizeof(observation)==56,"NPC membership observation extent");
+            std::memcpy(raw+4096,&observation,sizeof(observation));p.state=1;return 0;
+        }
+        if(p.operation==134){
+            auto* raw=reinterpret_cast<uint8_t*>(&p);bool padding=true;
+            for(size_t i=24;i<sizeof(p);++i)if((i<88||i>=136)&&raw[i])padding=false;
+            if(p.version!=3||p.error||p.state||!p.owner||!padding){p.error=3400;return 0;}
+            bool admitted=false;
+            __try {admitted=e33_npc_presentation::original_class_contract(runtime_base,p.inputs[0],p.inputs[1],p.inputs[2]);}
+            __except(EXCEPTION_EXECUTE_HANDLER){p.error=3402;return 0;}
+            if(!admitted){p.error=3401;return 0;}
+            const uint32_t yes=1;std::memcpy(raw+4096,&yes,4);p.state=1;return 0;
+        }
+#endif
+        if((p.operation>=110 && p.operation<=123)||p.operation==131||p.operation==132||p.operation==133) {
+#ifdef E33_BATTLE_PARAMETER_FRAME_RESEARCH
+            // A failed private frame retains the trigger it was authorized by.
+            // Normal shutdown already closes parameters before enemies/arenas.
+            if(session_enemy_spawn.is_trigger_anchor()&&session_parameter_research.holds_resources()&&
+               (p.operation==111||p.operation==118)){p.error=p.operation==111?407:3654;return 0;}
+#endif
+#ifdef E33_NPC_PRESENTATION_RESEARCH
+            if(session_npc_research.has_work()){p.error=3452;return 0;}
+#endif
+            __try {session_enemy_spawn.command(runtime_base,lease_session,session_leases,p);}
+            __except(EXCEPTION_EXECUTE_HANDLER) {p.error=2910;}
+            return 0;
+        }
+#endif
+        if(p.operation>=93 && p.operation<=97) {
+            __try {session_map_runtime.command(runtime_base,lease_session,session_leases,p);}
+            __except(EXCEPTION_EXECUTE_HANDLER) {session_map_runtime.quarantine();p.error=2109;}
+            return 0;
+        }
+#ifdef E33_RUNTIME_CINEMATIC_SESSION
+        if(p.operation>=70 && p.operation<=
+#ifdef E33_RUNTIME_SCENE_EDITOR_SESSION
+            98
+#else
+            73
+#endif
+#if defined(E33_RUNTIME_SCENE_EDITOR_SESSION) && E33_RUNTIME_CINEMATIC_VERSION >= 171
+            || p.operation==148
+#endif
+#if defined(E33_RUNTIME_SCENE_EDITOR_SESSION) && E33_RUNTIME_CINEMATIC_VERSION >= 172
+            || p.operation==149
+#endif
+#if defined(E33_RUNTIME_SCENE_EDITOR_SESSION) && E33_RUNTIME_CINEMATIC_VERSION >= 174
+            || p.operation==150
+#endif
+        ) {
+#ifdef E33_BATTLE_PARAMETER_FRAME_RESEARCH
+            if(session_parameter_research.holds_resources() && p.operation!=73){p.error=3495;return 0;}
+#endif
+            __try {session_runtime_cinematic.command(runtime_base,p,session_builder.active() || session_mesh.active() || session_sequence.active());}
+            __except(EXCEPTION_EXECUTE_HANDLER) {session_runtime_cinematic.quarantine();p.error=2015;}
+            return 0;
+        }
+        if(p.operation>=20 && session_runtime_cinematic.active()){p.error=2001;return 0;}
+#endif
         if(p.operation>=20) {session_builder.command(runtime_base,lease_session,session_leases,p);p.step=session_builder.step();return 0;}
         session_mesh.command(runtime_base,lease_session,session_leases,p);session_mesh.reply(p);return 0;
     }
@@ -581,6 +894,11 @@ uint32_t backend_command(SessionPacket* packet) {
         return 0;
     }
 #ifdef E33_ZONE_TRAVEL_SESSION
+    case SessionQAEncounter: {
+        auto& wire=*reinterpret_cast<QAEncounterPacket*>(packet->console_text);
+        if(session_sequence.active() || session_picto_batch.active()){wire.error=1905;return 0;}
+        if(wire.operation==1)qa_encounter_reset(runtime_base,wire);else qa_mime_arena(runtime_base,wire);return 0;
+    }
     case SessionZoneTravel: {
         auto& wire=*reinterpret_cast<ZoneTravelPacket*>(packet->console_text);
         if(session_sequence.active() || session_picto_batch.active() || (wire.operation==1 && session_menu.menu.active())){wire.error=1812;return 0;}
@@ -909,6 +1227,42 @@ static StrongLeaseResult guarded_lease_close() {
 #endif
 #ifdef E33_MESH_SESSION
 static uint32_t guarded_mesh_close() {
+#if E33_RUNTIME_CINEMATIC_VERSION>=186
+    __try {const auto e=session_encounter_tuning.close(runtime_base,lease_session,session_leases);if(e)return e;}
+    __except(EXCEPTION_EXECUTE_HANDLER){return 3637;}
+#endif
+#ifdef E33_ENEMY_SPAWN_SESSION
+#ifdef E33_BATTLE_PARAMETER_FRAME_RESEARCH
+    __try {const auto e=session_parameter_research.close(runtime_base,lease_session,session_leases);if(e)return e;}
+    __except(EXCEPTION_EXECUTE_HANDLER) {return 3056;}
+#endif
+#ifdef E33_NPC_PRESENTATION_RESEARCH
+    __try {const auto e=session_npc_research.close(runtime_base,lease_session,session_leases);if(e)return e;}
+    __except(EXCEPTION_EXECUTE_HANDLER){return 3453;}
+#endif
+    __try {const auto e=session_enemy_spawn.close(runtime_base,lease_session,session_leases);if(e)return e;}
+    __except(EXCEPTION_EXECUTE_HANDLER) {return 2910;}
+#if E33_RUNTIME_CINEMATIC_VERSION>=177
+#if E33_RUNTIME_CINEMATIC_VERSION>=191
+    for(unsigned slot=e33_owned_arena::Slots::capacity;slot-->0;){
+        __try {
+            auto& arena=session_owned_battle_arenas[slot];
+            const auto e=arena.close(runtime_base,lease_session,session_leases);if(e)return e;
+            if(!session_owned_arena_slots.retired(slot,e,arena.has_work()))return 3641;
+        }__except(EXCEPTION_EXECUTE_HANDLER){return 3602;}
+    }
+#else
+    __try {const auto e=session_owned_battle_arena.close(runtime_base,lease_session,session_leases);if(e)return e;}
+    __except(EXCEPTION_EXECUTE_HANDLER) {return 3602;}
+#endif
+#endif
+#endif
+    __try {const auto e=session_map_runtime.close(runtime_base,lease_session,session_leases);if(e)return e;}
+    __except(EXCEPTION_EXECUTE_HANDLER) {return 2109;}
+#ifdef E33_RUNTIME_CINEMATIC_SESSION
+    __try {const auto e=session_runtime_cinematic.close(1);if(e)return e;}
+    __except(EXCEPTION_EXECUTE_HANDLER) {return 2015;}
+#endif
     __try {const auto e=session_builder.stop(runtime_base,lease_session,session_leases,true);if(e)return e;return session_mesh.close(runtime_base,lease_session,session_leases);}
     __except(EXCEPTION_EXECUTE_HANDLER) {return 1808;}
 }
@@ -938,6 +1292,9 @@ uint32_t backend_close() {
 #endif
 #ifdef E33_KEYBIND_SESSION
     session_keys.close(); // Revoke input even when other cleanup must defer.
+#endif
+#ifdef E33_ZONE_TRAVEL_SESSION
+    if(!backend_shutting_down() && !qa_mime_restore(runtime_base))return kSessionCloseDeferred;
 #endif
     uint32_t lease_cleanup_error=0;
 #ifdef E33_TRACE_SESSION
@@ -999,10 +1356,39 @@ uint32_t backend_close() {
     return result;
 }
 #ifdef E33_MESH_SESSION
-bool backend_mesh_wake_needed(){return session_mesh.animating() || session_builder.active();}
+bool backend_mesh_wake_needed(){return session_mesh.animating() || session_builder.active()
+#ifdef E33_RUNTIME_CINEMATIC_SESSION
+    || session_runtime_cinematic.active()
+#endif
+    ;}
 #endif
 void backend_message(MSG* message) {
+#if E33_RUNTIME_CINEMATIC_VERSION>=186
+    __try {session_encounter_tuning.poll(runtime_base,lease_session,session_leases);}
+    __except(EXCEPTION_EXECUTE_HANDLER) {} // owner remains available for cleanup
+#endif
+#ifdef E33_NPC_PRESENTATION_RESEARCH
+    __try {session_npc_research.poll_entry(runtime_base);}
+    __except(EXCEPTION_EXECUTE_HANDLER) {} // Unknown startup/activity retains the NPC.
+#endif
+#ifdef E33_ENEMY_SPAWN_SESSION
+    __try {session_enemy_spawn.poll_helper_entry(runtime_base);}
+    __except(EXCEPTION_EXECUTE_HANDLER) {} // pending journal stays intact on uncertain reads
+#if E33_RUNTIME_CINEMATIC_VERSION >= 195
+    for(auto& arena:session_owned_battle_arenas){
+        __try {arena.poll_helper_entry(runtime_base);}
+        __except(EXCEPTION_EXECUTE_HANDLER) {} // retain its paired startup journal
+    }
+#endif
+#endif
 #ifdef E33_MESH_SESSION
+#ifdef E33_RUNTIME_CINEMATIC_SESSION
+#ifdef E33_RUNTIME_SCENE_EDITOR_SESSION
+    session_runtime_cinematic.pointer_message(message);
+#endif
+    __try {if(session_runtime_cinematic.active())session_runtime_cinematic.poll();}
+    __except(EXCEPTION_EXECUTE_HANDLER) {session_runtime_cinematic.quarantine();}
+#endif
     if(session_builder.active())session_builder.poll(runtime_base,lease_session,session_leases,
         (!session_menu.menu.active() || session_builder.owns_menu(session_menu.widget)) && attachment_valid(runtime_base) && local_read<uint64_t>(attached_console+0xd8)==0);
     if(session_mesh.active())guarded_mesh_poll();
@@ -1067,17 +1453,46 @@ void backend_message(MSG* message) {
 #ifdef E33_MENU_ESCAPE_SESSION
     // Route only this builder's visible panel. Keep ordinary SDK menus and
     // text-entry keys untouched, and swallow the release after async close.
-    static bool builder_blocked_z=false,builder_blocked_y=false;
+    static bool builder_blocked_z=false,builder_blocked_y=false,builder_blocked_g=false;
     const bool key_down=message->message==WM_KEYDOWN||message->message==WM_SYSKEYDOWN;
     const bool key_up=message->message==WM_KEYUP||message->message==WM_SYSKEYUP;
-    if(message->wParam=='Z'||message->wParam=='Y') {
-        auto& held=message->wParam=='Z'?builder_blocked_z:builder_blocked_y;
+#ifdef E33_RUNTIME_SCENE_EDITOR_SESSION
+    static bool scene_backspace_down=false;
+    if(message->wParam==VK_BACK){
+        if(key_up && scene_backspace_down){scene_backspace_down=false;message->message=WM_NULL;return;}
+        if(key_down && scene_backspace_down){message->message=WM_NULL;return;}
+        DWORD scene_foreground=0;GetWindowThreadProcessId(GetForegroundWindow(),&scene_foreground);
+        if(key_down && scene_foreground==GetCurrentProcessId() && lifetime_valid() && attachment_valid(runtime_base) && local_read<uint64_t>(attached_console+0xd8)==0 && session_menu.menu.accepts_actions() && session_runtime_cinematic.timeline_shortcuts(session_menu.widget) && session_keys.contains(VK_BACK) && !(GetKeyState(VK_CONTROL)&0x8000) && !(GetKeyState(VK_MENU)&0x8000) && !(GetKeyState(VK_SHIFT)&0x8000)){
+            session_keys.press(VK_BACK,(message->lParam&(LPARAM(1)<<30))!=0,true);
+            scene_backspace_down=true;message->message=WM_NULL;return;
+        }
+    }
+    static e33_runtime_scene::GameplayShortcutFilter scene_shortcut_keys;
+    const bool scene_shortcut_block=session_runtime_cinematic.blocks_gameplay_shortcuts() && !session_menu.menu.active() &&
+        lifetime_valid() && attachment_valid(runtime_base) && local_read<uint64_t>(attached_console+0xd8)==0;
+    if(scene_shortcut_keys.consume(static_cast<unsigned>(message->wParam),key_down,key_up,scene_shortcut_block)){
+        message->message=WM_NULL;return;
+    }
+#endif
+    if(message->wParam=='Z'||message->wParam=='Y'||message->wParam=='G') {
+        auto& held=message->wParam=='G'?builder_blocked_g:message->wParam=='Z'?builder_blocked_z:builder_blocked_y;
         const bool alt=(message->lParam&(LPARAM(1)<<29))||(GetKeyState(VK_MENU)&0x8000);
         if(key_up&&held){held=false;message->message=WM_NULL;return;}
         if(key_down&&session_builder.active()&&!session_menu.menu.active()&&lifetime_valid()&&attachment_valid(runtime_base)&&local_read<uint64_t>(attached_console+0xd8)==0&&
-           (message->wParam=='Z'||alt)) {
-            if(alt&&!(message->lParam&(LPARAM(1)<<30)))session_builder.request_history(message->wParam=='Y');
+           (message->wParam=='Z'||message->wParam=='G'||alt)) {
+            if(alt&&message->wParam!='G'&&!(message->lParam&(LPARAM(1)<<30)))session_builder.request_history(message->wParam=='Y');
             held=true;message->message=WM_NULL;return;
+        }
+    }
+    // Consume rotation chords before SDK keybind dispatch (P used to play).
+    static bool rotation_key_down[5]{};
+    const unsigned rotation_key=message->wParam=='Y'?0:message->wParam=='P'?1:message->wParam=='R'?2:message->wParam==VK_OEM_PLUS?3:message->wParam==VK_ADD?4:5;
+    if(rotation_key<5){
+        if(key_up&&rotation_key_down[rotation_key]){rotation_key_down[rotation_key]=false;message->message=WM_NULL;return;}
+        if(key_down&&session_builder.active()&&!session_builder.preview_active()&&!session_menu.menu.active()&&
+           lifetime_valid()&&attachment_valid(runtime_base)&&local_read<uint64_t>(attached_console+0xd8)==0&&
+           !(GetKeyState(VK_MENU)&0x8000)&&!(GetKeyState(VK_CONTROL)&0x8000)&&(rotation_key>=3||!(GetKeyState(VK_SHIFT)&0x8000))){
+            rotation_key_down[rotation_key]=true;message->message=WM_NULL;return;
         }
     }
     static bool builder_menu_key_down[3]{};

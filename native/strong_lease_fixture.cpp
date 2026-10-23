@@ -33,6 +33,17 @@ struct Engine {
 int main() {
     using R=StrongLeaseResult;
     {
+        Engine gc; StrongLeasePool<2> retired; uint64_t token=0;
+        check(retired.begin(7)==R::Ok&&retired.acquire(gc,7,100,token)==R::Ok,"purge collector setup");
+        check(retired.owns_retirement_storage(7,token,100),"live collector storage belongs to token");
+        (*gc.allocations.begin())->object=0;
+        check(!retired.owns_object(7,token,100),"cleared collector cannot authorize actor access");
+        check(retired.owns_retirement_storage(7,token,100),"cleared collector still needs destruction");
+        check(!retired.owns_retirement_storage(8,token,100)&&!retired.owns_retirement_storage(7,token+1,100),"foreign retirement rejected");
+        check(retired.release(gc,7,token)==R::Ok&&gc.frees==1&&retired.active()==0,"cleared collector destroyed once");
+        check(!retired.owns_retirement_storage(7,token,100),"retirement token cannot be reused");
+    }
+    {
         // Audio cleanup must retain its full bounded batch even when all
         // public/menu slots are occupied. Private tokens are never exported.
         Engine isolated_engine;

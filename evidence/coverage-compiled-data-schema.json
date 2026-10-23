@@ -1,0 +1,1010 @@
+{
+  "372": {
+    "owners": [
+      {
+        "event": "struct_metadata",
+        "name": "MovieSceneCompiledData",
+        "index": 372,
+        "size": 1024,
+        "serial": 0,
+        "address": "0x2aca359d600",
+        "super": "0x2ac96dd0e00"
+      },
+      {
+        "event": "struct_metadata",
+        "name": "Object",
+        "index": 1,
+        "size": 40,
+        "serial": 1008,
+        "address": "0x2ac96dd0e00",
+        "super": "0x0"
+      }
+    ],
+    "properties": [
+      {
+        "event": "property_metadata",
+        "owner": "MovieSceneCompiledData",
+        "owner_index": 372,
+        "name": "EvaluationTemplate",
+        "type": "StructProperty",
+        "offset": 40,
+        "element_size": 352,
+        "dimension": 1,
+        "flags": 18014948265295872,
+        "vtable_rva": "0x6e136a0",
+        "struct_name": "MovieSceneEvaluationTemplate",
+        "struct_index": 10318,
+        "struct_serial": 0
+      },
+      {
+        "event": "property_metadata",
+        "owner": "MovieSceneCompiledData",
+        "owner_index": 372,
+        "name": "Hierarchy",
+        "type": "StructProperty",
+        "offset": 392,
+        "element_size": 288,
+        "dimension": 1,
+        "flags": 18014398509481984,
+        "vtable_rva": "0x6e136a0",
+        "struct_name": "MovieSceneSequenceHierarchy",
+        "struct_index": 10332,
+        "struct_serial": 0
+      },
+      {
+        "event": "property_metadata",
+        "owner": "MovieSceneCompiledData",
+        "owner_index": 372,
+        "name": "EntityComponentField",
+        "type": "StructProperty",
+        "offset": 680,
+        "element_size": 240,
+        "dimension": 1,
+        "flags": 18014398509481984,
+        "vtable_rva": "0x6e136a0",
+        "struct_name": "MovieSceneEntityComponentField",
+        "struct_index": 10304,
+        "struct_serial": 0
+      },
+      {
+        "event": "property_metadata",
+        "owner": "MovieSceneCompiledData",
+        "owner_index": 372,
+        "name": "TrackTemplateField",
+        "type": "StructProperty",
+        "offset": 920,
+        "element_size": 48,
+        "dimension": 1,
+        "flags": 18014398509481984,
+        "vtable_rva": "0x6e136a0",
+        "struct_name": "MovieSceneEvaluationField",
+        "struct_index": 10313,
+        "struct_serial": 0
+      },
+      {
+        "event": "property_metadata",
+        "owner": "MovieSceneCompiledData",
+        "owner_index": 372,
+        "name": "DeterminismFences",
+        "type": "ArrayProperty",
+        "offset": 968,
+        "element_size": 16,
+        "dimension": 1,
+        "flags": 18014398509482496,
+        "vtable_rva": "0x6e0de80",
+        "inner_type": "StructProperty",
+        "inner_name": "DeterminismFences",
+        "inner_element_size": 8,
+        "inner_struct_name": "FrameTime",
+        "inner_struct_index": 5691,
+        "inner_struct_serial": 0,
+        "inner_struct_address": "0x2aca08fb250"
+      },
+      {
+        "event": "property_metadata",
+        "owner": "MovieSceneCompiledData",
+        "owner_index": 372,
+        "name": "CompiledSignature",
+        "type": "StructProperty",
+        "offset": 984,
+        "element_size": 16,
+        "dimension": 1,
+        "flags": 20266268116386304,
+        "vtable_rva": "0x6e136a0",
+        "struct_name": "Guid",
+        "struct_index": 5659,
+        "struct_serial": 0
+      },
+      {
+        "event": "property_metadata",
+        "owner": "MovieSceneCompiledData",
+        "owner_index": 372,
+        "name": "CompilerVersion",
+        "type": "StructProperty",
+        "offset": 1000,
+        "element_size": 16,
+        "dimension": 1,
+        "flags": 20266268116386304,
+        "vtable_rva": "0x6e136a0",
+        "struct_name": "Guid",
+        "struct_index": 5659,
+        "struct_serial": 0
+      },
+      {
+        "event": "property_metadata",
+        "owner": "MovieSceneCompiledData",
+        "owner_index": 372,
+        "name": "AccumulatedMask",
+        "type": "StructProperty",
+        "offset": 1016,
+        "element_size": 1,
+        "dimension": 1,
+        "flags": 18014467228958720,
+        "vtable_rva": "0x6e136a0",
+        "struct_name": "MovieSceneSequenceCompilerMaskStruct",
+        "struct_index": 10282,
+        "struct_serial": 0
+      },
+      {
+        "event": "property_metadata",
+        "owner": "MovieSceneCompiledData",
+        "owner_index": 372,
+        "name": "AllocatedMask",
+        "type": "StructProperty",
+        "offset": 1017,
+        "element_size": 1,
+        "dimension": 1,
+        "flags": 18014467228958720,
+        "vtable_rva": "0x6e136a0",
+        "struct_name": "MovieSceneSequenceCompilerMaskStruct",
+        "struct_index": 10282,
+        "struct_serial": 0
+      },
+      {
+        "event": "property_metadata",
+        "owner": "MovieSceneCompiledData",
+        "owner_index": 372,
+        "name": "AccumulatedFlags",
+        "type": "EnumProperty",
+        "offset": 1018,
+        "element_size": 1,
+        "dimension": 1,
+        "flags": 20266268116386304,
+        "vtable_rva": "0x6deeee8",
+        "enum_name": "EMovieSceneSequenceFlags",
+        "enum_index": 6607,
+        "enum_serial": 0,
+        "inner_type": "ByteProperty",
+        "inner_name": "UnderlyingType",
+        "inner_element_size": 1
+      }
+    ],
+    "function": null
+  },
+  "5759": {
+    "owners": [
+      {
+        "event": "struct_metadata",
+        "name": "Timespan",
+        "index": 5759,
+        "size": 8,
+        "serial": 0,
+        "address": "0x2aca08fe460",
+        "super": "0x0"
+      }
+    ],
+    "properties": [],
+    "function": null
+  },
+  "15209": {
+    "owners": [
+      {
+        "event": "struct_metadata",
+        "name": "GetDuration",
+        "index": 15209,
+        "size": 16,
+        "serial": 0,
+        "address": "0x2aca0aa3110",
+        "super": "0x0"
+      }
+    ],
+    "properties": [
+      {
+        "event": "property_metadata",
+        "owner": "GetDuration",
+        "owner_index": 15209,
+        "name": "ReturnValue",
+        "type": "StructProperty",
+        "offset": 0,
+        "element_size": 16,
+        "dimension": 1,
+        "flags": 6755468160533888,
+        "vtable_rva": "0x6e136a0",
+        "struct_name": "QualifiedFrameTime",
+        "struct_index": 5741,
+        "struct_serial": 0
+      }
+    ],
+    "function": {
+      "event": "function_metadata",
+      "owner": "MovieSceneSequencePlayer",
+      "flags": 1409418243,
+      "params_size": 16,
+      "return_offset": 0,
+      "entry_rva": "0x2d68850"
+    }
+  },
+  "16302": {
+    "owners": [
+      {
+        "event": "struct_metadata",
+        "name": "GetDuration",
+        "index": 16302,
+        "size": 8,
+        "serial": 0,
+        "address": "0x2aca0aded70",
+        "super": "0x0"
+      }
+    ],
+    "properties": [
+      {
+        "event": "property_metadata",
+        "owner": "GetDuration",
+        "owner_index": 16302,
+        "name": "ReturnValue",
+        "type": "StructProperty",
+        "offset": 0,
+        "element_size": 8,
+        "dimension": 1,
+        "flags": 6755468160534400,
+        "vtable_rva": "0x6e136a0",
+        "struct_name": "Timespan",
+        "struct_index": 5759,
+        "struct_serial": 0
+      }
+    ],
+    "function": {
+      "event": "function_metadata",
+      "owner": "MediaPlayer",
+      "flags": 1417806851,
+      "params_size": 8,
+      "return_offset": 0,
+      "entry_rva": "0x3207a70"
+    }
+  },
+  "16315": {
+    "owners": [
+      {
+        "event": "struct_metadata",
+        "name": "GetTime",
+        "index": 16315,
+        "size": 8,
+        "serial": 0,
+        "address": "0x2aca0adf8d0",
+        "super": "0x0"
+      }
+    ],
+    "properties": [
+      {
+        "event": "property_metadata",
+        "owner": "GetTime",
+        "owner_index": 16315,
+        "name": "ReturnValue",
+        "type": "StructProperty",
+        "offset": 0,
+        "element_size": 8,
+        "dimension": 1,
+        "flags": 6755468160534400,
+        "vtable_rva": "0x6e136a0",
+        "struct_name": "Timespan",
+        "struct_index": 5759,
+        "struct_serial": 0
+      }
+    ],
+    "function": {
+      "event": "function_metadata",
+      "owner": "MediaPlayer",
+      "flags": 1417806851,
+      "params_size": 8,
+      "return_offset": 0,
+      "entry_rva": "0x3208990"
+    }
+  },
+  "16859": {
+    "owners": [
+      {
+        "event": "struct_metadata",
+        "name": "GetDuration",
+        "index": 16859,
+        "size": 4,
+        "serial": 0,
+        "address": "0x2aca0afd4d0",
+        "super": "0x0"
+      }
+    ],
+    "properties": [
+      {
+        "event": "property_metadata",
+        "owner": "GetDuration",
+        "owner_index": 16859,
+        "name": "ReturnValue",
+        "type": "FloatProperty",
+        "offset": 0,
+        "element_size": 4,
+        "dimension": 1,
+        "flags": 6755469234276224,
+        "vtable_rva": "0x6e11560"
+      }
+    ],
+    "function": {
+      "event": "function_metadata",
+      "owner": "AnimatedSparseVolumeTextureController",
+      "flags": 67240963,
+      "params_size": 4,
+      "return_offset": 0,
+      "entry_rva": "0x32e5f40"
+    }
+  },
+  "18747": {
+    "owners": [
+      {
+        "event": "struct_metadata",
+        "name": "GetDuration",
+        "index": 18747,
+        "size": 16,
+        "serial": 0,
+        "address": "0x2aca0b648d0",
+        "super": "0x0"
+      }
+    ],
+    "properties": [
+      {
+        "event": "property_metadata",
+        "owner": "GetDuration",
+        "owner_index": 18747,
+        "name": "A",
+        "type": "StructProperty",
+        "offset": 0,
+        "element_size": 8,
+        "dimension": 1,
+        "flags": 6755468160533120,
+        "vtable_rva": "0x6e136a0",
+        "struct_name": "Timespan",
+        "struct_index": 5759,
+        "struct_serial": 0
+      },
+      {
+        "event": "property_metadata",
+        "owner": "GetDuration",
+        "owner_index": 18747,
+        "name": "ReturnValue",
+        "type": "StructProperty",
+        "offset": 8,
+        "element_size": 8,
+        "dimension": 1,
+        "flags": 6755468160534400,
+        "vtable_rva": "0x6e136a0",
+        "struct_name": "Timespan",
+        "struct_index": 5759,
+        "struct_serial": 0
+      }
+    ],
+    "function": {
+      "event": "function_metadata",
+      "owner": "KismetMathLibrary",
+      "flags": 344073219,
+      "params_size": 16,
+      "return_offset": 8,
+      "entry_rva": "0x384d940"
+    }
+  },
+  "21937": {
+    "owners": [
+      {
+        "event": "struct_metadata",
+        "name": "GetTime",
+        "index": 21937,
+        "size": 12,
+        "serial": 0,
+        "address": "0x2aca0c13010",
+        "super": "0x0"
+      }
+    ],
+    "properties": [
+      {
+        "event": "property_metadata",
+        "owner": "GetTime",
+        "owner_index": 21937,
+        "name": "TimeUnit",
+        "type": "EnumProperty",
+        "offset": 0,
+        "element_size": 1,
+        "dimension": 1,
+        "flags": 6755469234274944,
+        "vtable_rva": "0x6deeee8",
+        "enum_name": "EMovieSceneTimeUnit",
+        "enum_index": 6612,
+        "enum_serial": 0,
+        "inner_type": "ByteProperty",
+        "inner_name": "UnderlyingType",
+        "inner_element_size": 1
+      },
+      {
+        "event": "property_metadata",
+        "owner": "GetTime",
+        "owner_index": 21937,
+        "name": "ReturnValue",
+        "type": "StructProperty",
+        "offset": 4,
+        "element_size": 8,
+        "dimension": 1,
+        "flags": 6755468160533888,
+        "vtable_rva": "0x6e136a0",
+        "struct_name": "FrameTime",
+        "struct_index": 5691,
+        "struct_serial": 0
+      }
+    ],
+    "function": {
+      "event": "function_metadata",
+      "owner": "MovieSceneScriptingActorReferenceKey",
+      "flags": 1409418240,
+      "params_size": 12,
+      "return_offset": 4,
+      "entry_rva": "0x4ad67d0"
+    }
+  },
+  "21949": {
+    "owners": [
+      {
+        "event": "struct_metadata",
+        "name": "GetTime",
+        "index": 21949,
+        "size": 12,
+        "serial": 0,
+        "address": "0x2aca0c13a90",
+        "super": "0x0"
+      }
+    ],
+    "properties": [
+      {
+        "event": "property_metadata",
+        "owner": "GetTime",
+        "owner_index": 21949,
+        "name": "TimeUnit",
+        "type": "EnumProperty",
+        "offset": 0,
+        "element_size": 1,
+        "dimension": 1,
+        "flags": 6755469234274944,
+        "vtable_rva": "0x6deeee8",
+        "enum_name": "EMovieSceneTimeUnit",
+        "enum_index": 6612,
+        "enum_serial": 0,
+        "inner_type": "ByteProperty",
+        "inner_name": "UnderlyingType",
+        "inner_element_size": 1
+      },
+      {
+        "event": "property_metadata",
+        "owner": "GetTime",
+        "owner_index": 21949,
+        "name": "ReturnValue",
+        "type": "StructProperty",
+        "offset": 4,
+        "element_size": 8,
+        "dimension": 1,
+        "flags": 6755468160533888,
+        "vtable_rva": "0x6e136a0",
+        "struct_name": "FrameTime",
+        "struct_index": 5691,
+        "struct_serial": 0
+      }
+    ],
+    "function": {
+      "event": "function_metadata",
+      "owner": "MovieSceneScriptingBoolKey",
+      "flags": 1409418240,
+      "params_size": 12,
+      "return_offset": 4,
+      "entry_rva": "0x4ad67d0"
+    }
+  },
+  "21964": {
+    "owners": [
+      {
+        "event": "struct_metadata",
+        "name": "GetTime",
+        "index": 21964,
+        "size": 12,
+        "serial": 0,
+        "address": "0x2aca0c147b0",
+        "super": "0x0"
+      }
+    ],
+    "properties": [
+      {
+        "event": "property_metadata",
+        "owner": "GetTime",
+        "owner_index": 21964,
+        "name": "TimeUnit",
+        "type": "EnumProperty",
+        "offset": 0,
+        "element_size": 1,
+        "dimension": 1,
+        "flags": 6755469234274944,
+        "vtable_rva": "0x6deeee8",
+        "enum_name": "EMovieSceneTimeUnit",
+        "enum_index": 6612,
+        "enum_serial": 0,
+        "inner_type": "ByteProperty",
+        "inner_name": "UnderlyingType",
+        "inner_element_size": 1
+      },
+      {
+        "event": "property_metadata",
+        "owner": "GetTime",
+        "owner_index": 21964,
+        "name": "ReturnValue",
+        "type": "StructProperty",
+        "offset": 4,
+        "element_size": 8,
+        "dimension": 1,
+        "flags": 6755468160533888,
+        "vtable_rva": "0x6e136a0",
+        "struct_name": "FrameTime",
+        "struct_index": 5691,
+        "struct_serial": 0
+      }
+    ],
+    "function": {
+      "event": "function_metadata",
+      "owner": "MovieSceneScriptingByteKey",
+      "flags": 1409418240,
+      "params_size": 12,
+      "return_offset": 4,
+      "entry_rva": "0x4ad67d0"
+    }
+  },
+  "21983": {
+    "owners": [
+      {
+        "event": "struct_metadata",
+        "name": "GetTime",
+        "index": 21983,
+        "size": 12,
+        "serial": 0,
+        "address": "0x2aca0c15850",
+        "super": "0x0"
+      }
+    ],
+    "properties": [
+      {
+        "event": "property_metadata",
+        "owner": "GetTime",
+        "owner_index": 21983,
+        "name": "TimeUnit",
+        "type": "EnumProperty",
+        "offset": 0,
+        "element_size": 1,
+        "dimension": 1,
+        "flags": 6755469234274944,
+        "vtable_rva": "0x6deeee8",
+        "enum_name": "EMovieSceneTimeUnit",
+        "enum_index": 6612,
+        "enum_serial": 0,
+        "inner_type": "ByteProperty",
+        "inner_name": "UnderlyingType",
+        "inner_element_size": 1
+      },
+      {
+        "event": "property_metadata",
+        "owner": "GetTime",
+        "owner_index": 21983,
+        "name": "ReturnValue",
+        "type": "StructProperty",
+        "offset": 4,
+        "element_size": 8,
+        "dimension": 1,
+        "flags": 6755468160533888,
+        "vtable_rva": "0x6e136a0",
+        "struct_name": "FrameTime",
+        "struct_index": 5691,
+        "struct_serial": 0
+      }
+    ],
+    "function": {
+      "event": "function_metadata",
+      "owner": "MovieSceneScriptingDoubleKey",
+      "flags": 1409418240,
+      "params_size": 12,
+      "return_offset": 4,
+      "entry_rva": "0x4ad67d0"
+    }
+  },
+  "22009": {
+    "owners": [
+      {
+        "event": "struct_metadata",
+        "name": "GetTime",
+        "index": 22009,
+        "size": 12,
+        "serial": 0,
+        "address": "0x2aca0c16f10",
+        "super": "0x0"
+      }
+    ],
+    "properties": [
+      {
+        "event": "property_metadata",
+        "owner": "GetTime",
+        "owner_index": 22009,
+        "name": "TimeUnit",
+        "type": "EnumProperty",
+        "offset": 0,
+        "element_size": 1,
+        "dimension": 1,
+        "flags": 6755469234274944,
+        "vtable_rva": "0x6deeee8",
+        "enum_name": "EMovieSceneTimeUnit",
+        "enum_index": 6612,
+        "enum_serial": 0,
+        "inner_type": "ByteProperty",
+        "inner_name": "UnderlyingType",
+        "inner_element_size": 1
+      },
+      {
+        "event": "property_metadata",
+        "owner": "GetTime",
+        "owner_index": 22009,
+        "name": "ReturnValue",
+        "type": "StructProperty",
+        "offset": 4,
+        "element_size": 8,
+        "dimension": 1,
+        "flags": 6755468160533888,
+        "vtable_rva": "0x6e136a0",
+        "struct_name": "FrameTime",
+        "struct_index": 5691,
+        "struct_serial": 0
+      }
+    ],
+    "function": {
+      "event": "function_metadata",
+      "owner": "MovieSceneScriptingEventKey",
+      "flags": 1409418240,
+      "params_size": 12,
+      "return_offset": 4,
+      "entry_rva": "0x4ad67d0"
+    }
+  },
+  "22024": {
+    "owners": [
+      {
+        "event": "struct_metadata",
+        "name": "GetTime",
+        "index": 22024,
+        "size": 12,
+        "serial": 0,
+        "address": "0x2aca0c17c30",
+        "super": "0x0"
+      }
+    ],
+    "properties": [
+      {
+        "event": "property_metadata",
+        "owner": "GetTime",
+        "owner_index": 22024,
+        "name": "TimeUnit",
+        "type": "EnumProperty",
+        "offset": 0,
+        "element_size": 1,
+        "dimension": 1,
+        "flags": 6755469234274944,
+        "vtable_rva": "0x6deeee8",
+        "enum_name": "EMovieSceneTimeUnit",
+        "enum_index": 6612,
+        "enum_serial": 0,
+        "inner_type": "ByteProperty",
+        "inner_name": "UnderlyingType",
+        "inner_element_size": 1
+      },
+      {
+        "event": "property_metadata",
+        "owner": "GetTime",
+        "owner_index": 22024,
+        "name": "ReturnValue",
+        "type": "StructProperty",
+        "offset": 4,
+        "element_size": 8,
+        "dimension": 1,
+        "flags": 6755468160533888,
+        "vtable_rva": "0x6e136a0",
+        "struct_name": "FrameTime",
+        "struct_index": 5691,
+        "struct_serial": 0
+      }
+    ],
+    "function": {
+      "event": "function_metadata",
+      "owner": "MovieSceneScriptingFloatKey",
+      "flags": 1409418240,
+      "params_size": 12,
+      "return_offset": 4,
+      "entry_rva": "0x4ad67d0"
+    }
+  },
+  "22050": {
+    "owners": [
+      {
+        "event": "struct_metadata",
+        "name": "GetTime",
+        "index": 22050,
+        "size": 12,
+        "serial": 0,
+        "address": "0x2aca0c192f0",
+        "super": "0x0"
+      }
+    ],
+    "properties": [
+      {
+        "event": "property_metadata",
+        "owner": "GetTime",
+        "owner_index": 22050,
+        "name": "TimeUnit",
+        "type": "EnumProperty",
+        "offset": 0,
+        "element_size": 1,
+        "dimension": 1,
+        "flags": 6755469234274944,
+        "vtable_rva": "0x6deeee8",
+        "enum_name": "EMovieSceneTimeUnit",
+        "enum_index": 6612,
+        "enum_serial": 0,
+        "inner_type": "ByteProperty",
+        "inner_name": "UnderlyingType",
+        "inner_element_size": 1
+      },
+      {
+        "event": "property_metadata",
+        "owner": "GetTime",
+        "owner_index": 22050,
+        "name": "ReturnValue",
+        "type": "StructProperty",
+        "offset": 4,
+        "element_size": 8,
+        "dimension": 1,
+        "flags": 6755468160533888,
+        "vtable_rva": "0x6e136a0",
+        "struct_name": "FrameTime",
+        "struct_index": 5691,
+        "struct_serial": 0
+      }
+    ],
+    "function": {
+      "event": "function_metadata",
+      "owner": "MovieSceneScriptingIntegerKey",
+      "flags": 1409418240,
+      "params_size": 12,
+      "return_offset": 4,
+      "entry_rva": "0x4ad67d0"
+    }
+  },
+  "22064": {
+    "owners": [
+      {
+        "event": "struct_metadata",
+        "name": "GetTime",
+        "index": 22064,
+        "size": 12,
+        "serial": 0,
+        "address": "0x2aca0c19f30",
+        "super": "0x0"
+      }
+    ],
+    "properties": [
+      {
+        "event": "property_metadata",
+        "owner": "GetTime",
+        "owner_index": 22064,
+        "name": "TimeUnit",
+        "type": "EnumProperty",
+        "offset": 0,
+        "element_size": 1,
+        "dimension": 1,
+        "flags": 6755469234274944,
+        "vtable_rva": "0x6deeee8",
+        "enum_name": "EMovieSceneTimeUnit",
+        "enum_index": 6612,
+        "enum_serial": 0,
+        "inner_type": "ByteProperty",
+        "inner_name": "UnderlyingType",
+        "inner_element_size": 1
+      },
+      {
+        "event": "property_metadata",
+        "owner": "GetTime",
+        "owner_index": 22064,
+        "name": "ReturnValue",
+        "type": "StructProperty",
+        "offset": 4,
+        "element_size": 8,
+        "dimension": 1,
+        "flags": 6755468160533888,
+        "vtable_rva": "0x6e136a0",
+        "struct_name": "FrameTime",
+        "struct_index": 5691,
+        "struct_serial": 0
+      }
+    ],
+    "function": {
+      "event": "function_metadata",
+      "owner": "MovieSceneScriptingObjectPathKey",
+      "flags": 1409418240,
+      "params_size": 12,
+      "return_offset": 4,
+      "entry_rva": "0x4ad67d0"
+    }
+  },
+  "22076": {
+    "owners": [
+      {
+        "event": "struct_metadata",
+        "name": "GetTime",
+        "index": 22076,
+        "size": 12,
+        "serial": 0,
+        "address": "0x2aca0c1a9b0",
+        "super": "0x0"
+      }
+    ],
+    "properties": [
+      {
+        "event": "property_metadata",
+        "owner": "GetTime",
+        "owner_index": 22076,
+        "name": "TimeUnit",
+        "type": "EnumProperty",
+        "offset": 0,
+        "element_size": 1,
+        "dimension": 1,
+        "flags": 6755469234274944,
+        "vtable_rva": "0x6deeee8",
+        "enum_name": "EMovieSceneTimeUnit",
+        "enum_index": 6612,
+        "enum_serial": 0,
+        "inner_type": "ByteProperty",
+        "inner_name": "UnderlyingType",
+        "inner_element_size": 1
+      },
+      {
+        "event": "property_metadata",
+        "owner": "GetTime",
+        "owner_index": 22076,
+        "name": "ReturnValue",
+        "type": "StructProperty",
+        "offset": 4,
+        "element_size": 8,
+        "dimension": 1,
+        "flags": 6755468160533888,
+        "vtable_rva": "0x6e136a0",
+        "struct_name": "FrameTime",
+        "struct_index": 5691,
+        "struct_serial": 0
+      }
+    ],
+    "function": {
+      "event": "function_metadata",
+      "owner": "MovieSceneScriptingStringKey",
+      "flags": 1409418240,
+      "params_size": 12,
+      "return_offset": 4,
+      "entry_rva": "0x4ad67d0"
+    }
+  },
+  "22471": {
+    "owners": [
+      {
+        "event": "struct_metadata",
+        "name": "GetDuration",
+        "index": 22471,
+        "size": 4,
+        "serial": 0,
+        "address": "0x2aca0c30350",
+        "super": "0x0"
+      }
+    ],
+    "properties": [
+      {
+        "event": "property_metadata",
+        "owner": "GetDuration",
+        "owner_index": 22471,
+        "name": "ReturnValue",
+        "type": "FloatProperty",
+        "offset": 0,
+        "element_size": 4,
+        "dimension": 1,
+        "flags": 6755469234276224,
+        "vtable_rva": "0x6e11560"
+      }
+    ],
+    "function": {
+      "event": "function_metadata",
+      "owner": "GeometryCacheComponent",
+      "flags": 1409418241,
+      "params_size": 4,
+      "return_offset": 0,
+      "entry_rva": "0x4cd2cd0"
+    }
+  },
+  "24986": {
+    "owners": [
+      {
+        "event": "struct_metadata",
+        "name": "GetDuration",
+        "index": 24986,
+        "size": 4,
+        "serial": 0,
+        "address": "0x2aca0cb9bf0",
+        "super": "0x0"
+      }
+    ],
+    "properties": [
+      {
+        "event": "property_metadata",
+        "owner": "GetDuration",
+        "owner_index": 24986,
+        "name": "ReturnValue",
+        "type": "FloatProperty",
+        "offset": 0,
+        "element_size": 4,
+        "dimension": 1,
+        "flags": 6755469234276224,
+        "vtable_rva": "0x6e11560"
+      }
+    ],
+    "function": {
+      "event": "function_metadata",
+      "owner": "LTweener",
+      "flags": 1409418241,
+      "params_size": 4,
+      "return_offset": 0,
+      "entry_rva": "0x5a82180"
+    }
+  },
+  "25340": {
+    "owners": [
+      {
+        "event": "struct_metadata",
+        "name": "GetDuration",
+        "index": 25340,
+        "size": 4,
+        "serial": 0,
+        "address": "0x2aca0ccd1b0",
+        "super": "0x0"
+      }
+    ],
+    "properties": [
+      {
+        "event": "property_metadata",
+        "owner": "GetDuration",
+        "owner_index": 25340,
+        "name": "ReturnValue",
+        "type": "FloatProperty",
+        "offset": 0,
+        "element_size": 4,
+        "dimension": 1,
+        "flags": 6755469234276224,
+        "vtable_rva": "0x6e11560"
+      }
+    ],
+    "function": {
+      "event": "function_metadata",
+      "owner": "LGUIImageSequencePlayer",
+      "flags": 1409418240,
+      "params_size": 4,
+      "return_offset": 0,
+      "entry_rva": "0x5e617a0"
+    }
+  }
+}

@@ -107,6 +107,26 @@ class InvocationPlanner:
             _metadata=self._metadata)
         return PreparedInvocation(self, plan)
 
+    def prepare_blueprint(self, obj, function, **arguments):
+        """Explicit typed Blueprint call; never grants authority beyond native checks.
+
+        Supports scalar/object, registered name inputs and ordinary POD parameters. RPCs, delegates,
+        ubergraphs, static/native functions and owned/complex values are rejected.
+        Blueprint side effects and latent execution are not automatically undone.
+        """
+        session = self._check()
+        if not getattr(session, "supports_blueprint_invocation", False):
+            raise UnsupportedInvocation("Typed Blueprint invocation capability is unavailable")
+        if self._catalog is None:
+            raise RuntimeError("Refresh the planner before preparing calls")
+        from dataclasses import replace
+        from .invocation import prepare_call
+        from ._blueprint_wire import validate_function
+        plan = prepare_call(self._catalog, obj, function, arguments,
+                            pod_values=True, name_values=True, _metadata=self._metadata)
+        validate_function(plan.function_flags, plan.entry_rva, plan.function.name)
+        return PreparedInvocation(self, replace(plan, wire_version=8))
+
     def adopt_observations(self, catalog):
         """Merge a fresh selected closure while retaining checked metadata.
 
@@ -175,7 +195,8 @@ class PreparedInvocation:
         schema; these observations grant no authority. The original stays unchanged.
         """
         planner, _ = self._check()
-        return planner.prepare(self._plan.target, self._plan.function, **arguments)
+        prepare = planner.prepare_blueprint if self._plan.wire_version == 8 else planner.prepare
+        return prepare(self._plan.target, self._plan.function, **arguments)
 
     def invoke(self, *, refresh_from_result=False):
         """Optionally reuse the validated object-result catalog for future plans.

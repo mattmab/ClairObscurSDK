@@ -1,0 +1,748 @@
+{
+  "/Script/CoreUObject.FrameNumber": {
+    "dataclass": "StructDescriptor",
+    "object": {
+      "dataclass": "CatalogObject",
+      "pid": 13448,
+      "index": 5687,
+      "serial": 9558,
+      "address": 2940451401552,
+      "name": "FrameNumber",
+      "class_name": "ScriptStruct",
+      "metaclass_name": "Class",
+      "class_index": 13,
+      "outer_index": 0,
+      "outer_serial": 0,
+      "object_flags": 65,
+      "item_flags": 1107296256
+    },
+    "owners": {
+      "items": [
+        {
+          "entries": [
+            {
+              "key": "event",
+              "value": "struct_metadata"
+            },
+            {
+              "key": "name",
+              "value": "FrameNumber"
+            },
+            {
+              "key": "index",
+              "value": 5687
+            },
+            {
+              "key": "size",
+              "value": 4
+            },
+            {
+              "key": "serial",
+              "value": 9558
+            },
+            {
+              "key": "address",
+              "value": "0x2aca08faf50"
+            },
+            {
+              "key": "super",
+              "value": "0x0"
+            }
+          ],
+          "truncated": false
+        }
+      ],
+      "truncated": false
+    },
+    "properties": {
+      "items": [
+        {
+          "entries": [
+            {
+              "key": "event",
+              "value": "property_metadata"
+            },
+            {
+              "key": "owner",
+              "value": "FrameNumber"
+            },
+            {
+              "key": "owner_index",
+              "value": 5687
+            },
+            {
+              "key": "name",
+              "value": "Value"
+            },
+            {
+              "key": "type",
+              "value": "IntProperty"
+            },
+            {
+              "key": "offset",
+              "value": 0
+            },
+            {
+              "key": "element_size",
+              "value": 4
+            },
+            {
+              "key": "dimension",
+              "value": 1
+            },
+            {
+              "key": "flags",
+              "value": 6755469234274821
+            },
+            {
+              "key": "vtable_rva",
+              "value": "0x6e10a98"
+            }
+          ],
+          "truncated": false
+        }
+      ],
+      "truncated": false
+    },
+    "function": null
+  },
+  "/Script/CoreUObject.FrameTime": {
+    "dataclass": "StructDescriptor",
+    "object": {
+      "dataclass": "CatalogObject",
+      "pid": 13448,
+      "index": 5691,
+      "serial": 0,
+      "address": 2940451402320,
+      "name": "FrameTime",
+      "class_name": "ScriptStruct",
+      "metaclass_name": "Class",
+      "class_index": 13,
+      "outer_index": 0,
+      "outer_serial": 0,
+      "object_flags": 65,
+      "item_flags": 1107296256
+    },
+    "owners": {
+      "items": [
+        {
+          "entries": [
+            {
+              "key": "event",
+              "value": "struct_metadata"
+            },
+            {
+              "key": "name",
+              "value": "FrameTime"
+            },
+            {
+              "key": "index",
+              "value": 5691
+            },
+            {
+              "key": "size",
+              "value": 8
+            },
+            {
+              "key": "serial",
+              "value": 0
+            },
+            {
+              "key": "address",
+              "value": "0x2aca08fb250"
+            },
+            {
+              "key": "super",
+              "value": "0x0"
+            }
+          ],
+          "truncated": false
+        }
+      ],
+      "truncated": false
+    },
+    "properties": {
+      "items": [
+        {
+          "entries": [
+            {
+              "key": "event",
+              "value": "property_metadata"
+            },
+            {
+              "key": "owner",
+              "value": "FrameTime"
+            },
+            {
+              "key": "owner_index",
+              "value": 5691
+            },
+            {
+              "key": "name",
+              "value": "FrameNumber"
+            },
+            {
+              "key": "type",
+              "value": "StructProperty"
+            },
+            {
+              "key": "offset",
+              "value": 0
+            },
+            {
+              "key": "element_size",
+              "value": 4
+            },
+            {
+              "key": "dimension",
+              "value": 1
+            },
+            {
+              "key": "flags",
+              "value": 6755468160532484
+            },
+            {
+              "key": "vtable_rva",
+              "value": "0x6e136a0"
+            },
+            {
+              "key": "struct_name",
+              "value": "FrameNumber"
+            },
+            {
+              "key": "struct_index",
+              "value": 5687
+            },
+            {
+              "key": "struct_serial",
+              "value": 9558
+            }
+          ],
+          "truncated": false
+        },
+        {
+          "entries": [
+            {
+              "key": "event",
+              "value": "property_metadata"
+            },
+            {
+              "key": "owner",
+              "value": "FrameTime"
+            },
+            {
+              "key": "owner_index",
+              "value": 5691
+            },
+            {
+              "key": "name",
+              "value": "SubFrame"
+            },
+            {
+              "key": "type",
+              "value": "FloatProperty"
+            },
+            {
+              "key": "offset",
+              "value": 4
+            },
+            {
+              "key": "element_size",
+              "value": 4
+            },
+            {
+              "key": "dimension",
+              "value": 1
+            },
+            {
+              "key": "flags",
+              "value": 20266268116386308
+            },
+            {
+              "key": "vtable_rva",
+              "value": "0x6e11560"
+            }
+          ],
+          "truncated": false
+        }
+      ],
+      "truncated": false
+    },
+    "function": null
+  },
+  "/Script/CoreUObject.FrameRate": {
+    "dataclass": "StructDescriptor",
+    "object": {
+      "dataclass": "CatalogObject",
+      "pid": 13448,
+      "index": 5690,
+      "serial": 0,
+      "address": 2940451402128,
+      "name": "FrameRate",
+      "class_name": "ScriptStruct",
+      "metaclass_name": "Class",
+      "class_index": 13,
+      "outer_index": 0,
+      "outer_serial": 0,
+      "object_flags": 65,
+      "item_flags": 1107296256
+    },
+    "owners": {
+      "items": [
+        {
+          "entries": [
+            {
+              "key": "event",
+              "value": "struct_metadata"
+            },
+            {
+              "key": "name",
+              "value": "FrameRate"
+            },
+            {
+              "key": "index",
+              "value": 5690
+            },
+            {
+              "key": "size",
+              "value": 8
+            },
+            {
+              "key": "serial",
+              "value": 0
+            },
+            {
+              "key": "address",
+              "value": "0x2aca08fb190"
+            },
+            {
+              "key": "super",
+              "value": "0x0"
+            }
+          ],
+          "truncated": false
+        }
+      ],
+      "truncated": false
+    },
+    "properties": {
+      "items": [
+        {
+          "entries": [
+            {
+              "key": "event",
+              "value": "property_metadata"
+            },
+            {
+              "key": "owner",
+              "value": "FrameRate"
+            },
+            {
+              "key": "owner_index",
+              "value": 5690
+            },
+            {
+              "key": "name",
+              "value": "Numerator"
+            },
+            {
+              "key": "type",
+              "value": "IntProperty"
+            },
+            {
+              "key": "offset",
+              "value": 0
+            },
+            {
+              "key": "element_size",
+              "value": 4
+            },
+            {
+              "key": "dimension",
+              "value": 1
+            },
+            {
+              "key": "flags",
+              "value": 6755469234274821
+            },
+            {
+              "key": "vtable_rva",
+              "value": "0x6e10a98"
+            }
+          ],
+          "truncated": false
+        },
+        {
+          "entries": [
+            {
+              "key": "event",
+              "value": "property_metadata"
+            },
+            {
+              "key": "owner",
+              "value": "FrameRate"
+            },
+            {
+              "key": "owner_index",
+              "value": 5690
+            },
+            {
+              "key": "name",
+              "value": "Denominator"
+            },
+            {
+              "key": "type",
+              "value": "IntProperty"
+            },
+            {
+              "key": "offset",
+              "value": 4
+            },
+            {
+              "key": "element_size",
+              "value": 4
+            },
+            {
+              "key": "dimension",
+              "value": 1
+            },
+            {
+              "key": "flags",
+              "value": 6755469234274821
+            },
+            {
+              "key": "vtable_rva",
+              "value": "0x6e10a98"
+            }
+          ],
+          "truncated": false
+        }
+      ],
+      "truncated": false
+    },
+    "function": null
+  },
+  "/Script/CoreUObject.QualifiedFrameTime": {
+    "dataclass": "StructDescriptor",
+    "object": {
+      "dataclass": "CatalogObject",
+      "pid": 13448,
+      "index": 5741,
+      "serial": 0,
+      "address": 2940451411680,
+      "name": "QualifiedFrameTime",
+      "class_name": "ScriptStruct",
+      "metaclass_name": "Class",
+      "class_index": 13,
+      "outer_index": 0,
+      "outer_serial": 0,
+      "object_flags": 65,
+      "item_flags": 1107296256
+    },
+    "owners": {
+      "items": [
+        {
+          "entries": [
+            {
+              "key": "event",
+              "value": "struct_metadata"
+            },
+            {
+              "key": "name",
+              "value": "QualifiedFrameTime"
+            },
+            {
+              "key": "index",
+              "value": 5741
+            },
+            {
+              "key": "size",
+              "value": 16
+            },
+            {
+              "key": "serial",
+              "value": 0
+            },
+            {
+              "key": "address",
+              "value": "0x2aca08fd6e0"
+            },
+            {
+              "key": "super",
+              "value": "0x0"
+            }
+          ],
+          "truncated": false
+        }
+      ],
+      "truncated": false
+    },
+    "properties": {
+      "items": [
+        {
+          "entries": [
+            {
+              "key": "event",
+              "value": "property_metadata"
+            },
+            {
+              "key": "owner",
+              "value": "QualifiedFrameTime"
+            },
+            {
+              "key": "owner_index",
+              "value": 5741
+            },
+            {
+              "key": "name",
+              "value": "Time"
+            },
+            {
+              "key": "type",
+              "value": "StructProperty"
+            },
+            {
+              "key": "offset",
+              "value": 0
+            },
+            {
+              "key": "element_size",
+              "value": 8
+            },
+            {
+              "key": "dimension",
+              "value": 1
+            },
+            {
+              "key": "flags",
+              "value": 6755468160532484
+            },
+            {
+              "key": "vtable_rva",
+              "value": "0x6e136a0"
+            },
+            {
+              "key": "struct_name",
+              "value": "FrameTime"
+            },
+            {
+              "key": "struct_index",
+              "value": 5691
+            },
+            {
+              "key": "struct_serial",
+              "value": 0
+            }
+          ],
+          "truncated": false
+        },
+        {
+          "entries": [
+            {
+              "key": "event",
+              "value": "property_metadata"
+            },
+            {
+              "key": "owner",
+              "value": "QualifiedFrameTime"
+            },
+            {
+              "key": "owner_index",
+              "value": 5741
+            },
+            {
+              "key": "name",
+              "value": "Rate"
+            },
+            {
+              "key": "type",
+              "value": "StructProperty"
+            },
+            {
+              "key": "offset",
+              "value": 8
+            },
+            {
+              "key": "element_size",
+              "value": 8
+            },
+            {
+              "key": "dimension",
+              "value": 1
+            },
+            {
+              "key": "flags",
+              "value": 6755469234274820
+            },
+            {
+              "key": "vtable_rva",
+              "value": "0x6e136a0"
+            },
+            {
+              "key": "struct_name",
+              "value": "FrameRate"
+            },
+            {
+              "key": "struct_index",
+              "value": 5690
+            },
+            {
+              "key": "struct_serial",
+              "value": 0
+            }
+          ],
+          "truncated": false
+        }
+      ],
+      "truncated": false
+    },
+    "function": null
+  },
+  "/Script/MovieScene.MovieSceneSequencePlayer:GetCurrentTime": {
+    "dataclass": "StructDescriptor",
+    "object": {
+      "dataclass": "CatalogObject",
+      "pid": 13448,
+      "index": 15207,
+      "serial": 0,
+      "address": 2940453138256,
+      "name": "GetCurrentTime",
+      "class_name": "Function",
+      "metaclass_name": "Class",
+      "class_index": 16,
+      "outer_index": 407,
+      "outer_serial": 8830,
+      "object_flags": 65,
+      "item_flags": 1107296256
+    },
+    "owners": {
+      "items": [
+        {
+          "entries": [
+            {
+              "key": "event",
+              "value": "struct_metadata"
+            },
+            {
+              "key": "name",
+              "value": "GetCurrentTime"
+            },
+            {
+              "key": "index",
+              "value": 15207
+            },
+            {
+              "key": "size",
+              "value": 16
+            },
+            {
+              "key": "serial",
+              "value": 0
+            },
+            {
+              "key": "address",
+              "value": "0x2aca0aa2f50"
+            },
+            {
+              "key": "super",
+              "value": "0x0"
+            }
+          ],
+          "truncated": false
+        }
+      ],
+      "truncated": false
+    },
+    "properties": {
+      "items": [
+        {
+          "entries": [
+            {
+              "key": "event",
+              "value": "property_metadata"
+            },
+            {
+              "key": "owner",
+              "value": "GetCurrentTime"
+            },
+            {
+              "key": "owner_index",
+              "value": 15207
+            },
+            {
+              "key": "name",
+              "value": "ReturnValue"
+            },
+            {
+              "key": "type",
+              "value": "StructProperty"
+            },
+            {
+              "key": "offset",
+              "value": 0
+            },
+            {
+              "key": "element_size",
+              "value": 16
+            },
+            {
+              "key": "dimension",
+              "value": 1
+            },
+            {
+              "key": "flags",
+              "value": 6755468160533888
+            },
+            {
+              "key": "vtable_rva",
+              "value": "0x6e136a0"
+            },
+            {
+              "key": "struct_name",
+              "value": "QualifiedFrameTime"
+            },
+            {
+              "key": "struct_index",
+              "value": 5741
+            },
+            {
+              "key": "struct_serial",
+              "value": 0
+            }
+          ],
+          "truncated": false
+        }
+      ],
+      "truncated": false
+    },
+    "function": {
+      "entries": [
+        {
+          "key": "event",
+          "value": "function_metadata"
+        },
+        {
+          "key": "owner",
+          "value": "MovieSceneSequencePlayer"
+        },
+        {
+          "key": "flags",
+          "value": 1409418243
+        },
+        {
+          "key": "params_size",
+          "value": 16
+        },
+        {
+          "key": "return_offset",
+          "value": 0
+        },
+        {
+          "key": "entry_rva",
+          "value": "0x2d687f0"
+        }
+      ],
+      "truncated": false
+    }
+  }
+}

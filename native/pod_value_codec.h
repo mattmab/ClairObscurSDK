@@ -6,7 +6,7 @@
 
 // Value contract derived from this build's reflected fields and UMG thunks.
 // Invocation requires the separate v11 capability and native schema validator.
-enum class PodValueKind : uint32_t { Vector2D=1, LinearColor, Margin, Anchors, Vector, FrameNumber, FrameTime, FrameRate, QualifiedFrameTime, Timespan };
+enum class PodValueKind : uint32_t { Vector2D=1, LinearColor, Margin, Anchors, Vector, FrameNumber, FrameTime, FrameRate, QualifiedFrameTime, Timespan, Guid };
 inline uint32_t pod_value_width(PodValueKind kind) {
     switch (kind) {
         case PodValueKind::Vector2D: case PodValueKind::LinearColor: case PodValueKind::Margin: return 16;
@@ -14,14 +14,14 @@ inline uint32_t pod_value_width(PodValueKind kind) {
         case PodValueKind::Vector: return 24;
         case PodValueKind::FrameNumber: return 4;
         case PodValueKind::Timespan: case PodValueKind::FrameTime: case PodValueKind::FrameRate: return 8;
-        case PodValueKind::QualifiedFrameTime: return 16;
+        case PodValueKind::Guid: case PodValueKind::QualifiedFrameTime: return 16;
         default: return 0;
     }
 }
 inline bool valid_pod_value(PodValueKind kind, const uint8_t* bytes, uint32_t size) {
     const auto width = pod_value_width(kind);
     if (!bytes || !width || size != width) return false;
-    if(kind==PodValueKind::Timespan || kind==PodValueKind::FrameNumber || kind==PodValueKind::FrameRate) return true;
+    if(kind==PodValueKind::Guid || kind==PodValueKind::Timespan || kind==PodValueKind::FrameNumber || kind==PodValueKind::FrameRate) return true;
     if(kind==PodValueKind::FrameTime || kind==PodValueKind::QualifiedFrameTime) {
         float subframe; std::memcpy(&subframe,bytes+4,4);
         return std::isfinite(subframe); // Signed integer fields are copied exactly.

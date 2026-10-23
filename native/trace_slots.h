@@ -68,8 +68,12 @@ public:
             }
         }
     }
-    static size_t install(void* volatile* address, Entry expected, Post post, void* context, bool before = false) {
+    // An observation-only PRE registration is dispatched by the shared
+    // Blueprint opcode route. It leaves UFunction::Func unchanged, so typed
+    // SDK calls keep their ordinary entry/schema validation and dispatch.
+    static size_t install(void* volatile* address, Entry expected, Post post, void* context, bool before = false, bool replace_entry = true) {
         if (!address || !expected || !post || (reinterpret_cast<uintptr_t>(address) & 7)) return 0;
+        if (!replace_entry && !before) return 0;
         Guard guard;
         if (terminal_) return 0;
         size_t active = 0;
@@ -88,7 +92,7 @@ public:
                                reinterpret_cast<LPCWSTR>(entries_[index]), &pinned)) return 0;
         slot.original.store(expected, std::memory_order_release);
         slot.address = address; slot.post = post; slot.context = context; slot.before = before;
-        if (InterlockedCompareExchangePointer(address, reinterpret_cast<void*>(entries_[index]),
+        if (InterlockedCompareExchangePointer(address, replace_entry ? reinterpret_cast<void*>(entries_[index]) : reinterpret_cast<void*>(expected),
                 reinterpret_cast<void*>(expected)) != reinterpret_cast<void*>(expected)) {
             slot.post = nullptr; slot.context = nullptr;
             return 0;

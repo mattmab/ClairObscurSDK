@@ -1,0 +1,204 @@
+{
+  "animations": [
+    {
+      "path": "/Game/Characters/Enemies/Axons/Many_faces/Faces/Animations/Mask_Hit_2.Mask_Hit_2",
+      "values": {
+        "AdditiveAnimType": 0,
+        "bEnableRootMotion": false,
+        "Notifies": {
+          "length": 0
+        },
+        "SequenceLength": 0.433333337,
+        "Skeleton": "/Game/Animations/EmptySkeleton.EmptySkeleton"
+      },
+      "errors": {},
+      "eligible": true
+    },
+    {
+      "path": "/Game/Characters/Enemies/Axons/Many_faces/Faces/Animations/Mask_Base_Empty.Mask_Base_Empty",
+      "values": {
+        "AdditiveAnimType": 0,
+        "bEnableRootMotion": false,
+        "Notifies": {
+          "length": 0
+        },
+        "SequenceLength": 14.9666662,
+        "Skeleton": "/Game/Animations/EmptySkeleton.EmptySkeleton"
+      },
+      "errors": {},
+      "eligible": true
+    },
+    {
+      "path": "/Game/Characters/Enemies/Axons/Many_faces/Faces/Animations/Mask_Anger_Idle_02.Mask_Anger_Idle_02",
+      "values": {
+        "AdditiveAnimType": 0,
+        "bEnableRootMotion": false,
+        "Notifies": {
+          "length": 0
+        },
+        "SequenceLength": 1.66666663,
+        "Skeleton": "/Game/Animations/EmptySkeleton.EmptySkeleton"
+      },
+      "errors": {},
+      "eligible": true
+    },
+    {
+      "path": "/Game/Characters/Enemies/Axons/Many_faces/Faces/Animations/JoyOutro_mask_Joy_Idle.JoyOutro_mask_Joy_Idle",
+      "values": {
+        "AdditiveAnimType": 0,
+        "bEnableRootMotion": false,
+        "Notifies": {
+          "length": 0
+        },
+        "SequenceLength": 15.2333336,
+        "Skeleton": "/Game/Animations/EmptySkeleton.EmptySkeleton"
+      },
+      "errors": {},
+      "eligible": true
+    },
+    {
+      "path": "/Game/Characters/Enemies/Axons/Many_faces/Faces/Animations/JoyIntro_MaskJoy_Idle.JoyIntro_MaskJoy_Idle",
+      "values": {
+        "AdditiveAnimType": 0,
+        "bEnableRootMotion": false,
+        "Notifies": {
+          "length": 0
+        },
+        "SequenceLength": 10.1000004,
+        "Skeleton": "/Game/Animations/EmptySkeleton.EmptySkeleton"
+      },
+      "errors": {},
+      "eligible": true
+    },
+    {
+      "path": "/Game/Characters/Enemies/Axons/Many_faces/Faces/Animations/SadnessOutro_Mask_Sadness_Idle.SadnessOutro_Mask_Sadness_Idle",
+      "values": {
+        "AdditiveAnimType": 0,
+        "bEnableRootMotion": false,
+        "Notifies": {
+          "length": 0
+        },
+        "SequenceLength": 18.3666668,
+        "Skeleton": "/Game/Animations/EmptySkeleton.EmptySkeleton"
+      },
+      "errors": {},
+      "eligible": true
+    },
+    {
+      "path": "/Game/Characters/Enemies/Axons/Many_faces/Faces/Animations/Mask_Joy_Scream.Mask_Joy_Scream",
+      "values": {
+        "AdditiveAnimType": 0,
+        "bEnableRootMotion": false,
+        "Notifies": {
+          "length": 0
+        },
+        "SequenceLength": 14.9666662,
+        "Skeleton": "/Game/Animations/EmptySkeleton.EmptySkeleton"
+      },
+      "errors": {},
+      "eligible": true
+    },
+    {
+      "path": "/Game/Characters/Enemies/Axons/Many_faces/Faces/Animations/Mask_Joy_Idle.Mask_Joy_Idle",
+      "values": {
+        "AdditiveAnimType": 0,
+        "bEnableRootMotion": false,
+        "Notifies": {
+          "length": 0
+        },
+        "SequenceLength": 14.9666662,
+        "Skeleton": "/Game/Animations/EmptySkeleton.EmptySkeleton"
+      },
+      "errors": {},
+      "eligible": true
+    },
+    {
+      "path": "/Game/Characters/Enemies/ManyFaces/Masks/Anims/Sequences/Animation_Mask/Sadness_Sequence_01.Sadness_Sequence_01",
+      "values": {
+        "AdditiveAnimType": 0,
+        "bEnableRootMotion": false,
+        "Notifies": {
+          "length": 0
+        },
+        "SequenceLength": 6.94999981,
+        "Skeleton": "/Game/Animations/EmptySkeleton.EmptySkeleton"
+      },
+      "errors": {},
+      "eligible": true
+    },
+    {
+      "path": "/Game/Characters/Enemies/ManyFaces/Masks/Anims/Sequences/Animation_Mask/Joy_Sequence_01.Joy_Sequence_01",
+      "values": {
+        "AdditiveAnimType": 0,
+        "bEnableRootMotion": false,
+        "Notifies": {
+          "length": 0
+        },
+        "SequenceLength": 6.61666679,
+        "Skeleton": "/Game/Animations/EmptySkeleton.EmptySkeleton"
+      },
+      "errors": {},
+      "eligible": true
+    },
+    {
+      "path": "/Game/Characters/Enemies/ManyFaces/Masks/Anims/Sequences/Animation_Mask/Anger_Sequence_01.Anger_Sequence_01",
+      "values": {
+        "AdditiveAnimType": 0,
+        "bEnableRootMotion": false,
+        "Notifies": {
+          "length": 0
+        },
+        "SequenceLength": 4.7833333,
+        "Skeleton": "/Game/Animations/EmptySkeleton.EmptySkeleton"
+      },
+      "errors": {},
+      "eligible": true
+    },
+    {
+      "path": "/Game/Characters/Enemies/Axons/Many_faces/Faces/Animations/Mask_Joy_Attack1.Mask_Joy_Attack1",
+      "values": {
+        "AdditiveAnimType": 0,
+        "bEnableRootMotion": false,
+        "Notifies": {
+          "length": 0
+        },
+        "SequenceLength": 14.9666662,
+        "Skeleton": "/Game/Animations/EmptySkeleton.EmptySkeleton"
+      },
+      "errors": {},
+      "eligible": true
+    }
+  ],
+  "meshes": [
+    {
+      "path": "/Game/Characters/Enemies/Axons/Many_faces/Faces/Face_Sadness.Face_Sadness",
+      "values": {
+        "Skeleton": "/Game/Animations/EmptySkeleton.EmptySkeleton",
+        "MorphTargets": {
+          "length": 1
+        }
+      },
+      "errors": {}
+    },
+    {
+      "path": "/Game/Characters/Enemies/Axons/Many_faces/Faces/Face_Joy.Face_Joy",
+      "values": {
+        "Skeleton": "/Game/Animations/EmptySkeleton.EmptySkeleton",
+        "MorphTargets": {
+          "length": 1
+        }
+      },
+      "errors": {}
+    },
+    {
+      "path": "/Game/Characters/Enemies/Axons/Many_faces/Faces/Face_Anger.Face_Anger",
+      "values": {
+        "Skeleton": "/Game/Animations/EmptySkeleton.EmptySkeleton",
+        "MorphTargets": {
+          "length": 1
+        }
+      },
+      "errors": {}
+    }
+  ]
+}

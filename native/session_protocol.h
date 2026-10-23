@@ -3,6 +3,7 @@
 #include "mesh_protocol.h"
 #endif
 #include "picto_progression_protocol.h"
+#include "qa_encounter_protocol.h"
 #include "picto_batch_protocol.h"
 #ifdef E33_ZONE_TRAVEL_SESSION
 #include "zone_travel_protocol.h"
@@ -352,4 +353,3 @@ inline void session_mapping_name(wchar_t (&name)[96], DWORD controller, uint64_t
     swprintf_s(name, L"Local\\E33Session5_%lu_%016llx", controller, nonce);
 #endif
 }
-

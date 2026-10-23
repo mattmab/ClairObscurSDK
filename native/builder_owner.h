@@ -4,6 +4,7 @@
 #include <filesystem>
 #include <chrono>
 #include "builder_profile.h"
+#include "builder_mouse_rotation.h"
 #include "target_owned_text.h"
 #include "../gpu/bridge.h"
 #include "gpu_properties.h"
@@ -12,6 +13,7 @@ namespace e33_builder {
 // No pointer supplied by Python is used without a live slot/serial check.
 class Owner {
     CallIdentity ids_[128]{},camera_{},target_{},selected_{},hover_{},hover_actor_{},selected_actor_{};
+    MouseRotationGesture mouse_rotation_;
     bool schemas_[67]{},dragging_=false,left_was_=true,nudging_=false;
     bool auto_tick_=true,want_grab_=false,carrying_=false;
     unsigned highlight_mode_=1;
@@ -194,7 +196,7 @@ public:
     uint32_t step()const{return step_;}
     template<class Pool> uint32_t stop(uint64_t b,uint64_t session,Pool& pool,bool restore) {
         if(!TargetPodSchemaOps{b}.context())return 407;
-        dragging_=false;carrying_=false;duplicate_requested_=false;nudging_=false;
+        mouse_rotation_.reset();dragging_=false;carrying_=false;duplicate_requested_=false;nudging_=false;
         if(!booth_end(b,session,pool))return 1940;
         if(!preview_stop(b,session,pool)||!thumbnail_clear(b,session,pool))return 1934;
         if(!gpu_stop(b,session,pool))return 1920;
@@ -397,10 +399,10 @@ public:
         const double boothStats[]={booth_active_?1.:0.,booth_distance_,booth_rotation_[0],booth_rotation_[1],booth_rotation_[2],double(booth_lighting_)};std::memcpy(raw+3600,boothStats,sizeof(boothStats));
         const double selectionStats[]={double(candidates_.size()),double(scan_index_),collision_distance_,gpu_query_limit_,gpu_best_distance_,gpu_query_stale_?1.:0.};std::memcpy(raw+3648,selectionStats,sizeof(selectionStats));
         std::memcpy(raw+3696,gpu_samples_,sizeof(gpu_samples_));
+        const double mouseRotation[]={double(mouse_rotation_.axis),mouse_rotation_.angle};std::memcpy(raw+4080,mouseRotation,sizeof(mouseRotation));
         packet.actor=camera_;packet.component=selected_;packet.step=step_;packet.sections=uint32_t(edits_.size());std::memcpy(packet.position,position_,24);
     }
 };
 }
 
 #pragma warning(pop)
-

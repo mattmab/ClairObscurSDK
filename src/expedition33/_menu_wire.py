@@ -7,6 +7,7 @@ from ._invocation_wire import SIZE as CALL_SIZE, IDENTITY, _identity
 SIZE = 246608
 PLANS_AT = 128
 OPERATIONS = {'prepare': 1, 'attach': 2, 'focus': 3, 'close': 4, 'status': 5, 'open': 6}
+FOCUS_CAPTURE_DIAGNOSTICS = frozenset((*range(90201,90211),90220,90230))
 
 
 def request(operation, owner, *, leases=None, identities=None, plans=None):
@@ -54,6 +55,7 @@ def decode(sent, encoded):
                  (error == 816 and outcome == 1) or
                  (error in (0, 811, 812, 813, 814) and outcome == 2) or
                  (sent[4:8] in (b'\x01\0\0\0',b'\x06\0\0\0') and outcome == 2 and active == 0 and
-                  (error in (901, 902) or 910 <= error <= 919 or 10000 <= error < 20000)))):
+                  (error in (901, 902) or error in FOCUS_CAPTURE_DIAGNOSTICS or
+                   910 <= error <= 919 or 10000 <= error < 20000)))):
         raise ValueError('Inconsistent menu acknowledgement')
     return MenuReply(error, ('not_started', 'unknown', 'returned')[outcome], bool(active))

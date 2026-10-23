@@ -44,7 +44,10 @@ class FlightCleanupTests(unittest.TestCase):
             mod.invoke = Mock(return_value=True)
             mod.status = Mock()
             with patch.object(flight, 'read_values', return_value=Mock(values={
-                    (42, 'MovementMode'): mode, (42, 'CustomMovementMode'): custom})):
+                    (42, 'MovementMode'): mode, (42, 'CustomMovementMode'): custom,
+                    (42, 'MaxFlySpeed'):600.,(42,'MaxAcceleration'):600.,
+                    (42,'BrakingDecelerationFlying'):25.})):
+                mod.session=Mock()
                 mod.toggle()
             exit_call.bind.assert_called_once_with(NewMovementMode=mode, NewCustomMode=custom)
             self.assertEqual(mod.restore_mode, (mode, custom))
@@ -78,7 +81,53 @@ class FlightCleanupTests(unittest.TestCase):
         planner.close.assert_not_called()
 
     def test_flight_binding_is_separate_from_jump(self):
-        self.assertEqual(flight.Mod().management().keybinds[0].default, 'F6')
+        self.assertEqual(flight.Mod().management().keybinds[0].default, ',')
+
+    def test_flight_limits_restore_without_overwriting_another_writer(self):
+        mod=flight.Mod();mod.session=Mock(pid=123);mod.movement_class=42
+        movement=SimpleNamespace(index=1,serial=2,address=3,object_flags=0)
+        mod.flight_tuning=[(movement,'MaxFlySpeed',600.,6000.),
+                           (movement,'MaxAcceleration',600.,6000.)]
+        catalog=SimpleNamespace(objects=[movement])
+        with patch.object(flight,'capture_matching',return_value=catalog),patch.object(
+                flight,'read_values',return_value=SimpleNamespace(values={
+                    (42,'MaxFlySpeed'):6000.,(42,'MaxAcceleration'):777.})):
+            mod._restore_flight_tuning()
+        mod.session.assign_scalar.assert_called_once_with(movement,'MaxFlySpeed',600.,
+                expected=6000.,allow_mutation=True,catalog=catalog)
+        self.assertEqual(mod.flight_tuning,[])
+
+    def test_dead_movement_discards_tuning_without_writes(self):
+        mod=flight.Mod();mod.session=Mock(pid=123)
+        movement=SimpleNamespace(index=1,serial=2,address=3,object_flags=0x40000000)
+        mod.flight_tuning=[(movement,'MaxFlySpeed',600.,6000.)]
+        with patch.object(flight,'capture_matching',return_value=SimpleNamespace(objects=[movement])):
+            mod._restore_flight_tuning()
+        mod.session.assign_scalar.assert_not_called()
+        self.assertEqual(mod.flight_tuning,[])
+
+    def test_recycled_movement_identity_is_never_restored(self):
+        mod=flight.Mod();mod.session=Mock(pid=123)
+        old=SimpleNamespace(index=1,serial=2,address=3)
+        reused=SimpleNamespace(index=1,serial=4,address=3,object_flags=0)
+        mod.flight_tuning=[(old,'MaxFlySpeed',600.,6000.)]
+        with patch.object(flight,'capture_matching',return_value=SimpleNamespace(objects=[reused])):
+            mod._restore_flight_tuning()
+        mod.session.assign_scalar.assert_not_called()
+        self.assertEqual(mod.flight_tuning,[])
+
+    def test_vertical_boost_releases_braking_and_preserves_original_restore(self):
+        mod=flight.Mod();mod.session=Mock();mod.planner=Mock();mod.movement=object()
+        mod.flight_tuning=[(mod.movement,'MaxAcceleration',600.,6000.),
+                           (mod.movement,'BrakingDecelerationFlying',25.,12000.)]
+        mod._set_vertical_profile(True)
+        self.assertEqual([r[2:] for r in mod.flight_tuning],[(600.,18000.),(25.,0.)])
+        self.assertEqual(mod.session.assign_scalar.call_count,2)
+        mod._set_vertical_profile(True)
+        self.assertEqual(mod.session.assign_scalar.call_count,2)
+        mod._set_vertical_profile(False)
+        self.assertEqual([r[2:] for r in mod.flight_tuning],[(600.,6000.),(25.,12000.)])
+        self.assertEqual(mod.session.assign_scalar.call_count,4)
 
     def test_held_vertical_binding_tracks_remap_release_unbind_and_conflict(self):
         mod=flight.Mod();mod.flying=True

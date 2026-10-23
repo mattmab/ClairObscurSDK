@@ -144,7 +144,7 @@ class CatalogMenu(OwnedMenuPanel):
         self.region_roll=self._spawn('EditableTextBox');self._place(self.region_roll,1360,288,530,38)
         self._call(self.region_roll,'EditableTextBox','SetText',InText='0')
         self.region_roll_label=self.label(1360,264,530,22,.5)
-        self.template_info=self.label(1360,625,530,120,.48)
+        self.template_info=self.label(1360,635,530,105,.48)
         self.duplicate_status=self.label(1360,875,530,170,.55)
         self.duplicate_fields=[];self.duplicate_labels=[]
         for j,axis in enumerate('XYZ'):
@@ -274,7 +274,7 @@ class CatalogMenu(OwnedMenuPanel):
             labels=['Previous','Next','Favorites ON' if self.favorites else 'Favorites','Folders ON' if self.folders else 'All assets',self.kind.title(),'Up folder','Build','Gallery','Library','Maps','Load map' if self.workspace=='Maps' else 'Spawn page' if self.workspace=='Gallery' else 'Spawn selected','Preview','Favorite / unfavorite','Save map','Load selected map','Clear scene','Resume camera','Refresh catalog']
             for i,label in enumerate(labels,self.PAGE):self.set_text(self.labels[i],label)
             extra=[]
-            if self.workspace in ('Maps','Templates'):extra=['Save Template (region)','Saved templates' if self.workspace=='Maps' else 'Preview template','Back to maps','Clear region','Cancel scan','Apply rotation','Yaw - 15','Yaw + 15','Edit bounds live']
+            if self.workspace in ('Maps','Templates'):extra=['Save Template (region)','Saved templates' if self.workspace=='Maps' else 'Preview template','Back to maps','Clear region','Cancel scan','Apply rotation','Yaw - 15','Yaw + 15','Edit bounds live','Export for AI','Import AI Scene']
             elif self.workspace=='Bounds':
                 mode=getattr(self,'bounds_mode','Move');step=getattr(self,'bounds_step',100.)
                 axes=('Roll','Pitch','Yaw') if mode=='Rotate' else ('X','Y','Z')
@@ -288,10 +288,11 @@ class CatalogMenu(OwnedMenuPanel):
             elif self.workspace=='Gallery':extra=['Packing: '+('Tight' if self.batch_gallery.tight else 'Spaced'),'Spawn first batch','Previous batch','Next batch','Clear gallery','Pause / resume','Visit next','Resume camera','Save galleries','Rebuild saved','Free camera','Retry failed']
             elif self.workspace=='Library':extra=['Favorite / unfavorite','Save category/tags','Quick icons','Resume capture','Pause capture','Cancel capture','Index loaded meshes','All registered meshes','Retry cleanup','Scene objects' if self.library_assets else 'Asset tools','Visit selected','Duplicate selected','Delete selected','AFK cache: '+('ON' if self.background.mode=='afk' else 'OFF')]
             for j in range(14):
-                y=340+(j//2)*(48 if self.workspace=='TemplatePlace' else 55)
+                compact_actions=self.workspace in ('TemplatePlace','Maps','Templates')
+                y=340+(j//2)*(48 if compact_actions else 55)
                 for widget,dx,dy in ((self.buttons[36+j],0,0),(self.labels[36+j],10,8)):
                     self._render_call(self._slots[widget.index],'CanvasPanelSlot','SetPosition',InPosition={'X':float(1360+(j%2)*270+dx),'Y':float(y+dy)})
-                self._render_call(self._slots[self.buttons[36+j].index],'CanvasPanelSlot','SetSize',InSize={'X':260.,'Y':42. if self.workspace=='TemplatePlace' else 48.})
+                self._render_call(self._slots[self.buttons[36+j].index],'CanvasPanelSlot','SetSize',InSize={'X':260.,'Y':42. if compact_actions else 48.})
                 self.set_visible(36+j,j<len(extra));self.set_text(self.labels[36+j],extra[j] if j<len(extra) else '')
             for field in (self.field1,self.field2):self._render_call(field,'Widget','SetVisibility',InVisibility=self.visible if extra and self.workspace not in ('Maps','Templates','Bounds') else self.collapsed)
             region=self.workspace in ('Maps','Templates')
@@ -458,8 +459,11 @@ class CatalogMenu(OwnedMenuPanel):
                 if self.workspace=='Maps':self.workspace='Templates';self.offset=0;self.selected=None
                 else:self.start_template()
             elif i==2:self.workspace='Maps';self.offset=0;self.selected=None
+            elif i==9:self.mod.ai.export(reveal=True)
+            elif i==10:self.mod.ai.choose_import()
             elif i==8:self.workspace='Bounds';self.bounds_mode='Move';self.bounds_step=100.
-            elif i==4:self.mod.templates.cancel_scan()
+            elif i==4:
+                self.mod.ai.scanner.cancel_scan();self.mod.templates.cancel_scan()
             elif i in (5,6,7):
                 angles=[float(self.text(self.region_roll)),float(self.text(self.field2)),float(self.text(self.field1))]
                 if i in (6,7):angles[2]+=(-15 if i==6 else 15)

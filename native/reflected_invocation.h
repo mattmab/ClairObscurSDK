@@ -6,6 +6,8 @@
 #include "asset_call_protocol.h"
 #include "sequence_call_protocol.h"
 #include "blueprint_trace_profile.h"
+#include "blueprint_call_protocol.h"
+#include "blueprint_name_resolution.h"
 #include <cmath>
 #include "call_rejection_diagnostics.h"
 #include "picto_edit_profile.h"
@@ -100,6 +102,17 @@ inline bool call_entry_matches(uint64_t address, uint64_t expected, const CallEn
     const auto current = local_read<uint64_t>(address);
     return current == expected || (validator && validator->owned && validator->owned(address, expected, current));
 }
+inline bool call_blueprint_name(uint64_t base,uint64_t fname) {
+    const auto id=local_read<uint32_t>(fname);
+    if((id>>16)>=8192)return false;
+    const auto block=local_read<uint64_t>(base+0x92aadc0+0x10+uint64_t(id>>16)*8);
+    if(!block)return false;
+    const auto at=block+(id&65535)*2;
+    const auto header=local_read<uint16_t>(at);
+    const auto length=header>>6;
+    if((header&1) || !length || (id&65535)*2+2+length>0x20000)return false;
+    return length<16 || std::memcmp(reinterpret_cast<void*>(at+2),"ExecuteUbergraph",16)!=0;
+}
 inline uint32_t reflected_call(uint64_t base,CallPacket& packet,const CallRetention* retention=nullptr,
                                const CallPodValidation* pod=nullptr,const CallTextHandling* text=nullptr,
                                const CallEnumValidation* enums=nullptr,bool validate_only=false,
@@ -108,6 +121,8 @@ inline uint32_t reflected_call(uint64_t base,CallPacket& packet,const CallRetent
                                uint32_t* rejection_detail=nullptr) {
     if(rejection_detail) *rejection_detail=0;
     const bool pod_enabled=pod && pod->validate;
+    const bool blueprint_enabled=packet.version==kBlueprintCallVersion && pod_enabled &&
+        retention && retention->preflight && retention->capture && !text && !enums && !assets && !sequence;
     const bool asset_enabled=assets && assets->packet && &assets->packet->call==&packet && assets->validate &&
         pod_enabled && retention && retention->preflight && retention->capture && !text && !enums;
     if(assets && !asset_enabled) return 1453;
@@ -123,10 +138,10 @@ inline uint32_t reflected_call(uint64_t base,CallPacket& packet,const CallRetent
     if(text && !text_enabled) return 227;
     // Never overwrite a frame still owning uncertain native arguments.
     if(text_enabled && !text->available(text->context)) return 230;
-    if(auto invalid=sequence_enabled ? validate_sequence_call(*sequence->packet) : asset_enabled ? validate_asset_call(*assets->packet) : enum_enabled ? validate_enum_call(*enums->packet) :
+    if(auto invalid=blueprint_enabled ? validate_blueprint_call(packet) : sequence_enabled ? validate_sequence_call(*sequence->packet) : asset_enabled ? validate_asset_call(*assets->packet) : enum_enabled ? validate_enum_call(*enums->packet) :
        text_enabled ? (text->strings ? validate_string_call(*text->packet) : validate_text_call(*text->packet)) : validate_call_packet(packet,pod_enabled)) return invalid;
     packet.outcome=CallNotDispatched;
-    if((packet.version!=kCallVersion && !(sequence_enabled && packet.version==kSequenceCallVersion) && !(asset_enabled && packet.version==kAssetCallVersion) && !(pod_enabled && packet.version==kPodCallVersion) && !(text_enabled && (packet.version==kTextCallVersion || (text->strings && packet.version==kStringCallVersion))) && !(enum_enabled && packet.version==kEnumCallVersion)) || packet.parameter_size>kCallBytes ||
+    if((packet.version!=kCallVersion && !blueprint_enabled && !(sequence_enabled && packet.version==kSequenceCallVersion) && !(asset_enabled && packet.version==kAssetCallVersion) && !(pod_enabled && packet.version==kPodCallVersion) && !(text_enabled && (packet.version==kTextCallVersion || (text->strings && packet.version==kStringCallVersion))) && !(enum_enabled && packet.version==kEnumCallVersion)) || packet.parameter_size>kCallBytes ||
        packet.parameter_size>packet.allocation_extent || packet.allocation_extent>65536 ||
        packet.field_count>kCallFields || packet.object_count>kCallObjects) return 200;
     if(local_read<DWORD>(base+0x9272d30)!=GetCurrentThreadId() ||
@@ -157,8 +172,14 @@ inline uint32_t reflected_call(uint64_t base,CallPacket& packet,const CallRetent
        local_read<uint16_t>(function+0xb8)!=packet.return_offset ||
        local_read<int32_t>(function+0x58)!=static_cast<int32_t>(packet.allocation_extent) ||
        packet.entry_rva>=166776832 || !call_entry_matches(function+0xd8,base+packet.entry_rva,entry_validation)) return 204;
-    // Only the two exact audited game-owned functions can opt out of the
-    // Blueprint ban. Every existing schema/context/retention guard remains.
+    // V8 is an explicit Blueprint opt-in; ordinary calls retain the ban.
+    // Verify actual engine thunk and nonempty Script, not a caller address.
+    if(blueprint_enabled && (!blueprint_function_admitted(packet.function_flags,packet.entry_rva,"Function") ||
+       !call_blueprint_name(base,function+0x18) ||
+       local_read<uint64_t>(function+0xd8)!=base+kBlueprintThunkRva ||
+       !local_read<uint64_t>(function+0x60) || local_read<int32_t>(function+0x68)<=0 ||
+       local_read<int32_t>(function+0x68)>16*1024*1024 ||
+       local_read<int32_t>(function+0x6c)<local_read<int32_t>(function+0x68)))return 1472;
     bool game_owned_blueprint=false;
 #ifdef E33_GAME_OWNED_CINEMATIC_SESSION
     if(!(packet.function_flags&0x400)) {
@@ -166,7 +187,7 @@ inline uint32_t reflected_call(uint64_t base,CallPacket& packet,const CallRetent
         game_owned_blueprint=admit_game_owned_cinematic(admission,packet);
     }
 #endif
-    if(!(packet.function_flags&0x400) && !game_owned_blueprint && !admit_picto_edit(base,object,function,owner,packet) && !(blueprint_observation && validate_only &&
+    if(!(packet.function_flags&0x400) && !blueprint_enabled && !game_owned_blueprint && !admit_picto_edit(base,object,function,owner,packet) && !(blueprint_observation && validate_only &&
         blueprint_damage_schema(packet) && exact_name(base,function+0x18,"OnCharacterReceivedDamages") &&
         exact_name(base,owner+0x18,"BP_BattleSummaryStatsManager_C"))) return 205;
     auto dispatch=local_read<uint64_t>(local_read<uint64_t>(object)+0x268);
@@ -180,15 +201,15 @@ inline uint32_t reflected_call(uint64_t base,CallPacket& packet,const CallRetent
     unsigned seen=0, walked=0, returns=0;
     const char* kinds[]={"", "BoolProperty","ByteProperty","UInt16Property","IntProperty",
                          "FloatProperty","DoubleProperty","ObjectProperty","ClassProperty",
-                         "StructProperty","StructProperty","StructProperty","StructProperty","TextProperty","EnumProperty","StructProperty","StrProperty","SoftObjectProperty","StructProperty","StructProperty","StructProperty"};
-    static_assert(sizeof(kinds)/sizeof(kinds[0])==CallTimespan+1, "Reflected kind table must cover every admitted kind");
+                         "StructProperty","StructProperty","StructProperty","StructProperty","TextProperty","EnumProperty","StructProperty","StrProperty","SoftObjectProperty","StructProperty","StructProperty","StructProperty","NameProperty","StructProperty"};
+    static_assert(sizeof(kinds)/sizeof(kinds[0])==CallGuid+1, "Reflected kind table must cover every admitted kind");
     for(;property;property=local_read<uint64_t>(property+0x18)) {
         if(++walked>4096) return 207;
         auto flags=local_read<uint64_t>(property+0x38);
         if(!(flags&0x80)) continue;
         if(seen>=packet.field_count) return 208;
         const auto& field=packet.fields[seen++];
-        if(field.kind>=sizeof(kinds)/sizeof(kinds[0]) || field.kind<CallBool || (field.kind>(sequence_enabled ? kSequenceSettingsKind : asset_enabled ? kAssetCallKind : enum_enabled ? kEnumCallKind : text_enabled ? (text->strings ? kStringCallKind : kTextCallKind) : pod_enabled && packet.version==kPodCallVersion ? CallAnchors : CallClass) && !(pod_enabled && (field.kind==CallVector || frame_time_call_enabled(field.kind) || timespan_call_enabled(field.kind)))) || !field.name[0] || field.name[95] ||
+        if(field.kind>=sizeof(kinds)/sizeof(kinds[0]) || field.kind<CallBool || (field.kind>(sequence_enabled ? kSequenceSettingsKind : asset_enabled ? kAssetCallKind : enum_enabled ? kEnumCallKind : text_enabled ? (text->strings ? kStringCallKind : kTextCallKind) : pod_enabled && (packet.version==kPodCallVersion || blueprint_enabled) ? CallAnchors : CallClass) && !(blueprint_enabled && field.kind==kBlueprintNameKind) && !(pod_enabled && (field.kind==CallGuid || field.kind==CallVector || frame_time_call_enabled(field.kind) || timespan_call_enabled(field.kind)))) || !field.name[0] || field.name[95] ||
            field.flags!=flags || local_read<uint64_t>(property+0x10)!=(function|1) ||
            !exact_name(base,property+0x20,field.name) ||
            !exact_name(base,local_read<uint64_t>(property+8),(asset_enabled && packet.entry_rva==0x3860250 && field.kind==kAssetCallKind)?"SoftClassProperty":kinds[field.kind]) ||
@@ -248,6 +269,11 @@ inline uint32_t reflected_call(uint64_t base,CallPacket& packet,const CallRetent
             width=field.width;
         }
         if(field.width!=width) return 212;
+        if(field.kind==kBlueprintNameKind) {
+            uint64_t name=0;
+            if(!blueprint_enabled || !e33_blueprint_names::resolve(base,field.name+std::strlen(field.name)+1,name))return 1474;
+            std::memcpy(arguments+field.offset,&name,8);
+        }
         for(unsigned element=0;element<field.dimension;++element) {
             auto at=field.offset+element*width;
             for(unsigned byte=0;byte<width;++byte) {
@@ -359,6 +385,10 @@ inline uint32_t reflected_call(uint64_t base,CallPacket& packet,const CallRetent
             for(unsigned i=0;i<field.dimension;++i)
                 if(!valid_pod_value(call_pod_profile(field.kind),arguments+field.offset+i*field.width,field.width)) return 226;
         }
+        if(field.kind==kBlueprintNameKind) {
+            // Input-only registered names never leak raw FName IDs to Python.
+            std::memset(arguments+field.offset,0,8);
+        }
         if(field.kind!=CallObject && field.kind!=CallClass) continue;
         for(unsigned i=0;i<field.dimension;++i) {
             auto offset=field.offset+i*8;
@@ -385,4 +415,3 @@ inline uint32_t reflected_call(uint64_t base,CallPacket& packet,const CallRetent
     packet.outcome=CallDispatchReturned;
     return 0;
 }
-

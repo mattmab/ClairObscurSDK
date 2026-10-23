@@ -4,7 +4,7 @@ from .keys import VIRTUAL_KEYS
 
 HEADER = struct.Struct('<IIQQIIII')
 BINDING = struct.Struct('<II')
-CAPACITY = 64
+CAPACITY = 96
 SIZE = HEADER.size + BINDING.size * CAPACITY
 
 

@@ -16,10 +16,13 @@ from expedition33.invocation import InvocationError
 from expedition33.keys import VIRTUAL_KEYS
 
 LOG = logging.getLogger('expedition33.continent_flight')
-HORIZONTAL_SPEED = 1200.0
-VERTICAL_SPEED = 1200.0
+HORIZONTAL_SPEED = 6000.0
+VERTICAL_SPEED = 6000.0
 RESPONSE_SECONDS = 0.35
-MAX_ACCELERATION = 2400.0
+MAX_ACCELERATION = 12000.0
+FLIGHT_TUNING = {'MaxFlySpeed': HORIZONTAL_SPEED,
+                 'MaxAcceleration': 6000.0, 'BrakingDecelerationFlying': 12000.0}
+VERTICAL_TUNING = {'MaxAcceleration': 18000.0, 'BrakingDecelerationFlying': 0.0}
 
 
 class ExplorationNotReady(RuntimeError):
@@ -60,7 +63,7 @@ def discover_snapshot(pid, cached=None):
     """Pure reflection reads; never accesses a scope or prepares engine calls."""
     names = ('CharMoveComp', 'SetMovementMode', 'K2_GetActorLocation', 'IsFlying',
              'GetLastInputVector', 'GetVelocity', 'AddImpulse', 'StopMovementImmediately',
-             'IsLocallyControlled', 'Vector', 'EMovementMode')
+             'IsLocallyControlled', 'AddInputVector', 'Vector', 'EMovementMode')
     catalog = cached if cached is not None else capture_matching(pid,
         names=names, classes=('BP_jRPG_Character_WorldMap_pawn_C', 'BP_jRPG_Character_World_C', 'PlayerController'))
     controller_class = catalog.find_class('Controller').index
@@ -113,6 +116,9 @@ class Mod:
         self.discovery_generation = 0
         self.discovery_pending_generation = None
         self.disabled = False
+        self.flight_tuning = []
+        self.next_flight_check = 0.
+        self.vertical_profile = False
 
     def _diagnose_slow(self, phase, started, error=None):
         elapsed = (time.perf_counter() - started) * 1000
@@ -155,18 +161,20 @@ class Mod:
             raise
 
     def management(self):
-        return ModDefinition('continent-flight', 'Continent Flight', version='0.4-experimental',
+        return ModDefinition('continent-flight', 'Continent Flight', version='0.4-fast-smooth2-test',
             description='Toggle flight on the current exploration character, then hold the configured ascend or descend key. Space remains jump. Travel resets flight. Bindings can be changed in Mod keybinds.',
             actions=(Action('status', 'Flight status', self.status),
                      Action('refresh', 'Find current exploration character', self.refresh),
                      Action('land', 'Leave flight', self.land)),
-            keybinds=(Keybind('fly', 'Toggle flight (keep separate from jump)', 'F6', self.toggle),
+            keybinds=(Keybind('fly', 'Toggle flight (keep separate from jump)', ',', self.toggle),
                       Keybind('rise', 'Hold to ascend', 'E', self.rise),
                       Keybind('descend', 'Hold to descend', 'Q', self.descend)))
 
     def enable(self, session):
         if not getattr(session, 'supports_vector_values', False):
             raise RuntimeError('Continent Flight requires Vector support. Use the native Mods launcher (unified pause-menu runtime).')
+        if not getattr(session, 'supports_scalar_assignment', False):
+            raise RuntimeError('Fast flight requires the SDK scalar assignment runtime')
         self.session = session
         self.disabled = False
         self.user32 = ctypes.WinDLL('user32', use_last_error=True)
@@ -187,7 +195,7 @@ class Mod:
         session.actions.register('continent_flight.toggle', self.toggle)
         session.actions.register('continent_flight.land', self.land)
         self.enable_ms = (time.perf_counter() - started) * 1000
-        LOG.info('Ready in %.1f ms: F6 toggles flight; Space remains jump', self.enable_ms)
+        LOG.info('Ready in %.1f ms: Comma toggles flight; Space remains jump', self.enable_ms)
 
     def refresh(self, _):
         self.discovery_generation += 1
@@ -235,6 +243,8 @@ class Mod:
             'impulse': prepare('/Script/Engine.CharacterMovementComponent:AddImpulse', target=movement, Impulse={'X':0.0,'Y':0.0,'Z':0.0}, bVelocityChange=True),
             'stop': prepare('/Script/Engine.MovementComponent:StopMovementImmediately', target=movement),
             'controlled': prepare('/Script/Engine.Pawn:IsLocallyControlled'),
+            'vertical_input': prepare('/Script/Engine.PawnMovementComponent:AddInputVector', target=movement,
+                                      WorldVector={'X':0.0,'Y':0.0,'Z':0.0}, bForce=True),
         }
         self.pawn = catalog.path_name(pawn)
         self.error = None
@@ -264,6 +274,7 @@ class Mod:
 
     def _forget_target(self, reason):
         self.discovery_generation += 1
+        self._restore_flight_tuning()
         # Revocation is local only: never call the destroyed pawn to clean up.
         self.flying = False
         self.direction = 0
@@ -294,11 +305,70 @@ class Mod:
             raise RuntimeError('Cannot capture a supported pre-flight movement mode')
         self.restore_mode = (mode, custom)
         self.calls['exit'] = self.calls['exit'].bind(NewMovementMode=mode, NewCustomMode=custom)
-        self.invoke('enter')
+        try:
+            self._apply_flight_tuning(values)
+            self.invoke('enter')
+        except Exception:
+            self._restore_flight_tuning()
+            raise
         self.flying = True
         self.last_poll = time.monotonic()
         LOG.info('Flight enabled for %s', self.pawn)
         return self.status(None)
+
+    def _apply_flight_tuning(self, values):
+        if self.flight_tuning:raise RuntimeError('Previous flight tuning still owns properties')
+        for name in FLIGHT_TUNING:
+            old=values.get((self.movement_class,name))
+            if type(old) not in (int,float) or not math.isfinite(old):
+                raise RuntimeError('Cannot capture flight property '+name)
+        with self.operation():
+            for name,value in FLIGHT_TUNING.items():
+                old=values[(self.movement_class,name)]
+                if old==value:continue
+                self.session.assign_scalar(self.movement,name,value,expected=old,
+                                           allow_mutation=True,catalog=self.planner._catalog)
+                self.flight_tuning.append((self.movement,name,old,value))
+
+    def _restore_flight_tuning(self):
+        while self.flight_tuning:
+            movement,name,old,value=self.flight_tuning[-1]
+            with self.operation():
+                # A transition may already have destroyed or recycled the old
+                # component. Read live candidates, then match the full identity.
+                c=capture_matching(self.session.pid,names=('CharMoveComp','Default__GameplayStatics'))
+                observed=next((o for o in c.objects if (o.index,o.serial,o.address)==
+                               (movement.index,movement.serial,movement.address)),None)
+                if observed is None or observed.object_flags&0x40000030:
+                    self.flight_tuning.pop();continue
+                values=read_values(c,observed).values
+                current=values.get((self.movement_class,name))
+                if current==value:
+                    self.session.assign_scalar(observed,name,old,expected=value,
+                                               allow_mutation=True,catalog=c)
+                elif current!=old:
+                    LOG.warning('Flight restore preserved another writer: %s',name)
+            self.flight_tuning.pop()
+        self.vertical_profile=False
+
+    def _set_vertical_profile(self, active):
+        if active==self.vertical_profile:return
+        # Input is consumed by engine ticks between controller polls. Avoid
+        # braking ascent to a stop in those gaps; restore normal braking as
+        # soon as the held vertical binding is released.
+        with self.operation():
+            for name,boost in VERTICAL_TUNING.items():
+                value=boost if active else FLIGHT_TUNING[name]
+                at=next((i for i,row in enumerate(self.flight_tuning) if row[1]==name),None)
+                old,expected=(self.flight_tuning[at][2:] if at is not None else
+                              (FLIGHT_TUNING[name],FLIGHT_TUNING[name]))
+                if expected==value:continue
+                self.session.assign_scalar(self.movement,name,value,expected=expected,
+                                           allow_mutation=True,catalog=self.planner._catalog)
+                row=(self.movement,name,old,value)
+                if at is None:self.flight_tuning.append(row)
+                else:self.flight_tuning[at]=row
+        self.vertical_profile=active
 
     def space(self, _):
         if self.tap.press(time.monotonic()):
@@ -376,28 +446,33 @@ class Mod:
         self.user32.GetWindowThreadProcessId(self.user32.GetForegroundWindow(), ctypes.byref(pid))
         self.input_state = dict(foreground_pid=pid.value, target_pid=self.session.pid,
                                direction=self.direction, elapsed=elapsed)
-        if pid.value != self.session.pid:
+        focused=pid.value==self.session.pid
+        if not focused:
             self.direction = 0
-            return
         if self.direction:
             if not self._vertical_held():
                 self.direction = 0
         try:
-            if not self.invoke('controlled'):
-                self.land()
-                self._forget_target('Possession changed; waiting to rediscover')
-                return
-            if not self.invoke('is_flying'):
-                self.input_state['controlled_flight'] = False
-                self.direction = 0
-                return
+            if now>=self.next_flight_check:
+                self.next_flight_check=now+.25
+                if not self.invoke('controlled'):
+                    self.land()
+                    self._forget_target('Possession changed; waiting to rediscover')
+                    return
+                if not self.invoke('is_flying'):
+                    self._restore_flight_tuning()
+                    self.input_state['controlled_flight'] = False
+                    self.flying=False;self.direction=0
+                    return
             self.input_state['controlled_flight'] = True
-            desired = flight_velocity(self.invoke('input'), self.direction)
-            current = self.invoke('velocity')
-            correction = smooth_correction(desired, current, elapsed)
-            if any(abs(value) > 1.0 for value in correction.values()):
+            self._set_vertical_profile(bool(self.direction))
+            if not focused:return
+            # The movement component accelerates and brakes every engine frame.
+            # Do not fight its speed cap with periodic velocity impulses.
+            if self.direction:
                 with self.operation():
-                    with self.calls['impulse'].bind(Impulse=correction, bVelocityChange=True).invoke():
+                    with self.calls['vertical_input'].bind(
+                            WorldVector={'X':0.0,'Y':0.0,'Z':float(self.direction)},bForce=True).invoke():
                         pass
         except Exception as exc:
             self.direction = 0
@@ -416,6 +491,7 @@ class Mod:
                 if error.native_error != 202 or error.outcome != 'not_dispatched': raise
             self.flying = False
             LOG.info('Flight disabled')
+        self._restore_flight_tuning()
         return self.local_status()
 
     def local_status(self):

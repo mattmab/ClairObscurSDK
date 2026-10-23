@@ -1,0 +1,605 @@
+{
+  "schema": 1,
+  "runtime_scene_protocol": 7,
+  "plan_version": 6,
+  "body_only": true,
+  "combat_enabled": false,
+  "grounded": false,
+  "body": "/Game/Characters/Enemies/YellowForest/Boss_Scavenger/scavengers_rigg.scavengers_rigg",
+  "animation": "/Game/Animations/Enemies/YellowForest/Scavenger/Anim_Othi/A_Scavengers_HideAtkV2.A_Scavengers_HideAtkV2",
+  "skeleton": "/Game/Characters/UE4_Skeleton.UE4_Skeleton",
+  "plan_sha256": "5ca9a3f4d7e605bfe1bd64476bf314871f245251d515a35304211bfeed355ca9",
+  "dependencies": [
+    {
+      "kind": "context",
+      "name": "local"
+    },
+    {
+      "kind": "context",
+      "name": "controller"
+    },
+    {
+      "kind": "context",
+      "name": "pawn"
+    },
+    {
+      "kind": "object",
+      "path": "/Script/Engine.Default__GameplayStatics",
+      "class_name": "GameplayStatics"
+    },
+    {
+      "kind": "object",
+      "path": "/Script/Engine.CameraActor",
+      "class_name": "Class"
+    },
+    {
+      "kind": "object",
+      "path": "/Script/Engine.SkeletalMeshActor",
+      "class_name": "Class"
+    },
+    {
+      "kind": "object",
+      "path": "/Script/Engine.SkeletalMeshComponent",
+      "class_name": "Class"
+    },
+    {
+      "kind": "asset",
+      "path": "/Game/Characters/Heros/Lune/SK_Lune_Placeholder.SK_Lune_Placeholder"
+    },
+    {
+      "kind": "asset",
+      "path": "/Game/Characters/Heros/Lune/Animations/Skills/Lune_Thunder_Kick_IP.Lune_Thunder_Kick_IP"
+    },
+    {
+      "kind": "asset",
+      "path": "/Game/Audio/WAV/00_Placeholders/UI/Menu/Smart_UI_Interface_Click_An_Ants_Whip_1_Whoosh_Crack_Short_Menu.Smart_UI_Interface_Click_An_Ants_Whip_1_Whoosh_Crack_Short_Menu"
+    },
+    {
+      "kind": "object",
+      "path": "/Script/Engine.Skeleton",
+      "class_name": "Class"
+    },
+    {
+      "kind": "object",
+      "path": "/Script/Engine.CameraComponent",
+      "class_name": "Class"
+    },
+    {
+      "kind": "asset",
+      "path": "/Game/MetaHumans/Lune/Face/Lune_FaceMesh.Lune_FaceMesh"
+    },
+    {
+      "kind": "asset",
+      "path": "/Game/Characters/Hair/Heroes/Lune/Hair_Lune_2_skl.Hair_Lune_2_skl"
+    },
+    {
+      "kind": "asset",
+      "path": "/Game/Characters/Heros/Maelle/Customization/Skin/SK_Maelle_ActeIII.SK_Maelle_ActeIII"
+    },
+    {
+      "kind": "asset",
+      "path": "/Game/Characters/Heros/Maelle/Animations/Skills/Maelle_Skill_DancingFury_B_Inplace.Maelle_Skill_DancingFury_B_Inplace"
+    },
+    {
+      "kind": "asset",
+      "path": "/Game/MetaHumans/Maelle_v2/Face/Maelle_v2_FaceMesh.Maelle_v2_FaceMesh"
+    },
+    {
+      "kind": "asset",
+      "path": "/Game/Characters/Hair/Heroes/Maelle/Maelle_Hair_V3_Metahumanskl.Maelle_Hair_V3_Metahumanskl"
+    },
+    {
+      "kind": "asset",
+      "path": "/Game/Characters/Enemies/Petank/SK_Petank.SK_Petank"
+    },
+    {
+      "kind": "asset",
+      "path": "/Game/Characters/Heros/Maelle/Sword/SK_Sword_Maelle.SK_Sword_Maelle"
+    },
+    {
+      "kind": "asset",
+      "path": "/Game/Animations/AnimPacks/Idles/MC_Idles_Pack/Shift/Pack_MCIdlesPack_am_Stand_Idle_ShiftL_Loop_01_UE5.Pack_MCIdlesPack_am_Stand_Idle_ShiftL_Loop_01_UE5"
+    },
+    {
+      "kind": "object",
+      "path": "/Script/Engine.GameplayStatics:BeginDeferredActorSpawnFromClass",
+      "class_name": "Function"
+    },
+    {
+      "kind": "object",
+      "path": "/Script/Engine.GameplayStatics:FinishSpawningActor",
+      "class_name": "Function"
+    },
+    {
+      "kind": "object",
+      "path": "/Script/Engine.Actor:K2_DestroyActor",
+      "class_name": "Function"
+    },
+    {
+      "kind": "object",
+      "path": "/Script/Engine.Actor:K2_GetActorLocation",
+      "class_name": "Function"
+    },
+    {
+      "kind": "object",
+      "path": "/Script/Engine.Actor:K2_GetActorRotation",
+      "class_name": "Function"
+    },
+    {
+      "kind": "object",
+      "path": "/Script/Engine.PlayerController:SetViewTargetWithBlend",
+      "class_name": "Function"
+    },
+    {
+      "kind": "object",
+      "path": "/Script/Engine.Controller:GetViewTarget",
+      "class_name": "Function"
+    },
+    {
+      "kind": "object",
+      "path": "/Script/Engine.Controller:SetIgnoreMoveInput",
+      "class_name": "Function"
+    },
+    {
+      "kind": "object",
+      "path": "/Script/Engine.PlayerCameraManager:GetCameraLocation",
+      "class_name": "Function"
+    },
+    {
+      "kind": "object",
+      "path": "/Script/Engine.PlayerCameraManager:GetCameraRotation",
+      "class_name": "Function"
+    },
+    {
+      "kind": "object",
+      "path": "/Script/Engine.SceneComponent:SetMobility",
+      "class_name": "Function"
+    },
+    {
+      "kind": "object",
+      "path": "/Script/Engine.Controller:K2_GetPawn",
+      "class_name": "Function"
+    },
+    {
+      "kind": "object",
+      "path": "/Script/Engine.GameplayStatics:IsGamePaused",
+      "class_name": "Function"
+    },
+    {
+      "kind": "object",
+      "path": "/Script/Engine.Actor:SetActorEnableCollision",
+      "class_name": "Function"
+    },
+    {
+      "kind": "object",
+      "path": "/Script/Engine.Actor:K2_TeleportTo",
+      "class_name": "Function"
+    },
+    {
+      "kind": "object",
+      "path": "/Script/Engine.Actor:GetComponentByClass",
+      "class_name": "Function"
+    },
+    {
+      "kind": "object",
+      "path": "/Script/Engine.SkeletalMeshComponent:SetSkeletalMeshAsset",
+      "class_name": "Function"
+    },
+    {
+      "kind": "object",
+      "path": "/Script/Engine.SkeletalMeshComponent:PlayAnimation",
+      "class_name": "Function"
+    },
+    {
+      "kind": "object",
+      "path": "/Script/Engine.SkeletalMeshComponent:Stop",
+      "class_name": "Function"
+    },
+    {
+      "kind": "object",
+      "path": "/Script/Engine.GameplayStatics:CreateSound2D",
+      "class_name": "Function"
+    },
+    {
+      "kind": "object",
+      "path": "/Script/Engine.AudioComponent:Play",
+      "class_name": "Function"
+    },
+    {
+      "kind": "object",
+      "path": "/Script/Engine.AudioComponent:Stop",
+      "class_name": "Function"
+    },
+    {
+      "kind": "object",
+      "path": "/Script/Engine.ActorComponent:K2_DestroyComponent",
+      "class_name": "Function"
+    },
+    {
+      "kind": "object",
+      "path": "/Script/Engine.Controller:SetIgnoreLookInput",
+      "class_name": "Function"
+    },
+    {
+      "kind": "object",
+      "path": "/Script/Engine.CameraComponent:SetFieldOfView",
+      "class_name": "Function"
+    },
+    {
+      "kind": "object",
+      "path": "/Script/Engine.SkinnedMeshComponent:SetLeaderPoseComponent",
+      "class_name": "Function"
+    },
+    {
+      "kind": "object",
+      "path": "/Script/Engine.SceneComponent:K2_AttachToComponent",
+      "class_name": "Function"
+    },
+    {
+      "kind": "object",
+      "path": "/Script/Engine.SkinnedMeshComponent:GetNumBones",
+      "class_name": "Function"
+    },
+    {
+      "kind": "object",
+      "path": "/Script/Engine.SkinnedMeshComponent:GetBoneName",
+      "class_name": "Function"
+    },
+    {
+      "kind": "object",
+      "path": "/Script/Engine.SceneComponent:K2_SetRelativeTransform",
+      "class_name": "Function"
+    },
+    {
+      "kind": "object",
+      "path": "/Script/Niagara.Default__NiagaraFunctionLibrary",
+      "class_name": "NiagaraFunctionLibrary"
+    },
+    {
+      "kind": "asset",
+      "path": "/Game/FX/FX_Leo/Fx/Lune/Thunder_Fall/Systems/NS_Impact_Electric1.NS_Impact_Electric1"
+    },
+    {
+      "kind": "asset",
+      "path": "/Game/FX/FX_Leo/Fx/Maelle/FX_FlowerPetalsBurst.FX_FlowerPetalsBurst"
+    },
+    {
+      "kind": "asset",
+      "path": "/Game/FX/FX_Leo/Fx/Maelle/FX_MaelleSword.FX_MaelleSword"
+    },
+    {
+      "kind": "asset",
+      "path": "/Game/FX/FX_Leo/Fx/Lune/FX_LuneTrail.FX_LuneTrail"
+    },
+    {
+      "kind": "object",
+      "path": "/Script/Niagara.NiagaraFunctionLibrary:SpawnSystemAtLocation",
+      "class_name": "Function"
+    },
+    {
+      "kind": "asset",
+      "path": "/Game/Characters/Enemies/YellowForest/Boss_Scavenger/scavengers_rigg.scavengers_rigg"
+    },
+    {
+      "kind": "asset",
+      "path": "/Game/Characters/Heros/Lune/SK_Lune_Placeholder.SK_Lune_Placeholder"
+    },
+    {
+      "kind": "asset",
+      "path": "/Game/Characters/Heros/Lune/SK_Lune_Placeholder.SK_Lune_Placeholder"
+    },
+    {
+      "kind": "asset",
+      "path": "/Game/Characters/Heros/Lune/SK_Lune_Placeholder.SK_Lune_Placeholder"
+    },
+    {
+      "kind": "asset",
+      "path": "/Game/Characters/Heros/Lune/SK_Lune_Placeholder.SK_Lune_Placeholder"
+    },
+    {
+      "kind": "asset",
+      "path": "/Game/Characters/Heros/Lune/SK_Lune_Placeholder.SK_Lune_Placeholder"
+    },
+    {
+      "kind": "asset",
+      "path": "/Game/Animations/Enemies/YellowForest/Scavenger/Anim_Othi/A_Scavengers_HideAtkV2.A_Scavengers_HideAtkV2"
+    },
+    {
+      "kind": "asset",
+      "path": "/Game/Characters/Heros/Lune/SK_Lune_Placeholder.SK_Lune_Placeholder"
+    },
+    {
+      "kind": "asset",
+      "path": "/Game/Characters/Heros/Lune/SK_Lune_Placeholder.SK_Lune_Placeholder"
+    },
+    {
+      "kind": "asset",
+      "path": "/Game/Characters/Heros/Lune/SK_Lune_Placeholder.SK_Lune_Placeholder"
+    },
+    {
+      "kind": "asset",
+      "path": "/Game/Characters/Heros/Lune/SK_Lune_Placeholder.SK_Lune_Placeholder"
+    },
+    {
+      "kind": "asset",
+      "path": "/Game/Characters/Heros/Lune/SK_Lune_Placeholder.SK_Lune_Placeholder"
+    },
+    {
+      "kind": "asset",
+      "path": "/Game/Characters/Heros/Lune/SK_Lune_Placeholder.SK_Lune_Placeholder"
+    },
+    {
+      "kind": "asset",
+      "path": "/Game/Characters/Heros/Lune/SK_Lune_Placeholder.SK_Lune_Placeholder"
+    },
+    {
+      "kind": "asset",
+      "path": "/Game/Characters/Heros/Lune/SK_Lune_Placeholder.SK_Lune_Placeholder"
+    },
+    {
+      "kind": "asset",
+      "path": "/Game/Characters/Heros/Lune/SK_Lune_Placeholder.SK_Lune_Placeholder"
+    },
+    {
+      "kind": "asset",
+      "path": "/Game/Characters/Heros/Lune/SK_Lune_Placeholder.SK_Lune_Placeholder"
+    },
+    {
+      "kind": "asset",
+      "path": "/Game/Characters/Heros/Lune/SK_Lune_Placeholder.SK_Lune_Placeholder"
+    },
+    {
+      "kind": "asset",
+      "path": "/Game/Characters/Heros/Lune/SK_Lune_Placeholder.SK_Lune_Placeholder"
+    },
+    {
+      "kind": "asset",
+      "path": "/Game/Characters/Heros/Lune/SK_Lune_Placeholder.SK_Lune_Placeholder"
+    },
+    {
+      "kind": "asset",
+      "path": "/Game/Characters/Heros/Lune/SK_Lune_Placeholder.SK_Lune_Placeholder"
+    },
+    {
+      "kind": "asset",
+      "path": "/Game/Characters/Heros/Lune/SK_Lune_Placeholder.SK_Lune_Placeholder"
+    },
+    {
+      "kind": "asset",
+      "path": "/Game/Characters/Heros/Lune/SK_Lune_Placeholder.SK_Lune_Placeholder"
+    },
+    {
+      "kind": "asset",
+      "path": "/Game/Characters/Heros/Lune/SK_Lune_Placeholder.SK_Lune_Placeholder"
+    },
+    {
+      "kind": "asset",
+      "path": "/Game/Characters/Heros/Lune/SK_Lune_Placeholder.SK_Lune_Placeholder"
+    },
+    {
+      "kind": "asset",
+      "path": "/Game/Characters/Heros/Lune/SK_Lune_Placeholder.SK_Lune_Placeholder"
+    },
+    {
+      "kind": "asset",
+      "path": "/Game/Characters/Heros/Lune/SK_Lune_Placeholder.SK_Lune_Placeholder"
+    },
+    {
+      "kind": "asset",
+      "path": "/Game/Characters/Heros/Lune/SK_Lune_Placeholder.SK_Lune_Placeholder"
+    },
+    {
+      "kind": "asset",
+      "path": "/Game/Characters/Heros/Lune/SK_Lune_Placeholder.SK_Lune_Placeholder"
+    },
+    {
+      "kind": "asset",
+      "path": "/Game/Characters/Heros/Lune/SK_Lune_Placeholder.SK_Lune_Placeholder"
+    },
+    {
+      "kind": "asset",
+      "path": "/Game/Characters/Heros/Lune/SK_Lune_Placeholder.SK_Lune_Placeholder"
+    },
+    {
+      "kind": "asset",
+      "path": "/Game/Characters/Heros/Lune/SK_Lune_Placeholder.SK_Lune_Placeholder"
+    },
+    {
+      "kind": "asset",
+      "path": "/Game/Characters/Heros/Lune/SK_Lune_Placeholder.SK_Lune_Placeholder"
+    },
+    {
+      "kind": "asset",
+      "path": "/Game/Characters/Heros/Lune/SK_Lune_Placeholder.SK_Lune_Placeholder"
+    },
+    {
+      "kind": "asset",
+      "path": "/Game/Characters/Heros/Lune/SK_Lune_Placeholder.SK_Lune_Placeholder"
+    },
+    {
+      "kind": "asset",
+      "path": "/Game/Characters/Heros/Lune/SK_Lune_Placeholder.SK_Lune_Placeholder"
+    },
+    {
+      "kind": "asset",
+      "path": "/Game/Characters/Heros/Lune/SK_Lune_Placeholder.SK_Lune_Placeholder"
+    },
+    {
+      "kind": "asset",
+      "path": "/Game/Characters/Heros/Lune/SK_Lune_Placeholder.SK_Lune_Placeholder"
+    },
+    {
+      "kind": "asset",
+      "path": "/Game/Characters/Heros/Lune/SK_Lune_Placeholder.SK_Lune_Placeholder"
+    },
+    {
+      "kind": "asset",
+      "path": "/Game/Characters/Heros/Lune/SK_Lune_Placeholder.SK_Lune_Placeholder"
+    },
+    {
+      "kind": "asset",
+      "path": "/Game/Characters/Heros/Lune/SK_Lune_Placeholder.SK_Lune_Placeholder"
+    },
+    {
+      "kind": "asset",
+      "path": "/Game/Characters/Heros/Lune/SK_Lune_Placeholder.SK_Lune_Placeholder"
+    },
+    {
+      "kind": "object",
+      "path": "/Script/Engine.SkeletalMeshComponent:SetPosition",
+      "class_name": "Function"
+    },
+    {
+      "kind": "object",
+      "path": "/Script/Engine.StaticMeshActor",
+      "class_name": "Class"
+    },
+    {
+      "kind": "object",
+      "path": "/Script/Engine.StaticMeshComponent",
+      "class_name": "Class"
+    },
+    {
+      "kind": "object",
+      "path": "/Engine/BasicShapes/Cube.Cube",
+      "class_name": "StaticMesh"
+    },
+    {
+      "kind": "object",
+      "path": "/Script/Engine.StaticMeshComponent:SetStaticMesh",
+      "class_name": "Function"
+    },
+    {
+      "kind": "object",
+      "path": "/Game/LevelTools/FreeAimTargets/M_DebugEmissive1.M_DebugEmissive1",
+      "class_name": null
+    },
+    {
+      "kind": "object",
+      "path": "/Script/Engine.PrimitiveComponent:SetMaterial",
+      "class_name": "Function"
+    },
+    {
+      "kind": "object",
+      "path": "/Script/Engine.PrimitiveComponent:GetMaterial",
+      "class_name": "Function"
+    },
+    {
+      "kind": "object",
+      "path": "/Script/Engine.PrimitiveComponent:GetNumMaterials",
+      "class_name": "Function"
+    },
+    {
+      "kind": "object",
+      "path": "/Script/Engine.PlayerController:GetInputMouseDelta",
+      "class_name": "Function"
+    },
+    {
+      "kind": "asset",
+      "path": "/Game/Characters/Heros/Lune/Animations/Skills/Lune_Thunder_Kick_IP.Lune_Thunder_Kick_IP"
+    },
+    {
+      "kind": "asset",
+      "path": "/Game/Characters/Heros/Lune/Animations/Skills/Lune_Thunder_Kick_IP.Lune_Thunder_Kick_IP"
+    },
+    {
+      "kind": "asset",
+      "path": "/Game/Characters/Heros/Lune/Animations/Skills/Lune_Thunder_Kick_IP.Lune_Thunder_Kick_IP"
+    },
+    {
+      "kind": "asset",
+      "path": "/Game/Characters/Heros/Lune/Animations/Skills/Lune_Thunder_Kick_IP.Lune_Thunder_Kick_IP"
+    },
+    {
+      "kind": "asset",
+      "path": "/Game/Characters/Heros/Lune/Animations/Skills/Lune_Thunder_Kick_IP.Lune_Thunder_Kick_IP"
+    },
+    {
+      "kind": "asset",
+      "path": "/Game/Characters/Heros/Lune/Animations/Skills/Lune_Thunder_Kick_IP.Lune_Thunder_Kick_IP"
+    },
+    {
+      "kind": "asset",
+      "path": "/Game/Characters/Heros/Lune/Animations/Skills/Lune_Thunder_Kick_IP.Lune_Thunder_Kick_IP"
+    },
+    {
+      "kind": "asset",
+      "path": "/Game/Characters/Heros/Lune/Animations/Skills/Lune_Thunder_Kick_IP.Lune_Thunder_Kick_IP"
+    },
+    {
+      "kind": "asset",
+      "path": "/Game/Characters/Heros/Lune/Animations/Skills/Lune_Thunder_Kick_IP.Lune_Thunder_Kick_IP"
+    },
+    {
+      "kind": "asset",
+      "path": "/Game/Characters/Heros/Lune/Animations/Skills/Lune_Thunder_Kick_IP.Lune_Thunder_Kick_IP"
+    },
+    {
+      "kind": "asset",
+      "path": "/Game/Characters/Heros/Lune/Animations/Skills/Lune_Thunder_Kick_IP.Lune_Thunder_Kick_IP"
+    },
+    {
+      "kind": "asset",
+      "path": "/Game/Characters/Heros/Lune/Animations/Skills/Lune_Thunder_Kick_IP.Lune_Thunder_Kick_IP"
+    },
+    {
+      "kind": "asset",
+      "path": "/Game/Characters/Heros/Lune/Animations/Skills/Lune_Thunder_Kick_IP.Lune_Thunder_Kick_IP"
+    },
+    {
+      "kind": "asset",
+      "path": "/Game/Characters/Heros/Lune/Animations/Skills/Lune_Thunder_Kick_IP.Lune_Thunder_Kick_IP"
+    },
+    {
+      "kind": "asset",
+      "path": "/Game/Characters/Heros/Lune/Animations/Skills/Lune_Thunder_Kick_IP.Lune_Thunder_Kick_IP"
+    },
+    {
+      "kind": "asset",
+      "path": "/Game/Characters/Heros/Lune/Animations/Skills/Lune_Thunder_Kick_IP.Lune_Thunder_Kick_IP"
+    },
+    {
+      "kind": "asset",
+      "path": "/Game/Characters/Heros/Lune/Animations/Skills/Lune_Thunder_Kick_IP.Lune_Thunder_Kick_IP"
+    },
+    {
+      "kind": "asset",
+      "path": "/Game/Characters/Heros/Lune/Animations/Skills/Lune_Thunder_Kick_IP.Lune_Thunder_Kick_IP"
+    },
+    {
+      "kind": "asset",
+      "path": "/Game/Characters/Heros/Lune/Animations/Skills/Lune_Thunder_Kick_IP.Lune_Thunder_Kick_IP"
+    },
+    {
+      "kind": "asset",
+      "path": "/Game/Characters/Heros/Lune/Animations/Skills/Lune_Thunder_Kick_IP.Lune_Thunder_Kick_IP"
+    },
+    {
+      "kind": "asset",
+      "path": "/Game/Characters/Heros/Lune/Animations/Skills/Lune_Thunder_Kick_IP.Lune_Thunder_Kick_IP"
+    },
+    {
+      "kind": "asset",
+      "path": "/Game/Characters/Heros/Lune/Animations/Skills/Lune_Thunder_Kick_IP.Lune_Thunder_Kick_IP"
+    },
+    {
+      "kind": "asset",
+      "path": "/Game/Characters/Heros/Lune/Animations/Skills/Lune_Thunder_Kick_IP.Lune_Thunder_Kick_IP"
+    },
+    {
+      "kind": "asset",
+      "path": "/Game/Characters/Heros/Lune/Animations/Skills/Lune_Thunder_Kick_IP.Lune_Thunder_Kick_IP"
+    },
+    {
+      "kind": "object",
+      "path": "/Script/Engine.AudioComponent:SetVolumeMultiplier",
+      "class_name": "Function"
+    }
+  ],
+  "source_hashes": {
+    "full-native-candidate\\mods\\SceneEditor\\runtime.py": "702cf01c73c5fd36a437ede7f7751b36caf79a3b4371eb6cdaa5f9fe51aa451b",
+    "full-native-candidate\\mods\\SceneEditor\\scene.py": "abced6e5ae8649a49fee5176f46430d4563a5a70fbc948050d63928904e9c7d4",
+    "full-native-candidate\\mods\\SceneEditor\\palette.json": "40fdfd376e3cfb7e9282660f23c4213adcdb34cc4b4a4aa268079921469f7a57",
+    "scavenger-original-presentation.candidate.json": "701ae3148079ca64afce4a2a7842fc8d547335c1a4e444cdc088490dfe6aa7e0"
+  }
+}

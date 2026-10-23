@@ -3,7 +3,7 @@
 #include <cstring>
 
 namespace e33_keys {
-constexpr uint32_t capacity = 64;
+constexpr uint32_t capacity = 96;
 enum : uint32_t { Replace = 1, Drain = 2, Capture = 3 };
 struct Binding { uint32_t token, key; };
 struct Packet {
@@ -12,11 +12,11 @@ struct Packet {
     uint32_t count = 0, dropped = 0, error = 0, reserved = 0;
     Binding bindings[capacity]{};
 };
-static_assert(sizeof(Packet) == 552, "key packet ABI");
+static_assert(sizeof(Packet) == 808, "key packet ABI");
 inline bool supported_key(uint32_t key) {
     return (key >= 65 && key <= 90) || (key >= 48 && key <= 57) ||
         (key >= 112 && key <= 123) || key == 8 || key == 9 || key == 13 ||
-        key == 27 || (key >= 32 && key <= 40) || key == 45 || key == 46;
+        key == 27 || (key >= 32 && key <= 40) || key == 45 || key == 46 || key == 188 || key == 190;
 }
 inline bool valid_request(const Packet& p) {
     if(p.version != 1 || !p.session || !p.generation || p.count > capacity ||

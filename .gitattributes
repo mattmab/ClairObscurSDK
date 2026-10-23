@@ -1,2 +1,4 @@
 # Preserve authentic notice bytes; upstream whitespace is intentional.
 licenses/** -text -whitespace
+# This profile's runtime admission checks its exact byte hash.
+src/expedition33/_original_trigger_recipes.json -text

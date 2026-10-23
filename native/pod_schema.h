@@ -86,6 +86,10 @@ bool validate_pod_schema(Ops& ops,PodValueKind kind,const CallIdentity& identity
     uint64_t table=0, flags=0;
     const char* field_type=nullptr;
     switch(kind) {
+    case PodValueKind::Guid:
+        struct_name="Guid"; package="/Script/CoreUObject";
+        fields[0]="A"; fields[1]="B"; fields[2]="C"; fields[3]="D"; count=4; component=4;
+        table=0x6e10a98; flags=6755469251052033ULL; field_type="IntProperty"; break;
     case PodValueKind::Vector:
         struct_name="Vector"; package="/Script/CoreUObject";
         fields[0]="X"; fields[1]="Y"; fields[2]="Z"; count=3; component=8;

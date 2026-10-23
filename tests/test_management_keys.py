@@ -28,6 +28,14 @@ class ManagementKeysTests(unittest.TestCase):
         for key in ('Ctrl+F6', '`', '~', '', ' F6', True, 117):
             with self.assertRaises(ValueError): normalize_key(key)
 
+    def test_punctuation_names_and_persistence(self):
+        for alias, canonical, vk in [(',', ',', 188), ('Comma', ',', 188),
+                                      ('.', '.', 190), ('Period', '.', 190), ('dot', '.', 190)]:
+            self.assertEqual(normalize_key(alias),canonical)
+            self.assertEqual(VIRTUAL_KEYS[canonical],vk)
+            self.registry.set_keybind(self.registry.select('specimen'),'read-key',alias)
+            self.assertEqual(SettingsStore(self.store.path).get('specimen')['keybinds']['read-key'],canonical)
+
     def test_mapping_persists_and_revokes_old_delivery(self):
         self.loader.enable('Specimen')
         selected = self.registry.select('specimen')

@@ -199,7 +199,11 @@ int run_query(int argc, char** argv) {
         bool runtime_session = argc == 2 && std::string(argv[1]) == "--session";
         bool catalog = argc == 2 && std::string(argv[1]) == "--catalog";
         const bool matching_catalog = argc == 4 && std::string(argv[1]) == "--catalog-match";
-        const bool resolve_asset_names = argc == 4 && std::string(argv[1]) == "--resolve-asset-names";
+        // Read-only exact export observation also supports generated cells whose
+        // World export differs from the package basename. This does not change
+        // the retained loader's canonical-path authority or invoke the engine.
+        const bool resolve_export_names = argc == 4 && std::string(argv[1]) == "--resolve-export-names";
+        const bool resolve_asset_names = resolve_export_names || (argc == 4 && std::string(argv[1]) == "--resolve-asset-names");
         std::string asset_package,asset_name;
         const bool selected_catalog = matching_catalog || (argc == 4 && std::string(argv[1]) == "--catalog-select");
         std::unordered_set<std::string> match_names, match_classes;
@@ -227,8 +231,9 @@ int run_query(int argc, char** argv) {
                     "ASSET_PATH_INVALID");
             asset_package=path.substr(0,dot); asset_name=path.substr(dot+1);
             auto fold_asset=[](std::string value){for(char& ch:value)if(ch>='A'&&ch<='Z')ch=char(ch-'A'+'a');return value;};
-            require(asset_package.rfind("/Game/",0)==0 && !asset_name.empty() &&
-                    (fold_asset(asset_package.substr(asset_package.rfind('/')+1))==fold_asset(asset_name) || fold_asset(asset_package.substr(asset_package.rfind('/')+1)+"_C")==fold_asset(asset_name)),"ASSET_PATH_INVALID");
+            require(asset_package.rfind("/Game/",0)==0 && asset_package.size()>6 &&
+                    asset_package.back()!='/' && asset_package.find("//")==std::string::npos && !asset_name.empty() &&
+                    (resolve_export_names || fold_asset(asset_package.substr(asset_package.rfind('/')+1))==fold_asset(asset_name) || fold_asset(asset_package.substr(asset_package.rfind('/')+1)+"_C")==fold_asset(asset_name)),"ASSET_PATH_INVALID");
             for(char ch:asset_name) require((ch>='a'&&ch<='z') || (ch>='A'&&ch<='Z') ||
                 (ch>='0'&&ch<='9') || ch=='_',"ASSET_PATH_INVALID");
             for(char ch:asset_package) require((ch>='a'&&ch<='z') || (ch>='A'&&ch<='Z') ||
@@ -621,9 +626,12 @@ int run_query(int argc, char** argv) {
             if (read_enums) {
                 // Builder 1413ad330 creates FName/int64 pairs; UEnum setter
                 // 1412f26d0 copies them to +40, count +48/capacity +4c.
-                // Exact native UEnum only: subclasses need separate verification.
+                // UUserDefinedEnum inherits UEnum's member array. This is a
+                // read-only base-layout observation, with the same bounded
+                // array and before/after identity checks for every subclass.
                 require(derives_from_core_type(object.cls, "Enum") &&
-                        object.vtable == base + 0x6dee0b0, "ENUM_TARGET_TYPE_UNSUPPORTED");
+                        object.vtable >= base && object.vtable < base + 166776832,
+                        "ENUM_TARGET_TYPE_UNSUPPORTED");
                 struct Members { uint64_t data; int32_t count, capacity; };
                 struct Member { uint32_t name, number; int64_t value; };
                 static_assert(sizeof(Members) == 16 && sizeof(Member) == 16);
@@ -710,7 +718,10 @@ int run_query(int argc, char** argv) {
                     bool first_name=true;
                     unsigned names_seen=0;
                     for(size_t at=0;at+13<=bytes.size() && names_seen<256;++at) {
-                        if(bytes[at]!=0x1b && bytes[at]!=0x45) continue;
+                        // EX_NameConst uses the same 12-byte script-name
+                        // representation. Preserve these as candidate leads as
+                        // well, so read-only audits can identify CVar names.
+                        if(bytes[at]!=0x1b && bytes[at]!=0x45 && bytes[at]!=0x21) continue;
                         uint32_t id=0,number=0;
                         std::memcpy(&id,bytes.data()+at+1,4); std::memcpy(&number,bytes.data()+at+9,4);
                         if(number>65535 || (id>>16)>reader.get<uint32_t>(pool+8)) continue;
@@ -1028,6 +1039,8 @@ int run_query(int argc, char** argv) {
                         size_t struct_string_budget = 262144;
                         std::function<std::string(uint64_t, const PropertyPrefix&, uint64_t,
                             const uint8_t*, unsigned)> struct_json;
+                        std::function<std::string(uint64_t, const PropertyPrefix&, uint64_t,
+                            unsigned)> map_json;
                         struct_json = [&](uint64_t property, const PropertyPrefix& layout, uint64_t at,
                                           const uint8_t* bytes, unsigned depth) -> std::string {
                             require(depth < 4 && struct_budget > 0, "STRUCT_DEPTH_OR_NODE_LIMIT");
@@ -1082,6 +1095,31 @@ int run_query(int argc, char** argv) {
                                             std::string encoded;
                                             if (kind == "StructProperty") {
                                                 encoded = struct_json(member, child, at + child.offset, source, depth + 1);
+                                            } else if (kind == "MapProperty") {
+                                                // Nested maps currently admit only the objective-status schema.
+                                                // Publish its independently observed element types for Python validation.
+                                                const auto key = reader.get<uint64_t>(member + 0x70);
+                                                const auto val = reader.get<uint64_t>(member + 0x78);
+                                                const auto key_layout = reader.get<PropertyPrefix>(key);
+                                                const auto val_layout = reader.get<PropertyPrefix>(val);
+                                                const auto key_id = reader.get<uint64_t>(key_layout.type);
+                                                const auto val_id = reader.get<uint64_t>(val_layout.type);
+                                                const auto key_kind = read_name(reader, pool, uint32_t(key_id), uint32_t(key_id >> 32));
+                                                const auto val_kind = read_name(reader, pool, uint32_t(val_id), uint32_t(val_id >> 32));
+                                                require(key_kind == "NameProperty" && val_kind == "ByteProperty",
+                                                        "STRUCT_MAP_ELEMENT_TYPE_UNSUPPORTED");
+                                                encoded = map_json(member, child, at + child.offset, depth + 1);
+                                                const auto key_again = reader.get<PropertyPrefix>(key);
+                                                const auto val_again = reader.get<PropertyPrefix>(val);
+                                                require(reader.get<uint64_t>(member + 0x70) == key &&
+                                                        reader.get<uint64_t>(member + 0x78) == val &&
+                                                        !std::memcmp(&key_layout, &key_again, sizeof(key_layout)) &&
+                                                        !std::memcmp(&val_layout, &val_again, sizeof(val_layout)) &&
+                                                        reader.get<uint64_t>(key_layout.type) == key_id &&
+                                                        reader.get<uint64_t>(val_layout.type) == val_id,
+                                                        "STRUCT_MAP_DESCRIPTOR_CHANGED");
+                                                members << ",\"map_key_type\":" << quote(key_kind)
+                                                        << ",\"map_value_type\":" << quote(val_kind);
                                             } else if (kind == "StrProperty") {
                                                 // Copy FString contents, never expose or own its pointer.
                                                 struct StringHeader { uint64_t data; int32_t count, capacity; };
@@ -1160,6 +1198,128 @@ int run_query(int argc, char** argv) {
                                 << "},\"fields\":[" << members.str() << "],\"truncated\":" << (truncated ? "true" : "false") << "}}";
                             return out.str();
                         };
+                        map_json = [&](uint64_t property, const PropertyPrefix& layout, uint64_t at,
+                                       unsigned depth) -> std::string {
+                            require(depth < 4 && struct_budget > 0, "MAP_DEPTH_OR_NODE_LIMIT");
+                            --struct_budget;
+                            // Read-only, bounded supported map pairs, including Name->Byte.
+                            // Storage layout follows target export 14136a7f0;
+                            // frozen/relative allocators and other types fail closed.
+                            require(layout.dimension == 1 && layout.element_size == 80, "MAP_LAYOUT_UNSUPPORTED");
+                            uint8_t descriptor[0x30], descriptor_again[0x30];
+                            reader.read(property + 0x70, descriptor, sizeof(descriptor));
+                            auto d32 = [&](size_t off) { int32_t v; std::memcpy(&v, descriptor + off, 4); return v; };
+                            auto d64 = [&](size_t off) { uint64_t v; std::memcpy(&v, descriptor + off, 8); return v; };
+                            require(!(descriptor[0x28] & 1), "MAP_ALLOCATOR_UNSUPPORTED");
+                            const auto key_address = d64(0), value_address = d64(8);
+                            require(key_address && value_address && key_address != property &&
+                                    value_address != property && key_address != value_address, "MAP_INNER_INVALID");
+                            const auto key_layout = reader.get<PropertyPrefix>(key_address);
+                            const auto value_layout = reader.get<PropertyPrefix>(value_address);
+                            auto map_type = [&](const PropertyPrefix& child) {
+                                require(reader.get<uint64_t>(child.type + 0x10) & 0x8000, "MAP_INNER_TYPE_INVALID");
+                                const auto id = reader.get<uint64_t>(child.type);
+                                return read_name(reader, pool, uint32_t(id), uint32_t(id >> 32));
+                            };
+                            const auto key_kind = map_type(key_layout), value_kind = map_type(value_layout);
+                            const bool name_byte = key_kind == "NameProperty" && value_kind == "ByteProperty";
+                            const bool name_bool = key_kind == "NameProperty" && value_kind == "BoolProperty";
+                            const bool byte_struct = key_kind == "ByteProperty" && value_kind == "StructProperty";
+                            const bool name_struct = key_kind == "NameProperty" && value_kind == "StructProperty";
+                            const bool name_object = key_kind == "NameProperty" && value_kind == "ObjectProperty";
+                            const bool byte_double = key_kind == "ByteProperty" && value_kind == "DoubleProperty";
+                            const bool byte_int = key_kind == "ByteProperty" && value_kind == "IntProperty";
+                            const bool struct_object = key_kind == "StructProperty" && value_kind == "ObjectProperty";
+                            const bool struct_struct = key_kind == "StructProperty" && value_kind == "StructProperty";
+                            require(name_byte || name_bool || byte_struct || name_struct || name_object || byte_double || byte_int || struct_object || struct_struct,
+                                    "MAP_ELEMENT_TYPE_UNSUPPORTED");
+                            const bool struct_key = struct_object || struct_struct;
+                            const bool struct_value = byte_struct || name_struct || struct_struct;
+                            const auto value_offset = d32(0x10), stride = d32(0x1c);
+                            require(key_layout.owner == property && value_layout.owner == property &&
+                                    key_layout.dimension == 1 && value_layout.dimension == 1 &&
+                                    key_layout.offset == 0 && (struct_key ?
+                                        (key_layout.element_size > 0 && key_layout.element_size <= 128) :
+                                        key_layout.element_size == ((name_byte || name_bool || name_struct || name_object) ? 8 : 1)) &&
+                                    value_layout.offset == value_offset && value_layout.element_size > 0 &&
+                                    ((name_bool || name_byte) ? value_layout.element_size == 1 :
+                                     struct_value ? value_layout.element_size <= 512 : value_layout.element_size == (byte_int ? 4 : 8)) &&
+                                    value_offset >= key_layout.element_size && value_offset < stride && stride <= 1024 &&
+                                    value_layout.element_size <= stride - value_offset,
+                                    "MAP_PAIR_LAYOUT_INVALID");
+                            const auto key_constraint = struct_key ? reader.get<uint64_t>(key_address + 0x70) : 0;
+                            const auto value_constraint = !(name_byte || byte_double || byte_int) ? reader.get<uint64_t>(value_address + 0x70) : 0;
+                            require(!name_bool || uint32_t(value_constraint) == 0xff010001, "MAP_BOOL_ENCODING_UNSUPPORTED");
+                            uint8_t storage[80], storage_again[80];
+                            reader.read(at, storage, sizeof(storage));
+                            auto s32 = [&](size_t off) { int32_t v; std::memcpy(&v, storage + off, 4); return v; };
+                            auto s64 = [&](size_t off) { uint64_t v; std::memcpy(&v, storage + off, 8); return v; };
+                            const auto count = s32(8), capacity = s32(12), bit_count = s32(40), bit_capacity = s32(44), free_count = s32(52);
+                            require(count >= 0 && count <= capacity && capacity <= 4096 && bit_count == count &&
+                                    bit_capacity >= bit_count && bit_capacity <= 4096 && free_count >= 0 && free_count <= count,
+                                    "MAP_STORAGE_BOUNDS");
+                            const auto data = s64(0), heap_bits = s64(32);
+                            require(!count || (data && !(data & 7)), "MAP_DATA_INVALID");
+                            require(heap_bits || bit_capacity <= 128, "MAP_INLINE_BITS_OVERFLOW");
+                            const auto bits_at = heap_bits ? heap_bits : at + 16;
+                            std::vector<uint8_t> bytes(size_t(count) * stride), repeated(bytes.size());
+                            std::vector<uint32_t> bits((count + 31) / 32), bits_again(bits.size());
+                            if (count) {
+                                reader.read(data, bytes.data(), bytes.size());
+                                reader.read(bits_at, bits.data(), bits.size() * 4);
+                            }
+                            std::ostringstream pairs;
+                            int32_t live = 0;
+                            for (int32_t index = 0; index < count; ++index) {
+                                if (!(bits[index / 32] & (uint32_t(1) << (index % 32)))) continue;
+                                require(struct_budget > 0, "MAP_NODE_LIMIT"); --struct_budget;
+                                const auto source = bytes.data() + size_t(index) * stride;
+                                if (live++) pairs << ',';
+                                pairs << '[';
+                                if (struct_key) {
+                                    pairs << struct_json(key_address, key_layout,
+                                        data + uint64_t(index) * stride, source, depth + 1);
+                                } else if (key_kind == "NameProperty") {
+                                    uint64_t raw; std::memcpy(&raw, source, 8);
+                                    pairs << scalar_json(key_kind, raw);
+                                } else {
+                                    pairs << unsigned(source[0]);
+                                }
+                                pairs << ',';
+                                if (name_bool) {
+                                    require(source[value_offset] <= 1, "MAP_BOOL_VALUE_INVALID");
+                                    pairs << (source[value_offset] ? "true" : "false");
+                                } else if (struct_value) {
+                                    pairs << struct_json(value_address, value_layout,
+                                        data + uint64_t(index) * stride + value_offset, source + value_offset, depth + 1);
+                                } else {
+                                    uint64_t raw=0; std::memcpy(&raw, source + value_offset, name_byte ? 1 : byte_int ? 4 : 8);
+                                    pairs << scalar_json(value_kind, raw);
+                                }
+                                pairs << ']';
+                            }
+                            require(live == count - free_count, "MAP_OCCUPANCY_MISMATCH");
+                            if (count) {
+                                reader.read(data, repeated.data(), repeated.size());
+                                reader.read(bits_at, bits_again.data(), bits_again.size() * 4);
+                            }
+                            reader.read(at, storage_again, sizeof(storage_again));
+                            reader.read(property + 0x70, descriptor_again, sizeof(descriptor_again));
+                            const auto key_again = reader.get<PropertyPrefix>(key_address);
+                            const auto value_again = reader.get<PropertyPrefix>(value_address);
+                            const auto map_again = reader.get<PropertyPrefix>(property);
+                            require(bytes == repeated && bits == bits_again &&
+                                    !std::memcmp(storage, storage_again, sizeof(storage)) &&
+                                    !std::memcmp(descriptor, descriptor_again, sizeof(descriptor)) &&
+                                    !std::memcmp(&key_layout, &key_again, sizeof(key_layout)) &&
+                                    !std::memcmp(&value_layout, &value_again, sizeof(value_layout)) &&
+                                    !std::memcmp(&layout, &map_again, sizeof(layout)) &&
+                                    (!struct_key || reader.get<uint64_t>(key_address + 0x70) == key_constraint) &&
+                                    (name_byte || byte_double || byte_int || reader.get<uint64_t>(value_address + 0x70) == value_constraint), "MAP_OBSERVATION_CHANGED");
+                            std::ostringstream out;
+                            out << "{\"$map\":{\"length\":" << live << ",\"items\":[" << pairs.str() << "]}}";
+                            return out.str();
+                        };
                         if (read_values && type == "StructProperty") {
                             try {
                                 require(p.dimension <= 64 && p.element_size <= 65536, "STRUCT_VALUE_LIMIT");
@@ -1179,119 +1339,9 @@ int run_query(int argc, char** argv) {
                         }
                         if (read_values && type == "MapProperty") {
                             try {
-                                // Read-only, bounded Name->native-bool or Byte->Struct.
-                                // Storage layout follows target export 14136a7f0;
-                                // frozen/relative allocators and other types fail closed.
-                                require(p.dimension == 1 && p.element_size == 80, "MAP_LAYOUT_UNSUPPORTED");
-                                uint8_t descriptor[0x30], descriptor_again[0x30];
-                                reader.read(field + 0x70, descriptor, sizeof(descriptor));
-                                auto d32 = [&](size_t off) { int32_t v; std::memcpy(&v, descriptor + off, 4); return v; };
-                                auto d64 = [&](size_t off) { uint64_t v; std::memcpy(&v, descriptor + off, 8); return v; };
-                                require(!(descriptor[0x28] & 1), "MAP_ALLOCATOR_UNSUPPORTED");
-                                const auto key_address = d64(0), value_address = d64(8);
-                                const auto key_layout = reader.get<PropertyPrefix>(key_address);
-                                const auto value_layout = reader.get<PropertyPrefix>(value_address);
-                                auto map_type = [&](const PropertyPrefix& child) {
-                                    const auto id = reader.get<uint64_t>(child.type);
-                                    return read_name(reader, pool, uint32_t(id), uint32_t(id >> 32));
-                                };
-                                const auto key_kind = map_type(key_layout), value_kind = map_type(value_layout);
-                                const bool name_bool = key_kind == "NameProperty" && value_kind == "BoolProperty";
-                                const bool byte_struct = key_kind == "ByteProperty" && value_kind == "StructProperty";
-                                const bool name_struct = key_kind == "NameProperty" && value_kind == "StructProperty";
-                                const bool name_object = key_kind == "NameProperty" && value_kind == "ObjectProperty";
-                                const bool byte_double = key_kind == "ByteProperty" && value_kind == "DoubleProperty";
-                                const bool byte_int = key_kind == "ByteProperty" && value_kind == "IntProperty";
-                                const bool struct_object = key_kind == "StructProperty" && value_kind == "ObjectProperty";
-                                const bool struct_struct = key_kind == "StructProperty" && value_kind == "StructProperty";
-                                require(name_bool || byte_struct || name_struct || name_object || byte_double || byte_int || struct_object || struct_struct,
-                                        "MAP_ELEMENT_TYPE_UNSUPPORTED");
-                                const bool struct_key = struct_object || struct_struct;
-                                const bool struct_value = byte_struct || name_struct || struct_struct;
-                                const auto value_offset = d32(0x10), stride = d32(0x1c);
-                                require(key_layout.owner == field && value_layout.owner == field &&
-                                        key_layout.dimension == 1 && value_layout.dimension == 1 &&
-                                        key_layout.offset == 0 && (struct_key ?
-                                            (key_layout.element_size > 0 && key_layout.element_size <= 128) :
-                                            key_layout.element_size == ((name_bool || name_struct || name_object) ? 8 : 1)) &&
-                                        value_layout.offset == value_offset && value_layout.element_size > 0 &&
-                                        (name_bool ? value_layout.element_size == 1 :
-                                         struct_value ? value_layout.element_size <= 512 : value_layout.element_size == (byte_int ? 4 : 8)) &&
-                                        value_offset >= key_layout.element_size && value_offset < stride && stride <= 1024 &&
-                                        value_layout.element_size <= stride - value_offset,
-                                        "MAP_PAIR_LAYOUT_INVALID");
-                                const auto key_constraint = struct_key ? reader.get<uint64_t>(key_address + 0x70) : 0;
-                                const auto value_constraint = !(byte_double || byte_int) ? reader.get<uint64_t>(value_address + 0x70) : 0;
-                                require(!name_bool || uint32_t(value_constraint) == 0xff010001, "MAP_BOOL_ENCODING_UNSUPPORTED");
-                                const auto at = value_base + p.offset;
-                                uint8_t storage[80], storage_again[80];
-                                reader.read(at, storage, sizeof(storage));
-                                auto s32 = [&](size_t off) { int32_t v; std::memcpy(&v, storage + off, 4); return v; };
-                                auto s64 = [&](size_t off) { uint64_t v; std::memcpy(&v, storage + off, 8); return v; };
-                                const auto count = s32(8), capacity = s32(12), bit_count = s32(40), bit_capacity = s32(44), free_count = s32(52);
-                                require(count >= 0 && count <= capacity && capacity <= 4096 && bit_count == count &&
-                                        bit_capacity >= bit_count && bit_capacity <= 4096 && free_count >= 0 && free_count <= count,
-                                        "MAP_STORAGE_BOUNDS");
-                                const auto data = s64(0), heap_bits = s64(32);
-                                require(!count || (data && !(data & 7)), "MAP_DATA_INVALID");
-                                require(heap_bits || bit_capacity <= 128, "MAP_INLINE_BITS_OVERFLOW");
-                                const auto bits_at = heap_bits ? heap_bits : at + 16;
-                                std::vector<uint8_t> bytes(size_t(count) * stride), repeated(bytes.size());
-                                std::vector<uint32_t> bits((count + 31) / 32), bits_again(bits.size());
-                                if (count) {
-                                    reader.read(data, bytes.data(), bytes.size());
-                                    reader.read(bits_at, bits.data(), bits.size() * 4);
-                                }
-                                std::ostringstream pairs;
-                                int32_t live = 0;
-                                for (int32_t index = 0; index < count; ++index) {
-                                    if (!(bits[index / 32] & (uint32_t(1) << (index % 32)))) continue;
-                                    const auto source = bytes.data() + size_t(index) * stride;
-                                    if (live++) pairs << ',';
-                                    pairs << '[';
-                                    if (struct_key) {
-                                        pairs << struct_json(key_address, key_layout,
-                                            data + uint64_t(index) * stride, source, 0);
-                                    } else if (key_kind == "NameProperty") {
-                                        uint64_t raw; std::memcpy(&raw, source, 8);
-                                        pairs << scalar_json(key_kind, raw);
-                                    } else {
-                                        pairs << unsigned(source[0]);
-                                    }
-                                    pairs << ',';
-                                    if (name_bool) {
-                                        require(source[value_offset] <= 1, "MAP_BOOL_VALUE_INVALID");
-                                        pairs << (source[value_offset] ? "true" : "false");
-                                    } else if (struct_value) {
-                                        pairs << struct_json(value_address, value_layout,
-                                            data + uint64_t(index) * stride + value_offset, source + value_offset, 0);
-                                    } else {
-                                        uint64_t raw=0; std::memcpy(&raw, source + value_offset, byte_int ? 4 : 8);
-                                        pairs << scalar_json(value_kind, raw);
-                                    }
-                                    pairs << ']';
-                                }
-                                require(live == count - free_count, "MAP_OCCUPANCY_MISMATCH");
-                                if (count) {
-                                    reader.read(data, repeated.data(), repeated.size());
-                                    reader.read(bits_at, bits_again.data(), bits_again.size() * 4);
-                                }
-                                reader.read(at, storage_again, sizeof(storage_again));
-                                reader.read(field + 0x70, descriptor_again, sizeof(descriptor_again));
-                                const auto key_again = reader.get<PropertyPrefix>(key_address);
-                                const auto value_again = reader.get<PropertyPrefix>(value_address);
-                                const auto map_again = reader.get<PropertyPrefix>(field);
-                                require(bytes == repeated && bits == bits_again &&
-                                        !std::memcmp(storage, storage_again, sizeof(storage)) &&
-                                        !std::memcmp(descriptor, descriptor_again, sizeof(descriptor)) &&
-                                        !std::memcmp(&key_layout, &key_again, sizeof(key_layout)) &&
-                                        !std::memcmp(&value_layout, &value_again, sizeof(value_layout)) &&
-                                        !std::memcmp(&p, &map_again, sizeof(p)) &&
-                                        (!struct_key || reader.get<uint64_t>(key_address + 0x70) == key_constraint) &&
-                                        (byte_double || byte_int || reader.get<uint64_t>(value_address + 0x70) == value_constraint), "MAP_OBSERVATION_CHANGED");
+                                const auto value = map_json(field, p, value_base + p.offset, 0);
                                 std::cout << "{\"event\":\"stored_value\",\"owner_index\":" << header.index
-                                          << ",\"name\":" << quote(field_name) << ",\"element\":0,\"value\":{\"$map\":{\"length\":"
-                                          << live << ",\"items\":[" << pairs.str() << "]}}}\n";
+                                          << ",\"name\":" << quote(field_name) << ",\"element\":0,\"value\":" << value << "}\n";
                             } catch (const std::exception& error) {
                                 std::cout << "{\"event\":\"stored_value_error\",\"owner_index\":" << header.index
                                           << ",\"name\":" << quote(field_name) << ",\"error\":" << quote(error.what()) << "}\n";
@@ -1505,7 +1555,3 @@ int main(int argc, char** argv) {
         return run_reader_session(argv[2], run_query);
     return run_query(argc, argv);
 }
-
-
-
-

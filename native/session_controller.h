@@ -86,7 +86,11 @@ inline void run_runtime_session(DWORD pid, DWORD thread, int32_t object_index, i
     packet.request.function_index = function_index; packet.request.function_serial = function_serial;
     wchar_t executable[32768]; require(GetModuleFileNameW(nullptr, executable, 32768) != 0, "SESSION_SELF_PATH");
 #ifdef E33_KEYBIND_SESSION
-#if defined(E33_MESH_SESSION)
+#if defined(E33_RUNTIME_CINEMATIC_SESSION)
+    const auto cinematic_version=std::to_wstring(E33_RUNTIME_CINEMATIC_VERSION);
+    auto path = std::filesystem::path(executable).parent_path().parent_path() /
+        (L"runtime-session-cinematic-v"+cinematic_version) / (L"runtime_session_cinematic_v"+cinematic_version+L".dll");
+#elif defined(E33_MESH_SESSION)
     #ifdef E33_BUILDER_SELECTION_SESSION
     #ifdef E33_ZONE_TRAVEL_SESSION
     auto path = std::filesystem::path(executable).parent_path().parent_path() / L"runtime-session-zone-v68" / L"runtime_session_zone_v68.dll";
@@ -225,9 +229,75 @@ inline void run_runtime_session(DWORD pid, DWORD thread, int32_t object_index, i
     std::cout << "{\"event\":\"session_ready\",\"pid\":" << pid << ",\"game_thread_id\":" << thread
 #ifdef E33_MESH_SESSION
               << ",\"mesh_protocol\":3"
+              << ",\"map_runtime_protocol\":1"
+#ifdef E33_ENEMY_SPAWN_SESSION
+              << ",\"enemy_combat_placement_protocol\":1"
+#ifdef E33_BATTLE_PARAMETER_FRAME_RESEARCH
+              << ",\"battle_parameter_frame_research_protocol\":1"
+              << ",\"battle_parameter_policy_research_protocol\":1"
+              << ",\"battle_entry_preflight_research_protocol\":1"
+              << ",\"battle_entry_arena_research_protocol\":2"
+              << ",\"battle_entry_dispatch_research_protocol\":1"
+#endif
+              << ",\"enemy_retirement_protocol\":1,\"enemy_pose_protocol\":1,\"enemy_arena_protocol\":1,\"enemy_arena_binding_protocol\":1,\"enemy_clearance_protocol\":1,\"enemy_grounded_spawn_protocol\":2,\"enemy_current_world_staging_protocol\":1,\"enemy_extra_spots_protocol\":1"
+#ifdef E33_ENEMY_VISUAL_RESEARCH
+#ifdef E33_NPC_PRESENTATION_RESEARCH
+              << ",\"npc_presentation_admission_research_protocol\":1"
+              << ",\"npc_membership_observation_research_protocol\":1"
+              << ",\"npc_original_staging_research_protocol\":1"
+              << ",\"npc_original_placement_research_protocol\":1"
+              << ",\"npc_original_grounded_construction_research_protocol\":1"
+              << ",\"npc_original_preview_research_protocol\":1"
+              << ",\"npc_parameter_policy_research_protocol\":1"
+              << ",\"npc_arena_value_research_protocol\":1"
+              << ",\"npc_entry_preflight_research_protocol\":1"
+              << ",\"npc_proximity_research_protocol\":1"
+              << ",\"npc_interaction_variants_protocol\":1"
+              << ",\"npc_alicia_encounter_protocol\":1"
+#if E33_RUNTIME_CINEMATIC_VERSION >= 167
+              << ",\"npc_curator_encounter_protocol\":1"
+#endif
+#if E33_RUNTIME_CINEMATIC_VERSION >= 170
+              << ",\"npc_francois_encounter_protocol\":1"
+#endif
+#endif
+              << ",\"enemy_spawn_protocol\":3,\"enemy_visual_staging_research_protocol\":1,\"enemy_visual_arena_research_protocol\":2,\"enemy_helper_lookup_research_protocol\":1,\"enemy_geometry_placement_research_protocol\":1,\"enemy_authored_encounter_research_protocol\":7"
+#if E33_RUNTIME_CINEMATIC_VERSION >= 193
+              << ",\"enemy_trigger_anchor_research_protocol\":1"
+#endif
+#if E33_RUNTIME_CINEMATIC_VERSION >= 194
+              << ",\"enemy_trigger_parameter_research_protocol\":1"
+#endif
+#if E33_RUNTIME_CINEMATIC_VERSION >= 195
+              << ",\"enemy_trigger_entry_research_protocol\":1"
+#endif
+#else
+              << ",\"enemy_spawn_protocol\":1"
+#endif
+#endif
+#ifdef E33_RUNTIME_CINEMATIC_SESSION
+#ifdef E33_RUNTIME_SCENE_EDITOR_SESSION
+              << ",\"runtime_scene_protocol\":7"
+#if E33_RUNTIME_CINEMATIC_VERSION >= 171
+              << ",\"native_visual_staging_protocol\":1"
+  #if E33_RUNTIME_CINEMATIC_VERSION >= 172
+                << ",\"native_visual_encounter_preflight_protocol\":1"
+  #if E33_RUNTIME_CINEMATIC_VERSION >= 174
+  #if E33_RUNTIME_CINEMATIC_VERSION >= 175
+                << ",\"native_visual_grounding_protocol\":2"
+  #else
+                << ",\"native_visual_grounding_protocol\":1"
+  #endif
+  #endif
+  #endif
+#endif
+#else
+              << ",\"runtime_cinematic_protocol\":2"
+#endif
+#endif
 #endif
 #ifdef E33_CATALOG_GAME_OWNED_SESSION
-              << ",\"picto_edit_protocol\":1,\"picto_progression_protocol\":1,\"picto_class_load_protocol\":1,\"picto_cost_protocol\":1,\"picto_startup_protocol\":1,\"picto_stat_clear_protocol\":1,\"picto_stat_remove_protocol\":1,\"picto_inventory_protocol\":1,\"picto_batch_protocol\":1,\"picto_level_batch_protocol\":1,\"picto_mastery_batch_protocol\":1"
+              << ",\"qa_encounter_protocol\":1,\"picto_edit_protocol\":1,\"picto_progression_protocol\":1,\"picto_class_load_protocol\":1,\"picto_cost_protocol\":1,\"picto_startup_protocol\":1,\"picto_stat_clear_protocol\":1,\"picto_stat_remove_protocol\":1,\"picto_inventory_protocol\":1,\"picto_batch_protocol\":1,\"picto_level_batch_protocol\":1,\"picto_mastery_batch_protocol\":1"
 #endif
 #ifdef E33_REFLECTED_SESSION
               << ",\"reflected_protocol\":1"
@@ -237,6 +307,9 @@ inline void run_runtime_session(DWORD pid, DWORD thread, int32_t object_index, i
 #endif
 #ifdef E33_RETAINED_SESSION
               << ",\"retained_protocol\":1"
+#ifdef E33_POD_SESSION
+              << ",\"blueprint_invocation_protocol\":1"
+#endif
 #endif
 #ifdef E33_STABLE_SESSION
               << ",\"stable_identity_protocol\":1"
@@ -281,7 +354,7 @@ inline void run_runtime_session(DWORD pid, DWORD thread, int32_t object_index, i
 #endif
 #endif
 #ifdef E33_KEYBIND_SESSION
-              << ",\"key_capture_protocol\":1,\"keybind_protocol\":1,\"keybind_capacity\":64"
+              << ",\"key_capture_protocol\":1,\"keybind_protocol\":1,\"keybind_capacity\":96"
 #endif
 #ifdef E33_UI_BATCH_SESSION
               << ",\"ui_batch_protocol\":1"
@@ -303,6 +376,48 @@ inline void run_runtime_session(DWORD pid, DWORD thread, int32_t object_index, i
 #endif
 #ifdef E33_SEQUENCE_SESSION
               << ",\"asset_load_protocol\":1"
+#if defined(E33_RUNTIME_CINEMATIC_VERSION) && E33_RUNTIME_CINEMATIC_VERSION>=176
+              << ",\"generated_world_asset_load_protocol\":1"
+#if E33_RUNTIME_CINEMATIC_VERSION>=177 && defined(E33_ENEMY_SPAWN_SESSION)
+              << ",\"owned_battle_arena_staging_protocol\":1"
+#if E33_RUNTIME_CINEMATIC_VERSION>=191
+              << ",\"owned_battle_arena_capacity\":2"
+#endif
+#if E33_RUNTIME_CINEMATIC_VERSION>=178
+              << ",\"owned_component_pose_protocol\":1"
+#if E33_RUNTIME_CINEMATIC_VERSION>=192
+              << ",\"owned_helper_component_pose_protocol\":1"
+#endif
+#if E33_RUNTIME_CINEMATIC_VERSION>=179
+              << ",\"owned_helper_parameter_preflight_protocol\":1"
+#if E33_RUNTIME_CINEMATIC_VERSION>=180
+              << ",\"owned_battle_arena_grounding_protocol\":1"
+#if E33_RUNTIME_CINEMATIC_VERSION>=181
+              << ",\"owned_helper_source_frame_protocol\":1"
+#if E33_RUNTIME_CINEMATIC_VERSION>=182
+              << ",\"owned_battle_arena_approach_protocol\":1"
+#endif
+#if E33_RUNTIME_CINEMATIC_VERSION>=183
+              << ",\"owned_battle_arena_approach_diagnostics_protocol\":1"
+#endif
+#if E33_RUNTIME_CINEMATIC_VERSION>=184
+              << ",\"owned_battle_arena_advisory_route_protocol\":1"
+#if E33_RUNTIME_CINEMATIC_VERSION>=186
+              << ",\"encounter_tuning_protocol\":1"
+#if E33_RUNTIME_CINEMATIC_VERSION>=188
+              << ",\"encounter_tuning_max_health_multiplier\":1000"
+#endif
+#if E33_RUNTIME_CINEMATIC_VERSION>=189
+              << ",\"encounter_retry_tuning_protocol\":1,\"owned_authored_entry_protocol\":1"
+#endif
+#endif
+#endif
+#endif
+#endif
+#endif
+#endif
+#endif
+#endif
 #endif
 #ifdef E33_SEQUENCE_PLAYER_SESSION
               << ",\"sequence_player_protocol\":1"
@@ -469,6 +584,15 @@ inline void run_runtime_session(DWORD pid, DWORD thread, int32_t object_index, i
             command.resize(separator);separator=std::string::npos;
         }
 #endif
+        bool qa_encounter=command.substr(0,separator)=="qa-encounter-reset";
+        if(qa_encounter) {
+            require(separator!=std::string::npos,"QA_ENCOUNTER_PAYLOAD_MISSING");auto encoded=command.substr(separator+1);
+            require(encoded.size()==sizeof(QAEncounterPacket)*2,"QA_ENCOUNTER_PAYLOAD_SIZE");
+            auto* destination=reinterpret_cast<uint8_t*>(packet.console_text);
+            auto digit=[](char c)->unsigned { if(c>='0'&&c<='9')return c-'0';if(c>='a'&&c<='f')return c-'a'+10;throw std::runtime_error("QA_ENCOUNTER_ENCODING"); };
+            for(size_t i=0;i<sizeof(QAEncounterPacket);++i)destination[i]=static_cast<uint8_t>(digit(encoded[i*2])*16+digit(encoded[i*2+1]));
+            command.resize(separator);separator=std::string::npos;
+        }
         bool picto_progress=command.substr(0,separator)=="picto-progression";
         if(picto_progress) {
             require(separator!=std::string::npos,"PICTO_PAYLOAD_MISSING");auto encoded=command.substr(separator+1);
@@ -744,6 +868,7 @@ inline void run_runtime_session(DWORD pid, DWORD thread, int32_t object_index, i
 #ifdef E33_MESH_SESSION
         if(mesh) action=SessionMesh;
 #endif
+        if(qa_encounter) action=SessionQAEncounter;
         if(picto_progress) action=SessionPictoProgression;
         if(picto_batch) action=SessionPictoBatch;
 #ifdef E33_ZONE_TRAVEL_SESSION
@@ -840,6 +965,12 @@ inline void run_runtime_session(DWORD pid, DWORD thread, int32_t object_index, i
             std::cout << ",\"mesh_packet\":" << quote(encoded);
         }
 #endif
+        if(qa_encounter) {
+            static const char digits[]="0123456789abcdef";const auto* source=reinterpret_cast<const uint8_t*>(packet.console_text);
+            std::string encoded(sizeof(QAEncounterPacket)*2,'0');
+            for(size_t i=0;i<sizeof(QAEncounterPacket);++i){encoded[i*2]=digits[source[i]>>4];encoded[i*2+1]=digits[source[i]&15];}
+            std::cout << ",\"qa_encounter_packet\":" << quote(encoded);
+        }
         if(picto_progress) {
             static const char digits[]="0123456789abcdef";const auto* source=reinterpret_cast<const uint8_t*>(packet.console_text);
             std::string encoded(sizeof(PictoProgressionPacket)*2,'0');

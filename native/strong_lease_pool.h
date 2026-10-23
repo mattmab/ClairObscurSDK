@@ -88,6 +88,17 @@ public:
         }
         return false;
     }
+    // GC may clear a registered collector's object during forced world purge.
+    // The token still owns the collector allocation and must release it once.
+    bool owns_retirement_storage(uint64_t session,uint64_t token,uint64_t object) const {
+        if(!owns(session)||!token||!object)return false;
+        for(const auto& e:entries_)if(e.token==token){
+            const auto& s=e.storage;
+            return s.pointer&&!s.registration_uncertain&&!s.destruction_uncertain&&
+                s.pointer->registered&&(!s.pointer->object||s.pointer->object==object);
+        }
+        return false;
+    }
     StrongLeaseResult preflight(uint64_t session,uint32_t count) {
         if(!on_thread()) return StrongLeaseResult::InvalidContext;
         if(!owns(session)) return StrongLeaseResult::SessionMismatch;

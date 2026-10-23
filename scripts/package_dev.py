@@ -26,6 +26,7 @@ files = [root / 'README.md', root / 'DEVELOPMENT.md', root / 'launch.cmd', root 
 files.append(root / 'launch-native-mods.cmd')
 files.append(root / 'mods/Cinematics/catalog.json')
 files.append(root / 'src/expedition33/introspection/LICENSE')
+files.extend(root / relative for relative in ('src/expedition33/_enemy_catalog.json', 'mods/EnemySpawner/LICENSE', 'docs/ENEMY_SPAWNING.md'))
 files.extend(path for path in runtime.rglob('*') if path.is_file())
 for directory, pattern in [('src', '*.py'), ('mods', '*.py'), ('scripts', '*.py'), ('scripts', '*.cmd'),
                             ('scripts', '*.ps1'), ('native', '*.h'), ('native', '*.cpp'), ('tests', '*.py'), ('research', '*.md')]:

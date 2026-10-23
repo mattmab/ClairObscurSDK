@@ -11,7 +11,7 @@ class PauseVectorTests(unittest.TestCase):
         backend.trace_protocol = 1
         backend.trace_capacity = 16
         backend.keybind_protocol = 1
-        backend.keybind_capacity = 64
+        backend.keybind_capacity = 96
         backend.ui_batch_protocol = 1
         backend.pause_attachment_protocol = 2
         backend.vector_value_protocol = 1

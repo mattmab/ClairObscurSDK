@@ -6,7 +6,7 @@ from expedition33 import _key_wire as wire
 class KeyWireTests(unittest.TestCase):
     def test_native_packet_layout_and_replace_ack(self):
         sent = wire.request('replace', 123, 7, ((1, 117), (2, 65)))
-        self.assertEqual(len(sent), 552)
+        self.assertEqual(len(sent), 808)
         self.assertEqual(struct.unpack_from('<IIQQIIII', sent), (1, 1, 123, 7, 2, 0, 0, 0))
         self.assertEqual(sent[40:56], struct.pack('<IIII', 1, 117, 2, 65))
         self.assertEqual(wire.decode(sent, sent.hex()), (0, 0, ()))

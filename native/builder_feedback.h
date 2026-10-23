@@ -160,6 +160,7 @@ public:
         if(!frame||frame==last_frame_)return;last_frame_=frame;
         image_tick(b);
         if(menu_drag_enabled_&&!auto_tick_){
+            mouse_rotation_.reset();
             const auto now=GetTickCount64();const auto elapsed=last_clock_?now-last_clock_:0;last_clock_=now;
             DWORD foreground_pid=0;const auto window=GetForegroundWindow();GetWindowThreadProcessId(window,&foreground_pid);
             POINT point{};RECT area{};const bool down=(GetAsyncKeyState(VK_LBUTTON)&0x8000)!=0;
@@ -186,17 +187,17 @@ public:
               }
             menu_drag_point_=point;menu_drag_down_=down;return;
         }
-        if(!auto_tick_||tick_error_)return;
+        if(!auto_tick_||tick_error_){mouse_rotation_.reset();return;}
         const auto now=GetTickCount64();const auto elapsed=last_clock_?now-last_clock_:0;last_clock_=now;
         DWORD pid=0;GetWindowThreadProcessId(GetForegroundWindow(),&pid);
         if(!eligible||pid!=GetCurrentProcessId()) {
-            gpu_end_click();history_request_=0;dragging_=false;nudging_=false;left_was_=true;
+            mouse_rotation_.reset();gpu_end_click();history_request_=0;dragging_=false;nudging_=false;left_was_=true;
             glow(b,session,pool,{});if(ids_[48].address)visibility(b,ids_[48],false);
             return;
         }
         clear();put(0,ids_[0].address);
         if(!call(b,ids_[4],34)){tick_error_=1912;return;}
-        if(args_[8]) {gpu_end_click();dragging_=false;left_was_=true;glow(b,session,pool,{});if(ids_[48].address)visibility(b,ids_[48],false);return;}
+        if(args_[8]) {mouse_rotation_.reset();gpu_end_click();dragging_=false;left_was_=true;glow(b,session,pool,{});if(ids_[48].address)visibility(b,ids_[48],false);return;}
         LARGE_INTEGER begin{},end{},frequency{};QueryPerformanceCounter(&begin);QueryPerformanceFrequency(&frequency);
         // Escape is edge-triggered and consumed by the native message router.
         // Polling its held state here would close the next layer on another frame.
@@ -219,6 +220,11 @@ public:
         const auto history_request=history_request_;history_request_=0;
         const bool undo_pressed=history_request==1;
         const bool redo_pressed=history_request==2;
+        const bool rotation_allowed=!undo_pressed&&!redo_pressed&&!key(VK_MENU)&&!key(VK_CONTROL)&&!key(VK_SHIFT)&&selected_.address;
+        const bool scale_allowed=!undo_pressed&&!redo_pressed&&!key(VK_MENU)&&!key(VK_CONTROL)&&selected_.address;
+        const int wanted_axis=scale_allowed&&(key(VK_OEM_PLUS)||key(VK_ADD))?4:rotation_allowed?(key('Y')?1:key('P')?2:key('R')?3:0):0;
+        mouse_rotation_.select(wanted_axis);
+        if(mouse_rotation_.axis&&!rotate_mouse(b,(mouse_rotation_.axis==2||mouse_rotation_.axis==4)?look_pitch:look_yaw))tick_error_=1906;
         if(undo_pressed&&!undo(b,session,pool))tick_error_=1911;
         if(redo_pressed&&!carrying_&&!redo(b,session,pool))tick_error_=1965;
         const bool left=key(VK_LBUTTON);
@@ -233,13 +239,13 @@ public:
             (int(key(VK_NUMPAD6))-int(key(VK_NUMPAD4)))*fine,
             (int(key(VK_NUMPAD9))-int(key(VK_NUMPAD3)))*fine,
             (int(key(VK_NUMPAD7))-int(key(VK_NUMPAD1)))*fine*.1};
-        if(undo_pressed||redo_pressed)std::fill(std::begin(v),std::end(v),0.);
+        if(undo_pressed||redo_pressed||mouse_rotation_.axis)std::fill(std::begin(v),std::end(v),0.);
         // Sample view before ray selection; hovering never changes mobility or history.
-        rotation_[0]=std::clamp(std::remainder(rotation_[0],360.)+look_pitch,-89.,89.);
-        rotation_[1]=std::remainder(rotation_[1]+look_yaw,360.);rotation_[2]=0;
-        const bool placing=carrying_&&left&&!left_was_;
+        rotation_[0]=std::clamp(std::remainder(rotation_[0],360.)+(mouse_rotation_.axis?0.:look_pitch),-89.,89.);
+        rotation_[1]=std::remainder(rotation_[1]+(mouse_rotation_.axis?0.:look_yaw),360.);rotation_[2]=0;
+        const bool placing=!mouse_rotation_.axis&&carrying_&&left&&!left_was_;
         if(placing){carrying_=false;dragging_=false;}
-        if(!carrying_&&!placing&&!duplicate_requested_&&left&&(!left_was_||want_grab_)&&!undo_pressed) {
+        if(!mouse_rotation_.axis&&!carrying_&&!placing&&!duplicate_requested_&&left&&(!left_was_||want_grab_)&&!undo_pressed) {
             if(duplicate_click_) {
                 if(!pick(b,false,true))tick_error_=1905;
                 const auto owned=std::find_if(spawned_.begin(),spawned_.end(),[&](const auto& row){return row.component.index==hover_.index&&row.component.serial==hover_.serial&&row.component.address==hover_.address;});
@@ -252,9 +258,9 @@ public:
         if(carrying_)dragging_=true;left_was_=left;
         const bool nudge=v[4]||v[5]||v[6]||v[7];
         if(nudge&&!nudging_&&!dragging_&&selected_.address)if(!checkpoint(b,selected_))tick_error_=1911;
-        nudging_=nudge;v[3]=dragging_?1.:0.;
+        nudging_=nudge;v[3]=dragging_&&!mouse_rotation_.axis?1.:0.;
         if(!tick_error_&&!move(b,v))tick_error_=1906;
-        if(!dragging_){last_hover_=now;if(!pick(b,false))tick_error_=1905;}
+        if(!dragging_&&!mouse_rotation_.axis){last_hover_=now;if(!pick(b,false))tick_error_=1905;}
         if(true) {
             last_hud_=now;
             if(!glow(b,session,pool,highlight_mode_==1?(dragging_?selected_:hover_):(highlight_mode_==2&&dragging_?selected_:CallIdentity{})))tick_error_=1913;

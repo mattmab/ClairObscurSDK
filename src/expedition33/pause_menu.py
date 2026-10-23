@@ -418,8 +418,8 @@ class PauseMenuEntry:
             # has been borrowed or mutated while state is still new. Discard
             # that observation and let the next bounded scan start afresh.
             if (self.state == 'new' and isinstance(error, RuntimeQueryError)
-                    and 'DESCRIPTOR_IDENTITY_CHANGED' in str(error)):
-                log.info('Pause discovery changed during GC; waiting for the next scan')
+                    and any(reason in str(error) for reason in ('DESCRIPTOR_IDENTITY_CHANGED', 'MATCH_TYPE_NOT_REGISTERED'))):
+                log.info('Pause discovery is not ready; waiting for the next bounded scan')
                 return
             self.state, self.error = 'failed', f'{type(error).__name__}: {error}'
             log.exception('Pause entry suspended; owner retained for cleanup')

@@ -87,28 +87,30 @@ class Templates:
     def setup(self):
         from expedition33.catalog import capture
         self.catalog=capture();self.planner=self.mod.session.invocation_planner(selected_results=True,catalog=self.catalog)
-    def save(self,name):
+    def save(self,name,*,on_complete=None,max_rows=5900,all_loaded=False):
         if self.job or self.queue or self.draft:raise ValueError('Finish the current scan or placement first')
-        if any(p is None for p in self.points):raise ValueError('Mark both corners with F3 and F4')
+        if not all_loaded and any(p is None for p in self.points):raise ValueError('Mark both corners with F3 and F4')
         _,_,_,world=self.library.context()
         if world!=self.world:raise ValueError('Corners belong to another level; mark them again')
-        low=[min(a,b) for a,b in zip(*self.points)];high=[max(a,b) for a,b in zip(*self.points)]
+        low,high=([0.,0.,0.],[1.,1.,1.]) if all_loaded else ([min(a,b) for a,b in zip(*self.points)],[max(a,b) for a,b in zip(*self.points)])
         if any(b-a<1 for a,b in zip(low,high)):raise ValueError('Region must have width, depth and height')
         # Validate the name before starting engine work.
         validate(dict(format=FORMAT,version=1,name=name,world=world,objects=[],assets=[]))
         if self.scan_future is not None and not self.scan_future.done():raise ValueError('Previous discovery is finishing; try again shortly')
         from expedition33.catalog import capture
         self.failed=False;self.scan_future=self.scan_worker.submit(capture)
-        self.job=dict(name=name,world=world,low=low,high=high,objects=None,index=0,rows=[],skipped=0,assets={},pending=[],angles=list(self.angles))
+        self.job=dict(name=name,world=world,low=low,high=high,objects=None,index=0,rows=[],skipped=0,assets={},pending=[],angles=list(self.angles),on_complete=on_complete,max_rows=max_rows,all_loaded=all_loaded)
         q=region_quaternion(self.angles);center=[(a+b)/2 for a,b in zip(low,high)]
         corners=[rotate_point([x,y,z],center,q) for x in (low[0],high[0]) for y in (low[1],high[1]) for z in (low[2],high[2])]
         self.job['query_low']=[min(p[i] for p in corners) for i in range(3)];self.job['query_high']=[max(p[i] for p in corners) for i in range(3)]
+        # Cover the entire SDK-supported transform range, not a camera-sized region.
+        if all_loaded:self.job.update(query_low=[-1e8]*3,query_high=[1e8]*3)
         self.library.message='Discovering loaded components in background; Cancel scan is available'
         return self.status()
     def add(self,asset,p):
         j=self.job
-        if not region_contains(p[4:7],j['low'],j['high'],j.get('angles',[0.,0.,0.])):return
-        if len(j['rows'])>=5900:raise ValueError('Region exceeds 5900 props; choose a smaller region')
+        if not j.get('all_loaded') and not region_contains(p[4:7],j['low'],j['high'],j.get('angles',[0.,0.,0.])):return
+        if len(j['rows'])>=j.get('max_rows',5900):raise ValueError('Region exceeds scan object limit; choose a smaller region')
         p=list(p);p[4:7]=[v-a for v,a in zip(p[4:7],j['low'])]
         j['rows'].append(dict(id=uuid.uuid4().hex,kind='mesh',asset=asset,transform=pose(p)))
     def scan_one(self):
@@ -138,11 +140,14 @@ class Templates:
                 asset=j['assets'][identity]
                 if asset:self.add(asset,p)
             del j['pending'][:len(hits)]
-            self.library.message=f"Scanning {j['index']}/{len(j['objects'])} components; {len(j['rows'])}/5900 meshes"
+            self.library.message=f"Scanning {j['index']}/{len(j['objects'])} components; {len(j['rows'])}/{j.get('max_rows',5900)} meshes"
             return
         if j['index']>=len(j['objects']):
-            if not j['rows']:raise ValueError('No loaded visible mesh origins inside this region')
+            if not j['rows'] and not j.get('on_complete'):raise ValueError('No loaded visible mesh origins inside this region')
             data=dict(format=FORMAT,version=1,name=j['name'],world=j['world'],objects=j['rows'],assets=sorted({r['asset'] for r in j['rows']}))
+            if j.get('on_complete'):
+                data['scan_stats']={'components_considered':len(j['objects']),'skipped_components':j['skipped']}
+                self.job=None;j['on_complete'](data);return
             key=self.store.save(data);self.job=None
             self.library.message=f"Saved template: {data['name']} ({len(data['objects'])} meshes)"
             self.last_saved=key;return
@@ -158,7 +163,7 @@ class Templates:
             obj=self.catalog.by_index[identity[0]]
             if (obj.serial,obj.address)!=identity[1:]:raise ValueError('Region changed while scanning; mark it again')
             p=pose(list(struct.unpack_from('<12d',raw,at+16)))
-            if region_contains(p[4:7],j['low'],j['high'],j.get('angles',[0.,0.,0.])):j['pending'].append((identity,p))
+            if j.get('all_loaded') or region_contains(p[4:7],j['low'],j['high'],j.get('angles',[0.,0.,0.])):j['pending'].append((identity,p))
         j['index']+=consumed;j['instance']=instance;j['skipped']+=skipped
         self.library.message=f"Scanning {j['index']}/{len(j['objects'])}; {len(j['rows'])} meshes in region"
     def begin(self,key):

@@ -36,7 +36,7 @@ class KeybindService:
 
     def _replace(self, routes, *, capture=False):
         if len(routes) > wire.CAPACITY:
-            raise ManagementError('At most 64 active nonconflicting keybinds are supported')
+            raise ManagementError('At most 96 active nonconflicting keybinds are supported')
         self._generation = getattr(self.session, '_key_map_sequence', 0) + 1
         self.session._key_map_sequence = self._generation
         self._exchange('capture' if capture else 'replace', tuple((i + 1, route[3]) for i, route in enumerate(routes)))

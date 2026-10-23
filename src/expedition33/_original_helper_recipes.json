@@ -1,0 +1,1262 @@
+{
+  "schema": 1,
+  "recipes": [
+    {
+      "id": "visages",
+      "catalog_id": "fa663e84ef7b3c73",
+      "label": "Visages",
+      "integration_status": "sdk_catalog_original_helper_mounted_approach_victory_cleanup_verified",
+      "menu_available": true,
+      "development_menu_available": true,
+      "catalog_admitted": true,
+      "walk_up_verified": true,
+      "battle_class": "/Game/Characters/Enemies/Axons/Many_faces/BP_EnemyBattle_VisagesHeart.BP_EnemyBattle_VisagesHeart_C",
+      "helper_class": "/Game/Characters/Enemies/Axons/Many_faces/BP_DummyEnemy_Visages.BP_DummyEnemy_Visages_C",
+      "arena_class": "/Game/Levels/Battle_Maps/BattleMap_SpecialEnemies/BP_BattleMap_Visages.BP_BattleMap_Visages_C",
+      "source_asset": "/Game/Levels/Visages/GameActions/DA_GA_SQT_BossVisages.DA_GA_SQT_BossVisages",
+      "source_trigger": "/Game/Levels/Visages/GameActions/DA_GA_SQT_BossVisages.DA_GA_SQT_BossVisages:BP_GameAction_TriggerBattle_C_1",
+      "encounter_row": "MF_Axon_Visages",
+      "helper_relative_position": [
+        11280.77860380239,
+        -778.6775812619694,
+        -15391.079785957449
+      ],
+      "helper_relative_yaw": 90.91255822346596,
+      "battle_entry_anchor": "BP_jRPG_EnemyBattleSpot0.SpawnPosition",
+      "require_clear_approach": false,
+      "arena_components": [
+        {
+          "field": "BP_jRPG_EnemyBattleSpot0",
+          "position": [
+            454.9899677219576,
+            -162.1208480046247,
+            0.0
+          ],
+          "rotation": [
+            0.0,
+            168.6234588623047,
+            -0.0
+          ],
+          "scale": [
+            1.0,
+            1.0,
+            1.0
+          ],
+          "override_required": true
+        },
+        {
+          "field": "BP_jRPG_EnemyBattleSpot1",
+          "position": [
+            344.2059814390991,
+            -111.76832744228471,
+            0.0
+          ],
+          "rotation": [
+            0.0,
+            163.28949215807938,
+            0.0
+          ],
+          "scale": [
+            1.0,
+            1.0,
+            1.0
+          ],
+          "override_required": true
+        },
+        {
+          "field": "BP_jRPG_EnemyBattleSpot2",
+          "position": [
+            254.19333591814524,
+            -480.5785567846633,
+            0.0
+          ],
+          "rotation": [
+            0.0,
+            145.79115295410156,
+            0.0
+          ],
+          "scale": [
+            1.0,
+            1.0,
+            1.0
+          ],
+          "override_required": false
+        },
+        {
+          "field": "BP_jRPG_EnemyBattleSpot3",
+          "position": [
+            362.44189453125,
+            320.80059814453125,
+            0.0
+          ],
+          "rotation": [
+            0.0,
+            214.44268798828125,
+            0.0
+          ],
+          "scale": [
+            1.0,
+            1.0,
+            1.0
+          ],
+          "override_required": false
+        },
+        {
+          "field": "BP_jRPG_CharacterBattleSpot",
+          "position": [
+            -223.11257934570312,
+            264.80975341796875,
+            0.0
+          ],
+          "rotation": [
+            0.0,
+            -32.74433135986328,
+            0.0
+          ],
+          "scale": [
+            1.0,
+            1.0,
+            1.0
+          ],
+          "override_required": false
+        },
+        {
+          "field": "BP_jRPG_CharacterBattleSpot1",
+          "position": [
+            -230.0555419921875,
+            7.96527099609375,
+            0.0
+          ],
+          "rotation": [
+            0.0,
+            -12.947864532470703,
+            0.0
+          ],
+          "scale": [
+            1.0,
+            1.0,
+            1.0
+          ],
+          "override_required": false
+        },
+        {
+          "field": "BP_jRPG_CharacterBattleSpot2",
+          "position": [
+            -211.1983184814453,
+            -274.29693603515625,
+            0.0
+          ],
+          "rotation": [
+            0.0,
+            9.329551696777344,
+            0.0
+          ],
+          "scale": [
+            1.0,
+            1.0,
+            1.0
+          ],
+          "override_required": false
+        },
+        {
+          "field": "TargetingEnemyCameraFocusPoint",
+          "position": [
+            368.2581121805614,
+            53.79284186857586,
+            268.6524586392871
+          ],
+          "rotation": [
+            -1.5902773407325599e-15,
+            5.2876721579330975e-14,
+            1.7349925787383494e-12
+          ],
+          "scale": [
+            1.0,
+            1.0,
+            1.0
+          ],
+          "override_required": false
+        },
+        {
+          "field": "TargetingAllyCameraFocusPoint",
+          "position": [
+            -834.8218994140625,
+            -649.1121826171875,
+            -54.862518310546875
+          ],
+          "rotation": [
+            0.0,
+            0.0,
+            0.0
+          ],
+          "scale": [
+            1.0,
+            1.0,
+            1.0
+          ],
+          "override_required": false
+        },
+        {
+          "field": "OverviewCameraFocusPoint",
+          "position": [
+            4131.045582610246,
+            191.24830446005933,
+            2866.6417931613123
+          ],
+          "rotation": [
+            0.0,
+            0.0,
+            0.0
+          ],
+          "scale": [
+            1.0,
+            1.0,
+            1.0
+          ],
+          "override_required": false
+        },
+        {
+          "field": "IntroCameraFocusPoint1",
+          "position": [
+            3852.3822546271936,
+            -166.99185942583995,
+            1618.6768822185616
+          ],
+          "rotation": [
+            0.0,
+            0.0,
+            0.0
+          ],
+          "scale": [
+            1.0,
+            1.0,
+            1.0
+          ],
+          "override_required": false
+        }
+      ],
+      "supported_policies": [
+        "isolated"
+      ],
+      "preserve_authored_battle_phases": true,
+      "evidence_sha256": {
+        "visages-authored-helper-arena-anchor-v176.candidate.json": "6ecd790d19a3371aa1f4d727a874d973111890578d87386d25717b6b7108e356",
+        "visages-original-arena-parent-frames-v178.json": "05f356ddb2f06b59a8c42a19734867188083d465568635c0207f05f4c45a64ad",
+        "visages-owned-arena-staging-v181-visible.json": "a40d575fc497f685945ac4b03f582bab11f6047fb6e916df74d49d7a588d2a2e",
+        "visages-owned-arena-retirement-v181-visible.json": "ac20b9dc063d36215f77f1032dd945d44228b18801a566b9465780a5ab242297",
+        "visages-retained-component-observation-v176.json": "b1cdbf2786943fdbacb85bfa8024d35aeb23679804704de6a1ff1d1a2bc167cc",
+        "visages-product-entry-status-v181-3.json": "1a63042a76cbfdd23eb1e375cff26be898ff0a9638bebee652ea82483b0a1480",
+        "visages-product-user-fight-status-v181.json": "df0ee6936c729f14a09c0f0ed0750f25013f9b120def96fa99bcea1620e35b35",
+        "visages-product-battle-completed-v181.json": "f7108be14608847b92ab390cddcb63ac0807899581e88c7803ab4e122430027f",
+        "visages-product-retirement-readback-v181.json": "f861b54f6fad02e83aaa25ba903da423b3c2e88b2954bc25dbf2dfb388e43686",
+        "visages-product-user-result-v181.json": "e76959155e0aa459c04868c64b6fc8b53231fd3e2f1842e2c6de950fe2aefefc",
+        "visages-v185-mounted-entry-evidence.json": "82a214f622939c19b899141fbec40fd6306c969578a5b3f4bd93f6cc58dcf627",
+        "visages-v185-mounted-entry-confirmed.json": "16c1088041f977c4a045be519c3bb40a11f009a052d817f60baeb423dfad3b29",
+        "visages-v185-victory-cleanup.json": "3ed4ab9f477ba5477707275c20a7a215bd672821f2cc54a933a8ecd54ae3d802",
+        "visages-v185-independent-battle-idle.json": "03146bc12230f8df71ff81a6ed529b594b17d03edc7f870bd763136c5d0a9462",
+        "visages-v185-independent-retirement.json": "53730ee88af73a36c063eff2aabc88f5e6c755d3c7b0fdbc8f7655d853024783",
+        "visages-v185-mounted-victory-evidence.json": "d1504f6d10682fa3c101f331d415f6fbb896f3110c0d5ebafc4fcdbed078661f"
+      },
+      "approach_components": [
+        {
+          "field": "Part_Torso",
+          "class_path": "/Script/Engine.StaticMeshComponent",
+          "mesh_path": "/Game/Characters/Enemies/Axons/Many_faces/Separate/many_face_separate_torso_low.many_face_separate_torso_low",
+          "socket": "spine_01"
+        },
+        {
+          "field": "Part_UpperLegL",
+          "class_path": "/Script/Engine.StaticMeshComponent",
+          "mesh_path": "/Game/Characters/Enemies/Axons/Many_faces/Separate/many_face_separate_leg_l_low.many_face_separate_leg_l_low",
+          "socket": "thigh_l"
+        },
+        {
+          "field": "Part_UpperLegR",
+          "class_path": "/Script/Engine.StaticMeshComponent",
+          "mesh_path": "/Game/Characters/Enemies/Axons/Many_faces/Separate/many_face_separate_leg_r_low.many_face_separate_leg_r_low",
+          "socket": "thigh_r"
+        }
+      ],
+      "grounded_body_approach": true,
+      "approach_policy": "separate_live_body_footprints_bridged_to_verified_ground_300cm_outside_arm_400cm",
+      "admission_evidence": {
+        "source": "visages-v185-mounted-victory-evidence.json",
+        "approach": "automatic_visible_body_approach_while_mounted",
+        "victory": "user_confirmed",
+        "cleanup": "verified_with_idle_manager_empty_roster_and_independent_root_retirement",
+        "own_enemy_turn": "not_separately_reported_this_run"
+      },
+      "availability_note": "Main catalog: original Visages body and owned original arena. Approach the visible body on foot or mounted; mounted entry, victory and automatic cleanup are verified. Original phases and battle cutscenes remain enabled. Isolated entry only. The body is collisionless; supported ground and party clearance are still required."
+    },
+    {
+      "id": "sirene",
+      "catalog_id": "547f47e4a7d47332",
+      "label": "Sirene",
+      "integration_status": "hidden_source_construction_retirement_verified__grounded_link_entry_pending",
+      "catalog_admitted": false,
+      "menu_available": false,
+      "development_menu_available": false,
+      "walk_up_verified": false,
+      "battle_class": "/Game/Characters/Enemies/Axons/Sirene/BP_EnemyBattle_SireneHeart.BP_EnemyBattle_SireneHeart_C",
+      "helper_class": "/Game/Characters/Enemies/Axons/Sirene/BP_DummyEnemy_Sirene.BP_DummyEnemy_Sirene_C",
+      "arena_class": "/Game/Levels/Battle_Maps/BattleMap_SpecialEnemies/BP_BattleMap_Sirene.BP_BattleMap_Sirene_C",
+      "source_asset": "/Game/Levels/Siren/GameActions/DA_GA_SQT_BossSiren.DA_GA_SQT_BossSiren",
+      "source_trigger": "/Game/Levels/Siren/GameActions/DA_GA_SQT_BossSiren.DA_GA_SQT_BossSiren:BP_GameAction_TriggerBattle_C_0",
+      "encounter_row": "SI_Axon_Sirene",
+      "enemy_definition_row": "SI_Axon_Sirene",
+      "helper_relative_position": [
+        7073.375783536358,
+        -1355.7051792663674,
+        -7687.7924040435355
+      ],
+      "helper_relative_yaw": 81.52526243727311,
+      "battle_entry_anchor": "BP_jRPG_EnemyBattleSpot0.SpawnPosition",
+      "require_clear_approach": true,
+      "arena_components": [
+        {
+          "field": "BP_jRPG_EnemyBattleSpot0",
+          "position": [
+            1087.3013752390327,
+            -300.7199504636976,
+            0.5536155843042252
+          ],
+          "rotation": [
+            0.0,
+            168.6234588623047,
+            -0.0
+          ],
+          "scale": [
+            1.0,
+            1.0,
+            1.0
+          ],
+          "override_required": true
+        },
+        {
+          "field": "BP_jRPG_EnemyBattleSpot1",
+          "position": [
+            363.0500065667336,
+            252.19658638639376,
+            9.0342950898048e-08
+          ],
+          "rotation": [
+            0.0,
+            193.89242553710938,
+            0.0
+          ],
+          "scale": [
+            1.0,
+            1.0,
+            1.0
+          ],
+          "override_required": false
+        },
+        {
+          "field": "BP_jRPG_EnemyBattleSpot2",
+          "position": [
+            254.19333591814524,
+            -480.5785567846633,
+            0.0
+          ],
+          "rotation": [
+            0.0,
+            145.79115295410156,
+            0.0
+          ],
+          "scale": [
+            1.0,
+            1.0,
+            1.0
+          ],
+          "override_required": false
+        },
+        {
+          "field": "BP_jRPG_EnemyBattleSpot3",
+          "position": [
+            740.6723444164813,
+            495.5993843097784,
+            0.0
+          ],
+          "rotation": [
+            0.0,
+            214.44268798828125,
+            0.0
+          ],
+          "scale": [
+            1.0,
+            1.0,
+            1.0
+          ],
+          "override_required": false
+        },
+        {
+          "field": "BP_jRPG_CharacterBattleSpot",
+          "position": [
+            -223.11257934570312,
+            264.80975341796875,
+            0.0
+          ],
+          "rotation": [
+            0.0,
+            -32.74433135986328,
+            0.0
+          ],
+          "scale": [
+            1.0,
+            1.0,
+            1.0
+          ],
+          "override_required": false
+        },
+        {
+          "field": "BP_jRPG_CharacterBattleSpot1",
+          "position": [
+            -230.0555419921875,
+            7.96527099609375,
+            0.0
+          ],
+          "rotation": [
+            0.0,
+            -12.947864532470703,
+            0.0
+          ],
+          "scale": [
+            1.0,
+            1.0,
+            1.0
+          ],
+          "override_required": false
+        },
+        {
+          "field": "BP_jRPG_CharacterBattleSpot2",
+          "position": [
+            -211.1983184814453,
+            -274.29693603515625,
+            0.0
+          ],
+          "rotation": [
+            0.0,
+            9.329551696777344,
+            0.0
+          ],
+          "scale": [
+            1.0,
+            1.0,
+            1.0
+          ],
+          "override_required": false
+        },
+        {
+          "field": "TargetingEnemyCameraFocusPoint",
+          "position": [
+            368.2581121805614,
+            53.79284186857586,
+            268.6524586392871
+          ],
+          "rotation": [
+            -1.5902773407325599e-15,
+            5.2876721579330975e-14,
+            1.7349925787383494e-12
+          ],
+          "scale": [
+            1.0,
+            1.0,
+            1.0
+          ],
+          "override_required": false
+        },
+        {
+          "field": "TargetingAllyCameraFocusPoint",
+          "position": [
+            -834.8218994140625,
+            -649.1121826171875,
+            -54.862518310546875
+          ],
+          "rotation": [
+            0.0,
+            0.0,
+            0.0
+          ],
+          "scale": [
+            1.0,
+            1.0,
+            1.0
+          ],
+          "override_required": false
+        },
+        {
+          "field": "OverviewCameraFocusPoint",
+          "position": [
+            4131.045582610246,
+            191.24830446005933,
+            2866.6417931613123
+          ],
+          "rotation": [
+            0.0,
+            0.0,
+            0.0
+          ],
+          "scale": [
+            1.0,
+            1.0,
+            1.0
+          ],
+          "override_required": false
+        },
+        {
+          "field": "IntroCameraFocusPoint1",
+          "position": [
+            3852.3822546271936,
+            -166.99185942583995,
+            1618.6768822185616
+          ],
+          "rotation": [
+            0.0,
+            0.0,
+            0.0
+          ],
+          "scale": [
+            1.0,
+            1.0,
+            1.0
+          ],
+          "override_required": false
+        }
+      ],
+      "supported_policies": [
+        "isolated"
+      ],
+      "preserve_authored_battle_phases": true,
+      "grounded_body_approach": true,
+      "approach_policy": "live_skeletal_body_bounds_bridged_to_verified_ground_300cm_outside_arm_400cm",
+      "approach_components": [
+        {
+          "kind": "skeletal_body",
+          "field": "Body",
+          "class_path": "/Script/Engine.SkeletalMeshComponent",
+          "parent_field": "DefaultSceneRoot",
+          "mesh_path": "/Game/Characters/Enemies/Axons/Sirene/SK_Sirene_UE5.SK_Sirene_UE5",
+          "socket": "None"
+        }
+      ],
+      "source_presentation": {
+        "kind": "sirene_source_v190",
+        "source_world": "/Game/Levels/Siren/Level_Sirene_Main_V2/_Generated_/38DFJMPD8YROH9U24BMJRTFIY.Level_Sirene_Main_V2",
+        "source_actor": "/Game/Levels/Siren/Level_Sirene_Main_V2/_Generated_/38DFJMPD8YROH9U24BMJRTFIY.Level_Sirene_Main_V2:PersistentLevel.BP_DummyEnemy_Sirene_C_UAID_581122C6E7A528A401_1984609581",
+        "helper_class": "/Game/Characters/Enemies/Axons/Sirene/BP_DummyEnemy_Sirene.BP_DummyEnemy_Sirene_C",
+        "components": [
+          {
+            "name": "FX_Petals",
+            "class_path": "/Script/Niagara.NiagaraComponent",
+            "values": {
+              "Asset": "/Game/FX/FX_Leo/Fx/Maelle/FX_FlowerPetalsLarge.FX_FlowerPetalsLarge",
+              "AttachParent": "/Game/Levels/Siren/Level_Sirene_Main_V2/_Generated_/38DFJMPD8YROH9U24BMJRTFIY.Level_Sirene_Main_V2:PersistentLevel.BP_DummyEnemy_Sirene_C_UAID_581122C6E7A528A401_1984609581.Body",
+              "AttachSocketName": "Hand_R",
+              "RelativeLocation": {
+                "type": "/Script/CoreUObject.Vector",
+                "fields": {
+                  "X": -642.0,
+                  "Y": 0.0,
+                  "Z": 0.0
+                },
+                "errors": {},
+                "truncated": false
+              },
+              "RelativeRotation": {
+                "type": "/Script/CoreUObject.Rotator",
+                "fields": {
+                  "Pitch": 0.0,
+                  "Yaw": 0.0,
+                  "Roll": 0.0
+                },
+                "errors": {},
+                "truncated": false
+              },
+              "RelativeScale3D": {
+                "type": "/Script/CoreUObject.Vector",
+                "fields": {
+                  "X": 1.0,
+                  "Y": 1.0,
+                  "Z": 1.0
+                },
+                "errors": {},
+                "truncated": false
+              },
+              "bVisible": true,
+              "bHiddenInGame": false
+            },
+            "property": true
+          },
+          {
+            "name": "FX_Petals1",
+            "class_path": "/Script/Niagara.NiagaraComponent",
+            "values": {
+              "Asset": "/Game/FX/FX_Leo/Fx/Maelle/FX_FlowerPetalsLarge.FX_FlowerPetalsLarge",
+              "AttachParent": "/Game/Levels/Siren/Level_Sirene_Main_V2/_Generated_/38DFJMPD8YROH9U24BMJRTFIY.Level_Sirene_Main_V2:PersistentLevel.BP_DummyEnemy_Sirene_C_UAID_581122C6E7A528A401_1984609581.Body",
+              "AttachSocketName": "Hand_L",
+              "RelativeLocation": {
+                "type": "/Script/CoreUObject.Vector",
+                "fields": {
+                  "X": 642.0,
+                  "Y": 0.0,
+                  "Z": 0.0
+                },
+                "errors": {},
+                "truncated": false
+              },
+              "RelativeRotation": {
+                "type": "/Script/CoreUObject.Rotator",
+                "fields": {
+                  "Pitch": 0.0,
+                  "Yaw": 0.0,
+                  "Roll": 0.0
+                },
+                "errors": {},
+                "truncated": false
+              },
+              "RelativeScale3D": {
+                "type": "/Script/CoreUObject.Vector",
+                "fields": {
+                  "X": 1.0,
+                  "Y": 1.0,
+                  "Z": 1.0
+                },
+                "errors": {},
+                "truncated": false
+              },
+              "bVisible": true,
+              "bHiddenInGame": false
+            },
+            "property": true
+          },
+          {
+            "name": "FX_Ribbon01",
+            "class_path": "/Script/Niagara.NiagaraComponent",
+            "values": {
+              "Asset": "/Game/FX/FX_Leo/Fx/Enemies/Siren/Axon/FX_SirenRibbons.FX_SirenRibbons",
+              "AttachParent": "/Game/Levels/Siren/Level_Sirene_Main_V2/_Generated_/38DFJMPD8YROH9U24BMJRTFIY.Level_Sirene_Main_V2:PersistentLevel.BP_DummyEnemy_Sirene_C_UAID_581122C6E7A528A401_1984609581.Body",
+              "AttachSocketName": "spine_03",
+              "RelativeLocation": {
+                "type": "/Script/CoreUObject.Vector",
+                "fields": {
+                  "X": -70.82946494666001,
+                  "Y": -773.5873745845067,
+                  "Z": -46.933584756200936
+                },
+                "errors": {},
+                "truncated": false
+              },
+              "RelativeRotation": {
+                "type": "/Script/CoreUObject.Rotator",
+                "fields": {
+                  "Pitch": -68.16549853956234,
+                  "Yaw": -141.30533141687349,
+                  "Roll": 139.20905556109997
+                },
+                "errors": {},
+                "truncated": false
+              },
+              "RelativeScale3D": {
+                "type": "/Script/CoreUObject.Vector",
+                "fields": {
+                  "X": 1.0,
+                  "Y": 1.0,
+                  "Z": 1.0
+                },
+                "errors": {},
+                "truncated": false
+              },
+              "bVisible": true,
+              "bHiddenInGame": false
+            },
+            "property": true
+          },
+          {
+            "name": "FX_Ribbon02",
+            "class_path": "/Script/Niagara.NiagaraComponent",
+            "values": {
+              "Asset": "/Game/FX/FX_Leo/Fx/Enemies/Siren/Axon/FX_SirenRibbons.FX_SirenRibbons",
+              "AttachParent": "/Game/Levels/Siren/Level_Sirene_Main_V2/_Generated_/38DFJMPD8YROH9U24BMJRTFIY.Level_Sirene_Main_V2:PersistentLevel.BP_DummyEnemy_Sirene_C_UAID_581122C6E7A528A401_1984609581.Body",
+              "AttachSocketName": "spine_03",
+              "RelativeLocation": {
+                "type": "/Script/CoreUObject.Vector",
+                "fields": {
+                  "X": -32.94810367274081,
+                  "Y": -769.827468923089,
+                  "Z": -31.92319982541025
+                },
+                "errors": {},
+                "truncated": false
+              },
+              "RelativeRotation": {
+                "type": "/Script/CoreUObject.Rotator",
+                "fields": {
+                  "Pitch": -61.27038973683517,
+                  "Yaw": -27.19130771399537,
+                  "Roll": 30.364284724809025
+                },
+                "errors": {},
+                "truncated": false
+              },
+              "RelativeScale3D": {
+                "type": "/Script/CoreUObject.Vector",
+                "fields": {
+                  "X": 1.0,
+                  "Y": 1.0,
+                  "Z": 1.0
+                },
+                "errors": {},
+                "truncated": false
+              },
+              "bVisible": true,
+              "bHiddenInGame": false
+            },
+            "property": true
+          },
+          {
+            "name": "FX_Ribbon03",
+            "class_path": "/Script/Niagara.NiagaraComponent",
+            "values": {
+              "Asset": "/Game/FX/FX_Leo/Fx/Enemies/Siren/Axon/FX_SirenRibbons.FX_SirenRibbons",
+              "AttachParent": "/Game/Levels/Siren/Level_Sirene_Main_V2/_Generated_/38DFJMPD8YROH9U24BMJRTFIY.Level_Sirene_Main_V2:PersistentLevel.BP_DummyEnemy_Sirene_C_UAID_581122C6E7A528A401_1984609581.Body",
+              "AttachSocketName": "spine_03",
+              "RelativeLocation": {
+                "type": "/Script/CoreUObject.Vector",
+                "fields": {
+                  "X": -70.06738249306099,
+                  "Y": -770.0674536369577,
+                  "Z": -32.88125688979325
+                },
+                "errors": {},
+                "truncated": false
+              },
+              "RelativeRotation": {
+                "type": "/Script/CoreUObject.Rotator",
+                "fields": {
+                  "Pitch": 63.43099600799148,
+                  "Yaw": -411.2247707904202,
+                  "Roll": -223.06058925241342
+                },
+                "errors": {},
+                "truncated": false
+              },
+              "RelativeScale3D": {
+                "type": "/Script/CoreUObject.Vector",
+                "fields": {
+                  "X": 1.0,
+                  "Y": 1.0,
+                  "Z": 1.0
+                },
+                "errors": {},
+                "truncated": false
+              },
+              "bVisible": true,
+              "bHiddenInGame": false
+            },
+            "property": true
+          },
+          {
+            "name": "FX_Ribbon04",
+            "class_path": "/Script/Niagara.NiagaraComponent",
+            "values": {
+              "Asset": "/Game/FX/FX_Leo/Fx/Enemies/Siren/Axon/FX_SirenRibbons.FX_SirenRibbons",
+              "AttachParent": "/Game/Levels/Siren/Level_Sirene_Main_V2/_Generated_/38DFJMPD8YROH9U24BMJRTFIY.Level_Sirene_Main_V2:PersistentLevel.BP_DummyEnemy_Sirene_C_UAID_581122C6E7A528A401_1984609581.Body",
+              "AttachSocketName": "spine_03",
+              "RelativeLocation": {
+                "type": "/Script/CoreUObject.Vector",
+                "fields": {
+                  "X": -70.06738249306099,
+                  "Y": -770.0674536369577,
+                  "Z": -32.88125688979325
+                },
+                "errors": {},
+                "truncated": false
+              },
+              "RelativeRotation": {
+                "type": "/Script/CoreUObject.Rotator",
+                "fields": {
+                  "Pitch": 61.90466363569085,
+                  "Yaw": -514.4120303980353,
+                  "Roll": -319.57425251950275
+                },
+                "errors": {},
+                "truncated": false
+              },
+              "RelativeScale3D": {
+                "type": "/Script/CoreUObject.Vector",
+                "fields": {
+                  "X": 1.0,
+                  "Y": 1.0,
+                  "Z": 1.0
+                },
+                "errors": {},
+                "truncated": false
+              },
+              "bVisible": true,
+              "bHiddenInGame": false
+            },
+            "property": true
+          },
+          {
+            "name": "DefaultSceneRoot",
+            "class_path": "/Script/Engine.SceneComponent",
+            "values": {
+              "AttachParent": null,
+              "AttachSocketName": "None",
+              "RelativeLocation": {
+                "type": "/Script/CoreUObject.Vector",
+                "fields": {
+                  "X": 1640.2576484975998,
+                  "Y": -4436.247323277091,
+                  "Z": -6353.494281921785
+                },
+                "errors": {},
+                "truncated": false
+              },
+              "RelativeRotation": {
+                "type": "/Script/CoreUObject.Rotator",
+                "fields": {
+                  "Pitch": 0.0,
+                  "Yaw": 24.6066989898684,
+                  "Roll": 0.0
+                },
+                "errors": {},
+                "truncated": false
+              },
+              "RelativeScale3D": {
+                "type": "/Script/CoreUObject.Vector",
+                "fields": {
+                  "X": 1.0,
+                  "Y": 1.0,
+                  "Z": 1.0
+                },
+                "errors": {},
+                "truncated": false
+              },
+              "bVisible": true,
+              "bHiddenInGame": false
+            },
+            "property": true
+          },
+          {
+            "name": "Body",
+            "class_path": "/Script/Engine.SkeletalMeshComponent",
+            "values": {
+              "AnimClass": "/Game/Characters/Enemies/Axons/Sirene/Animations/ABP_SireneDummy_UE5.ABP_SireneDummy_UE5_C",
+              "AnimationMode": 0,
+              "SkinnedAsset": "/Game/Characters/Enemies/Axons/Sirene/SK_Sirene_UE5.SK_Sirene_UE5",
+              "OverrideMaterials": {
+                "length": 6,
+                "items": [
+                  null,
+                  null,
+                  null,
+                  null,
+                  null,
+                  "/Game/Characters/Enemies/Axons/Sirene/MI_Sirene_2.MI_Sirene_2"
+                ]
+              },
+              "AttachParent": "/Game/Levels/Siren/Level_Sirene_Main_V2/_Generated_/38DFJMPD8YROH9U24BMJRTFIY.Level_Sirene_Main_V2:PersistentLevel.BP_DummyEnemy_Sirene_C_UAID_581122C6E7A528A401_1984609581.DefaultSceneRoot",
+              "AttachSocketName": "None",
+              "RelativeLocation": {
+                "type": "/Script/CoreUObject.Vector",
+                "fields": {
+                  "X": 0.0,
+                  "Y": 0.0,
+                  "Z": 0.0
+                },
+                "errors": {},
+                "truncated": false
+              },
+              "RelativeRotation": {
+                "type": "/Script/CoreUObject.Rotator",
+                "fields": {
+                  "Pitch": 0.0,
+                  "Yaw": 0.0,
+                  "Roll": 0.0
+                },
+                "errors": {},
+                "truncated": false
+              },
+              "RelativeScale3D": {
+                "type": "/Script/CoreUObject.Vector",
+                "fields": {
+                  "X": 1.0,
+                  "Y": 1.0,
+                  "Z": 1.0
+                },
+                "errors": {},
+                "truncated": false
+              },
+              "bVisible": true,
+              "bHiddenInGame": false
+            },
+            "property": true
+          },
+          {
+            "name": "Hair_Sirene_Axon_skl",
+            "class_path": "/Script/Engine.SkeletalMeshComponent",
+            "values": {
+              "AnimClass": null,
+              "AnimationMode": 1,
+              "SkinnedAsset": "/Game/Characters/Hair/NPCs/Sirene_Zone/Hair_Sirene_Axon_skl.Hair_Sirene_Axon_skl",
+              "OverrideMaterials": {
+                "length": 1,
+                "items": [
+                  "/Game/Characters/Hair/NPCs/Sirene_Zone/MI_Hair_NPCs_Sirene_Axon.MI_Hair_NPCs_Sirene_Axon"
+                ]
+              },
+              "AttachParent": "/Game/Levels/Siren/Level_Sirene_Main_V2/_Generated_/38DFJMPD8YROH9U24BMJRTFIY.Level_Sirene_Main_V2:PersistentLevel.BP_DummyEnemy_Sirene_C_UAID_581122C6E7A528A401_1984609581.Body",
+              "AttachSocketName": "Head",
+              "RelativeLocation": {
+                "type": "/Script/CoreUObject.Vector",
+                "fields": {
+                  "X": 549.5131925036527,
+                  "Y": 440.0938303412206,
+                  "Z": -2.84123593409065
+                },
+                "errors": {},
+                "truncated": false
+              },
+              "RelativeRotation": {
+                "type": "/Script/CoreUObject.Rotator",
+                "fields": {
+                  "Pitch": -88.65984770893276,
+                  "Yaw": -273.8232785195145,
+                  "Roll": 276.6867338397906
+                },
+                "errors": {},
+                "truncated": false
+              },
+              "RelativeScale3D": {
+                "type": "/Script/CoreUObject.Vector",
+                "fields": {
+                  "X": 10.0,
+                  "Y": 10.000000149011612,
+                  "Z": 10.000000149011612
+                },
+                "errors": {},
+                "truncated": false
+              },
+              "bVisible": true,
+              "bHiddenInGame": false
+            },
+            "property": true
+          },
+          {
+            "name": "Spline_Ballet1",
+            "class_path": "/Script/Engine.SplineComponent",
+            "values": {
+              "AttachParent": "/Game/Levels/Siren/Level_Sirene_Main_V2/_Generated_/38DFJMPD8YROH9U24BMJRTFIY.Level_Sirene_Main_V2:PersistentLevel.BP_DummyEnemy_Sirene_C_UAID_581122C6E7A528A401_1984609581.DefaultSceneRoot",
+              "AttachSocketName": "None",
+              "RelativeLocation": {
+                "type": "/Script/CoreUObject.Vector",
+                "fields": {
+                  "X": -95.7805852835163,
+                  "Y": 3876.155017258209,
+                  "Z": 8860.214346803097
+                },
+                "errors": {},
+                "truncated": false
+              },
+              "RelativeRotation": {
+                "type": "/Script/CoreUObject.Rotator",
+                "fields": {
+                  "Pitch": 0.0,
+                  "Yaw": 0.0,
+                  "Roll": 0.0
+                },
+                "errors": {},
+                "truncated": false
+              },
+              "RelativeScale3D": {
+                "type": "/Script/CoreUObject.Vector",
+                "fields": {
+                  "X": 1.0,
+                  "Y": 1.0,
+                  "Z": 1.0
+                },
+                "errors": {},
+                "truncated": false
+              },
+              "bVisible": true,
+              "bHiddenInGame": false
+            },
+            "property": true
+          },
+          {
+            "name": "SM_sirene_ball_ball_1_low",
+            "class_path": "/Script/Engine.StaticMeshComponent",
+            "values": {
+              "StaticMesh": "/Game/Characters/Enemies/Axons/Sirene/SM_sirene_ball_ball_1_low.SM_sirene_ball_ball_1_low",
+              "OverrideMaterials": {
+                "length": 0,
+                "items": []
+              },
+              "AttachParent": "/Game/Levels/Siren/Level_Sirene_Main_V2/_Generated_/38DFJMPD8YROH9U24BMJRTFIY.Level_Sirene_Main_V2:PersistentLevel.BP_DummyEnemy_Sirene_C_UAID_581122C6E7A528A401_1984609581.Body",
+              "AttachSocketName": "Sirene_Weapon_Bone001",
+              "RelativeLocation": {
+                "type": "/Script/CoreUObject.Vector",
+                "fields": {
+                  "X": 0.0,
+                  "Y": 0.0,
+                  "Z": 0.0
+                },
+                "errors": {},
+                "truncated": false
+              },
+              "RelativeRotation": {
+                "type": "/Script/CoreUObject.Rotator",
+                "fields": {
+                  "Pitch": 0.0,
+                  "Yaw": 0.0,
+                  "Roll": 0.0
+                },
+                "errors": {},
+                "truncated": false
+              },
+              "RelativeScale3D": {
+                "type": "/Script/CoreUObject.Vector",
+                "fields": {
+                  "X": 1.0,
+                  "Y": 1.0,
+                  "Z": 1.0
+                },
+                "errors": {},
+                "truncated": false
+              },
+              "bVisible": false,
+              "bHiddenInGame": false
+            },
+            "property": true
+          },
+          {
+            "name": "SM_sirene_ball_ring_1_low",
+            "class_path": "/Script/Engine.StaticMeshComponent",
+            "values": {
+              "StaticMesh": "/Game/Characters/Enemies/Axons/Sirene/SM_sirene_ball_ring_1_low.SM_sirene_ball_ring_1_low",
+              "OverrideMaterials": {
+                "length": 0,
+                "items": []
+              },
+              "AttachParent": "/Game/Levels/Siren/Level_Sirene_Main_V2/_Generated_/38DFJMPD8YROH9U24BMJRTFIY.Level_Sirene_Main_V2:PersistentLevel.BP_DummyEnemy_Sirene_C_UAID_581122C6E7A528A401_1984609581.Body",
+              "AttachSocketName": "Sirene_Weapon_Bone002",
+              "RelativeLocation": {
+                "type": "/Script/CoreUObject.Vector",
+                "fields": {
+                  "X": 0.0,
+                  "Y": 0.0,
+                  "Z": 0.0
+                },
+                "errors": {},
+                "truncated": false
+              },
+              "RelativeRotation": {
+                "type": "/Script/CoreUObject.Rotator",
+                "fields": {
+                  "Pitch": 0.0,
+                  "Yaw": 0.0,
+                  "Roll": 0.0
+                },
+                "errors": {},
+                "truncated": false
+              },
+              "RelativeScale3D": {
+                "type": "/Script/CoreUObject.Vector",
+                "fields": {
+                  "X": 0.5,
+                  "Y": 0.5,
+                  "Z": 0.5
+                },
+                "errors": {},
+                "truncated": false
+              },
+              "bVisible": false,
+              "bHiddenInGame": false
+            },
+            "property": true
+          },
+          {
+            "name": "SM_sirene_ball_ring_2_low",
+            "class_path": "/Script/Engine.StaticMeshComponent",
+            "values": {
+              "StaticMesh": "/Game/Characters/Enemies/Axons/Sirene/SM_sirene_ball_ring_2_low.SM_sirene_ball_ring_2_low",
+              "OverrideMaterials": {
+                "length": 0,
+                "items": []
+              },
+              "AttachParent": "/Game/Levels/Siren/Level_Sirene_Main_V2/_Generated_/38DFJMPD8YROH9U24BMJRTFIY.Level_Sirene_Main_V2:PersistentLevel.BP_DummyEnemy_Sirene_C_UAID_581122C6E7A528A401_1984609581.Body",
+              "AttachSocketName": "Sirene_Weapon_Bone003",
+              "RelativeLocation": {
+                "type": "/Script/CoreUObject.Vector",
+                "fields": {
+                  "X": 0.0,
+                  "Y": 0.0,
+                  "Z": 0.0
+                },
+                "errors": {},
+                "truncated": false
+              },
+              "RelativeRotation": {
+                "type": "/Script/CoreUObject.Rotator",
+                "fields": {
+                  "Pitch": 0.0,
+                  "Yaw": 0.0,
+                  "Roll": 0.0
+                },
+                "errors": {},
+                "truncated": false
+              },
+              "RelativeScale3D": {
+                "type": "/Script/CoreUObject.Vector",
+                "fields": {
+                  "X": 0.3,
+                  "Y": 0.30000001192092896,
+                  "Z": 0.30000001192092896
+                },
+                "errors": {},
+                "truncated": false
+              },
+              "bVisible": false,
+              "bHiddenInGame": false
+            },
+            "property": true
+          },
+          {
+            "name": "Scene_Attach_Spline_1",
+            "class_path": "/Script/Engine.SceneComponent",
+            "values": {
+              "AttachParent": "/Game/Levels/Siren/Level_Sirene_Main_V2/_Generated_/38DFJMPD8YROH9U24BMJRTFIY.Level_Sirene_Main_V2:PersistentLevel.BP_DummyEnemy_Sirene_C_UAID_581122C6E7A528A401_1984609581.Spline_Ballet1",
+              "AttachSocketName": "None",
+              "RelativeLocation": {
+                "type": "/Script/CoreUObject.Vector",
+                "fields": {
+                  "X": 95.7805852835163,
+                  "Y": -3876.155017258209,
+                  "Z": -8860.214346803097
+                },
+                "errors": {},
+                "truncated": false
+              },
+              "RelativeRotation": {
+                "type": "/Script/CoreUObject.Rotator",
+                "fields": {
+                  "Pitch": 0.0,
+                  "Yaw": 0.0,
+                  "Roll": 0.0
+                },
+                "errors": {},
+                "truncated": false
+              },
+              "RelativeScale3D": {
+                "type": "/Script/CoreUObject.Vector",
+                "fields": {
+                  "X": 1.0,
+                  "Y": 1.0,
+                  "Z": 1.0
+                },
+                "errors": {},
+                "truncated": false
+              },
+              "bVisible": true,
+              "bHiddenInGame": false
+            },
+            "property": false
+          },
+          {
+            "name": "Scene_Attach_Spline_2",
+            "class_path": "/Script/Engine.SceneComponent",
+            "values": {
+              "AttachParent": "/Game/Levels/Siren/Level_Sirene_Main_V2/_Generated_/38DFJMPD8YROH9U24BMJRTFIY.Level_Sirene_Main_V2:PersistentLevel.BP_DummyEnemy_Sirene_C_UAID_581122C6E7A528A401_1984609581.Spline_Ballet1",
+              "AttachSocketName": "None",
+              "RelativeLocation": {
+                "type": "/Script/CoreUObject.Vector",
+                "fields": {
+                  "X": 95.780585,
+                  "Y": -3876.155017,
+                  "Z": -8860.214347
+                },
+                "errors": {},
+                "truncated": false
+              },
+              "RelativeRotation": {
+                "type": "/Script/CoreUObject.Rotator",
+                "fields": {
+                  "Pitch": 0.0,
+                  "Yaw": 0.0,
+                  "Roll": 0.0
+                },
+                "errors": {},
+                "truncated": false
+              },
+              "RelativeScale3D": {
+                "type": "/Script/CoreUObject.Vector",
+                "fields": {
+                  "X": 1.0,
+                  "Y": 1.0,
+                  "Z": 1.0
+                },
+                "errors": {},
+                "truncated": false
+              },
+              "bVisible": true,
+              "bHiddenInGame": false
+            },
+            "property": false
+          },
+          {
+            "name": "Scene_Attach_Spline_3",
+            "class_path": "/Script/Engine.SceneComponent",
+            "values": {
+              "AttachParent": "/Game/Levels/Siren/Level_Sirene_Main_V2/_Generated_/38DFJMPD8YROH9U24BMJRTFIY.Level_Sirene_Main_V2:PersistentLevel.BP_DummyEnemy_Sirene_C_UAID_581122C6E7A528A401_1984609581.Spline_Ballet1",
+              "AttachSocketName": "None",
+              "RelativeLocation": {
+                "type": "/Script/CoreUObject.Vector",
+                "fields": {
+                  "X": 95.780585,
+                  "Y": -3876.155017,
+                  "Z": -8860.214347
+                },
+                "errors": {},
+                "truncated": false
+              },
+              "RelativeRotation": {
+                "type": "/Script/CoreUObject.Rotator",
+                "fields": {
+                  "Pitch": 0.0,
+                  "Yaw": 0.0,
+                  "Roll": 0.0
+                },
+                "errors": {},
+                "truncated": false
+              },
+              "RelativeScale3D": {
+                "type": "/Script/CoreUObject.Vector",
+                "fields": {
+                  "X": 1.0,
+                  "Y": 1.0,
+                  "Z": 1.0
+                },
+                "errors": {},
+                "truncated": false
+              },
+              "bVisible": true,
+              "bHiddenInGame": false
+            },
+            "property": false
+          }
+        ]
+      },
+      "evidence_sha256": {
+        "sirene-original-source-join.json": "57ccde932edbb159884c1becb3963527af13c580e5d35b09bce496ffd0af8089",
+        "sirene-retained-original-sources-v190.json": "ed5a02f80876d9586352359cb86d89ca2558713daf43d0b60e55a509e52c7ac0",
+        "sirene-hidden-construction-v190-complete.json": "8ec1ea8d0b8433b22ef924b1b0498d86881cc4751e99ed09d76a62e65e382064",
+        "sirene-hidden-retirement-v190-complete.json": "a5c185ad143f4daf275db2b25193b6ac2336d0edd7df61891a0ed9db59694839",
+        "apply_sirene_source_overrides.py": "a66b5dac4577bbf26e49cf30b8d87827127d9630279f5219be8a87e20c3957f4",
+        "compare_sirene_generated_nodes.py": "204d5a7c0bbcca4a06c11d27bd19d81055cc8ce2e737742dc1f8f20fad96dcbe"
+      },
+      "admission_evidence": {},
+      "availability_note": "Preparation candidate only. Hidden original component fidelity and retirement verified; grounding, current-world helper lookup, battle link, entry, phases and completed-battle cleanup remain unverified."
+    }
+  ]
+}

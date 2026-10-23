@@ -32,13 +32,14 @@ def supports_traces(transport):
 def supports_keys(transport):
     return (supports_traces(transport) and
             type(getattr(transport, 'keybind_protocol', None)) is int and transport.keybind_protocol == 1 and
-            type(getattr(transport, 'keybind_capacity', None)) is int and transport.keybind_capacity == 64)
+            type(getattr(transport, 'keybind_capacity', None)) is int and transport.keybind_capacity == 96)
 
 
 class SessionTransport:
     def __init__(self, *, _executable=None):
         self._owner = threading.get_ident()
         self._closed = False
+        self._terminal_failure = None
         self.target_exit_code = None
         self._lines = queue.Queue(maxsize=256)
         executable = _executable or Path(__file__).resolve().parents[2] / 'build/research-probe/research_probe.exe'
@@ -63,12 +64,56 @@ class SessionTransport:
             self.objects = [self._read(), self._read()]
             ready = self._read()
             self.mesh_protocol = ready.get('mesh_protocol', 0)
+            self.enemy_spawn_protocol = ready.get('enemy_spawn_protocol', 0)
+            self.enemy_trigger_anchor_research_protocol = ready.get('enemy_trigger_anchor_research_protocol', 0)
+            self.enemy_trigger_parameter_research_protocol = ready.get('enemy_trigger_parameter_research_protocol', 0)
+            self.enemy_trigger_entry_research_protocol = ready.get('enemy_trigger_entry_research_protocol', 0)
+            self.enemy_combat_placement_protocol = ready.get('enemy_combat_placement_protocol', 0)
+            self.battle_parameter_frame_research_protocol = ready.get('battle_parameter_frame_research_protocol', 0)
+            self.battle_entry_preflight_research_protocol = ready.get('battle_entry_preflight_research_protocol', 0)
+            self.battle_entry_arena_research_protocol = ready.get('battle_entry_arena_research_protocol', 0)
+            self.battle_entry_dispatch_research_protocol = ready.get('battle_entry_dispatch_research_protocol', 0)
+            self.battle_parameter_policy_research_protocol = ready.get('battle_parameter_policy_research_protocol', 0)
+            self.enemy_retirement_protocol = ready.get('enemy_retirement_protocol', 0)
+            self.enemy_pose_protocol = ready.get('enemy_pose_protocol', 0)
+            self.enemy_arena_protocol = ready.get('enemy_arena_protocol', 0)
+            self.enemy_arena_binding_protocol = ready.get('enemy_arena_binding_protocol', 0)
+            self.enemy_clearance_protocol = ready.get('enemy_clearance_protocol', 0)
+            self.enemy_grounded_spawn_protocol = ready.get('enemy_grounded_spawn_protocol', 0)
+            self.enemy_visual_staging_research_protocol = ready.get('enemy_visual_staging_research_protocol', 0)
+            self.enemy_visual_arena_research_protocol = ready.get('enemy_visual_arena_research_protocol', 0)
+            self.enemy_helper_lookup_research_protocol = ready.get('enemy_helper_lookup_research_protocol', 0)
+            self.enemy_geometry_placement_research_protocol = ready.get('enemy_geometry_placement_research_protocol', 0)
+            self.enemy_authored_encounter_research_protocol = ready.get('enemy_authored_encounter_research_protocol', 0)
+            self.npc_presentation_admission_research_protocol = ready.get('npc_presentation_admission_research_protocol', 0)
+            self.npc_membership_observation_research_protocol = ready.get('npc_membership_observation_research_protocol', 0)
+            self.npc_original_staging_research_protocol = ready.get('npc_original_staging_research_protocol', 0)
+            self.npc_original_placement_research_protocol = ready.get('npc_original_placement_research_protocol', 0)
+            self.npc_original_grounded_construction_research_protocol = ready.get('npc_original_grounded_construction_research_protocol', 0)
+            self.npc_original_preview_research_protocol = ready.get('npc_original_preview_research_protocol', 0)
+            self.npc_parameter_policy_research_protocol = ready.get('npc_parameter_policy_research_protocol', 0)
+            self.npc_arena_value_research_protocol = ready.get('npc_arena_value_research_protocol', 0)
+            self.npc_entry_preflight_research_protocol = ready.get('npc_entry_preflight_research_protocol', 0)
+            self.npc_proximity_research_protocol = ready.get('npc_proximity_research_protocol', 0)
+            self.npc_interaction_variants_protocol = ready.get('npc_interaction_variants_protocol', 0)
+            self.npc_alicia_encounter_protocol = ready.get('npc_alicia_encounter_protocol', 0)
+            self.npc_curator_encounter_protocol = ready.get('npc_curator_encounter_protocol', 0)
+            self.npc_francois_encounter_protocol = ready.get('npc_francois_encounter_protocol', 0)
+            self.enemy_current_world_staging_protocol = ready.get('enemy_current_world_staging_protocol', 0)
+            self.enemy_extra_spots_protocol = ready.get('enemy_extra_spots_protocol', 0)
+            self.map_runtime_protocol = ready.get('map_runtime_protocol', 0)
+            self.runtime_cinematic_protocol = ready.get('runtime_cinematic_protocol', 0)
+            self.runtime_scene_protocol = ready.get('runtime_scene_protocol', 0)
+            self.native_visual_staging_protocol = ready.get('native_visual_staging_protocol', 0)
+            self.native_visual_encounter_preflight_protocol = ready.get('native_visual_encounter_preflight_protocol', 0)
+            self.native_visual_grounding_protocol = ready.get('native_visual_grounding_protocol', 0)
             self.reflected_protocol = ready.get('reflected_protocol', 0)
             self.lease_protocol = ready.get('lease_protocol', 0)
             self.lease_policy_protocol = ready.get('lease_policy_protocol', 0)
             self.lease_limit = 4096 if self.lease_policy_protocol==1 else 128
             self._lease_owner = 0
             self.retained_protocol = ready.get('retained_protocol', 0)
+            self.blueprint_invocation_protocol = ready.get('blueprint_invocation_protocol', 0)
             self.stable_identity_protocol = ready.get('stable_identity_protocol', 0)
             self.object_assignment_protocol = ready.get('object_assignment_protocol', 0)
             self.menu_input_protocol = ready.get('menu_input_protocol', 0)
@@ -94,7 +139,22 @@ class SessionTransport:
             self.owned_audio_cleanup_protocol = ready.get('owned_audio_cleanup_protocol', 0)
             self.original_audio_pause_protocol = ready.get('original_audio_pause_protocol', 0)
             self.asset_load_protocol = ready.get('asset_load_protocol', 0)
-            for capability in ('picto_edit_protocol', 'picto_progression_protocol',
+            self.generated_world_asset_load_protocol = ready.get('generated_world_asset_load_protocol', 0)
+            self.owned_battle_arena_staging_protocol = ready.get('owned_battle_arena_staging_protocol', 0)
+            self.owned_battle_arena_capacity = ready.get('owned_battle_arena_capacity', 1)
+            self.owned_component_pose_protocol = ready.get('owned_component_pose_protocol', 0)
+            self.owned_helper_component_pose_protocol = ready.get('owned_helper_component_pose_protocol', 0)
+            self.owned_helper_parameter_preflight_protocol = ready.get('owned_helper_parameter_preflight_protocol', 0)
+            self.owned_battle_arena_grounding_protocol = ready.get('owned_battle_arena_grounding_protocol', 0)
+            self.owned_battle_arena_approach_protocol = ready.get('owned_battle_arena_approach_protocol', 0)
+            self.owned_battle_arena_approach_diagnostics_protocol = ready.get('owned_battle_arena_approach_diagnostics_protocol', 0)
+            self.owned_battle_arena_advisory_route_protocol = ready.get('owned_battle_arena_advisory_route_protocol', 0)
+            self.encounter_tuning_protocol = ready.get('encounter_tuning_protocol', 0)
+            self.encounter_tuning_max_health_multiplier = ready.get('encounter_tuning_max_health_multiplier', 100)
+            self.encounter_retry_tuning_protocol = ready.get('encounter_retry_tuning_protocol', 0)
+            self.owned_authored_entry_protocol = ready.get('owned_authored_entry_protocol', 0)
+            self.owned_helper_source_frame_protocol = ready.get('owned_helper_source_frame_protocol', 0)
+            for capability in ('qa_encounter_protocol', 'picto_edit_protocol', 'picto_progression_protocol',
                                'picto_class_load_protocol', 'picto_cost_protocol', 'picto_startup_protocol', 'picto_stat_clear_protocol', 'picto_stat_remove_protocol', 'picto_inventory_protocol', 'picto_batch_protocol', 'picto_level_batch_protocol', 'picto_mastery_batch_protocol'):
                 setattr(self, capability, ready.get(capability, 0))
             self.ui_batch_protocol = ready.get('ui_batch_protocol', 0)
@@ -189,7 +249,9 @@ class SessionTransport:
     def _command(self, command, payload=None):
         self._check_thread()
         if self._closed:
-            raise RuntimeQueryError('Native session is closed')
+            failure = getattr(self, '_terminal_failure', None)
+            detail = f"; first failure in {failure['command']}: {failure['error']}" if failure else ''
+            raise RuntimeQueryError('Native session is closed' + detail)
         reflected = command == 'reflected-invoke'
         retained = command == 'retained-invoke'
         assignment = command == 'object-assign'
@@ -215,6 +277,8 @@ class SessionTransport:
         mesh = command == 'mesh'
         if mesh and getattr(self,'mesh_protocol',0)!=3:
             raise ValueError('Mesh candidate unavailable')
+        qa_encounter = command == 'qa-encounter-reset'
+        if qa_encounter and getattr(self,'qa_encounter_protocol',0)!=1:raise ValueError('Updated QA encounter runtime required')
         picto_progress = command == 'picto-progression'
         if picto_progress and getattr(self,'picto_progression_protocol',0)!=1:
             raise ValueError('Picto progression capability unavailable')
@@ -274,7 +338,7 @@ class SessionTransport:
             raise ValueError('Native session does not support object leases')
         if reflected and getattr(self, 'reflected_protocol', 0) != 1:
             raise ValueError('Native session does not support reflected invocation')
-        if not zone and not mesh and not picto_batch and not picto_progress and not lease_policy and not widget_hook and not sound_event and not music_audio and not override and not sequence and not media and not pause and not ui_batch and not keys and not trace and not reflected and not leased and not retained and not assignment and not text and not menu and not button_action and not multi_button and command not in ('enable', 'disable', 'invoke', 'drain', 'ping', 'close', 'console-attach', 'console-detach', 'console-status', 'console-poll', 'console-execute', 'console-print', 'console-names', 'console-key'):
+        if not qa_encounter and not zone and not mesh and not picto_batch and not picto_progress and not lease_policy and not widget_hook and not sound_event and not music_audio and not override and not sequence and not media and not pause and not ui_batch and not keys and not trace and not reflected and not leased and not retained and not assignment and not text and not menu and not button_action and not multi_button and command not in ('enable', 'disable', 'invoke', 'drain', 'ping', 'close', 'console-attach', 'console-detach', 'console-status', 'console-poll', 'console-execute', 'console-print', 'console-names', 'console-key'):
             raise ValueError('Unsupported native session command')
         suffix = ''
         if zone:
@@ -291,7 +355,140 @@ class SessionTransport:
                 raise ValueError('Picto mastery batch capability unavailable')
             suffix = ' ' + payload.hex()
         elif mesh:
-            from .procedural_mesh import validate_request
+            parameter_mesh=(type(payload) is bytes and len(payload)>=8 and 124<=int.from_bytes(payload[4:8],'little')<=130)
+            enemy_mesh=(type(payload) is bytes and len(payload)>=8 and (110<=int.from_bytes(payload[4:8],'little')<=123 or int.from_bytes(payload[4:8],'little') in (131,132,133)))
+            map_mesh=(type(payload) is bytes and len(payload)>=8 and 93<=int.from_bytes(payload[4:8],'little')<=97)
+            scene_mesh=(type(payload) is bytes and len(payload)>=8 and getattr(self,'runtime_scene_protocol',0) in (1,2,3,4,5,6,7) and
+                    (70<=int.from_bytes(payload[4:8],'little')<=92 or int.from_bytes(payload[4:8],'little')==98))
+            npc_admission=(type(payload) is bytes and len(payload)>=8 and int.from_bytes(payload[4:8],'little')==134)
+            npc_membership=(type(payload) is bytes and len(payload)>=8 and int.from_bytes(payload[4:8],'little')==135)
+            npc_staging=(type(payload) is bytes and len(payload)>=8 and 136<=int.from_bytes(payload[4:8],'little')<=147)
+            visual_staging=(type(payload) is bytes and len(payload)>=8 and int.from_bytes(payload[4:8],'little') in (148,149,150))
+            arena_staging=(type(payload) is bytes and len(payload)>=8 and int.from_bytes(payload[4:8],'little') in (151,152,153,154,155,156))
+            tuning=(type(payload) is bytes and len(payload)>=8 and 157<=int.from_bytes(payload[4:8],'little')<=159)
+            if tuning:
+                if getattr(self,'encounter_tuning_protocol',0)!=1:raise ValueError('Encounter tuning unavailable')
+                from .encounter_tuning import validate_request
+            elif arena_staging:
+                capability=getattr(self,'owned_battle_arena_staging_protocol',0)
+                if type(capability) is not int or capability!=1:raise ValueError('Owned battle arena staging unavailable')
+                if int.from_bytes(payload[4:8],'little')==156:
+                    capability=getattr(self,'owned_helper_source_frame_protocol',0)
+                    if type(capability) is not int or capability!=1:raise ValueError('Owned helper source frame unavailable')
+                if int.from_bytes(payload[4:8],'little')==155:
+                    capability=getattr(self,'owned_battle_arena_grounding_protocol',0)
+                    if type(capability) is not int or capability!=1:raise ValueError('Owned battle arena grounding unavailable')
+                    if payload[24]:
+                        capability=getattr(self,'owned_battle_arena_approach_protocol',0)
+                        if type(capability) is not int or capability!=1:raise ValueError('Owned battle arena approach screening unavailable')
+                    if payload[24]&2:
+                        capability=getattr(self,'owned_battle_arena_approach_diagnostics_protocol',0)
+                        if type(capability) is not int or capability!=1:raise ValueError('Owned battle arena approach diagnostics unavailable')
+                    if payload[24]&4:
+                        capability=getattr(self,'owned_battle_arena_advisory_route_protocol',0)
+                        if type(capability) is not int or capability!=1:raise ValueError('Owned battle arena advisory route unavailable')
+                if int.from_bytes(payload[4:8],'little')==154:
+                    capability=getattr(self,'owned_component_pose_protocol',0)
+                    if type(capability) is not int or capability!=1:raise ValueError('Owned component pose unavailable')
+                    if payload[24]:
+                        capability=getattr(self,'owned_helper_component_pose_protocol',0)
+                        if type(capability) is not int or capability!=1:raise ValueError('Owned helper component pose unavailable')
+                from .owned_battle_arena import validate_request
+            elif visual_staging:
+                capability=getattr(self,'native_visual_staging_protocol',0)
+                if type(capability) is not int or capability!=1:raise ValueError('Native visual staging unavailable')
+                if int.from_bytes(payload[4:8],'little')==149:
+                    capability=getattr(self,'native_visual_encounter_preflight_protocol',0)
+                    if type(capability) is not int or capability!=1:raise ValueError('Native visual arena preflight unavailable')
+                if int.from_bytes(payload[4:8],'little')==150:
+                    capability=getattr(self,'native_visual_grounding_protocol',0)
+                    if type(capability) is not int or capability!=2:raise ValueError('Native visual grounding unavailable')
+                from .native_visual_staging import validate_request
+            elif npc_staging:
+                capability=getattr(self,'npc_original_staging_research_protocol',0)
+                if type(capability) is not int or capability!=1:raise ValueError('Original NPC staging research unavailable')
+                if int.from_bytes(payload[4:8],'little') in (146,147):
+                    capability=getattr(self,'npc_interaction_variants_protocol',0)
+                    if type(capability) is not int or capability!=1:raise ValueError('NPC interaction variants unavailable')
+                if int.from_bytes(payload[4:8],'little')==145:
+                    capability=getattr(self,'npc_proximity_research_protocol',0)
+                    if type(capability) is not int or capability!=1:raise ValueError('NPC proximity research unavailable')
+                if int.from_bytes(payload[4:8],'little') in (143,144):
+                    capability=getattr(self,'npc_arena_value_research_protocol',0)
+                    if type(capability) is not int or capability!=1:raise ValueError('NPC arena value research unavailable')
+                if int.from_bytes(payload[4:8],'little')==142:
+                    capability=getattr(self,'npc_original_preview_research_protocol',0)
+                    if type(capability) is not int or capability!=1:raise ValueError('Original NPC preview research unavailable')
+                if int.from_bytes(payload[4:8],'little')==141:
+                    capability=getattr(self,'npc_original_grounded_construction_research_protocol',0)
+                    if type(capability) is not int or capability!=1:raise ValueError('Grounded NPC construction research unavailable')
+                if int.from_bytes(payload[4:8],'little')>=139:
+                    capability=getattr(self,'npc_original_placement_research_protocol',0)
+                    if type(capability) is not int or capability!=1:raise ValueError('Original NPC placement research unavailable')
+                from ._npc_staging_research import validate_request
+            elif npc_membership:
+                capability=getattr(self,'npc_membership_observation_research_protocol',0)
+                if type(capability) is not int or capability!=1:raise ValueError('NPC membership observation research unavailable')
+                from ._npc_membership_research import validate_request
+            elif npc_admission:
+                capability=getattr(self,'npc_presentation_admission_research_protocol',0)
+                if type(capability) is not int or capability!=1:raise ValueError('Original NPC admission research unavailable')
+                from ._npc_admission_research import validate_request
+            elif parameter_mesh:
+                capability=getattr(self,'battle_parameter_frame_research_protocol',0)
+                if type(capability) is not int or capability!=1:
+                    raise ValueError('Native session does not support original parameter research')
+                if int.from_bytes(payload[4:8],'little')>=127:
+                    policy_capability=getattr(self,'battle_parameter_policy_research_protocol',0)
+                    if type(policy_capability) is not int or policy_capability!=1:
+                        raise ValueError('Native session does not support owned policy research')
+                if int.from_bytes(payload[4:8],'little')>=128:
+                    entry_capability=getattr(self,'battle_entry_preflight_research_protocol',0)
+                    if type(entry_capability) is not int or entry_capability!=1:
+                        raise ValueError('Native session does not support owned entry preflight research')
+                if int.from_bytes(payload[4:8],'little')>=129:
+                    arena_capability=getattr(self,'battle_entry_arena_research_protocol',0)
+                    if type(arena_capability) is not int or arena_capability!=2:
+                        raise ValueError('Native session does not support owned parameter arena research')
+                if int.from_bytes(payload[4:8],'little')==130:
+                    dispatch_capability=getattr(self,'battle_entry_dispatch_research_protocol',0)
+                    if type(dispatch_capability) is not int or dispatch_capability!=1:
+                        raise ValueError('Native session does not support owned battle entry research')
+                from ._battle_parameter_wire import validate_request
+            elif enemy_mesh:
+                capability=getattr(self,'enemy_spawn_protocol',0)
+                operation=int.from_bytes(payload[4:8],'little')
+                pose_capability=getattr(self,'enemy_pose_protocol',0)
+                authored_capability=getattr(self,'enemy_authored_encounter_research_protocol',0)
+                if operation==133 and (type(authored_capability) is not int or authored_capability not in (2,3,4,5,6,7) or (int.from_bytes(payload[32:36],'little')==2 and authored_capability<3) or (int.from_bytes(payload[32:36],'little')>=3 and authored_capability<4) or (int.from_bytes(payload[32:36],'little')>=7 and authored_capability<5) or (int.from_bytes(payload[32:36],'little')>=8 and authored_capability<6) or (int.from_bytes(payload[32:36],'little')>=12 and authored_capability<7)):
+                    raise ValueError('Native session does not support authored instance encounters')
+                if operation==132 and (type(getattr(self,'enemy_geometry_placement_research_protocol',0)) is not int or getattr(self,'enemy_geometry_placement_research_protocol',0)!=1):
+                    raise ValueError('Native session does not support original helper geometry placement')
+                if operation==131 and (type(getattr(self,'enemy_helper_lookup_research_protocol',0)) is not int or getattr(self,'enemy_helper_lookup_research_protocol',0)!=1):
+                    raise ValueError('Native session does not support original helper lookup')
+                if operation==123 and (type(getattr(self,'enemy_combat_placement_protocol',0)) is not int or self.enemy_combat_placement_protocol!=1):
+                    raise ValueError('Native session does not support combat placement')
+                if type(capability) is not int or capability not in (1,2,3) or operation==114 and capability<2 or operation==115 and capability<3 or operation==116 and (type(pose_capability) is not int or pose_capability!=1) or operation==117 and (type(getattr(self,'enemy_arena_protocol',0)) is not int or getattr(self,'enemy_arena_protocol',0)!=1) or operation==118 and (type(getattr(self,'enemy_arena_binding_protocol',0)) is not int or getattr(self,'enemy_arena_binding_protocol',0)!=1) or operation==119 and (type(getattr(self,'enemy_clearance_protocol',0)) is not int or getattr(self,'enemy_clearance_protocol',0)!=1) or operation in (120,121) and (type(getattr(self,'enemy_grounded_spawn_protocol',0)) is not int or getattr(self,'enemy_grounded_spawn_protocol',0)!=2) or operation==122 and (type(getattr(self,'enemy_extra_spots_protocol',0)) is not int or getattr(self,'enemy_extra_spots_protocol',0)!=1):
+                    raise ValueError('Native session does not support this owned enemy operation')
+                from ._enemy_spawn_wire import validate_request
+            elif map_mesh:
+                if getattr(self,'map_runtime_protocol',0)!=1:
+                    raise ValueError('Native session does not support independent map ownership')
+                from .map_runtime import validate_request
+            elif scene_mesh:
+                from ._runtime_scene_wire import validate_request
+            elif (type(payload) is bytes and len(payload)>=8 and
+                    70<=int.from_bytes(payload[4:8],'little')<=73):
+                if getattr(self,'runtime_cinematic_protocol',0)!=2:
+                    raise ValueError('Native session does not support the isolated cinematic adapter')
+                from ._runtime_cinematic_wire import validate_request
+            else:
+                from .procedural_mesh import validate_request
+            if scene_mesh:validate_request(payload,protocol=self.runtime_scene_protocol)
+            else:validate_request(payload)
+            suffix = ' ' + payload.hex()
+        elif qa_encounter:
+            from .qa_encounter import validate_request
             validate_request(payload)
             suffix = ' ' + payload.hex()
         elif picto_progress:
@@ -377,6 +574,10 @@ class SessionTransport:
             from ._retained_wire import SIZE
             if type(payload) is not bytes or len(payload) != SIZE:
                 raise ValueError('Invalid retained invocation payload')
+            if int.from_bytes(payload[:4], 'little') == 8 and (
+                    type(getattr(self, 'blueprint_invocation_protocol', None)) is not int or
+                    self.blueprint_invocation_protocol != 1):
+                raise ValueError('Native session does not support typed Blueprint invocation')
             if int.from_bytes(payload[:4], 'little') == 4 and any(getattr(self, name, 0) != 1 for name in
                     ('enum_value_protocol', 'text_value_protocol', 'pod_value_protocol', 'object_assignment_protocol',
                      'stable_identity_protocol', 'retained_protocol', 'lease_protocol', 'reflected_protocol')):
@@ -432,7 +633,12 @@ class SessionTransport:
             elif response.get('closed') is not False:
                 raise RuntimeQueryError('Native session closed unexpectedly')
             return response
-        except BaseException:
+        except BaseException as error:
+            # Keep the first wire failure: a menu service can catch it before
+            # a later key poll observes only the already-closed transport.
+            # Never record payloads or retry a command with uncertain outcome.
+            if getattr(self, '_terminal_failure', None) is None:
+                self._terminal_failure = {'command': command, 'error': f'{type(error).__name__}: {error}'}
             self._abort()
             raise
 
@@ -480,4 +686,3 @@ class SessionTransport:
 
     def __exit__(self, *_exc):
         self.close()
-

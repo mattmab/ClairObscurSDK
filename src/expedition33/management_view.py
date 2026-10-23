@@ -155,7 +155,7 @@ class ManagementView:
         else:
             rows = [(a['title'], 'action', a['id'], view['enabled'], MenuEditor('json'))
                     for a in view['actions']]
-        return f"{view['name']} â€” {self.screen}", detail, rows
+        return f"{view['name']} — {self.screen}", detail, rows
 
     def render(self):
         self._check()

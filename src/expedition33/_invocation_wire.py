@@ -43,7 +43,7 @@ def encode_plan(plan):
     IDENTITY.pack_into(packet, HEADER.size + IDENTITY.size, *_identity(plan.function))
     for number, parameter in enumerate(plan.parameters):
         try:
-            kind = ((20 if parameter.pod_profile == '/Script/CoreUObject.Timespan' else 19 if parameter.pod_profile == '/Script/CoreUObject.QualifiedFrameTime' else 15 if parameter.pod_profile == '/Script/CoreUObject.Vector' else 9 + POD_KINDS.index(parameter.pod_profile))
+            kind = ((22 if parameter.pod_profile == '/Script/CoreUObject.Guid' else 20 if parameter.pod_profile == '/Script/CoreUObject.Timespan' else 19 if parameter.pod_profile == '/Script/CoreUObject.QualifiedFrameTime' else 15 if parameter.pod_profile == '/Script/CoreUObject.Vector' else 9 + POD_KINDS.index(parameter.pod_profile))
                     if parameter.kind == 'StructProperty' and plan.wire_version == 2
                     else KINDS.index(parameter.kind) + 1)
             name = parameter.name.encode('ascii')
