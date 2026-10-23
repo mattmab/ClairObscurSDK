@@ -50,11 +50,15 @@ menu timings depend on the installation and current game state.
 
 ## Validation
 
-- 1,995 SDK tests passed (8 existing skips); 140 World Builder tests passed.
+- 1,995 SDK tests completed successfully (8 existing skips); 140 World Builder tests passed.
 - Runtime210 and its native fixtures compiled with MSVC `/W4 /WX`.
 - Live title and gameplay Mods-button opens measured approximately 150–197 ms
   after preparation. Initial preparation and individual mod activation
   still take additional time; `startuptiming` reports those costs separately.
+- A clean runtime210 load restored seven gameplay mods in 1.59 seconds after
+  the owner-thread exploration-ready observation, versus about 11 seconds
+  before these changes. World Builder finished 10.35 seconds of preparation
+  before selecting the save. This is not a zero-delay gameplay-readiness claim.
 - Title → save → title → save retained the SDK process and menu shell. Map
   Travel, Continent Flight, Scene Editor, WorldBuilder Map Loader and Enemy
   Spawner retired and reactivated with acknowledged cleanup and no pending leases.
