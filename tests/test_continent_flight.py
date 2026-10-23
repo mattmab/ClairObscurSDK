@@ -32,6 +32,37 @@ class FlightCleanupTests(unittest.TestCase):
                         mod.enable(session)
                     session.console.expose.assert_not_called()
 
+    def test_discovery_reads_only_local_controller_and_possessed_pawn_fields(self):
+        controller=SimpleNamespace(index=3,object_flags=0)
+        pawn=SimpleNamespace(index=4,class_name='BP_jRPG_Character_WorldMap_pawn_C')
+        movement=SimpleNamespace(index=5,outer_index=4,name='CharMoveComp')
+        catalog=Mock(objects=[movement]);catalog.select.return_value=(controller,)
+        catalog.find_class.side_effect=lambda name:SimpleNamespace(index={'Controller':1,'PlayerController':2}[name])
+        values={3:SimpleNamespace(values={(2,'bIsLocalPlayerController'):True,(1,'Pawn'):pawn})}
+        with patch.object(flight,'read_values_many',autospec=True,return_value=values) as read:
+            self.assertEqual(flight.discover_snapshot(7,catalog),(catalog,pawn,movement))
+        read.assert_called_once_with(catalog,(controller,),fields=('bIsLocalPlayerController','Pawn'))
+
+    def test_loading_preparation_is_consumed_once_and_rechecks_possession(self):
+        mod=flight.Mod();mod.session=SimpleNamespace(pid=7)
+        catalog=object();metadata=object();snapshot=(catalog,object(),object())
+        mod._loading_flight=('world',(snapshot,metadata))
+        mod._prepare_calls=Mock()
+        with patch.object(flight,'discover_snapshot',return_value=snapshot) as discover:
+            mod._prepare(use_cache=True)
+        discover.assert_called_once_with(7,catalog)
+        mod._prepare_calls.assert_called_once_with(None,snapshot,metadata=metadata)
+        self.assertIsNone(mod._loading_flight)
+
+    def test_changed_possession_cannot_use_loading_plans(self):
+        mod=flight.Mod();mod.session=SimpleNamespace(pid=7)
+        mod._loading_flight=('world',((object(),object(),object()),object()))
+        mod._prepare_calls=Mock()
+        with patch.object(flight,'discover_snapshot',side_effect=flight.ExplorationNotReady('changed')):
+            with self.assertRaises(flight.ExplorationNotReady):mod._prepare(use_cache=True)
+        mod._prepare_calls.assert_not_called()
+        self.assertIsNone(mod._loading_flight)
+
     def test_toggle_restores_observed_area_movement_mode(self):
         for mode, custom in ((1, 0), (3, 0), (6, 2)):
             mod = flight.Mod()

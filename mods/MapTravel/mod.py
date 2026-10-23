@@ -114,7 +114,7 @@ class Mod:
         return self.request is not None and self.request.active
 
     def management(self):
-        return ModDefinition('sdk.map_travel', 'Map Travel', version='0.2.2',
+        return ModDefinition('sdk.map_travel', 'Map Travel', version='0.2.3',
             description='Browse installed maps and travel to their native entrance.',
             actions=(Action('open', 'Open Map Travel', self.open_menu),
                      Action('status', 'Travel status', self.status),))
@@ -143,6 +143,10 @@ class Mod:
         # the immutable process-prepared package list or another world cycle.
         return [dict(row) for row in self._prepared_maps]
 
+    def prepare_loading_ui(self,session):
+        from .loading_entry import LoadingEntry
+        return LoadingEntry(self,session)
+
     def enable(self, session):
         if self._retirement_result == 'ack':self.request=None
         self._world_retiring=False;self._retirement_result=None
@@ -153,9 +157,25 @@ class Mod:
             raise ManagementError('Enable SDK Management first')
         self.session = session
         self.maps=self._activation_maps()
-        attach_routes(self.maps, routes(session.pid))
+        prepared_routes=getattr(self,'_loading_routes',None)
+        # Only copied route labels/IDs are prepared; the normal native travel
+        # operation still reads the current level table before every dispatch.
+        attach_routes(self.maps, routes(session.pid) if prepared_routes is None else prepared_routes)
         self.native = shared.for_view(lambda registry: MapView(registry, self))
-        self.pause = self._new_pause_entry()
+        prepared=getattr(self,'_loading_entry',None)
+        token=session.mods._loader.world_lifecycle.current_token if prepared is not None else None
+        if (prepared is not None and prepared.entry is not None and prepared.entry.state=='attached'
+                and token is not None and (prepared.context.world,prepared.context.gi)==token[:2]):
+            self.pause=prepared.entry;prepared.adopted=True
+        elif prepared is not None and prepared.entry is not None and prepared.entry.state not in ('new','closed'):
+            raise ManagementError('Loading pause entry has not acknowledged its world handoff')
+        else:
+            if prepared is not None:
+                # Activation chose the legacy unbuilt fallback. Revoke the
+                # loading preparer before a later tick can create a duplicate.
+                prepared.adopted=True
+                prepared.entry=None
+            self.pause = self._new_pause_entry()
         session.console.expose('map_travel', self)
         session.actions.register('map_travel.status', self.status, mutates=False)
 

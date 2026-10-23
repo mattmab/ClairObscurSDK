@@ -146,6 +146,23 @@ class WorldLifecycleTests(unittest.TestCase):
   self.assertIsNone(self.loader._loaded['World'][2]);self.loader.enable('World')
   self.assertIs(self.loader._loaded['World'][1],self.mod);self.assertEqual(self.loader._loaded['World'][0],key)
   self.assertIsNot(self.mod.scope,old);self.assertTrue(old._closed)
+ def test_title_enabled_choice_activates_on_load_and_again_after_title_return(self):
+  from expedition33.settings import SettingsStore
+  registry=self.loader.registry
+  registry._settings=SettingsStore(Path(self.tmp.name)/'settings.json')
+  self.coordinator.observe(None,title=True)
+  registry.stage_enabled(registry.select('test.world'),True)
+  self.assertFalse(registry.view(registry.select('test.world'))['enabled'])
+  self.coordinator.observe(ready())
+  self.assertEqual(list(registry.restore_enabled_steps()),[('test.world',None)])
+  self.assertTrue(registry.view(registry.select('test.world'))['enabled'])
+  self.coordinator.observe(None,title=True);self.loader.poll()
+  self.assertTrue(self.coordinator.cleanup_ready)
+  self.assertTrue(registry._settings.get('test.world')['enabled'])
+  self.coordinator.observe(ready(9))
+  self.assertEqual(list(registry.restore_enabled_steps()),[('test.world',None)])
+  self.assertTrue(registry.view(registry.select('test.world'))['enabled'])
+  self.assertEqual(self.mod.events.count('enable'),2)
  def test_unknown_adapter_is_never_replayed_and_blocks_new_epoch(self):
   self.enable();self.mod.outcomes=['unknown'];scope=self.mod.scope
   self.coordinator.observe(ready(9));self.loader.poll();self.loader.poll()
@@ -204,5 +221,19 @@ class WorldLifecycleTests(unittest.TestCase):
    with patch('expedition33._session.supports_keys',return_value=True):self.loader.poll()
    self.assertEqual(keys.cancel_capture.called,expected)
   self.loader._keys=None
+
+class HarnessWorldGateTests(unittest.TestCase):
+ def test_harness_bridge_is_compatible_and_revokes_direct_dispatch(self):
+  from expedition33.world_lifecycle import GatedActions
+  from expedition33.introspection import Harness
+  bridge=N(OPERATIONS=frozenset(('agent_status',)),dispatch=Mock(return_value={'ok':True}))
+  coordinator=N(allows_scope=Mock(return_value=True));scope=object()
+  actions=GatedActions(N(_bridge=bridge),coordinator,'Harness',scope)
+  harness=Harness(N(actions=actions,supports_reflected_invocation=False))
+  self.assertEqual(harness.request({'op':'agent_status'}),{'ok':True})
+  coordinator.allows_scope.return_value=False
+  with self.assertRaises(WorldLifecycleError):harness.request({'op':'agent_status'})
+  bridge.dispatch.assert_called_once_with({'op':'agent_status'})
+  harness.close()
 
 if __name__=='__main__':unittest.main()

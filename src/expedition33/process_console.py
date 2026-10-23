@@ -156,6 +156,9 @@ class ProcessConsole:
         self._owner=threading.get_ident()
         self.session=session;self.management_menu=management_menu
         self._registry=management_menu.registry;self._native=management_menu.native
+        from .process_ui_routes import ProcessMenuRoute
+        owner=getattr(self._native,'owner',None)
+        self._title_native=ProcessMenuRoute(owner,'title') if owner is not None else None
         self._title_registry=_TitleConsoleRegistry(self._registry)
         self._attach_attempted=False
         self._world_active=False
@@ -163,7 +166,7 @@ class ProcessConsole:
         # Definitions/preferences remain usable, but existing callbacks must
         # not unexpectedly activate gameplay while the player is at title.
         management_menu.registry=self._title_registry
-        management_menu.native=None
+        management_menu.native=self._title_native
 
     def _check(self):
         if threading.get_ident()!=self._owner:
@@ -183,7 +186,7 @@ class ProcessConsole:
         self._check()
         self._world_active=False
         self.management_menu.registry=self._title_registry
-        self.management_menu.native=None
+        self.management_menu.native=self._title_native
 
     def world_active(self):
         self._check()

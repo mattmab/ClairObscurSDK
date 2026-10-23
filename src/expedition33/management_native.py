@@ -65,6 +65,14 @@ class NativeManagementMenu:
         self._logged_detail = None
 
     def prepared_view_state(self):
+        from .mods_workspace import ModsWorkspaceView
+        from .mods_workspace_scroll import ScrollWorkspaceView
+        from .title_management import TitleWorkspaceView
+        if type(self.view) not in (ManagementView,ModsWorkspaceView,ScrollWorkspaceView,TitleWorkspaceView):
+            # Mod presenters can own Sessions, workers, or callbacks. They are
+            # not copyable navigation state. Repaint on explicit open instead
+            # of traversing arbitrary mod resources for the prepared-frame key.
+            return None
         from copy import deepcopy
         return (type(self.view),id(self.view),deepcopy({k:v for k,v in vars(self.view).items() if k!='registry'}))
 

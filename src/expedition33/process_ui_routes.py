@@ -44,7 +44,11 @@ class ProcessMenuRoute:
     def prepare(self):pass # Host owns the unique warmup.
     def poll(self):pass # Host owns the unique native UI tick.
     def open(self,*,view_factory=None):
-        return self._service(required=True).open(view_factory=view_factory)
+        service=self._service(required=True)
+        if self.kind=='title' and view_factory is None:
+            # The entry journals title input restoration when the menu closes.
+            return self.owner.open()
+        return service.open(view_factory=view_factory)
     def close_menu(self):
         service=self._service()
         if service is not None:return service.close_menu()

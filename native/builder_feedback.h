@@ -156,6 +156,13 @@
 public:
     template<class Pool> void poll(uint64_t b,uint64_t session,Pool& pool,bool eligible) {
         if(!active_||!TargetPodSchemaOps{b}.context())return;
+#ifdef E33_RETIRED_WORLD_SESSION
+        if(retiring_||!epoch_.established()||!e33_retired_world::TargetOps{b}.current_binding(epoch_.engine(),epoch_.viewport(),epoch_.world())){
+            // Stop all old-world input immediately. The owner-thread adapter
+            // subsequently requests the independently proved retirement ACK.
+            auto_tick_=false;mouse_rotation_.reset();return;
+        }
+#endif
         const auto frame=local_read<uint64_t>(b+0x9272d10);
         if(!frame||frame==last_frame_)return;last_frame_=frame;
         image_tick(b);

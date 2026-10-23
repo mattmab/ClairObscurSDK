@@ -209,8 +209,10 @@ def prepare(session, widget, child, player, leases, *, z_order=1000, catalog=Non
         specs.append((library,'WidgetBlueprintLibrary','SetInputMode_UIOnlyEx',
                   {'PlayerController':player,'InWidgetToFocus':child,'InMouseLockMode':None,'bFlushInput':False}))
         specs.append((library,'WidgetBlueprintLibrary','SetInputMode_GameOnly',{'PlayerController':player,'bFlushInput':False}))
+    metadata=None
     def encode_menu_plan(obj,fn,args):
-        plan=prepare_call(catalog,obj,fn,args,enum_values=ui_input and fn.name=='SetInputMode_UIOnlyEx')
+        plan=prepare_call(catalog,obj,fn,args,enum_values=ui_input and fn.name=='SetInputMode_UIOnlyEx',
+            **({'_metadata':metadata} if metadata is not None else {}))
         from ._metadata_stabilization import available,require_positive_plan_identities
         if available(getattr(session,'_transport',None)):require_positive_plan_identities(plan)
         if plan.wire_version==4:
@@ -229,6 +231,17 @@ def prepare(session, widget, child, player, leases, *, z_order=1000, catalog=Non
     if cached is not None and cached[0] == key:
         plans = cached[1]
     else:
+        from ._metadata_stabilization import available
+        if available(getattr(session,'_transport',None)):
+            # These retained native Script descriptors survive controller changes.
+            # Reuse copied schemas only after resolving every recorded dependency
+            # against this catalog; native dispatch still validates each plan.
+            from ._planning_metadata import MetadataObservations
+            from .reflection import describe
+            metadata=getattr(session,'_menu_schema_observations',None)
+            if metadata is None:
+                metadata=MetadataObservations();session._menu_schema_observations=metadata
+            metadata.read('struct',catalog,functions,describe)
         if ui_input:
             from .enums import describe_enums
             mode=describe_enums(catalog,(enum,))[enum.index].value('EMouseLockMode::DoNotLock')

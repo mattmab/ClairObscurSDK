@@ -10,6 +10,7 @@ from ._pause_attachment import PauseAttachment
 from ._pause_clicks import PauseClicks
 from .invocation import prepare_call
 from .cinematics.original_game_action import controller_context,NotReady
+from . import RuntimeQueryError
 
 TITLE_WORLD='/Game/Levels/UI/MainMenu/Level_MainMenu.Level_MainMenu'
 
@@ -174,7 +175,7 @@ class TitleMenuEntry(PauseMenuEntry):
             retained=stable_targets.get(self.restore_panel.index)
             if retained is None:retained=self.scope.retain(self.restore_panel)
             opacity=self.call(self.restore_panel,'Widget','GetRenderOpacity');enabled=self.call(self.restore_panel,'Widget','GetIsEnabled')
-            def simple(name,**args):return replace(self.planner.prepare(self.restore_panel,self.fn('Widget',name),**args)._plan,wire_version=1)
+            def simple(name,**args):return replace(self.prepare(self.restore_panel,self.fn('Widget',name),**args)._plan,wire_version=1)
             self.attachment.arm_restore(retained,simple('SetRenderOpacity',InOpacity=opacity),simple('SetIsEnabled',bInIsEnabled=enabled))
             self._hide_opacity=simple('SetRenderOpacity',InOpacity=0.);self._hide_enabled=simple('SetIsEnabled',bInIsEnabled=False)
             self.observer=PauseClicks(self.scope._session,self.fn('CommonButtonBase','HandleButtonClicked'),self.button,self.planner._catalog)
@@ -183,10 +184,10 @@ class TitleMenuEntry(PauseMenuEntry):
             slot=self.create(self.grid,'VerticalBox','AddChildToVerticalBox',Content=self.button)
             self.call(slot,'VerticalBoxSlot','SetPadding',InPadding=dict(padding[self.cls('VerticalBoxSlot').index,'Padding'].fields))
             self.call(slot,'VerticalBoxSlot','SetHorizontalAlignment',InHorizontalAlignment=0);self.call(slot,'VerticalBoxSlot','SetVerticalAlignment',InVerticalAlignment=0)
-            self._active_call=self.planner.prepare(self.pause,self.fn('CommonActivatableWidget','IsActivated'))
-            self._viewport_focus=self.planner.prepare(self.library,self.fn('WidgetBlueprintLibrary','SetFocusToGameViewport'))
-            self._button_focus=self.planner.prepare(self.button,self.fn('Widget','SetUserFocus'),PlayerController=self.player)
-            self._loading_label=self._cleanup_label=self._normal_label=self.planner.prepare(label,self.fn('TextBlock','SetText'),InText='Mods')
+            self._active_call=self.prepare(self.pause,self.fn('CommonActivatableWidget','IsActivated'))
+            self._viewport_focus=self.prepare(self.library,self.fn('WidgetBlueprintLibrary','SetFocusToGameViewport'))
+            self._button_focus=self.prepare(self.button,self.fn('Widget','SetUserFocus'),PlayerController=self.player)
+            self._loading_label=self._cleanup_label=self._normal_label=self.prepare(label,self.fn('TextBlock','SetText'),InText='Mods')
             self._title_input=self._prepare_title_input()
             self._label_widget=label;self.state='attached'
         return True
@@ -209,7 +210,7 @@ class TitleMenuEntry(PauseMenuEntry):
         from .enums import describe_enums
         enum=self.one(o for o in self.planner._catalog.objects if o.class_name=='Enum' and o.name=='EMouseLockMode')
         mode=describe_enums(self.planner._catalog,(enum,))[enum.index].value('EMouseLockMode::DoNotLock')
-        return self.planner.prepare(self.library,self.fn('WidgetBlueprintLibrary','SetInputMode_UIOnlyEx'),
+        return self.prepare(self.library,self.fn('WidgetBlueprintLibrary','SetInputMode_UIOnlyEx'),
             PlayerController=self.player,InWidgetToFocus=self.button,InMouseLockMode=mode,bFlushInput=False)
 
     def _open_from_pause(self):
@@ -267,6 +268,17 @@ class TitleMenuEntry(PauseMenuEntry):
     def poll(self):
         try:return self._poll_title()
         except NotReady:return # Unreadable authority retains owners and suppresses input callbacks.
+        except RuntimeQueryError as error:
+            # Before construction starts, title assets may finish loading
+            # between the readiness sample and this independent discovery.
+            # No UI dispatch has occurred in state 'new'. A later observation
+            # may start a new proof; partial construction/unknown dispatches
+            # remain errors and are never replayed here.
+            if self.state=='new' and any(reason in str(error) for reason in
+                    ('DESCRIPTOR_IDENTITY_CHANGED','SELECTED_DEPENDENCY_CHANGED','READ_FAILED',
+                     'Object identity changed or belongs to another process')):
+                return
+            raise
     def _poll_title(self):
         ready=self._readiness()
         if ready is None:return

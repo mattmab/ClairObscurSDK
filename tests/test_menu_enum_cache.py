@@ -17,7 +17,7 @@ class MenuEnumCacheTests(unittest.TestCase):
    for name in names:row(name,outer_index=classes[owner].index)
   class Catalog:
    pid=1
-   def __init__(self):self.objects=objects
+   def __init__(self):self.objects=objects;self.by_index={obj.index:obj for obj in objects}
    def resolve(self,obj):return obj
    def select(self,cls):return [engine] if cls=='GameEngine' else [library]
    def find_class(self,cls):return classes[cls]
@@ -30,5 +30,17 @@ class MenuEnumCacheTests(unittest.TestCase):
    enum.serial+=1
    menu.prepare(session,widget,child,player,leases,catalog=Catalog(),_plan_only=True)
    self.assertEqual(read.call_count,2)
+   session._transport.metadata_stabilization_protocol=1
+   def descriptions(catalog,functions):
+    return {fn.index:NS(owners=(),properties=()) for fn in functions}
+   with patch('expedition33.reflection.describe',side_effect=descriptions) as schemas, \
+        patch('expedition33._metadata_stabilization.require_positive_plan_identities'):
+    for _ in range(2):
+     player.serial+=1
+     menu.prepare(session,widget,child,player,leases,catalog=Catalog(),_plan_only=True)
+    # Rebinding changes encoded controller patches, but the twelve native
+    # function schemas need only one bounded batch, never twelve new queries.
+    self.assertEqual(schemas.call_count,1)
+    self.assertEqual(len(schemas.call_args.args[1]),12)
 
 if __name__=='__main__':unittest.main()

@@ -106,6 +106,12 @@ class Mod:
         self._catalog_selection=None
         self.pending_catalog_asset=None
         self._menu_reader=None
+        self._loading_ui=None
+
+    def prepare_loading_ui(self,session):
+        from .loading_ui import LoadingUI
+        self._loading_ui=LoadingUI(self,session)
+        return self._loading_ui
 
     @contextmanager
     def menu_reads(self):
@@ -149,7 +155,7 @@ class Mod:
         self.hud_hidden = hidden
 
     def management(self):
-        return ModDefinition('e33.world-builder', 'World Builder', version='0.32.1-experimental',
+        return ModDefinition('e33.world-builder', 'World Builder', version='0.32.3-experimental',
             description='F8 freecam. WASD fly, mouse look, Space/Ctrl up/down (E/Q also work), Shift faster. Hold left mouse to grab a world prop; release to place. Numpad 8/2 forward/back, 4/6 left/right, 9/3 up/down, 7/1 yaw; Alt precise; Alt+Z undo. F9 restores edits and clears spawned props. F7 opens folders, previews, spawning, galleries and saved maps.',
             actions=(Action('catalog', 'Open asset catalog', self.open_catalog),Action('toggle', 'Enter / leave builder camera', self.toggle),
                      Action('restore', 'Restore all edited geometry', self.restore),
@@ -166,8 +172,15 @@ class Mod:
 
     def enable(self, session):
         self.session = session
+        self._retirement_result=self._native_retirement=None
+        self.active=self.started=self.booth_pending=False
         from .library import Library
-        self.library = Library(self)
+        if self._loading_ui is not None:
+            if self._loading_ui.bound is None:
+                raise RuntimeError('World Builder loading UI has not completed its controller handoff')
+            self.catalog_menu=self._loading_ui.catalog;self.hud=self._loading_ui.hud
+            self.library._catalog=None;self.library.actors_indexed=False
+        else:self.library = Library(self)
         from .directional import DuplicationDraft
         self.directional=DuplicationDraft(self.library)
         from .templates import Templates
@@ -746,6 +759,17 @@ class Mod:
             self.error = str(exc)
             LOG.exception('Builder status failed')
             self.next_status = float('inf')
+
+    def revoke_world(self,context):
+        from .retirement import revoke
+        revoke(self,context)
+
+    def begin_world_retirement(self,context):
+        return self.poll_world_retirement(context)
+
+    def poll_world_retirement(self,context):
+        from .retirement import poll
+        return poll(self,context)
 
     def disable(self):
         failures=[]

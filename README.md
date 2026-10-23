@@ -18,7 +18,7 @@ or the local, untracked `settings/install-path.txt`.
 ## RC18: preparation before loading a save
 
 [RC18 downloads and release notes](https://github.com/mattmab/ClairObscurSDK/releases/tag/v0.1.0-rc18)
-pair the SDK with native runtime209. The title-screen Mods menu stages desired
+pair the SDK with native runtime210. The title-screen Mods menu stages desired
 mod states, options and keybinds before save activation. Gameplay activation
 still waits for a loaded world. Keybind panels keep fixed row widgets while
 scrolling; owned cleanup and exact object identities remain required.

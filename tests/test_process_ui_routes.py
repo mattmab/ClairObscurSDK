@@ -86,4 +86,18 @@ class RouteTests(unittest.TestCase):
         console.title_active();self.assertIs(menu.registry,facade);self.assertIsNone(menu.native)
         session.console.enable.assert_not_called()
 
+    def test_title_console_uses_title_route_without_world_authority(self):
+        from expedition33.management import ManagementError
+        from expedition33.process_console import ProcessConsole
+        registry=N(_settings=None);native=routes.ProcessMenuRoute(self.owner)
+        menu=N(registry=registry,native=native);session=N(console=N(_enabled=True))
+        driver=ProcessConsole(session,menu)
+        self.owner.open=Mock(return_value='title opened')
+        self.owner.context.kind='title'
+        self.assertEqual(menu.native.command('open'),'title opened')
+        self.owner.open.assert_called_once_with();self.service.open.assert_not_called()
+        driver.world_active();self.assertIs(menu.native,native)
+        driver.title_active();self.owner.context.kind='world'
+        with self.assertRaises(ManagementError):menu.native.command('open')
+
 if __name__=='__main__':unittest.main()

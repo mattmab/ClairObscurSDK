@@ -31,7 +31,7 @@ def validate_request(data):
     if type(data) is not bytes or len(data)!=SIZE:raise ValueError('Mesh packet size')
     version,op,error,state,owner=HEADER.unpack_from(data)
     # World Builder bounded adapter; independently checked again on game thread.
-    if 20 <= op <= 67:
+    if 20 <= op <= 68:
         if version != 3 or error or state or not owner or any(data[24:88]):
             raise ValueError('Builder header')
         if op in (20,62):

@@ -15,7 +15,7 @@ ROOT = Path(__file__).resolve().parents[1]
 def build(destination, *, requires_sdk='0.1.0-rc18'):
     destination = Path(destination).resolve()
     manifest = build_all(ROOT / 'mods', destination / 'SDK_Mods', include={'E33WorldBuilder'})
-    archive = destination / 'E33WorldBuilder-0.32.1.zip'
+    archive = destination / 'E33WorldBuilder-0.32.3.zip'
     with zipfile.ZipFile(archive, 'w', zipfile.ZIP_DEFLATED) as out:
         out.write(destination / 'SDK_Mods/E33WorldBuilder.sdkmod', 'SDK_Mods/E33WorldBuilder.sdkmod')
         out.write(ROOT / 'mods/E33WorldBuilder/README.txt', 'README-WorldBuilder.txt')

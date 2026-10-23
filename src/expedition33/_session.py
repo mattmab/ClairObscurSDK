@@ -103,6 +103,7 @@ class SessionTransport:
             self.enemy_extra_spots_protocol = ready.get('enemy_extra_spots_protocol', 0)
             self.map_runtime_protocol = ready.get('map_runtime_protocol', 0)
             self.retired_world_cleanup_protocol = ready.get('retired_world_cleanup_protocol', 0)
+            self.builder_world_retirement_protocol = ready.get('builder_world_retirement_protocol', 0)
             self.runtime_cinematic_protocol = ready.get('runtime_cinematic_protocol', 0)
             self.runtime_scene_protocol = ready.get('runtime_scene_protocol', 0)
             self.native_visual_staging_protocol = ready.get('native_visual_staging_protocol', 0)
@@ -507,6 +508,9 @@ class SessionTransport:
                     raise ValueError('Native session does not support the isolated cinematic adapter')
                 from ._runtime_cinematic_wire import validate_request
             else:
+                if (type(payload) is bytes and len(payload)>=8 and int.from_bytes(payload[4:8],'little')==68
+                        and (type(getattr(self,'builder_world_retirement_protocol',0)) is not int or self.builder_world_retirement_protocol!=1)):
+                    raise ValueError('Native session does not support World Builder retirement')
                 from .procedural_mesh import validate_request
             if scene_mesh:validate_request(payload,protocol=self.runtime_scene_protocol,allow_retired=type(getattr(self,'retired_world_cleanup_protocol',0)) is int and self.retired_world_cleanup_protocol==1)
             else:validate_request(payload)

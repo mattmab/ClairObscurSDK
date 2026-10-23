@@ -8,6 +8,10 @@
 #include "target_owned_text.h"
 #include "../gpu/bridge.h"
 #include "gpu_properties.h"
+#ifdef E33_RETIRED_WORLD_SESSION
+#include "retired_world_target.h"
+#include "builder_retirement_storage.h"
+#endif
 namespace e33_builder {
 // Only fixed reflected Engine functions, dispatched on the SDK game thread.
 // No pointer supplied by Python is used without a live slot/serial check.
@@ -27,6 +31,10 @@ class Owner {
     std::string label_;
     OwnedTextStorage text_;
     uint64_t owner_=0,token_=0;
+#ifdef E33_RETIRED_WORLD_SESSION
+    e33_retired_world::Anchor epoch_;
+    bool retiring_=false,retirement_bridges_stopped_=false;
+#endif
     CallIdentity menu_widget_{};
     bool menu_drag_enabled_=false,menu_drag_down_=true,menu_dragging_=false;
     POINT menu_drag_point_{};
@@ -86,6 +94,9 @@ class Owner {
         return false;
     }
     bool current(uint64_t b) {
+#ifdef E33_RETIRED_WORLD_SESSION
+        if(epoch_.established()&&!e33_retired_world::TargetOps{b}.current_binding(epoch_.engine(),epoch_.viewport(),epoch_.world()))return false;
+#endif
         clear();return call(b,ids_[0],21) && get<uint64_t>()==call_identity(b,ids_[1]) && call_identity(b,ids_[1]);
     }
     bool camera_pose(uint64_t b) {
@@ -184,6 +195,9 @@ class Owner {
 #include "builder_carry.h"
 #include "builder_preview.h"
 #include "builder_booth.h"
+#ifdef E33_RETIRED_WORLD_SESSION
+#include "builder_retirement.h"
+#endif
 public:
     bool preview_active()const{return booth_active_;}
     bool owns_menu(const CallIdentity& widget)const {
@@ -196,6 +210,9 @@ public:
     uint32_t step()const{return step_;}
     template<class Pool> uint32_t stop(uint64_t b,uint64_t session,Pool& pool,bool restore) {
         if(!TargetPodSchemaOps{b}.context())return 407;
+#ifdef E33_RETIRED_WORLD_SESSION
+        if(epoch_.established()&&!e33_retired_world::TargetOps{b}.current_binding(epoch_.engine(),epoch_.viewport(),epoch_.world()))return retire_world(b,session,pool);
+#endif
         mouse_rotation_.reset();dragging_=false;carrying_=false;duplicate_requested_=false;nudging_=false;
         if(!booth_end(b,session,pool))return 1940;
         if(!preview_stop(b,session,pool)||!thumbnail_clear(b,session,pool))return 1934;
@@ -215,12 +232,27 @@ public:
         if(call_identity(b,camera_)){clear();if(!call(b,camera_,2))return 1909;}
         camera_={};active_=false;overlay_=false;selected_={};
         if(token_) {TargetStrongReferenceOps ops{b,{-1,0,0}};auto e=pool.release(ops,session,token_);if(e!=StrongLeaseResult::Ok)return uint32_t(e);token_=0;}
-        if(restore)owner_=0;
+        if(restore){
+#ifdef E33_RETIRED_WORLD_SESSION
+            e33_retired_world::TargetOps proof{b};const auto error=epoch_.release(proof,pool,session);
+            if(error)return error;epoch_.reset();
+#endif
+            owner_=0;
+        }
         return 0;
     }
     template<class Pool> void command(uint64_t b,uint64_t session,Pool& pool,MeshPacket& packet) {
         auto raw=reinterpret_cast<uint8_t*>(&packet);
         const auto op=packet.operation;
+#ifdef E33_RETIRED_WORLD_SESSION
+        if(op==68){
+            if(packet.version!=3||!packet.owner||packet.error||packet.state||
+                (owner_&&owner_!=packet.owner)){packet.error=1900;return;}
+            packet.error=retire_world(b,session,pool);packet.state=active_?1U:0U;return;
+        }
+        if(retiring_){packet.error=407;return;}
+        if(epoch_.established()&&!e33_retired_world::TargetOps{b}.current_binding(epoch_.engine(),epoch_.viewport(),epoch_.world())){packet.error=407;return;}
+#endif
         if(packet.version!=3||op<20||op>67||!packet.owner||packet.error||packet.state||!TargetPodSchemaOps{b}.context()){packet.error=1900;return;}
         if(owner_&&owner_!=packet.owner){packet.error=1901;return;}
         if(op==45) {
@@ -236,6 +268,12 @@ public:
             if(!named(b,ids_[6].address,"CameraActor","/Script/Engine")||!call_is_class(b,ids_[6].address)||!current(b)){packet.error=1902;return;}
             clear();if(!call(b,ids_[1],11)||!args_[0]){packet.error=1902;return;}
             clear();if(!call(b,ids_[2],18)||get<uint64_t>()!=ids_[1].address){packet.error=1902;return;}
+#ifdef E33_RETIRED_WORLD_SESSION
+            e33_retired_world::TargetOps proof{b};
+            if(!epoch_.established())packet.error=epoch_.capture(proof,pool,session,ids_[0]);
+            else if(epoch_.prove(proof)!=e33_retired_world::Result::SameWorld)packet.error=407;
+            if(packet.error)return;
+#endif
             // Map overlays need spawn/edit ownership, never a camera, HUD,
             // movement lock, input capture, or GPU picking resources.
             if(op==62){overlay_=true;active_=true;auto_tick_=false;packet.state=1;return;}
@@ -261,7 +299,13 @@ public:
             if(!call(b,ids_[0],6)){packet.error=1903;return;}
         } else if(op==22 || op==25) {
             packet.error=op==22?stop(b,session,pool,false):((restore_edits(b)&&clear_spawned(b,session,pool))?0:1908);
-            if(op==25&&!active_&&!packet.error)owner_=0;
+            if(op==25&&!active_&&!packet.error){
+#ifdef E33_RETIRED_WORLD_SESSION
+                e33_retired_world::TargetOps proof{b};packet.error=epoch_.release(proof,pool,session);
+                if(packet.error)return;epoch_.reset();
+#endif
+                owner_=0;
+            }
         } else if(op==27) {
             if(!undo(b,session,pool))packet.error=1911;
         } else if(op==28) {

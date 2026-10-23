@@ -195,6 +195,33 @@ class NativeServiceTests(unittest.TestCase):
         menu._paint.assert_called_once()
         service.open();menu._paint.assert_called_once();menu._bind.assert_called_once()
 
+    def test_mod_presenter_with_worker_lock_is_not_deepcopied(self):
+        import threading
+        from expedition33.management_view import ManagementView
+        class ForeignView(ManagementView):
+            def __init__(self,registry):
+                super().__init__(registry)
+                self.model=threading.Lock()
+        service=self.service();service._view_options['view_factory']=ForeignView
+        service.prepare();menu=service.menu
+        self.assertIsNone(menu.prepared_view_state())
+        menu._paint=Mock(wraps=menu._paint)
+        service.open();service.close_menu();service.open()
+        self.assertEqual(menu._paint.call_count,2)
+
+    def test_startup_coalesces_detached_changes_but_open_uses_current_state(self):
+        service=self.service();service.prepare();menu=service.menu
+        self.registry._startup_progress={'completed':0,'total':2,'finished':False,'failed':0}
+        menu._paint=Mock(wraps=menu._paint)
+        self.loader.enable('Specimen')
+        service.poll();service.poll()
+        menu._paint.assert_not_called()
+        service.open();menu._paint.assert_called_once()
+        service.close_menu();menu._paint.reset_mock()
+        self.registry._startup_progress['finished']=True
+        service._next_poll=0;service.poll()
+        menu._paint.assert_called_once()
+
     def test_detached_refresh_revokes_old_revision_and_requires_readiness(self):
         service=self.service();service.open();menu=service.menu;old=menu.frame
         service.close_menu();menu.view.query='different'

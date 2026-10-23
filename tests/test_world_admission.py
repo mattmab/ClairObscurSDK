@@ -4,7 +4,7 @@ import sys
 from types import SimpleNamespace as N
 import unittest
 from unittest.mock import patch
-from contextlib import contextmanager
+from contextlib import contextmanager, nullcontext
 
 from expedition33 import RuntimeQueryError
 
@@ -187,6 +187,47 @@ class WarmObserverTests(unittest.TestCase):
             self.assertEqual(provider.observe().state,'inactive')
             self.assertEqual(factory.call_count,2)
             provider.close()
+
+
+class SeededActivationTests(unittest.TestCase):
+    def test_prepare_starts_one_worker_without_observing_world_or_admitting(self):
+        from unittest.mock import Mock
+        provider=m.WarmAdmissionObserver(7)
+        reader=Mock();reader.bind.side_effect=lambda:nullcontext()
+        with patch.object(m,'ReadBatch',return_value=reader) as factory, \
+             patch.object(m,'_read_admission') as observe:
+            provider.prepare();provider.prepare()
+            self.assertEqual(factory.call_count,1)
+            self.assertEqual(reader.bind.call_count,2)
+            observe.assert_not_called()
+            self.assertIsNone(provider._activation_binding)
+        provider.close()
+
+    def test_copied_selectors_still_require_two_fresh_passes(self):
+        provider=m.WarmAdmissionObserver(7)
+        binding=tuple((7,i,3,0x10000+i*8) for i in range(8))
+        provider.seed_activation(binding)
+        state=m.Admission('world_ready','exploration_ready',('epoch',),True)
+        class Reader:
+            _closed=False
+            @contextmanager
+            def bind(self):yield
+            def close(self):self._closed=True
+        with patch.object(m,'ReadBatch',return_value=Reader()), \
+             patch.object(provider,'_activation_pass',side_effect=(state,m.Admission('loading','changed'))) as reads, \
+             patch.object(provider,'observe') as full:
+            self.assertEqual(provider.observe_activation().state,'observation_pending')
+            self.assertEqual(reads.call_count,2)
+            full.assert_not_called()
+            self.assertIsNone(provider._activation_binding)
+        provider.close()
+
+    def test_wrong_process_and_mutable_selectors_are_rejected(self):
+        provider=m.WarmAdmissionObserver(7)
+        for binding in ([],tuple((8,i,3,0x10000) for i in range(8)),
+                        tuple((7,i,True,0x10000) for i in range(8))):
+            with self.assertRaises(ValueError):provider.seed_activation(binding)
+        provider.close()
 
 
 if __name__=='__main__':unittest.main()

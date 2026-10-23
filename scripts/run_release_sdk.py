@@ -108,8 +108,9 @@ def main():
         from expedition33.settings import SettingsStore
         original_transport = sdk.SessionTransport
         def release_transport(*, _executable=None):
-            transport = original_transport(_executable=ROOT / 'build/research-probe-cinematic-v209-lease-batch/research_probe.exe')
+            transport = original_transport(_executable=ROOT / 'build/research-probe-cinematic-v210-lease-batch/research_probe.exe')
             required = ('retired_world_cleanup_protocol', 'menu_open_focus_protocol', 'metadata_stabilization_protocol', 'stable_lease_protocol', 'console_color_status_protocol', 'lease_release_batch_protocol', 'original_game_action_protocol', 'blueprint_trace_protocol', 'picto_edit_protocol', 'picto_progression_protocol', 'picto_class_load_protocol', 'picto_cost_protocol')
+            required = (*required,'builder_world_retirement_protocol')
             if transport.zone_travel_protocol != 2 or any(getattr(transport, name, 0) != 1 for name in required) or transport.mesh_protocol != 3:
                 transport.close()
                 raise RuntimeError('Combined release runtime is missing capabilities')
@@ -127,6 +128,8 @@ def main():
                 from expedition33.process_ui import ProcessUI
                 process_ui = ProcessUI(session,loader.registry)
                 session._process_ui = process_ui
+                from expedition33.loading_preparation import LoadingPreparation
+                loading_preparation=LoadingPreparation(session,loader)
             if args.early_init:
                 # Core services register Python callbacks immediately. Neither
                 # console attachment nor native widgets are needed for readiness.
@@ -172,7 +175,7 @@ def main():
             loader.registry._startup_progress['phase'] = 'mods'
             startup_pending_result = None
             restoration = loader.registry.restore_enabled_steps()
-            next_restore = time.monotonic() + .25
+            next_restore = time.monotonic() + .005
             gameplay_confirmed = False
             activation_candidate = False
             startup_counts_refreshed = not args.early_init
@@ -251,6 +254,7 @@ def main():
                 from expedition33.ui_admission import UiAdmissionObserver
                 from expedition33.console_startup import ConsoleReadiness
                 admission_observer = WarmAdmissionObserver(session.pid)
+                admission_observer.prepare()
                 admission_monitor = ReadOnlyAdmissionMonitor(lambda pid=session.pid:UiAdmissionObserver(pid))
                 title_ui = process_ui
                 console_readiness = ConsoleReadiness(session.pid)
@@ -275,11 +279,17 @@ def main():
                 while not loader.stop_requested and kernel.WaitForSingleObject(handle, 0) == 258:
                     if args.early_init:
                         observation = admission_monitor.snapshot()
+                        # Loading preparers need the current copied pause-widget
+                        # observation before they run, rather than last turn's
+                        # readiness value after gameplay activation has begun.
+                        ui_ready=(observation.admission.menu_ready if observation is not None else None)
                         if observation is None:
                             world_lifecycle.observe(None)
                         elif observation.sequence != last_lifecycle_sequence:
                             last_lifecycle_sequence = observation.sequence
                             packet = observation.admission
+                            selectors=getattr(packet,'activation_selectors',None)
+                            if selectors is not None:admission_observer.seed_activation(selectors)
                             # Confirm a new gameplay token before revoking old
                             # owners. Repeated old mailbox slots cannot overwrite
                             # a newer token already observed at an enable gate.
@@ -311,6 +321,8 @@ def main():
                         if not runtime_polling_started:
                             session.poll() # No generic mod/key polling before first admission.
                         process_ui.observe(observation.admission if observation is not None else None)
+                        loading_ui_ready=loading_preparation.observe(observation.admission if observation is not None else None)
+                        if not loading_ui_ready:activation_candidate=False
                         if title_readiness is True:
                             process_console.title_active()
                         title_cleanup_ready = process_ui.title_cleanup_ready
@@ -369,12 +381,14 @@ def main():
                                 late_core_pending = False
                             else:
                                 activation_candidate = False
-                    if not args.early_init or runtime_polling_started:
+                    if ((not args.early_init or runtime_polling_started) and
+                            not (args.early_init and activation_candidate and restoration is not None
+                                 and not startup_gate.pending(time.monotonic()))):
                         loader.poll()
-                    if restoration is not None and not loader.stop_requested and time.monotonic() >= next_restore and (not args.early_init or activation_candidate) and not startup_gate.pending(time.monotonic()):
+                    while restoration is not None and not loader.stop_requested and time.monotonic() >= next_restore and (not args.early_init or activation_candidate) and not startup_gate.pending(time.monotonic()):
                         management = loader._loaded['SDKManagement'][1]
                         # Restore saved mods even while Pause/Mods is open.
-                        # Keep polling between enables, but never initialize a
+                        # Keep transport responsive, but never initialize a
                         # gameplay mod during SDK-owned travel/recovery.
                         busy = management.native.travel_recovery_pending
                         if busy:
@@ -439,7 +453,15 @@ def main():
                                     loaded=loader._loaded.get(folder)
                                     if loaded:startup_gate.arm(loaded[1],time.monotonic())
                                     logging.info('Saved mod initialized: %s', result[0])
-                        next_restore = time.monotonic() + .25
+                        # Drain synchronous activations without repainting the
+                        # same detached menu or polling every earlier mod after
+                        # each enable. Fresh admission still gates EVERY enable;
+                        # asynchronous readiness yields to the ordinary loop.
+                        # Console commands can change pending preferences.
+                        session.console.poll()
+                        session.poll()
+                        if busy or not gameplay_confirmed:break
+                        next_restore = time.monotonic()
                     if args.early_init:
                         title_service=getattr(title_ui,'service',None)
                         frontend_failed=bool(getattr(title_ui,'frontend_failed',None) or
@@ -473,6 +495,7 @@ def main():
                     if title_ui is not None:
                         if not title_ui.close():
                             raise RuntimeError('Process UI cleanup pending; retain owner before Session close')
+                    if args.early_init:loading_preparation.close()
                 finally:
                     try:
                         if admission_monitor is not None:
