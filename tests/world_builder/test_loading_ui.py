@@ -21,7 +21,7 @@ class LoadingUITests(unittest.TestCase):
              patch('loading_test_builder.hud.BuilderHUD',return_value=hud), \
              patch('loading_test_builder.catalog_menu.CatalogMenu',return_value=catalog), \
              patch('loading_test_builder.loading_ui.OwnedUiProof',side_effect=(first,second)):
-            owner=LoadingUI(mod,object());title=object();owner.prepare(title)
+            owner=LoadingUI(mod,object());title=N(kind='title',signature=('title',1));owner.prepare(title)
         self.assertIs(mod.session,original);self.assertIs(owner.context,title)
         hud.build.assert_called_once();catalog.build.assert_called_once()
         self.assertIsNone(owner.bound)

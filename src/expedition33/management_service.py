@@ -182,6 +182,10 @@ class NativeMenuService:
             self.menu.open()
             self._observed = self._snapshot()
             self._prepared_view_state = prepared_state() if callable(prepared_state) else None
+            logging.getLogger(__name__).info('Native menu open stages (ms): %s',{
+                key:round(row['last_ms'],1) for source in (getattr(self.menu,'latency',None),getattr(self.menu.panel,'latency',None))
+                if source is not None for key,row in source.snapshot()['timings'].items()
+                if key in ('menu.paint_total','menu.bind_controls','widget.layout_total','widget.appearance_total','widget.open_attach_focus','widget.prime_menu_plan')})
         except BaseException as error:
             self._frontend_rejection = known_rejection(error) or getattr(self,'_frontend_rejection',None)
             self._failure = f'{type(error).__name__}: {error}'
@@ -275,18 +279,18 @@ class NativeMenuService:
             self._failure = self.menu.failure
         if (self._failure or self.menu is None or self.menu.panel.state not in ('built','open')):
             return
-        progress=getattr(self.registry,'_startup_progress',None)
-        if (self.menu.panel.state=='built' and type(progress) is dict
-                and progress.get('finished') is False):
-            # Coalesce activation changes into one detached repaint. An open
-            # menu still renders progress and explicit open always validates
-            # and refreshes its current frame before accepting input.
-            return
         try:
             # Other mods' metadata preparation invalidates this shared cache.
             # Repair before readiness consumers can attach, even if presenter
             # refresh is throttled. Fresh prepare keeps all identity guards.
             self._warm_menu_plan()
+            progress=getattr(self.registry,'_startup_progress',None)
+            if (self.menu.panel.state=='built' and type(progress) is dict
+                    and progress.get('finished') is False):
+                # Coalesce activation changes into one detached repaint. An open
+                # menu still renders progress and explicit open always validates
+                # and refreshes its current frame before accepting input.
+                return
             if time.monotonic() < self._next_poll:return
             self._next_poll = time.monotonic() + .5
             registry_changed = self._snapshot() != self._observed

@@ -182,7 +182,7 @@ class Mod:
             raise
 
     def management(self):
-        return ModDefinition('continent-flight', 'Continent Flight', version='0.4.2',
+        return ModDefinition('continent-flight', 'Continent Flight', version='0.4.3',
             description='Toggle flight on the current exploration character, then hold the configured ascend or descend key. Space remains jump. Travel resets flight. Bindings can be changed in Mod keybinds.',
             actions=(Action('status', 'Flight status', self.status),
                      Action('refresh', 'Find current exploration character', self.refresh),

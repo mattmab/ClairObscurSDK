@@ -55,9 +55,19 @@ class PauseAttachment:
             raise
 
     def arm(self, lease, plan):
-        if self.state != 'empty' or not lease.active or lease not in self.scope._leases or lease.object != plan.target:
+        original=lease.object if lease.active else None
+        target=plan.target
+        same=original==target
+        if not same:
+            # GC bookkeeping flags may change while a persistent widget remains
+            # leased. Require the complete immutable identity/outer binding;
+            # native admission still validates the live lease and call plan.
+            keys=('pid','index','serial','address','name','class_index','outer_index','outer_serial')
+            same=all(hasattr(original,key) and hasattr(target,key) and
+                getattr(original,key)==getattr(target,key) for key in keys)
+        if self.state!='empty' or not lease.active or lease not in self.scope._leases or not same:
             raise ValueError('Pause attachment needs its owned widget lease')
-        return self._send(1, lease._token, plan)
+        return self._send(1,lease._token,plan)
 
     def close(self):
         if self.state in ('empty', 'closed'): return True

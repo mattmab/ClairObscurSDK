@@ -67,6 +67,7 @@ class TitleAttachmentTests(unittest.TestCase):
   def obj(name,index):return N(name=name,index=index,serial=1,address=index+1000,class_name=name)
   self.player=obj('PlayerController',1);self.title=obj('WBP_MM_TitleScreen_C',2);self.box=obj('VerticalBox',3);self.button=obj('WBP_BaseButton_C',4);self.style=obj('style',5)
   self.catalog=N(objects=[obj('Default__WidgetBlueprintLibrary',20),obj('Default__GameplayStatics',21)],with_observations=lambda value:self.catalog)
+  self.button.outer_index=99;self.catalog.by_index={99:obj('BP_jRPG_GI_Custom_C',99)}
   self.planner._catalog=self.catalog
   self.found=dict(context={'world_path':TITLE_WORLD,'controller':(7,1,1,1001),'world':(7,9,1,1009)},catalog=self.catalog,local_player=obj('LocalPlayer',9),player=self.player,main=obj('main',8),title=self.title,box=self.box,restore_tree=obj('WidgetTree',40),restore_panel=obj('Overlay',41),source_button=obj('source',6),source_slot=obj('source-slot',7),style=self.style)
  def install(self,changed=False):
@@ -104,6 +105,11 @@ class TitleAttachmentTests(unittest.TestCase):
   self.ready=False
   with patch('expedition33.title_menu.resolve_title',side_effect=AssertionError('read while inactive')):self.assertFalse(self.entry.install())
   self.assertEqual(self.events,[])
+ def test_prepared_title_enters_install_without_polling_clicks(self):
+  self.entry.state='prepared'
+  with patch.object(self.entry,'install',return_value=True) as install:
+   self.entry.poll()
+  install.assert_called_once_with()
  def test_title_exit_closes_entry_not_gameplay(self):
   self.install();self.ready=False;self.entry.poll();self.assertEqual(self.events[-3:],['observer-close','detach','scope-close']);self.assertEqual(self.entry.state,'closed')
  def test_open_rejects_changed_title(self):

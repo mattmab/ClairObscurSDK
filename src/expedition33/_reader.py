@@ -105,6 +105,19 @@ class ReadBatch:
                 raise RuntimeQueryError('Read batches cannot be nested across owners or processes')
             self._borrowed = parent
             return self
+        self.warm()
+        self._token=_active.set(self)
+        return self
+
+    def warm(self):
+        """Start validated read-only IO without borrowing or binding an operation.
+
+        No catalog request is issued here. A different owned reader may be
+        active; this worker remains unusable for queries until bind() is entered.
+        """
+        self._check()
+        if self._borrowed is not None:raise RuntimeQueryError('Borrowed reader cannot own another worker')
+        if self._process is not None:return self
         root=Path(__file__).resolve().parents[2]
         combined=root/'build/readonly-worker-values-v2/research_probe.exe'
         executable = self._executable or (combined if combined.is_file() else root/'build/readonly-worker-strings-v1/research_probe.exe')
@@ -120,7 +133,6 @@ class ReadBatch:
                     or ready['version'] not in (1,2) or ready.get('pid')!=self.pid):
                 raise RuntimeQueryError(f'Read worker rejected startup: {ready}')
             self.supports_catalog_values=ready['version']>=2
-            self._token = _active.set(self)
             return self
         except BaseException:
             self.close()

@@ -63,7 +63,7 @@ class LoadingModPreparationTests(unittest.TestCase):
         owner=loading.LoadingFlight(module.Mod(),N(pid=7));reader=Mock()
         with patch('expedition33._reader.ReadBatch',return_value=reader),patch('expedition33._reader.active_reader',return_value=object()):
             owner._prepare_reader()
-        self.assertIs(owner.reader,reader);reader.bind.assert_not_called()
+        self.assertIs(owner.reader,reader);reader.bind.assert_not_called();reader.warm.assert_called_once_with()
 
     def test_map_monitor_handoff_does_not_close_the_active_mods_worker(self):
         module=self.load('WorldBuilderMapLoader')
@@ -106,6 +106,22 @@ class LoadingModPreparationTests(unittest.TestCase):
             owner.observe_title(N())
             self.assertTrue(owner.released)
             owner.close();scope.close.assert_called_once()
+
+    def test_world_builder_proves_owned_trees_during_bootstrap_without_save(self):
+        module=self.load('E33WorldBuilder')
+        loading=importlib.import_module(module.__name__+'.loading_ui')
+        owner=loading.LoadingUI.__new__(loading.LoadingUI)
+        previous=object();owner.mod=N(session=previous,help_minimized=False);owner.scope=N(pid=7)
+        catalog=Mock();hud=Mock();proofs=(Mock(),Mock());context=N(kind='world')
+        with patch.object(importlib.import_module(module.__name__+'.library'),'Library'), \
+             patch.object(importlib.import_module(module.__name__+'.hud'),'BuilderHUD',return_value=hud), \
+             patch.object(importlib.import_module(module.__name__+'.catalog_menu'),'CatalogMenu',return_value=catalog), \
+             patch.object(loading,'ReadBatch'),patch.object(loading,'prepare_panel_metadata'), \
+             patch.object(loading,'OwnedUiProof',side_effect=proofs):
+            owner.prepare(context)
+        for proof,panel in zip(proofs,(catalog,hud)):
+            proof.verify.assert_called_once_with(panel,context,preparing=True)
+        self.assertIs(owner.mod.session,previous)
 
     def test_world_builder_loading_handoff_borrows_the_hosts_reader(self):
         module=self.load('E33WorldBuilder')

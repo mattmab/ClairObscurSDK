@@ -17,6 +17,7 @@ class UiAdmission:
     ui_context: UiContext | None = None
     prewarm_context: UiContext | None = None
     activation_selectors: tuple | None = None
+    bootstrap_ready: bool = False
 
 
 class UiAdmissionObserver(WarmAdmissionObserver):
@@ -96,6 +97,14 @@ class UiAdmissionObserver(WarmAdmissionObserver):
     def _prewarm_packet(self,admission,context):
         # SaveLoaded may still be false after the new world/controller and its
         # pause widget exist. This grants UI preparation only, never activation.
+        if context is not None and getattr(context,'kind',None)=='title':
+            # The authored frontend can already exist while the save manager
+            # still reports loading. Its own fresh authority proof, rather than
+            # a gameplay save flag, decides when the title entry can attach.
+            title=self._title_observation(admission)
+            if title.title_ready is True:
+                return replace(title,ui_context=context,prewarm_context=context)
+            return replace(title,prewarm_context=context)
         ready=False
         if context is not None and getattr(context,'kind',None)=='world':
             with self._reader.bind():
@@ -110,7 +119,9 @@ class UiAdmissionObserver(WarmAdmissionObserver):
                         pause,_=read_object_reference(catalog,controller,catalog.by_index[owners[0]],
                             'PauseMenuWidget',project=True)
                         ready=pause is not None and pause.class_name=='WBP_PauseMenu_C'
-        return UiAdmission(admission,ready,prewarm_context=context)
+        bootstrap=(context is not None and getattr(context,'kind',None)=='world' and
+            context.world==getattr(self,'_bootstrap_world',None) and not admission.activation_ready)
+        return UiAdmission(admission,ready,prewarm_context=context,bootstrap_ready=bootstrap)
 
     def _title_prewarm_context(self):
         """No borrowed title widget/input authority; verify engine/PC twice."""
@@ -123,7 +134,9 @@ class UiAdmissionObserver(WarmAdmissionObserver):
         def once():
             chain,catalog=anchor(self.engine_catalog(),project=True)
             world,gi=chain[2:]
-            if (catalog.path_name(world)==TITLE_WORLD)!=(kind=='title'):return None
+            world_path=catalog.path_name(world)
+            if (world_path==TITLE_WORLD)!=(kind=='title'):return None
+            if world_path=='/Game/Levels/Map_Game_Bootstrap.Map_Game_Bootstrap':self._bootstrap_world=identity(world)
             current=self.controller(catalog,gi)
             if tuple(current['world'])!=identity(world):return None
             selected=capture_selected(self.pid,(current['controller'][1:],))

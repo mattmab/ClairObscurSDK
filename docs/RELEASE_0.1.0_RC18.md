@@ -48,23 +48,41 @@ These changes preserve the representative RC17 encounter and cinematic results;
 they do not imply every catalog entry has been individually tested. Startup and
 menu timings depend on the installation and current game state.
 
-## Validation
+## Loading and title refresh
 
-- 1,995 SDK tests completed successfully (8 existing skips); 140 World Builder tests passed.
-- Runtime210 and its native fixtures compiled with MSVC `/W4 /WX`.
-- Live title and gameplay Mods-button opens measured approximately 150–197 ms
-  after preparation. Initial preparation and individual mod activation
-  still take additional time; `startuptiming` reports those costs separately.
-- A clean runtime210 load restored seven gameplay mods in 1.59 seconds after
-  the owner-thread exploration-ready observation, versus about 11 seconds
-  before these changes. World Builder finished 10.35 seconds of preparation
-  before selecting the save. This is not a zero-delay gameplay-readiness claim.
-- Title → save → title → save retained the SDK process and menu shell. Map
-  Travel, Continent Flight, Scene Editor, WorldBuilder Map Loader and Enemy
-  Spawner retired and reactivated with acknowledged cleanup and no pending leases.
+- Prepare core menus, World Builder widgets and title/pause button contents
+  during engine startup loading. Fresh authored title-widget proof allows the
+  Mods button to attach before the title menu fades in.
+- Warm the read worker before it is needed, batch World Builder construction
+  and menu visibility updates, and preserve current-world ownership checks.
+- Defer read-only loading/GC proof races without failing untouched mods or
+  rebuilding already-owned trees. Keep uncertain native cleanup owners held.
+- Includes Continent Flight 0.4.3, Map Travel 0.2.4 and World Builder
+  0.32.5-experimental. Native runtime remains 210.
+
+## Validation and measured limits
+
+- 2,060 SDK tests passed (8 skips); 140 World Builder tests passed.
+- Native runtime210 and its fixtures were previously compiled with MSVC /W4 /WX.
+- Live cold launch showed Mods alongside the authored title buttons during
+  fade-in. A prepared title Mods opening measured 167 ms.
+- In the final cold run, the core menu prepared in 6.25 seconds, World Builder
+  in 3.40 seconds and Flight in 0.68 seconds, before save selection. Flight
+  activated from its loading snapshot in 44 ms. All seven enabled gameplay
+  mods restored successfully, with normal Flight toggle/restore and stable
+  keybind scrolling.
+- Title/save handoff retains the reusable shell; same-session title return
+  reattaches the title button. World ownership and cleanup acknowledgments
+  remain required before reuse.
+- Remaining limits: final restoration took 0.65 seconds after owner-thread
+  exploration readiness, excluding earlier UI handoff and pause attachment.
+  First-visible-gameplay zero-delay readiness and an 80 ms immediate-pause
+  bound are not established. Switching between Mods and Map Travel still
+  repaints the shared panel and measured about 0.69 seconds. The 200 ms goal
+  is met by the measured prepared Mods open, not every view change.
 - Active cinematic presentations/media, Scene visual-arena restitution and
-  encounter tuning still retain unsupported retirement owners rather than
-  restoring old-world state. Ordinary inactive browser/editor cleanup is supported.
+  encounter tuning retain unsupported retirement owners rather than restoring
+  old-world state. Ordinary inactive browser/editor cleanup is supported.
 
 ## Optional map loader upgrade
 

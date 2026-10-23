@@ -46,6 +46,13 @@ class ConstructionTests(unittest.TestCase):
             with self.assertRaisesRegex(ValueError,'dependency'):recipe.flush(self.panel())
             invoke.assert_not_called()
 
+    def test_pump_runs_after_group_outputs_are_adopted(self):
+        recipe=construction.Construction();panel=self.panel()
+        pending=recipe.record('tree','spawn',{}).return_value
+        panel.scope._session=NS(_loading_ui_pump=lambda:self.assertEqual(recipe.resolve(pending).index,42))
+        with patch.object(construction,'invoke_group',return_value=[NS(index=42)]):
+            recipe.flush(panel)
+
     def test_missing_capability_never_dispatches(self):
         session=NS(_transport=NS(ui_batch_protocol=1))
         with patch('expedition33._ui_batch.execute') as execute:

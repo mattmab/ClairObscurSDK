@@ -30,11 +30,13 @@ def prepare_static(pid,session=None):
         return metadata
 
 
-def prepare_snapshot(pid,static=None,cached=None):
+def prepare_snapshot(pid,static=None,cached=None,*,callbacks=None):
     from expedition33._reader import ReadBatch
     from expedition33._planning_metadata import MetadataObservations
     from expedition33.invocation import prepare_call
-    from . import discover_snapshot, flight_calls
+    if callbacks is None:
+        from . import discover_snapshot,flight_calls
+    else:discover_snapshot,flight_calls=callbacks
     with ReadBatch(pid):
         snapshot=discover_snapshot(pid,cached) if cached is not None else discover_snapshot(pid)
         catalog,pawn,movement=snapshot
@@ -51,15 +53,16 @@ class FlightObserver:
     """Worker-owned copied discovery, independent of owner-thread UI builds."""
     def __init__(self,pid,static):
         from expedition33._reader import ReadBatch
+        from . import ExplorationNotReady,discover_snapshot,flight_calls
+        self.not_ready=ExplorationNotReady;self.callbacks=(discover_snapshot,flight_calls)
         self.pid=pid;self.static=static;self.catalog=None
         self.reader=ReadBatch(pid,share=True)
 
     def observe(self):
-        from . import ExplorationNotReady
         with self.reader.bind():
             try:
-                result=prepare_snapshot(self.pid,self.static,self.catalog)
-            except ExplorationNotReady:
+                result=prepare_snapshot(self.pid,self.static,self.catalog,callbacks=self.callbacks)
+            except self.not_ready:
                 self.catalog=None
                 return None
             self.catalog=result[0][0]
@@ -101,13 +104,11 @@ class LoadingFlight:
 
     def _prepare_reader(self):
         if self.reader is None and self.mod.reader is None:
-            from expedition33._reader import ReadBatch,active_reader
+            from expedition33._reader import ReadBatch
             self.reader=ReadBatch(self.pid,share=True)
-            # A menu callback can already own shared IO. Store our unstarted
-            # owner there; the mod borrows that operation and binds its own
-            # worker later, without retaining or closing the caller's reader.
-            if active_reader() is None:
-                with self.reader.bind():pass
+            # Warm only the process handshake during existing menu IO. It sends
+            # no UObject queries and never replaces the caller's active reader.
+            self.reader.warm()
 
     def observe_title(self,context):
         self.context=context;self.mod._loading_flight=None

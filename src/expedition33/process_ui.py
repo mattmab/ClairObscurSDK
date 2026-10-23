@@ -48,12 +48,13 @@ class UiEntryOwner:
         factory=TitleMenuEntry if context.kind=='title' else PauseMenuEntry
         self.entry=factory(self.scope,service,readiness=lambda:self.ready)
         if context.kind=='world':self.entry._expected_controller=context.controller
+        else:self.scope._title_local_selector=context.local_player[1:]
     def poll(self):
         self.entry.poll()
         return self.entry.state=='attached'
     def prepare(self):
         # Loading may attach a current pause widget, but never dispatch clicks.
-        if self.entry.state=='new':self.entry.install()
+        if self.entry.state in ('new','prepared'):self.entry.install()
         return self.entry.state=='attached'
     def close(self):
         self.ready=False;self.journal.capture(self.scope)
@@ -84,7 +85,10 @@ class CachedProcessShell:
         from .mods_workspace_scroll import ScrollWorkspaceView
         return TitleWorkspaceView if kind=='title' else ScrollWorkspaceView
 
-    def prepare(self,context):
+    def prepare_loading(self,context):
+        return self.prepare(context,preparing=True)
+
+    def prepare(self,context,*,preparing=False):
         self.needs_capacity_rebuild() # Reject an unsupported registry before any build.
         from .pause_preparation import prepare as prepare_pause
         prepare_pause(self.scope._session)
@@ -97,7 +101,8 @@ class CachedProcessShell:
         from .ui_shell_proof import prepare_panel_metadata
         with shared_operation(self.scope.pid):
             prepare_panel_metadata(menu.panel)
-            self.proof.verify(menu.panel,context)
+            if preparing:self.proof.verify(menu.panel,context,preparing=True)
+            else:self.proof.verify(menu.panel,context)
             # Proof metadata stabilization invalidates the process menu plan.
             # Rebuild it on this retained reader before publishing the entry.
             menu.panel.prime_menu_plan()
@@ -173,6 +178,7 @@ class CachedProcessShell:
         # registry/presenter still invalidates it through the existing checks.
         self.service._observed=self.service._snapshot()
         self.service._prepared_view_state=menu.prepared_view_state()
+        self.service._primed_menu_cache=getattr(getattr(self.scope,'_session',None),'_menu_plan_cache',None)
         self.context=context;self.ready=True
         return True
 
@@ -214,6 +220,8 @@ class ProcessUI:
         self._rebuild_requested=False
         self._pending_reason=None
         self._prewarmed_signature=None
+        self._prepared_pause=None;self._prepared_pause_key=None;self._pause_preparation_failed=False
+        self._prepared_title=None;self._prepared_title_key=None
         self.frontend_failed=None;self._frontend_record=None
 
     def _check(self):
@@ -262,14 +270,17 @@ class ProcessUI:
     def observe(self,packet):
         """Copied scheduling only; actual handoff independently proves context."""
         context=(getattr(packet,'ui_context',None) or getattr(packet,'prewarm_context',None)) if packet is not None else None
-        if context is not None and context.kind=='world':
-            with self._read_operation():return self._observe(packet)
+        if context is not None:
+            from ._reader import active_reader
+            if active_reader() is None:
+                with self._read_operation():return self._observe(packet)
         return self._observe(packet)
 
     def _observe(self,packet):
         context=getattr(packet,'ui_context',None) if packet is not None else None
         prewarm=getattr(packet,'prewarm_context',None) if packet is not None else None
         if prewarm is not None and prewarm.kind=='world':
+            if self.shell is None:return self.poll(prewarm,_prepare_only=True)
             # Build/rebind detached widgets while the loading screen still owns
             # presentation. No pause entry, input, or gameplay enable is granted.
             stage=(getattr(packet,'menu_ready',None) is True and
@@ -280,9 +291,10 @@ class ProcessUI:
                 if getattr(packet,'menu_ready',None) is not True:return False
             elif self.shell is not None:
                 return self.poll(prewarm,_prepare_only=True)
-        if (context is None and prewarm is not None and prewarm.kind=='title'
-                and self.context is None and self.entry is None):
-            return self.poll(prewarm,_prepare_only=True)
+        if context is None and prewarm is not None and prewarm.kind=='title':
+            # Attachment has its own fresh authored-widget proof. Stage it
+            # during the title fade; clicks remain disabled until admission.
+            return self.poll(prewarm,_prepare_only=True,_stage_entry=True)
         if context is not None and context.kind=='world':
             prior=(self.context is not None and self.context.signature==context.signature)
             if (not prior and packet.admission.activation_ready and
@@ -360,9 +372,55 @@ class ProcessUI:
         if record is None:record=getattr(getattr(service,'menu',None),'_frontend_rejection',None)
         return record if isinstance(record,FrontendRejection) else None
 
+    def _prepare_pause_contents(self,context):
+        source=getattr(self.session,'_pause_button_source',None)
+        if source is None or self._prepared_pause is not None or self._pause_preparation_failed:return
+        from dataclasses import replace
+        self._prepared_pause=self._entry_factory(self.session,self.shell.service,replace(context,kind='world'))
+        self._prepared_pause_key=context.persistent_key
+        try:self._prepared_pause.entry.prepare_detached(source)
+        except Exception:
+            import logging
+            logging.getLogger(__name__).exception('Detached pause preparation held; retiring its exact owner')
+            self._pause_preparation_failed=True
+            if self._prepared_pause.close():
+                self._prepared_pause=None;self._prepared_pause_key=None
+
+    def _new_entry(self,context):
+        if context.kind=='title' and self._prepared_title is not None and self._prepared_title_key==context.persistent_key:
+            cached=self._prepared_title;self._prepared_title=None;self._prepared_title_key=None
+            return cached
+        cached=self._prepared_pause
+        if cached is not None and self._pause_preparation_failed:
+            if not cached.close():raise UiProofPending('Detached pause preparation cleanup pending')
+            self._prepared_pause=None;self._prepared_pause_key=None;cached=None
+        if context.kind=='world' and cached is not None and self._prepared_pause_key==context.persistent_key:
+            self._prepared_pause=None;self._prepared_pause_key=None
+            cached.entry._expected_controller=context.controller
+            return cached
+        return self._entry_factory(self.session,self.shell.service,context)
+
+    def _prepare_title_contents(self,context):
+        if self._prepared_title is not None or self._entry_factory is not UiEntryOwner:return
+        if self.context is not None or self.entry is not None:return
+        from dataclasses import replace
+        from .pause_preparation import capture_metadata
+        from .catalog import capture_selected
+        panel=self.shell.service.menu.panel
+        catalog=panel._planner._catalog.with_observations(capture_metadata(self.session))
+        catalog=catalog.with_observations(capture_selected(self.session.pid,(context.controller[1:],context.local_player[1:])))
+        one=lambda name:panel._one(o for o in catalog.objects if o.name==name)
+        source=dict(catalog=catalog,gi=context.gi[1:],local=context.local_player[1:],
+            player=catalog.by_index[context.controller[1]],library=one('Default__WidgetBlueprintLibrary'),
+            gameplay=one('Default__GameplayStatics'),style=one('CTS_B1_SmallLine_Outline_C'),
+            dimensions=(0,0),stable=panel._metadata_stable_ui)
+        self._prepared_title=self._entry_factory(self.session,self.shell.service,replace(context,kind='title'))
+        self._prepared_title_key=context.persistent_key
+        self._prepared_title.entry.prepare_detached(source)
+
     def _prepare_entry(self,context):
         if self.entry is None:
-            self.entry=self._entry_factory(self.session,self.shell.service,context)
+            self.entry=self._new_entry(context)
             self._entry_context=context
         self.entry.prepare()
         self.entry.ready=None
@@ -389,15 +447,17 @@ class ProcessUI:
                 self.shell.ready=True
                 self.entry.ready=True
                 if self.entry.poll() is False:self.phase='entry_pending';return False
+                if context.kind=='title' and isinstance(self.entry,UiEntryOwner):self._prepare_pause_contents(context)
                 self.context=context;self._entry_context=None;self.phase='ready';return True
             capacity_changed=self._rebuild_requested or (self.shell is not None and
                 getattr(self.shell,'needs_capacity_rebuild',lambda:False)())
             if self.entry is not None and self.context is not None and self.context.signature==context.signature and self._entry_context is None and not capacity_changed:
                 self.shell.ready=True;self.entry.ready=True
-                if self.entry.poll() is False:self.phase='entry_pending';return False
                 self.shell.poll()
+                if self.entry.poll() is False:self.phase='entry_pending';return False
                 record=self._recorded_rejection()
                 if record is not None:self._suspend_frontend(record);return False
+                if context.kind=='title' and isinstance(self.entry,UiEntryOwner):self._prepare_pause_contents(context)
                 self.phase='ready';return True
             self.phase='detaching'
             if self.shell is not None and not self.shell.detach():return False
@@ -408,6 +468,12 @@ class ProcessUI:
                 self.phase='explicit_tree_retirement'
                 if not self.shell.close():return False
                 self.shell=None;self.context=None;self._shell_key=None;self._rebuild_requested=False
+            if self._prepared_pause is not None and self._prepared_pause_key!=context.persistent_key:
+                if not self._prepared_pause.close():return False
+                self._prepared_pause=None;self._prepared_pause_key=None
+            if self._prepared_title is not None and self._prepared_title_key!=context.persistent_key:
+                if not self._prepared_title.close():return False
+                self._prepared_title=None;self._prepared_title_key=None
             if self.shell is not None and self._shell_key!=context.persistent_key:
                 self.phase='retiring_game_instance'
                 if not self.shell.close():return False
@@ -418,8 +484,13 @@ class ProcessUI:
             if self.context is None:
                 self.phase='preparing'
                 prepared=getattr(self.shell,'context',None)
-                if prepared is None or prepared.signature!=context.signature:
-                    if not self.shell.prepare(context):return False
+                if prepared is None:
+                    prepare=(getattr(self.shell,'prepare_loading',None) if _prepare_only else None) or self.shell.prepare
+                    if not prepare(context):return False
+                elif prepared.signature!=context.signature:
+                    if _prepare_only and context.kind=='world':
+                        if not self.shell.rebind(context,preparing=True):return False
+                    elif not self.shell.rebind(context):return False
             else:
                 self.phase='rebinding'
                 try:
@@ -436,13 +507,15 @@ class ProcessUI:
                     # next observation must reauthorize even this clean rebuild.
                     return False
             if _prepare_only:
+                self._prepare_title_contents(context)
                 self._prewarmed_signature=context.signature
                 if _stage_entry:self._prepare_entry(context)
                 self.phase='prewarmed';self.shell.ready=None;return False
             self.phase='entry'
-            self.entry=self._entry_factory(self.session,self.shell.service,context)
+            self.entry=self._new_entry(context)
             self._entry_context=context
             if self.entry.poll() is False:self.phase='entry_pending';return False
+            if context.kind=='title' and isinstance(self.entry,UiEntryOwner):self._prepare_pause_contents(context)
             self.context=context;self._entry_context=None;self.phase='ready';return True
         except UiProofPending as error:
             reason=str(error)[:256]
@@ -473,6 +546,12 @@ class ProcessUI:
     def close(self):
         self._check();self.phase='closing'
         self.close_queries()
+        if self._prepared_title is not None:
+            if not self._prepared_title.close():return False
+            self._prepared_title=None;self._prepared_title_key=None
+        if self._prepared_pause is not None:
+            if not self._prepared_pause.close():return False
+            self._prepared_pause=None;self._prepared_pause_key=None
         if self.shell is not None:
             # Explicit retirement of a failed shell uses its full acknowledged
             # close path, never a reuse attempt or an alternate construction.

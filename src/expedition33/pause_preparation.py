@@ -8,14 +8,14 @@ from .enums import describe_enums
 
 NAMES=('WBP_PauseMenu_C','WBP_BaseButton_C','CommonButtonBase','CommonActivatableWidget',
     'CommonTextBlock','TextBlock','TextLayoutWidget','Widget','UserWidget','WidgetTree',
-    'GridPanel','GridSlot','PanelSlot','ContentWidget','WidgetBlueprintLibrary','GameplayStatics',
+    'GridPanel','GridSlot','VerticalBox','VerticalBoxSlot','PanelSlot','ContentWidget','WidgetBlueprintLibrary','GameplayStatics',
     'Default__WidgetBlueprintLibrary','Default__GameplayStatics','Margin',
-    'Create','SpawnObject','SetContent','AddChildToGrid','SetPadding','SetHorizontalAlignment',
+    'Create','SpawnObject','SetContent','AddChildToGrid','AddChildToVerticalBox','SetInputMode_UIOnlyEx','EMouseLockMode','SetPadding','SetHorizontalAlignment',
     'SetVerticalAlignment','SetText','SetStyle','SetJustification','SetMinDimensions',
     'SetIsSelectable','SetIsToggleable','SetFocusToGameViewport','SetUserFocus',
     'IsActivated','RemoveFromParent','HandleButtonClicked',
     'Overlay','OverlaySlot','PanelWidget','AddChildToOverlay',
-    'GetRenderOpacity','SetRenderOpacity','GetIsEnabled','SetIsEnabled',
+    'GetRenderOpacity','SetRenderOpacity','GetIsEnabled','SetIsEnabled','GetOwningPlayer','GetOwningLocalPlayer',
     'GetChildrenCount','GetChildAt','CommonTextBlock_178',
     'ETextJustify','EHorizontalAlignment','EVerticalAlignment')
 WORLD_NAMES=('WBP_PauseMenu_C','WBP_BaseButton_C','CommonTextBlock_178')
@@ -38,13 +38,14 @@ def prepare(session):
         if not 1<=len(selectors)<=1024:raise RuntimeError('Pause metadata exceeds selected bound')
         metadata=MetadataObservations()
         owners={
-            'WidgetBlueprintLibrary':('Create','SetFocusToGameViewport'),
+            'WidgetBlueprintLibrary':('Create','SetFocusToGameViewport','SetInputMode_UIOnlyEx'),
             'GameplayStatics':('SpawnObject',),'ContentWidget':('SetContent',),
+            'VerticalBox':('AddChildToVerticalBox',),'VerticalBoxSlot':('SetPadding','SetHorizontalAlignment','SetVerticalAlignment'),
             'GridPanel':('AddChildToGrid',),'GridSlot':('SetPadding','SetHorizontalAlignment','SetVerticalAlignment'),
             'CommonTextBlock':('SetStyle',),'TextBlock':('SetText',),
             'TextLayoutWidget':('SetJustification',),
             'CommonButtonBase':('SetMinDimensions','SetIsSelectable','SetIsToggleable','HandleButtonClicked'),
-            'Widget':('GetRenderOpacity','SetRenderOpacity','GetIsEnabled','SetIsEnabled','RemoveFromParent','SetUserFocus'),
+            'Widget':('GetRenderOpacity','SetRenderOpacity','GetIsEnabled','SetIsEnabled','RemoveFromParent','SetUserFocus','GetOwningPlayer','GetOwningLocalPlayer'),
             'CommonActivatableWidget':('IsActivated',),'Overlay':('AddChildToOverlay',),
             'OverlaySlot':('SetHorizontalAlignment','SetVerticalAlignment'),
             'PanelWidget':('GetChildrenCount','GetChildAt')}
@@ -157,3 +158,11 @@ def capture(session,*,controller=None):
         # in an existing plan. Unrelated title-entry schemas need no world copy.
         session._pause_schema_observations=checked
     return catalog
+
+
+def capture_metadata(session):
+    """Fresh retained UI schema selectors, without any world widget discovery."""
+    selectors=getattr(session,'_pause_entry_metadata_selectors',None)
+    readonly=getattr(session,'_pause_readonly_metadata_selectors',None)
+    if selectors is None or readonly is None:return None
+    return capture_selected(session.pid,selectors+readonly)

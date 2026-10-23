@@ -259,6 +259,20 @@ def main():
                 admission_monitor = ReadOnlyAdmissionMonitor(lambda pid=session.pid:UiAdmissionObserver(pid))
                 title_ui = process_ui
                 console_readiness = ConsoleReadiness(session.pid)
+            def service_title_loading():
+                sample=admission_monitor.snapshot()
+                packet=sample.admission if sample is not None else None
+                if packet is not None and getattr(packet,'bootstrap_ready',False) is True:
+                    session.console.poll();session.poll()
+                elif packet is not None and getattr(packet,'title_ready',False) is True:
+                    process_ui.observe(packet)
+                    session.console.poll()
+                    session.poll()
+                elif packet is not None:
+                    context=getattr(packet,'ui_context',None) or getattr(packet,'prewarm_context',None)
+                    if context is not None and context.kind=='world':process_ui.quiesce()
+                if loader.stop_requested:raise RuntimeError('Loading interrupted by SDK shutdown')
+
             def fresh_world_admission():
                 # Read-only gate before EVERY cycle/core/optional enable. A
                 # different fresh token schedules retirement but never enables
@@ -324,11 +338,11 @@ def main():
                         process_ui.observe(observation.admission if observation is not None else None)
                         loading_packet=observation.admission if observation is not None else None
                         loading_context=(getattr(loading_packet,'ui_context',None) or getattr(loading_packet,'prewarm_context',None))
-                        if loading_context is not None and loading_context.kind=='world':
+                        if loading_context is not None:
                             with process_ui._read_operation():
-                                loading_ui_ready=loading_preparation.observe(loading_packet)
+                                loading_ui_ready=loading_preparation.observe(loading_packet,pump=service_title_loading)
                         else:
-                            loading_ui_ready=loading_preparation.observe(loading_packet)
+                            loading_ui_ready=loading_preparation.observe(loading_packet,pump=service_title_loading)
                         if not loading_ui_ready:activation_candidate=False
                         if title_readiness is True:
                             process_console.title_active()

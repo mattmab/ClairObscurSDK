@@ -14,6 +14,18 @@ m=importlib.util.module_from_spec(spec);sys.modules[spec.name]=m;spec.loader.exe
 
 
 class UiProbeTests(unittest.TestCase):
+    def test_authored_title_can_attach_while_save_manager_is_loading(self):
+        observer=m.UiAdmissionObserver.__new__(m.UiAdmissionObserver)
+        context=N(kind='title');admission=Admission('loading','save_load_in_progress')
+        for ready in (True,False,None):
+            observed=m.UiAdmission(admission,False,ready)
+            with patch.object(observer,'_title_observation',return_value=observed):
+                result=observer._prewarm_packet(admission,context)
+            self.assertIs(result.prewarm_context,context)
+            self.assertIs(result.ui_context,context if ready is True else None)
+            self.assertIs(result.title_ready,ready)
+            self.assertFalse(result.admission.activation_ready)
+
     def test_new_world_prewarm_does_not_wait_for_saved_loaded_flag(self):
         observer=m.UiAdmissionObserver.__new__(m.UiAdmissionObserver)
         observer._reader=object();context=N(kind='world')

@@ -36,16 +36,70 @@ class ProcessUiTests(unittest.TestCase):
         self.router=m.ProcessUI(self.session,self.registry,shell_factory=Shell,entry_factory=Entry,reader_factory=lambda pid:self.reader)
         self.title=context();self.world=context('world',world=5,pc=6)
 
-    def test_verified_pre_title_context_warms_shell_without_entry_or_input(self):
+    def test_detached_pause_owner_is_adopted_once_with_current_controller(self):
+        self.router.shell=N(service=object())
+        source=object();self.session._pause_button_source=source
+        owner=N(entry=N(prepare_detached=Mock()))
+        self.router._entry_factory=Mock(return_value=owner)
+        self.router._prepare_pause_contents(self.title)
+        owner.entry.prepare_detached.assert_called_once_with(source)
+        self.router._prepare_pause_contents(self.title)
+        self.assertEqual(self.router._entry_factory.call_count,1)
+        self.assertIs(self.router._new_entry(self.world),owner)
+        self.assertEqual(owner.entry._expected_controller,self.world.controller)
+        self.assertIsNone(self.router._prepared_pause)
+        self.router._new_entry(self.world)
+        self.assertEqual(self.router._entry_factory.call_count,2)
+
+    def test_detached_title_owner_is_adopted_once_without_scope_transfer(self):
+        self.router.shell=N(service=object())
+        owner=N(entry=object(),close=Mock(return_value=True))
+        self.router._prepared_title=owner;self.router._prepared_title_key=self.title.persistent_key
+        self.assertIs(self.router._new_entry(self.title),owner)
+        self.assertIsNone(self.router._prepared_title)
+        self.assertIsNot(self.router._new_entry(self.title),owner)
+
+    def test_detached_title_cleanup_ack_precedes_shell_release(self):
+        owner=N(close=Mock(return_value=False))
+        self.router._prepared_title=owner
+        self.assertFalse(self.router.close())
+        self.assertIs(self.router._prepared_title,owner)
+        owner.close.return_value=True
+        self.assertTrue(self.router.close())
+        self.assertIsNone(self.router._prepared_title)
+
+    def test_shutdown_keeps_detached_pause_owner_until_release_ack(self):
+        self.router._prepared_pause=N(close=Mock(return_value=False))
+        owner=self.router._prepared_pause
+        self.assertFalse(self.router.close())
+        self.assertIs(self.router._prepared_pause,owner)
+        owner.close.return_value=True
+        self.assertTrue(self.router.close())
+        self.assertIsNone(self.router._prepared_pause)
+
+    def test_verified_pre_title_context_stages_entry_without_polling_input(self):
         packet=N(ui_context=None,prewarm_context=self.title,title_ready=False)
         self.assertFalse(self.router.observe(packet))
-        self.assertEqual(self.router.phase,'prewarmed');self.assertEqual(len(self.entries),0)
+        self.assertEqual(self.router.phase,'prewarmed');self.assertEqual(len(self.entries),1)
+        self.assertIsNone(self.entries[0].ready)
+        self.assertNotIn('entry.poll.title',self.events)
+        self.assertIn('entry.prepare.title',self.events)
         self.assertEqual(self.events.count('shell.build_and_prove'),1)
         self.assertFalse(self.router.observe(packet))
         self.assertEqual(self.events.count('shell.build_and_prove'),1)
         self.assertTrue(self.router.observe(N(ui_context=self.title,title_ready=True)))
         self.assertEqual(len(self.entries),1)
         self.assertEqual(self.events.count('shell.build_and_prove'),1)
+
+    def test_bootstrap_shell_rebinds_to_title_even_before_first_entry(self):
+        boot=context('world',world=10,pc=11)
+        self.assertFalse(self.router.observe(N(ui_context=None,prewarm_context=boot,
+            menu_ready=False,admission=N(activation_ready=False))))
+        self.assertIsNone(self.router.context)
+        self.assertTrue(self.router.observe(N(ui_context=self.title,title_ready=True)))
+        self.assertEqual(self.events.count('shell.build_and_prove'),1)
+        self.assertEqual(self.events.count('set_owner.title'),1)
+        self.assertEqual(self.shells[0].context,self.title)
 
     def test_loading_world_rebinds_detached_shell_without_entry_or_repeating_proof(self):
         self.router.observe(N(ui_context=self.title,title_ready=True))
@@ -65,10 +119,10 @@ class ProcessUiTests(unittest.TestCase):
         self.shell_ack=False
         changed=context(gi=9)
         self.assertFalse(self.router.observe(N(ui_context=None,prewarm_context=changed,title_ready=False)))
-        self.assertEqual(len(self.shells),1);self.assertEqual(len(self.entries),0)
+        self.assertEqual(len(self.shells),1);self.assertEqual(len(self.entries),1)
         self.shell_ack=True
         self.router.observe(N(ui_context=None,prewarm_context=changed,title_ready=False))
-        self.assertEqual(len(self.shells),2);self.assertEqual(len(self.entries),0)
+        self.assertEqual(len(self.shells),2);self.assertEqual(len(self.entries),2)
 
     def test_loading_pause_attachment_never_polls_clicks_before_admission(self):
         self.router.observe(N(ui_context=self.title,title_ready=True))
@@ -93,11 +147,14 @@ class ProcessUiTests(unittest.TestCase):
         self.assertTrue(self.router.shell.ready)
         self.assertIn('entry.poll.world',self.events)
 
-    def test_loading_pause_without_prepared_shell_does_not_build_gameplay_ui(self):
+    def test_first_verified_loading_world_builds_only_detached_shell(self):
         self.assertFalse(self.router.observe(N(ui_context=None,prewarm_context=self.world,
             menu_ready=True,admission=N(activation_ready=False))))
-        self.assertIsNone(self.router.shell)
+        self.assertIsNotNone(self.router.shell)
         self.assertEqual(self.entries,[])
+        self.assertEqual(self.router.phase,'prewarmed')
+        self.assertFalse(self.router.gameplay_ui_ready)
+
 
     def test_title_world_title_share_exact_tree_and_new_entries(self):
         self.assertTrue(self.router.poll(self.title));tree=self.router.shell.widgets
@@ -150,7 +207,7 @@ class ProcessUiTests(unittest.TestCase):
     def test_combat_with_same_ui_context_does_not_retire_or_rebuild(self):
         self.router.poll(self.world);before=len(self.events)
         self.router.poll(self.world)
-        self.assertEqual(self.events[before:],['entry.poll.world','shell.poll'])
+        self.assertEqual(self.events[before:],['shell.poll','entry.poll.world'])
         self.assertEqual(len(self.shells),1)
 
     def test_binding_growth_rebuild_is_detached_acknowledged_and_never_exposed_early(self):
@@ -675,6 +732,12 @@ class TypedReadbackTests(unittest.TestCase):
     def test_old_world_controller_readback_rejects_even_if_player_and_lp_match(self):
         self.p._invoke=Mock(side_effect=(self.pc,self.local,obj(8,'OldPC','PlayerController')))
         with self.assertRaisesRegex(proof.UiProofMismatch,'world readback'):self.verify()
+
+    def test_loading_module_snapshot_race_defers_pure_proof(self):
+        self.p._invoke=Mock()
+        self.p._current.side_effect=proof.RuntimeQueryError('MODULE_SNAPSHOT_FAILED')
+        with self.assertRaises(proof.UiProofPending):self.verify()
+        self.p._invoke.assert_not_called()
 
     def test_setter_not_replayed_after_known_getter_lease_deferral(self):
         calls=[];first=[True];setters=[]

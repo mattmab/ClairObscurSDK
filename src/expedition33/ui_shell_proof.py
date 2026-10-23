@@ -208,7 +208,7 @@ class OwnedUiProof:
         try:return self._current_observation(context,preparing=preparing)
         except RuntimeQueryError as error:
             if any(reason in str(error) for reason in ('DESCRIPTOR_IDENTITY_CHANGED','READ_FAILED',
-                    'SELECTED_DEPENDENCY_CHANGED','Object identity changed or belongs to another process',
+                    'SELECTED_DEPENDENCY_CHANGED','MODULE_SNAPSHOT_FAILED','Object identity changed or belongs to another process',
                     'Object property reference changed during observation')):
                 raise UiProofPending('UI context changed during loading observation') from None
             raise
@@ -451,7 +451,7 @@ class OwnedUiProof:
         try:return self._verify_observation(panel,context,rebind=rebind,preparing=preparing)
         except RuntimeQueryError as error:
             if any(reason in str(error) for reason in ('DESCRIPTOR_IDENTITY_CHANGED','READ_FAILED',
-                    'SELECTED_DEPENDENCY_CHANGED','Object identity changed or belongs to another process',
+                    'SELECTED_DEPENDENCY_CHANGED','MODULE_SNAPSHOT_FAILED','Object identity changed or belongs to another process',
                     'Object property reference changed during observation')):
                 raise UiProofPending('UI closure changed during loading handoff') from None
             raise

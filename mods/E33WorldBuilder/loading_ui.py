@@ -27,7 +27,7 @@ class LoadingUI:
             # Neither build attaches a viewport nor captures keyboard input.
             self.hud=BuilderHUD(self.scope,self.mod.help_minimized)
             self.catalog=CatalogMenu(self.mod)
-            with ReadBatch(self.scope.pid,share=True):
+            with ReadBatch(self.scope.pid,share=active_reader() is None):
                 self.hud.build()
                 self.catalog.build()
                 prepare_panel_metadata(self.catalog)
@@ -38,7 +38,7 @@ class LoadingUI:
                 self.context=context
                 try:
                     for panel,proof in zip((self.catalog,self.hud),self.proofs):
-                        proof.verify(panel,context)
+                        proof.verify(panel,context,preparing=context.kind=='world')
                 except UiProofPending:
                     # A fast Continue can end title during construction. Keep
                     # both detached owners; bind() proves the next context.
@@ -52,6 +52,12 @@ class LoadingUI:
             for panel,proof in zip((self.catalog,self.hud),self.proofs):
                 proof.verify(panel,context,rebind=True,preparing=preparing)
         self.bound=context.signature
+
+    def observe_title(self,context):
+        # A loading GC may have interrupted only the final read-only proof.
+        # Re-prove the existing detached trees, without rebuilding or replaying
+        # construction, before the user selects the next save.
+        if not self.released:self.bind(context)
 
     def close(self):
         for panel in (self.catalog,self.hud):

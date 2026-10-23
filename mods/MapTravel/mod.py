@@ -114,7 +114,7 @@ class Mod:
         return self.request is not None and self.request.active
 
     def management(self):
-        return ModDefinition('sdk.map_travel', 'Map Travel', version='0.2.3',
+        return ModDefinition('sdk.map_travel', 'Map Travel', version='0.2.4',
             description='Browse installed maps and travel to their native entrance.',
             actions=(Action('open', 'Open Map Travel', self.open_menu),
                      Action('status', 'Travel status', self.status),))

@@ -47,6 +47,22 @@ class RouteTests(unittest.TestCase):
         self.route.open();replacement.open.assert_called_once_with(view_factory=None)
         self.assertIs(self.route.menu,replacement.menu)
 
+    def test_mod_route_uses_host_reader_and_borrows_existing_operation(self):
+        from contextlib import contextmanager
+        events=[]
+        @contextmanager
+        def operation():
+            events.append('enter')
+            try:yield
+            finally:events.append('exit')
+        self.owner.context.kind='world';self.owner._read_operation=operation
+        self.service.open.side_effect=lambda **kw:events.append('open')
+        with patch('expedition33._reader.active_reader',return_value=None):self.route.open()
+        self.assertEqual(events,['enter','open','exit'])
+        events.clear()
+        with patch('expedition33._reader.active_reader',return_value=object()):self.route.open()
+        self.assertEqual(events,['open'])
+
     def test_borrower_prepare_poll_close_never_build_or_destroy_host_tree(self):
         self.owner.context.kind='world'
         self.route.prepare();self.route.poll();self.route.close()

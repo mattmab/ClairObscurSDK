@@ -253,9 +253,84 @@ class PauseMenuEntry:
         def run():return self.prepare(obj,self.fn(owner,name),**args).invoke(refresh_from_result=True).return_value
         return self._timed(owner+'.'+name,run)
 
+    def _arm_button(self):
+        self.attachment=PauseAttachment(self.scope)
+        lease=self.one(l for l in self.scope._leases if l.active and l.object==self.button)
+        remove=prepare_call(self.planner._catalog,self.button,self.fn('Widget','RemoveFromParent'),{})
+        self.attachment.arm(lease,remove)
+
+    def _build_button(self,gameplay,style,dimensions,*,arm=True):
+        self.button=self.create(self.library,'WidgetBlueprintLibrary','Create',
+            WorldContextObject=self.player,WidgetType=self.cls('WBP_BaseButton_C'),OwningPlayer=self.player)
+        if arm:self._arm_button()
+        button_tree = self.reference(self.button,'UserWidget','WidgetTree')
+        content = self.reference(self.button,'WBP_BaseButton_C','ButtonContent')
+        label = self.create(gameplay,'GameplayStatics','SpawnObject',ObjectClass=self.cls('CommonTextBlock'),Outer=button_tree)
+        self.layout(label,'CommonTextBlock','SetStyle',InStyle=style)
+        self.layout(label,'TextBlock','SetText',InText=self.label)
+        self.layout(label,'TextLayoutWidget','SetJustification',InJustification=1)
+        frame = self.create(gameplay,'GameplayStatics','SpawnObject',ObjectClass=self.cls('Overlay'),Outer=button_tree)
+        label_slot = self.create(frame,'Overlay','AddChildToOverlay',Content=label)
+        self.layout(label_slot,'OverlaySlot','SetHorizontalAlignment',InHorizontalAlignment=2)
+        self.layout(label_slot,'OverlaySlot','SetVerticalAlignment',InVerticalAlignment=2)
+        self.call(content,'ContentWidget','SetContent',Content=frame)
+        self.layout(self.button,'CommonButtonBase','SetMinDimensions',
+            InMinWidth=dimensions[0],
+            InMinHeight=dimensions[1])
+        self.layout(self.button,'CommonButtonBase','SetIsSelectable',bInIsSelectable=False)
+        self.layout(self.button,'CommonButtonBase','SetIsToggleable',bInIsToggleable=False)
+        self._label_widget=label
+
+    def prepare_detached(self,source):
+        """Build owned button contents at title; borrow no title widget leases."""
+        if self.state!='new' or not self.available:return False
+        catalog=source['catalog']
+        from ._metadata_stabilization import script_function
+        selected=[]
+        for obj in catalog.objects:
+            try:script_function(catalog,obj)
+            except ValueError:continue
+            selected.append(obj)
+        selected.extend(o for o in catalog.objects if o.class_name in ('Enum','ScriptStruct'))
+        selected.extend((source['player'],source['library'],source['gameplay'],
+            catalog.by_index[source['local'][0]],catalog.by_index[catalog.find_class('WBP_BaseButton_C').index]))
+        # Do not carry the title entry's transient buttons, slots or borrowed
+        # restore widgets into a second construction planner.
+        catalog=catalog.subset(selected)
+        catalog=capture_selected(self.parent_scope.pid,tuple((o.index,o.serial,o.address) for o in catalog.objects))
+        cache=getattr(self.parent_scope._session,'_pause_schema_observations',None)
+        if cache is not None:
+            from ._planning_metadata import MetadataObservations
+            checked=MetadataObservations()
+            for key,entry in cache._entries.items():
+                try:
+                    for dependency in entry[1]:catalog.resolve(dependency)
+                except RuntimeQueryError:continue
+                checked._entries[key]=entry
+            self.parent_scope._session._pause_schema_observations=checked
+        self.scope=SessionScope(self.parent_scope);self.state='building'
+        self.planner=self.scope.invocation_planner(selected_results=True,catalog=catalog)
+        self.planner._require_stable_ui_identities=source['stable']
+        self._metadata_stable_ui=source['stable']
+        self.player=source['player'];self.library=source['library']
+        self._prepared_local=source['local']
+        self._build_button(source['gameplay'],source['style'],source['dimensions'],arm=False)
+        self.flush_layout()
+        # Detached contents must belong to the persistent game instance, not
+        # retain the departing title world/controller through an outer chain.
+        chain=self.planner._catalog.outer_chain(self.button)
+        roots=[o for o in chain if o.class_name=='BP_jRPG_GI_Custom_C']
+        if (len(roots)!=1 or (roots[0].index,roots[0].serial,roots[0].address)!=source['gi']
+                or (self.button.outer_index,self.button.outer_serial)!=(roots[0].index,roots[0].serial)
+                or any(o.class_name=='World' for o in chain)):
+            raise RuntimeError('Detached pause button is outside the persistent game instance')
+        self.state='prepared'
+        return True
+
     def install(self):
         if self._readiness is not None and self._readiness() is not True:return False
-        if self.state != 'new' or not self.available: return False
+        if self.state not in ('new','prepared') or not self.available:return False
+        prepared_button=self.state=='prepared'
         started = time.perf_counter()
         from .pause_preparation import NAMES,capture as capture_prepared
         names=NAMES
@@ -284,9 +359,14 @@ class PauseMenuEntry:
                 if (player.pid,player.index,player.serial,player.address)!=expected:return False
             self.timings['current_entry_ms']=(time.perf_counter()-started)*1000-self.timings['catalog_ms']
             self.player, self.pause = current
-            self.scope = SessionScope(self.parent_scope)
-            self.state = 'building'
-            self.planner = self.scope.invocation_planner(selected_results=True,catalog=catalog)
+            if prepared_button:
+                owned=tuple((lease.object.index,lease.object.serial,lease.object.address)
+                    for lease in self.scope._leases if lease.active and lease._object is not None)
+                catalog=catalog.with_observations(capture_selected(self.parent_scope.pid,tuple(dict.fromkeys(owned))))
+                self.planner.close();self._functions.clear()
+            else:self.scope=SessionScope(self.parent_scope)
+            self.state='building'
+            self.planner=self.scope.invocation_planner(selected_results=True,catalog=catalog)
             self.planner._require_stable_ui_identities=getattr(self,'_metadata_stable_ui',False)
             self.local_player = self.reference(self.player,'PlayerController','Player')
             local_values = read_values_many(self.planner._catalog, (self.local_player,),
@@ -322,28 +402,28 @@ class PauseMenuEntry:
             padding = slot_values[source_slot.index].values[self.cls('GridSlot').index,'Padding']
             self.timings['discovery_ms'] = (time.perf_counter() - started) * 1000
             creation_started=time.perf_counter()
-            self.button = self.create(self.library,'WidgetBlueprintLibrary','Create',
-                WorldContextObject=self.player, WidgetType=self.cls('WBP_BaseButton_C'), OwningPlayer=self.player)
-            self.attachment = PauseAttachment(self.scope) # Publish before arming native cleanup.
-            lease = self.one(l for l in self.scope._leases if l.active and l.object == self.button)
-            remove = prepare_call(self.planner._catalog,self.button,self.fn('Widget','RemoveFromParent'),{})
-            self.attachment.arm(lease,remove)
-            button_tree = self.reference(self.button,'UserWidget','WidgetTree')
-            content = self.reference(self.button,'WBP_BaseButton_C','ButtonContent')
-            label = self.create(gameplay,'GameplayStatics','SpawnObject',ObjectClass=self.cls('CommonTextBlock'),Outer=button_tree)
-            self.layout(label,'CommonTextBlock','SetStyle',InStyle=style)
-            self.layout(label,'TextBlock','SetText',InText=self.label)
-            self.layout(label,'TextLayoutWidget','SetJustification',InJustification=1)
-            frame = self.create(gameplay,'GameplayStatics','SpawnObject',ObjectClass=self.cls('Overlay'),Outer=button_tree)
-            label_slot = self.create(frame,'Overlay','AddChildToOverlay',Content=label)
-            self.layout(label_slot,'OverlaySlot','SetHorizontalAlignment',InHorizontalAlignment=2)
-            self.layout(label_slot,'OverlaySlot','SetVerticalAlignment',InVerticalAlignment=2)
-            self.call(content,'ContentWidget','SetContent',Content=frame)
-            self.layout(self.button,'CommonButtonBase','SetMinDimensions',
-                InMinWidth=resume_values[self.cls('CommonButtonBase').index,'MinWidth'],
-                InMinHeight=resume_values[self.cls('CommonButtonBase').index,'MinHeight'])
-            self.layout(self.button,'CommonButtonBase','SetIsSelectable',bInIsSelectable=False)
-            self.layout(self.button,'CommonButtonBase','SetIsToggleable',bInIsToggleable=False)
+            if prepared_button:
+                # LocalPlayer-owned widgets resolve the current controller after
+                # travel. Verify it freshly before attaching the detached tree.
+                local_id=(self.local_player.index,self.local_player.serial,self.local_player.address)
+                if local_id!=self._prepared_local:
+                    raise RuntimeError('Prepared pause button LocalPlayer changed')
+                owning=self.call(self.button,'Widget','GetOwningPlayer')
+                local=self.call(self.button,'Widget','GetOwningLocalPlayer')
+                if not self._same_bound_object(owning,self.player) or not self._same_bound_object(local,self.local_player):
+                    raise RuntimeError('Prepared pause button current owning player changed')
+                # Native attachment ownership is world-specific. It begins only
+                # here, after the persistent detached tree's new-world proof.
+                self._arm_button()
+                self.layout(self._label_widget,'CommonTextBlock','SetStyle',InStyle=style)
+                self.layout(self.button,'CommonButtonBase','SetMinDimensions',
+                    InMinWidth=resume_values[self.cls('CommonButtonBase').index,'MinWidth'],
+                    InMinHeight=resume_values[self.cls('CommonButtonBase').index,'MinHeight'])
+                label=self._label_widget
+            else:
+                self._build_button(gameplay,style,(resume_values[self.cls('CommonButtonBase').index,'MinWidth'],
+                    resume_values[self.cls('CommonButtonBase').index,'MinHeight']))
+                label=self._label_widget
             self.timings['button_contents_ms']=(time.perf_counter()-creation_started)*1000
             attachment_started=time.perf_counter()
             pause_panel = self.reference(self.pause,'WBP_PauseMenu_C','PausePanel')
@@ -496,7 +576,7 @@ class PauseMenuEntry:
             log.info('Recovered expired pause click subscription')
         now = time.monotonic()
         try:
-            if self.state == 'new':
+            if self.state in ('new','prepared'):
                 if now < self._next_scan: return
                 self._next_scan = now + .25
                 self.install()

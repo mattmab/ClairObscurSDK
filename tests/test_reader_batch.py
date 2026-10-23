@@ -17,6 +17,24 @@ class ReadBatchTests(unittest.TestCase):
         self.addCleanup(batch.__exit__)
         return batch
 
+    def test_warm_does_not_bind_or_replace_another_read_operation(self):
+        parent=ReadBatch(17,share=True);reader=ReadBatch(17,share=True)
+        process=SimpleNamespace(stdin=io.StringIO(),stdout=io.StringIO(),wait=Mock(return_value=0),kill=Mock())
+        token=_active.set(parent)
+        try:
+            with patch('expedition33._reader.subprocess.Popen',return_value=process) as spawn, \
+                    patch('expedition33._reader.threading.Thread'), \
+                    patch.object(reader,'_line',return_value='{"event":"reader_ready","version":2,"pid":17}'):
+                reader.warm();reader.warm()
+                self.assertIs(_active.get(),parent);self.assertIsNone(reader._token)
+                self.assertTrue(reader.supports_catalog_values)
+                with self.assertRaisesRegex(RuntimeQueryError,'Enter the read batch'):
+                    reader.query(['--catalog'])
+                spawn.assert_called_once()
+        finally:_active.reset(token)
+        with reader.bind():self.assertIs(_active.get(),reader)
+        self.assertIsNone(_active.get());reader.close();parent.close()
+
     def test_complete_framed_response_uses_existing_snapshot_validation(self):
         batch = self.batch(['{"event":"snapshot_start","pid":17}\n',
             '{"event":"snapshot_end","emitted":0}\n',

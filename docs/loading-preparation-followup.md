@@ -21,19 +21,40 @@ Activation console messages are batched between input-service intervals.
 Preparation, activation and usable timings remain recorded and are displayed
 by `startuptiming`.
 
-## Validation and remaining work
+## Title and loading refresh
 
-Local live tests exercised cold launches, save loads, Flight toggling, Mods
-opening, and return-to-title followed by another save load in the same session.
-Flight consumed its loading snapshot in 31–40 ms in the measured runs. A warm
-Mods opening took 163 ms. The full Python suite ran 2,039 tests with 8 skips;
-the read worker compiled with warnings treated as errors.
+Detached core menus, World Builder catalog/HUD trees and title/pause button
+contents now prepare in the engine bootstrap loading window. The title entry
+uses fresh authored widget hierarchy proof independently of save readiness and
+can attach behind the Press Any Button screen. Gameplay activation still waits
+for fresh possession and world admission. Read-only GC races defer proof and
+untouched preparation owners; they do not replay uncertain native mutations.
 
-The first-visible-gameplay readiness target is **not yet met**. Final saved-mod
-restoration took approximately 0.59–0.76 seconds after the owner logged
-exploration readiness. That interval excludes earlier synchronous UI handoff
-and pause-entry attachment: closer screen sampling exposed several seconds of
-that work after gameplay started becoming visible. These measurements must not
-be reported as zero-delay readiness. Moving the eligible preparation window
-earlier did not eliminate that handoff on the tested save. Further work must
-remove or schedule the synchronous UI setup before presentation.
+Public mod versions: Continent Flight 0.4.3, Map Travel 0.2.4 and World Builder
+0.32.5-experimental. The SDK version remains 0.1.0-rc18 with native runtime210.
+This refresh uses a new release tag; earlier assets remain immutable.
+
+## Validation and remaining limits
+
+The Python suite passed 2,060 tests with 8 skips; the separate World Builder
+suite passed 140 tests. Live checks covered cold launch, title menu fade-in,
+save loading, Flight toggle/restore, keybind scrolling and same-session title
+return. The Mods button was present alongside the authored title buttons during
+their fade-in. Title attachment took 0.88-1.01 seconds before that menu appeared;
+a prepared title Mods opening measured 167 ms.
+
+In the final cold run, core menu preparation took 6.25 seconds, World Builder
+3.40 seconds and Flight preparation 0.68 seconds, all during startup before
+save selection. Flight activated from its loading snapshot in 44 ms. All seven
+enabled gameplay mods restored successfully. The owner logged final restoration
+0.65 seconds after exploration readiness, excluding earlier UI rebinding and
+pause attachments. Those attachments took about 0.71 and 0.60 seconds.
+
+The first-visible-gameplay zero-delay target is not established. First pause
+inspection showed both buttons ready, but the sampling does not establish an
+80 ms bound after the earliest possible pause. Changing the shared panel from
+Mods to Map Travel (or back) still repaints and measured about 0.69 seconds,
+down from 2.19 seconds. Its paint phase remains about 0.50-0.52 seconds. Thus the
+200 ms goal applies to the measured prepared Mods opening, not every view change.
+Timings remain available through `startuptiming`; detailed stage measurements
+are kept in the local SDK log, not normal console startup output.
