@@ -16,7 +16,7 @@ static_assert(sizeof(Packet) == 808, "key packet ABI");
 inline bool supported_key(uint32_t key) {
     return (key >= 65 && key <= 90) || (key >= 48 && key <= 57) ||
         (key >= 112 && key <= 123) || key == 8 || key == 9 || key == 13 ||
-        key == 27 || (key >= 32 && key <= 40) || key == 45 || key == 46 || key == 188 || key == 190;
+        key == 27 || (key >= 32 && key <= 40) || key == 45 || key == 46 || key == 188 || key == 189 || key == 190;
 }
 inline bool valid_request(const Packet& p) {
     if(p.version != 1 || !p.session || !p.generation || p.count > capacity ||

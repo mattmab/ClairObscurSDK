@@ -5,6 +5,14 @@ from . import _multi_button_wire as wire
 from .menu import MenuError
 
 
+class ControlBindBatchRejected(MenuError):
+    """Known stopped bind batch; its menu still owns the dispatched prefix."""
+    def __init__(self,completed,error):
+        self.completed=completed
+        super().__init__('Control bind batch rejected; close its owning menu',
+            outcome='returned',native_error=error)
+
+
 class ControlAction:
     def __init__(self, owner, lease, callback):
         self._owner, self._lease, self._callback = owner, lease, callback
@@ -124,13 +132,22 @@ class MenuControls:
         if len(self.controls) + len(bindings) > 64:
             raise ValueError('Menu control capacity exceeded')
         controls, requests = [], []
+        # Snapshot once before any native acquisition. Large retained shells
+        # otherwise rescan every lease for each visible control.
+        by_identity = {}
+        for lease in session._leases:
+            if lease.active:
+                obj = lease.object
+                identity = (obj.pid, obj.index, obj.serial, obj.address)
+                by_identity.setdefault(identity, []).append(lease)
+        protected = {id(c._lease) for c in self.controls if c._state != 'closed'}
+        selected = set()
         for child, callback in bindings:
             if not callable(callback): raise TypeError('Button callback must be callable')
-            leases = [lease for lease in session._leases if lease.active and
-                      (lease.object.pid, lease.object.index, lease.object.serial, lease.object.address) ==
-                      (child.pid, child.index, child.serial, child.address)]
-            if len(leases) != 1 or self.protects(leases[0]) or any(c._lease is leases[0] for c in controls):
+            leases = by_identity.get((child.pid, child.index, child.serial, child.address), ())
+            if len(leases) != 1 or id(leases[0]) in protected or id(leases[0]) in selected:
                 raise ValueError('Control requires one unbound owned lease')
+            selected.add(id(leases[0]))
             control = ControlAction(self, leases[0], callback)
             controls.append(control)
             requests.append(('multi-button', wire.request('bind', self.menu._owner,
@@ -139,13 +156,36 @@ class MenuControls:
         _ui_batch.encode(requests)
         self.controls.extend(controls)
         try:
-            responses = _ui_batch.execute(session, requests)
+            responses = _ui_batch.execute_controls(session, requests)
             for control, (_, sent), response in zip(controls, requests, responses):
                 reply = wire.decode(sent, response['multi_button_packet'],
                                     session=session._transport.button_action_session)
                 if reply.error or any(c is not control and c._registration == reply.registration for c in self.controls):
                     raise MenuError('UI control batch rejected', outcome='unknown')
                 control._registration, control._state = reply.registration, 'active'
+        except _ui_batch.ControlBatchRejected as error:
+            # Validate the complete known prefix before adopting any native
+            # registration. The failed item can already retain its child.
+            try:
+                done=error.completed
+                if (not 1<=done<=len(controls) or len(error.replies)!=done or
+                        not error.replies[-1].error or error.replies[-1].error==1014 or
+                        error.replies[-1].outcome not in ('returned','not_started') or
+                        any(reply.error or reply.outcome!='returned' for reply in error.replies[:-1])):
+                    raise ValueError('Invalid stopped control prefix')
+                existing={c._registration for c in self.controls if c not in controls and c._registration}
+                registrations=[reply.registration for reply in error.replies[:-1]]
+                if (any(not value or value in existing for value in registrations) or
+                        len(set(registrations))!=len(registrations)):
+                    raise ValueError('Duplicate stopped control registration')
+                for control,reply in zip(controls[:done-1],error.replies[:-1]):
+                    control._registration,control._state=reply.registration,'active'
+                controls[done-1]._revoke('menu_closing')
+                for control in controls[done:]:
+                    control._revoke('closed');self.controls.remove(control)
+            except BaseException:
+                self.abort();raise
+            raise ControlBindBatchRejected(done,error.inner_error) from error
         except BaseException:
             self.abort()
             raise
@@ -198,6 +238,8 @@ class MenuControls:
             self.sequence = event.sequence
             control = active[event.registration]
             if not control.active or self.menu._state not in ('attached', 'focused'): continue
+            readiness=getattr(self.menu,'_world_callback_readiness',None)
+            if readiness is not None and readiness() is not True:continue
             try:
                 control._callback(event)
             except BaseException:

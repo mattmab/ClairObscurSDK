@@ -508,6 +508,32 @@ class Mod:
             state['velocity'] = dict(self.invoke('velocity'))
         return state
 
+    def revoke_world(self,context):
+        self.disabled=True;self.discovery_generation+=1
+        self.input_state={};self.tap.last=None
+        self._retirement_token=context.previous_token
+        self._retirement_reader_closed=False
+        if self.discovery_future is not None:self.discovery_future.cancel()
+
+    def begin_world_retirement(self,context):
+        return self.poll_world_retirement(context)
+
+    def poll_world_retirement(self,context):
+        if getattr(self,'_retirement_token',None)!=context.previous_token:return 'unknown'
+        future=self.discovery_future
+        if future is not None and not future.done():return 'pending'
+        # Discovery workers only read. Never land or restore old movement
+        # properties after the coordinator has retired their authoritative epoch.
+        self.discovery_future=None
+        if self.discovery_worker is not None:
+            self.discovery_worker.shutdown(wait=False,cancel_futures=True)
+            self.discovery_worker=None
+        if self.planner is not None:self.planner.close();self.planner=None
+        if not self._retirement_reader_closed:self._close_reader();self._retirement_reader_closed=True
+        self.calls={};self.cached_observations=None;self.flight_tuning=[]
+        self.flying=False;self.restore_mode=None;self.session=None
+        return 'ack'
+
     def disable(self):
         self.disabled = True
         self.discovery_generation += 1

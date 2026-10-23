@@ -97,6 +97,8 @@ class ButtonAction:
         for event in result.events:
             if not self.active or not self._menu.active: break
             self._last_sequence = event.sequence
+            readiness=getattr(self._menu,'_world_callback_readiness',None)
+            if readiness is not None and readiness() is not True:continue
             try:
                 self._callback(event)
             except BaseException:

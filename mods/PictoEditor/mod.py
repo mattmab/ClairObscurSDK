@@ -1410,6 +1410,76 @@ class StockEditor(PauseMenuEntry):
         log.info('Picto disable restoration: %s',result)
         return result
 
+    def revoke_world(self,context):
+        self._retirement_token=context.previous_token
+        self._retirement_reader_future=None;self._retirement_bulk_cancelled=False
+        self.restore_queue.clear();self.catalog_request=None;self.lumina_ui_pending=False
+        self.unlock_confirm=self.clear_confirm=None
+        if self.bulk_job is not None:self.bulk_job.queue.clear()
+        job=self.unlock_bulk
+        if job is not None:
+            job.queue.clear();job.cancelled=True
+        futures=(self.catalog_future,self.refresh_future,
+            getattr(job,'future',None),getattr(self.unlock_transaction,'future',None))
+        self._retirement_read_futures=tuple(future for future in futures if future is not None)
+        for future in self._retirement_read_futures:future.cancel()
+
+    def retire_world(self,context):
+        if getattr(self,'_retirement_token',None)!=context.previous_token:return 'unknown'
+        job=self.unlock_bulk
+        if job is not None and getattr(job,'native',False) is True and job.dispatched:
+            if not self._retirement_bulk_cancelled:
+                if job.error is not None:return 'unknown'
+                # Native op3 only stops its owned timer/remaining frame writes.
+                # Unlike stop(), it does not schedule current-save reconciliation.
+                state=job._command(3)
+                if state not in (2,3,4):return 'unknown'
+                self._retirement_bulk_cancelled=True
+        if any(not future.done() for future in self._retirement_read_futures):return 'pending'
+        if self._retirement_reader_future is None:
+            self._retirement_reader_future=self.refresh_worker.submit(
+                lambda:self.worker_reader.close() if self.worker_reader is not None else None)
+            return 'pending'
+        if not self._retirement_reader_future.done():return 'pending'
+        self._retirement_reader_future.result()
+        self.refresh_worker.shutdown(wait=False,cancel_futures=True)
+        self.main_reader.close()
+        # Card/catalog layout snapshots belong to the retired stock UI. Never
+        # restore them or tick a bulk equipment refresh against the next save.
+        if self.attachment is not None:
+            if not self.attachment.retire_world():return 'pending'
+            self.attachment=None
+        while self.observers:
+            self.observers[0].close();self.observers.pop(0)
+        if self.bulk_job is not None:
+            self.bulk_job.planner.close();self.bulk_job=None
+        if self.card_layout.planner is not None:self.card_layout.planner.close()
+        self.card_layout.saved.clear();self.card_layout.pending=None
+        if self.planner is not None:self.planner.close()
+        self.catalog_future=self.refresh_future=None
+        self.state='closed'
+        return 'ack'
+
+    def close_failed_startup(self):
+        """Release pre-UI readers only; never compensate unknown game writes.
+
+        Activation has not created editor UI or interactive jobs. If that
+        invariant changes, preserve the owner and let session teardown handle
+        its native journal instead of invoking ordinary disable callbacks.
+        """
+        if any(value is not None for value in (self.scope,self.attachment,
+                self.native_catalog,self.unlock_bulk,self.unlock_transaction,self.bulk_job)):
+            raise RuntimeError('Startup cleanup has unexpected interactive ownership; retain native journal')
+        self.restore_queue.clear();self.catalog_request=None
+        for future in (self.catalog_future,self.refresh_future):
+            if future is not None:future.cancel()
+        try:
+            self.refresh_worker.submit(lambda:self.worker_reader.close() if self.worker_reader is not None else None).result()
+        finally:
+            try:self.main_reader.close()
+            finally:self.refresh_worker.shutdown(wait=True,cancel_futures=True)
+        self.state='closed'
+
     def close(self, *, restore_originals=False):
         if self.unlock_bulk is not None:self.unlock_bulk.stop()
         if self.unlock_bulk is not None and getattr(self.unlock_bulk,'native',False) is True:
@@ -1481,6 +1551,8 @@ class Mod:
 
     def enable(self, session):
         self.session = session
+        self._startup_failed=True
+        self.editor=None
         started = time.perf_counter()
         self.editor = StockEditor(session)
         try:
@@ -1493,14 +1565,19 @@ class Mod:
                 log.info('Picto pre-override baseline: pid=%s definitions=%s',session.pid,len(baseline))
                 self.editor.timings['baseline_ms']=round((time.perf_counter()-started)*1000,1)
                 self.startup_restore = restore(session, self.editor.preferences.profiles, catalog=startup_catalog)
+                if self.startup_restore['missing']:
+                    raise RuntimeError('Saved Picto restoration is incomplete')
             self.editor.restore_queue.clear()
             self.editor.timings['restore_ms'] = round((time.perf_counter() - started) * 1000, 1)
             log.info('Picto startup restoration: %s', self.startup_restore)
         except Exception as error:
             self.editor.restore_error = str(error)
             log.exception('Picto startup restoration stopped; no mutation retry')
-        self.editor.prepare_catalog()
-        self.editor.poll()
+            raise RuntimeError('Picto startup restoration failed; gameplay outcome retained without replay') from error
+        self._startup_failed=False
+        # Baselines and saved gameplay restoration above are activation work.
+        # The optional catalog starts from open_catalog(); stock-panel discovery
+        # runs in normal poll, after the host can report that restoration ended.
         self.editor.timings['enable_ms'] = round((time.perf_counter() - started) * 1000, 1)
         log.info('Picto enable timings: %s', self.editor.timings)
         session.console.expose('picto_editor', self)
@@ -1601,6 +1678,22 @@ class Mod:
                     sum(x[0] for x in samples)/len(samples),sum(x[1] for x in samples)/len(samples),max(x[1] for x in samples))
                 self._poll_samples=[]
 
+    def revoke_world(self,context):
+        self._retirement_token=context.previous_token
+        if self.editor is not None:self.editor.revoke_world(context)
+
+    def begin_world_retirement(self,context):
+        return self.poll_world_retirement(context)
+
+    def poll_world_retirement(self,context):
+        if getattr(self,'_retirement_token',None)!=context.previous_token:return 'unknown'
+        if self.editor is None:return 'ack'
+        result=self.editor.retire_world(context)
+        if result=='ack':self.session=None
+        return result
+
     def disable(self):
-        self.editor.close(restore_originals=True)
+        if self.editor is None:return
+        if getattr(self,'_startup_failed',False):self.editor.close_failed_startup()
+        else:self.editor.close(restore_originals=True)
 

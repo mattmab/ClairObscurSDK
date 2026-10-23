@@ -105,6 +105,9 @@ class InvocationPlanner:
             enum_values=session.supports_enum_values,
             _trace_plan=getattr(session, '_trace_plan_for', lambda _: None)(function),
             _metadata=self._metadata)
+        if getattr(self,'_require_stable_ui_identities',False):
+            from ._metadata_stabilization import require_positive_plan_identities
+            require_positive_plan_identities(plan)
         return PreparedInvocation(self, plan)
 
     def prepare_blueprint(self, obj, function, **arguments):

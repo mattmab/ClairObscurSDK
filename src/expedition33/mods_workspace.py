@@ -342,7 +342,7 @@ class ModsWorkspaceMenu(NativeManagementMenu):
         self._field_context = None
 
     def _open(self):
-        self._field_context = None
+        if not getattr(self,'_reuse_prepared_frame',False):self._field_context = None
         return super()._open()
 
     def _paint_frame(self):
@@ -383,13 +383,18 @@ class ModsWorkspaceMenu(NativeManagementMenu):
         if not isinstance(self.view, ModsWorkspaceView):
             return super()._bind()
         frame = self.frame
-        bindings = []
+        retaining=getattr(self,'_retain_scroll_callbacks',False)
+        if retaining and getattr(self,'_bound_frame',None) is not frame:
+            raise ManagementError('Cannot retain callbacks across a changed frame')
+        if not retaining:self._binding_tokens={}
+        bindings = [];binding_tokens=[]
         bindable = self.view.bindable_tokens() if callable(getattr(self.view, 'bindable_tokens', None)) else None
         for index, control in enumerate(frame.controls):
             if not control.enabled:
                 continue
             if bindable is not None and control.token not in bindable:
                 continue
+            if retaining and control.token in self._binding_tokens:continue
             def click(_event, control=control, frame=frame):
                 if self._presentation_suspended:
                     return
@@ -408,7 +413,10 @@ class ModsWorkspaceMenu(NativeManagementMenu):
                 if operation == 'clear':
                     self._field_context = None
                 self.submit(frame.revision, control.token, **submission)
-            bindings.append((self.panel.buttons[index], click))
+            bindings.append((self.panel.buttons[index], click));binding_tokens.append(control.token)
         for start in range(0,len(bindings),48):
-            self.actions.extend(self.panel.menu.bind_controls(bindings[start:start+48]))
+            controls=self.panel.menu.bind_controls(bindings[start:start+48])
+            self.actions.extend(controls)
+            self._binding_tokens.update(zip(binding_tokens[start:start+48],controls))
+        self._bound_frame=frame
         self._accept_input = True

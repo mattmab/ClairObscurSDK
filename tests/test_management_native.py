@@ -1,6 +1,6 @@
 import unittest
 from contextlib import nullcontext
-from unittest.mock import patch
+from unittest.mock import patch, Mock
 from types import SimpleNamespace
 
 import test_management
@@ -19,7 +19,8 @@ class FakePanel:
         self.labels = [f'label{i}' for i in range(12)]
         self.text, self.enabled, self.handles, self.operations = {}, {}, [], []
         self.visible = {}
-        self.menu = SimpleNamespace(bind_control=self.bind,
+        self.menu = None
+        self._binding_menu = SimpleNamespace(bind_control=self.bind,
             bind_controls=lambda bindings: [self.bind(*b) for b in bindings],
             remove_controls=lambda controls: all(c.remove() for c in controls))
         self.defer = False
@@ -27,7 +28,7 @@ class FakePanel:
     def enable_cached_planning(self): self.operations.append('planner')
     def prime_menu_plan(self): self.operations.append('prime')
     def paint_batch(self): return nullcontext()
-    def open(self): self.operations.append('open'); self.state = 'open'
+    def open(self): self.operations.append('open'); self.state = 'open'; self.menu=self._binding_menu
     def set_text(self, label, text): self.text[label] = text
     def set_enabled(self, index, enabled): self.enabled[index] = enabled
     def set_visible(self, index, visible): self.visible[index] = visible
@@ -46,12 +47,14 @@ class FakePanel:
         if self.defer: return False
         for handle in self.handles: handle.active = False
         self.state = "closed"
+        self.menu = None
         return True
     def hide(self):
         if self.defer: return False
         for handle in self.handles: handle.active = False
         self.operations.append('hide')
         self.state = 'built'
+        self.menu = None
         return True
 
 
@@ -63,6 +66,16 @@ class NativeManagementTests(unittest.TestCase):
         with patch('expedition33.management_native.OwnedMenuPanel', FakePanel):
             self.menu = NativeManagementMenu(None, self.registry)
         self.menu.open()
+
+    def test_detached_refresh_rejects_retained_active_callbacks(self):
+        self.start()
+        self.menu.panel.state='built';self.menu.panel.menu=None
+        with patch.object(self.menu,'_paint') as paint:
+            with self.assertRaisesRegex(ManagementError,'acknowledged native detach'):
+                self.menu.refresh_detached()
+        paint.assert_not_called()
+        # Preserve active owners for the normal cleanup path.
+        self.assertTrue(any(action.active for action in self.menu.actions))
 
     def click(self, label):
         control = next(c for c in self.menu.frame.controls if c.label == label)
@@ -125,6 +138,48 @@ class NativeManagementTests(unittest.TestCase):
         self.assertFalse(self.menu.close())
         self.menu.panel.defer = False
         self.assertTrue(self.menu.close())
+
+    def test_owned_tree_close_skips_per_child_fallback_after_ack(self):
+        self.start()
+        self.menu.panel.close_owned_tree = Mock(return_value=True)
+        self.menu.panel.close = Mock(side_effect=AssertionError('per-child close fallback'))
+        self.assertTrue(self.menu.close())
+        self.menu.panel.close_owned_tree.assert_called_once()
+        self.menu.panel.close.assert_not_called()
+        self.assertFalse(self.menu.actions)
+        self.assertFalse(self.menu._accept_input)
+
+    def test_pending_owned_tree_close_keeps_handles_and_does_not_fallback(self):
+        self.start()
+        actions = list(self.menu.actions)
+        self.menu.panel.close_owned_tree = Mock(side_effect=[False, True])
+        self.menu.panel.close = Mock(side_effect=AssertionError('fallback must not retry'))
+        self.assertFalse(self.menu.close())
+        self.assertEqual(self.menu.actions, actions)
+        self.assertFalse(self.menu._accept_input)
+        self.assertTrue(self.menu.close())
+        self.assertFalse(self.menu.actions)
+        self.menu.panel.close.assert_not_called()
+        self.assertEqual(self.menu.panel.close_owned_tree.call_count, 2)
+
+    def test_unknown_owned_tree_close_retains_owner_without_fallback(self):
+        self.start()
+        actions = list(self.menu.actions)
+        self.menu.panel.close_owned_tree = Mock(side_effect=RuntimeError('unknown root cleanup'))
+        self.menu.panel.close = Mock(side_effect=AssertionError('unknown fallback'))
+        with self.assertRaisesRegex(RuntimeError, 'unknown root cleanup'):
+            self.menu.close()
+        self.assertEqual(self.menu.actions, actions)
+        self.assertFalse(self.menu._accept_input)
+        self.menu.panel.close_owned_tree.assert_called_once()
+        self.menu.panel.close.assert_not_called()
+
+    def test_noncallable_owned_tree_contract_uses_legacy_close(self):
+        self.start()
+        self.menu.panel.close_owned_tree = None
+        self.assertTrue(self.menu.close())
+        self.assertEqual(self.menu.panel.state, 'closed')
+        self.assertIn('close', self.menu.panel.operations)
 
     def test_long_text_has_bounded_lines_and_does_not_change_registry(self):
         self.assertEqual(display_line('one\ntwo', 20), 'one two')

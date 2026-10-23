@@ -8,6 +8,7 @@ from test_cinematics import module as browser
 from expedition33.cinematics import presentation
 
 from expedition33 import management_native as management
+from expedition33._menu_latency import MenuLatency
 
 class DeferredPresentationTests(unittest.TestCase):
     def setUp(self):
@@ -16,6 +17,8 @@ class DeferredPresentationTests(unittest.TestCase):
         self.panel=N(state='open',uncertain=False,menu=self.native,buttons=list(range(12)),
             paint_batch=nullcontext,_mutate=lambda fn,*args:fn(*args))
         self.menu=management.NativeManagementMenu.__new__(management.NativeManagementMenu)
+        self.menu.latency=MenuLatency()
+        self.menu._button_colors={}
         self.menu.panel=self.panel;self.menu.actions=[];self.menu.failure=None
         self.menu._accept_input=True;self.menu._presentation_suspended=False;self.menu._presentation_dirty=False
         self.menu._reusable=True;self.menu.error=None

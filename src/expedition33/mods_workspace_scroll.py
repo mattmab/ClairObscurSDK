@@ -6,16 +6,28 @@ The ScrollBox owns wheel/drag/clipping; registry generations own every action.
 import math
 import time
 import textwrap
+from contextlib import contextmanager
 from dataclasses import replace
 from .management import ManagementError, Selection
 from .management_view import MenuControl, MenuFrame
 from .management_native import NativeManagementMenu, display_detail, display_line
 from .mods_workspace import ModsWorkspaceView, ModsWorkspacePanel, ModsWorkspaceMenu, THEMES
 from .widgets import OwnedMenuPanel
+from ._menu_latency import measure_method
 
 EMPTY = MenuControl(-1, '', False)
 ROW_HEIGHT = 84
 CONTROL_COUNT = 105
+MAX_FIXED_KEY_ROWS = 128
+
+def key_token(row):
+    return row_token(row) if row < 12 else CONTROL_COUNT + (row - 12) * 6
+
+def column_key_token(row,capacity):
+    return 64+row if row<12 else CONTROL_COUNT+max(0,capacity-12)*6+row-12
+
+def key_control_count(capacity):
+    return CONTROL_COUNT + max(0, capacity - 12) * 7
 TEXT_MIN, TEXT_MAX, TEXT_DEFAULT = .75, 2.75, 1.35
 
 def bounded_detail(text, **bounds):
@@ -61,6 +73,7 @@ class ScrollWorkspaceView(ModsWorkspaceView):
         self.key_scroll_start = 0
         self.key_total = 0
         self.binding_start = 0
+        self.key_row_capacity = 12
 
     @property
     def native_scroll_list(self):
@@ -71,14 +84,32 @@ class ScrollWorkspaceView(ModsWorkspaceView):
         cell = index * 2
         return cell if cell < 48 else 81 + cell - 48
 
+    @property
+    def native_scroll_keys(self):
+        return self.screen == 'all_keys'
+
     def bindable_tokens(self):
+        if self.native_scroll_keys:
+            return ({key_token(i)+cell for i in range(self.binding_start,
+                min(self.total_rows,self.binding_start+8)) for cell in range(6)}
+                | set(range(48,81)))
         if not self.native_scroll_list:
-            return set(range(CONTROL_COUNT))
+            tokens=set(range(CONTROL_COUNT))
+            if self.screen=='options':
+                tokens.difference_update(range(64,76))
+                tokens.update(column_key_token(i,self.key_row_capacity) for i in range(
+                    self.key_scroll_start,min(self.key_total,self.key_scroll_start+10)))
+            return tokens
         return ({self.mod_token(i) + cell
                  for i in range(self.binding_start, min(self.total_rows, self.binding_start + 24))
                  for cell in (0, 1)} | set(range(48, 81)))
 
     def update_scroll_bindings(self, first_visible):
+        if self.native_scroll_keys:
+            first_visible=min(max(0,first_visible),max(0,self.total_rows-7))
+            if self.binding_start == first_visible:return False
+            self.binding_start=first_visible
+            return True
         end = min(self.total_rows, first_visible + 12)
         if first_visible >= self.binding_start and end <= self.binding_start + 24:
             return False
@@ -149,7 +180,7 @@ class ScrollWorkspaceView(ModsWorkspaceView):
             self.total_rows=len(rows);self.row_states=[]
             visible=10 if self.screen=='options' else 7
             self.scroll_start=min(self.scroll_start,max(0,len(rows)-visible))
-            controls=[EMPTY]*CONTROL_COUNT
+            controls=[EMPTY]*key_control_count(self.key_row_capacity)
             def add(index,label,op,arg=None,enabled=True,editor=None):
                 controls[index]=MenuControl(index,label,enabled,editor)
                 self._commands[index]=(op,arg,enabled)
@@ -170,8 +201,11 @@ class ScrollWorkspaceView(ModsWorkspaceView):
                     description=f"{mod['name']}\n{'ENABLED' if mod['enabled'] else 'DISABLED'}\n\nAuthor: {mod['author'] or 'Unknown'}\nVersion: {mod['version'] or 'Unknown'}\nModule: {mod['folder']}\n\n{len(mod['options'])} options\n{len(mod['keybinds'])} keybinds\n\n{mod['description']}"
                 self.key_total=len(mod['keybinds'])
                 self.key_scroll_start=min(self.key_scroll_start,max(0,self.key_total-10))
-                for i,binding in enumerate(mod['keybinds'][self.key_scroll_start:self.key_scroll_start+12]):
-                    add(64+i,f"{binding['title']}: {binding['value'] or 'Unbound'}",'global_key',(self.selection,binding['id']),not mod['protected'])
+                if self.key_total>self.key_row_capacity:
+                    self.status=f'Showing first {self.key_row_capacity} bindings; use the global keybind search for remaining bindings.'
+                    self.key_total=self.key_row_capacity
+                for i,binding in enumerate(mod['keybinds'][:self.key_row_capacity]):
+                    add(column_key_token(i,self.key_row_capacity),f"{binding['title']}: {binding['value'] or 'Unbound'}",'global_key',(self.selection,binding['id']),not mod['protected'])
                 add(60,'Enable' if not mod['enabled'] else 'Disable','inline_toggle',self.selection,not mod['protected'])
                 add(61,'Reload','reload_current',enabled=not mod['protected'])
             if self.editing:
@@ -185,7 +219,7 @@ class ScrollWorkspaceView(ModsWorkspaceView):
             return self.chrome(replace(frame, controls=expand_controls(frame.controls)))
         self._check()
         self._invalidate()
-        controls = [EMPTY] * CONTROL_COUNT
+        controls = [EMPTY] * key_control_count(self.key_row_capacity)
         self.row_states = []
         def add(index, label, operation, argument=None, enabled=True):
             self._commands[index] = (operation, argument, enabled)
@@ -236,11 +270,15 @@ class ScrollWorkspaceView(ModsWorkspaceView):
         self.summary = summary
         self.total_rows = len(rows)
         self.scroll_start = min(self.scroll_start, max(0, len(rows)-(10 if self.screen=='list' else 7)))
-        if self.native_scroll_list:
+        if self.native_scroll_keys and len(rows)>self.key_row_capacity:
+            self.status=f'Showing first {self.key_row_capacity} matching bindings; narrow Search to see remaining bindings.'
+            rows=rows[:self.key_row_capacity]
+            self.total_rows=len(rows)
+        if self.native_scroll_list or self.native_scroll_keys:
             self.scroll_start = 0
-        visible_rows = rows if self.native_scroll_list else rows[self.scroll_start:self.scroll_start+(12 if self.screen=='list' else 8)]
+        visible_rows = rows if self.native_scroll_list or self.native_scroll_keys else rows[self.scroll_start:self.scroll_start+(12 if self.screen=='list' else 8)]
         for local, row in enumerate(visible_rows):
-            index = self.mod_token(local) if self.native_scroll_list else row_token(local)
+            index = self.mod_token(local) if self.native_scroll_list else key_token(local) if self.native_scroll_keys else row_token(local)
             if self.screen == 'list':
                 label, operation, argument, allowed, _ = row
                 if operation == 'load':
@@ -380,12 +418,36 @@ class ScrollWorkspacePanel(ModsWorkspacePanel):
         self.scaled_labels, self.surfaces = [], []
         self.appearance = None
         self.row_slots, self.button_slots, self.label_slots = [], [], []
+        self.extra_key_row_slots=[]
         self.layout_mode = None
         self.scroll_marker = None
         self.surface_slots, self.switches, self.switch_slots = [], [], []
         self.key_slots=[]
         self.slider_scale=None
         self.text_bounds={}
+        self._scaled_geometry={}
+        self._slot_geometry={}
+        self._readiness_visible=None
+
+    @contextmanager
+    def paint_batch(self):
+        # Geometry entries are tentative until every queued setter is ACKed.
+        try:
+            with super().paint_batch():
+                yield
+        except BaseException:
+            self._scaled_geometry.clear()
+            self._slot_geometry.clear()
+            self._readiness_visible = None
+            raise
+
+    def set_readiness_visible(self, show):
+        if self._readiness_visible == show:
+            return
+        for widget in (self.readiness_label, self.readiness_track, self.readiness_fill):
+            self._render_call(widget, 'Widget', 'SetVisibility',
+                InVisibility=self.invisible if show else self.collapsed)
+        self._readiness_visible = show
 
     def label(self,x,y,width,height,scale=.62):
         label=super().label(x,y,width,height,scale)
@@ -491,6 +553,19 @@ class ScrollWorkspacePanel(ModsWorkspacePanel):
             self._call(knob,'Border','SetBrushColor',InBrushColor={'R':.9,'G':.94,'B':.95,'A':1.})
             self._call(knob,'Widget','SetVisibility',InVisibility=self.invisible)
             self.canvas=self.content_canvas
+        # Fixed key rows beyond the shared12 rows remain owned/detached.
+        # Slate scrolls their permanent slots; only visible callbacks change.
+        for row in range(12,getattr(self,'key_row_capacity',12)):
+            row_canvas=self._spawn('CanvasPanel')
+            slot=self._place(row_canvas,0,row*ROW_HEIGHT,1840,ROW_HEIGHT)
+            self.extra_key_row_slots.append(slot)
+            self.canvas=row_canvas
+            for cell in range(6):self._button(cell*150,0,140,72)
+            self.canvas=self.content_canvas
+        self.canvas=self.key_canvas
+        for row in range(12,getattr(self,'key_row_capacity',12)):
+            self._button(0,row*64,494,58)
+            self.key_slots.append((self.button_slots[-1],self.label_slots[-1]))
         self.canvas=self.root_canvas
         self.slider=self._spawn('Slider');self._place(self.slider,1346,58,502,22)
         field_bg=self._spawn('Border');self._place(field_bg,32,116,660,48)
@@ -515,9 +590,14 @@ class ScrollWorkspacePanel(ModsWorkspacePanel):
             if bounds is not None and bounds[0] is slot:
                 self.text_bounds[label.index]=(slot,w*base,h*base)
                 break
-        self._render_call(slot,'CanvasPanelSlot','SetPosition',InPosition={'X':float(x),'Y':float(y)})
-        self._render_call(slot,'CanvasPanelSlot','SetSize',InSize={'X':float(w),'Y':float(h)})
+        key=(slot.index,slot.serial,slot.address)
+        geometry=(float(x),float(y),float(w),float(h))
+        if self._slot_geometry.get(key)==geometry:return
+        self._render_call(slot,'CanvasPanelSlot','SetPosition',InPosition={'X':geometry[0],'Y':geometry[1]})
+        self._render_call(slot,'CanvasPanelSlot','SetSize',InSize={'X':geometry[2],'Y':geometry[3]})
+        self._slot_geometry[key]=geometry
 
+    @measure_method('widget.layout_total')
     def layout(self, view):
         mode='maps' if getattr(view,'native_scroll_list',False) and view.screen != 'list' else 'keys' if view.screen=='all_keys' else 'mods' if view.screen=='list' else 'options' if view.screen=='options' else 'editor'
         fixed_mods = mode == 'mods' and view.native_scroll_list
@@ -552,6 +632,13 @@ class ScrollWorkspacePanel(ModsWorkspacePanel):
                         self.position(self.button_slots[i],cx,cy+2,cw-8,58)
                         self.position(self.label_slots[i],cx+10,cy+12,(cw-26)/.53,46/.53)
                     x+=w
+            for row in range(12,getattr(self,'key_row_capacity',12)):
+                x=0
+                for cell,w in enumerate((600,210,170,170,230,160)):
+                    i=key_token(row)+cell
+                    self.position(self.button_slots[i],x,2,w-8,72)
+                    self.position(self.label_slots[i],x+10,12,(w-26)/.53,60/.53)
+                    x+=w
             globals={48:(32,970,190,48),49:(238,970,140,48),50:(394,970,140,48),51:(1708,972,176,52),
                 52:(704,116,112,48),53:(828,116,190,48),54:(1030,116,142,48),55:(1200,116,190,48),
                 56:(32,890,190,46),57:(746,25,188,46),58:(948,25,160,46),59:(1122,25,180,46),
@@ -580,9 +667,9 @@ class ScrollWorkspacePanel(ModsWorkspacePanel):
             self.scroll_marker=marker
         start=view.scroll_start if view.screen in ('list','all_keys','options','keybinds') else 0
         for i,slot in enumerate(self.row_slots):
-            self.position(slot,0,i*6*rh if mode=='maps' else i*3*rh if fixed_mods else (start+i)*rh,1840,6*rh if mode=='maps' else 3*rh if fixed_mods else rh)
+            self.position(slot,0,i*6*rh if mode=='maps' else i*3*rh if fixed_mods else i*rh if mode=='keys' else (start+i)*rh,1840,6*rh if mode=='maps' else 3*rh if fixed_mods else rh)
         for i,(button,label) in enumerate(self.key_slots):
-            y=(view.key_scroll_start+i)*64
+            y=i*64
             self.position(button,0,y,494,58);self.position(label,10,y+10,474/.53,48/.53)
         for i,knob in enumerate(self.switches):
             states=getattr(view,'row_states',[]);token=row_token(i)
@@ -611,7 +698,13 @@ class ScrollWorkspacePanel(ModsWorkspacePanel):
                 self.direct(self.buttons[0],'Widget','SetUserFocus',PlayerController=self.player)
                 return
 
+    @measure_method('widget.appearance_total')
     def paint_appearance(self,theme,text_scale):
+        appearance = (theme, text_scale/TEXT_DEFAULT)
+        if self.appearance != appearance:
+            # The base theme pass also sets label scales; restore each bounded
+            # geometry after that pass even if only the theme changed.
+            self._scaled_geometry.clear()
         super().paint_appearance(theme,text_scale/TEXT_DEFAULT)
         if self.slider_scale!=text_scale:
             self.direct(self.slider,'Slider','SetValue',InValue=(text_scale-TEXT_MIN)/(TEXT_MAX-TEXT_MIN))
@@ -622,8 +715,12 @@ class ScrollWorkspacePanel(ModsWorkspacePanel):
         for label,base in self.scaled_labels:
             slot,width,height=self.text_bounds[label.index]
             scale=min(base*(48/36)*text_scale, max(.25,height/56))
+            geometry = (slot, width, height, scale)
+            if self._scaled_geometry.get(label.index) == geometry:
+                continue
             self._render_call(label,'Widget','SetRenderScale',Scale={'X':scale,'Y':scale})
             self._render_call(slot,'CanvasPanelSlot','SetSize',InSize={'X':width/scale,'Y':height/scale})
+            self._scaled_geometry[label.index] = geometry
         self.set_text(self.scale_label,f'TEXT {text_scale:.2f}x')
 
     def scroll_offset(self):
@@ -648,6 +745,15 @@ class ScrollWorkspaceMenu(ModsWorkspaceMenu):
         self._scroll_poll=0.
         self._capture_owner=None
         self._capturing_target=None
+        bindings=sum(len(v['keybinds']) for v in registry.views())
+        capacity=min(MAX_FIXED_KEY_ROWS,max(12,((bindings+7)//8)*8+8))
+        self.panel.key_row_capacity=self.view.key_row_capacity=capacity
+        self.panel.count=key_control_count(capacity)
+
+    def _render_view(self):
+        self.view.key_row_capacity=self.panel.key_row_capacity
+        frame=super()._render_view()
+        return replace(frame,controls=tuple(frame.controls)+(EMPTY,)*(self.panel.count-len(frame.controls)))
 
     def _cancel_key_capture(self):
         if self._capture_owner is not None:
@@ -662,6 +768,23 @@ class ScrollWorkspaceMenu(ModsWorkspaceMenu):
             if not self.panel.menu.remove_controls(group):
                 raise RuntimeError('Control removal deferred; close this native menu')
             del self.actions[:len(group)]
+        self._binding_tokens={}
+        self._bound_frame=None
+
+    def _rebind_scroll_window(self):
+        if getattr(self,'_bound_frame',None) is not self.frame:
+            raise ManagementError('Scroll callback frame changed; refresh explicitly')
+        desired=self.view.bindable_tokens()
+        departed=[(token,control) for token,control in self._binding_tokens.items() if token not in desired]
+        for start in range(0,len(departed),48):
+            group=departed[start:start+48]
+            if not self.panel.menu.remove_controls([control for _,control in group]):
+                raise RuntimeError('Scroll control removal deferred; retain all owners')
+            for token,control in group:
+                self.actions.remove(control);del self._binding_tokens[token]
+        self._retain_scroll_callbacks=True
+        try:self._bind()
+        finally:self._retain_scroll_callbacks=False
 
     def _sync_key_capture(self):
         target=getattr(self.view,'capture_target',None)
@@ -691,6 +814,7 @@ class ScrollWorkspaceMenu(ModsWorkspaceMenu):
         except Exception as error:self.view.status=f'Rebind failed: {error}'
         self.refresh()
 
+    @measure_method('menu.bind_controls')
     def _bind(self):
         super()._bind()
         self._sync_key_capture()
@@ -707,14 +831,16 @@ class ScrollWorkspaceMenu(ModsWorkspaceMenu):
         return super()._close()
 
     def _paint_frame(self):
-        if len(self.frame.controls)!=CONTROL_COUNT:self.frame=replace(self.frame,controls=expand_controls(self.frame.controls))
+        if len(self.frame.controls)<CONTROL_COUNT:self.frame=replace(self.frame,controls=expand_controls(self.frame.controls))
         self.panel.layout(self.view)
         try:
             owner=self.view.registry.select('sdk.management')
             theme=self.view.registry.option(owner,'theme')
             scale=self.view.registry.option(owner,'text_scale')
         except ManagementError:theme,scale='World Builder',1.
+        old_appearance=getattr(self.panel,'appearance',None)
         self.panel.paint_appearance(theme,scale)
+        if self.panel.appearance!=old_appearance:self._button_colors.clear()
         self.panel.set_text(self.panel.title,"MATT'S E33 MODS")
         self.panel.set_text(self.panel.subtitle,{'list':'MOD WORKSPACE','options':'MOD CONFIGURATION','all_keys':'GLOBAL KEYBINDS'}.get(self.view.screen,self.frame.title)[:38])
         headings=('MOD SUMMARY','OPTIONS','KEYBINDS') if self.view.screen=='options' else ('ALL SDK KEYBINDS','','') if self.view.screen=='all_keys' else ('INSTALLED SDK MODS','MOD WORKSPACE','') if self.view.screen=='list' else ('MOD CONTROLS','DETAILS','')
@@ -728,8 +854,7 @@ class ScrollWorkspaceMenu(ModsWorkspaceMenu):
         progress = getattr(self.view.registry, '_startup_progress', None)
         if hasattr(self.panel, 'readiness_label'):
             show = self.view.screen == 'list' and progress is not None
-            for widget in (self.panel.readiness_label,self.panel.readiness_track,self.panel.readiness_fill):
-                self.panel.direct(widget,'Widget','SetVisibility',InVisibility=self.panel.invisible if show else self.panel.collapsed)
+            self.panel.set_readiness_visible(show)
             if show:
                 completed, total = progress['completed'], progress['total']
                 fraction = min(1., completed / max(1,total)) if not progress['finished'] else 1.
@@ -756,6 +881,11 @@ class ScrollWorkspaceMenu(ModsWorkspaceMenu):
             pw=max(8,int(580/(font*.65)));ph=max(1,int(280/(font*1.6)))
             self.panel.set_text(self.panel.preview,bounded_detail('\n\n'.join(options),width=pw,height=ph))
             self.panel.set_text(self.panel.key_preview,bounded_detail('\n\n'.join(keys),width=pw,height=ph))
+        colors=[THEMES.get(self.panel.appearance[0],THEMES['World Builder'])[2]]*len(self.frame.controls)
+        for row,(selected,enabled,conflict) in enumerate(getattr(self.view,'row_states',[])):
+            token=self.view.mod_token(row) if self.view.screen=='list' and self.view.native_scroll_list else row_token(row)
+            colors[token]=(.30,.12,.04) if conflict else (.06,.26,.32) if selected else THEMES.get(self.panel.appearance[0],THEMES['World Builder'])[2]
+            if self.view.screen=='list':colors[token+1]=(.035,.42,.20) if enabled else (.14,.16,.18)
         for i,control in enumerate(self.frame.controls):
             label=control.label
             if self.view.screen=='list' and not self.view.native_scroll_list and (i<48 or i>=81) and (i if i<48 else i-81)%6==1 and label in ('ON','OFF'):label=''
@@ -768,15 +898,7 @@ class ScrollWorkspaceMenu(ModsWorkspaceMenu):
             self.panel.set_text(self.panel.labels[i],display_line(label,limit))
             self.panel.set_enabled(i,bool(control.enabled))
             self.panel.set_visible(i,bool(control.label))
-            accent=THEMES.get(self.panel.appearance[0],THEMES['World Builder'])[2]
-            self.panel._render_call(self.panel.buttons[i],'Button','SetBackgroundColor',InBackgroundColor=dict(zip(('R','G','B','A'),(*accent,1.))))
-        for row,(selected,enabled,conflict) in enumerate(getattr(self.view,'row_states',[])):
-            token = self.view.mod_token(row) if self.view.screen == 'list' and self.view.native_scroll_list else row_token(row)
-            accent=(.30,.12,.04) if conflict else (.06,.26,.32) if selected else THEMES.get(self.panel.appearance[0],THEMES['World Builder'])[2]
-            self.panel._render_call(self.panel.buttons[token],'Button','SetBackgroundColor',InBackgroundColor=dict(zip(('R','G','B','A'),(*accent,1.))))
-            if self.view.screen=='list':
-                color=(.035,.42,.20) if enabled else (.14,.16,.18)
-                self.panel._render_call(self.panel.buttons[token+1],'Button','SetBackgroundColor',InBackgroundColor=dict(zip(('R','G','B','A'),(*color,1.))))
+            self._set_button_color(i,colors[i])
         self._paint_field()
 
     def poll_scroll(self):
@@ -797,14 +919,13 @@ class ScrollWorkspaceMenu(ModsWorkspaceMenu):
         # All map widgets/labels occupy permanent positions. Native Slate owns
         # scrolling; only the bounded handler window changes, without repaint,
         # relayout, view.render(), scroll reset, or text replacement.
-        if getattr(self.view, 'native_scroll_list', False):
+        if getattr(self.view, 'native_scroll_list', False) or getattr(self.view,'native_scroll_keys',False):
             first=max(0,min(int(self.panel.scroll_offset()//row_height(self.view.screen)),max(0,self.view.total_rows-1)))
             rebind=self.view.update_scroll_bindings(first)
             if changed:
                 self.refresh()
             elif rebind:
-                self._revoke()
-                self._bind()
+                self._rebind_scroll_window()
             return
         if self.view.screen not in ('list','all_keys','options','keybinds'):
             if changed:self.refresh()
@@ -814,5 +935,8 @@ class ScrollWorkspaceMenu(ModsWorkspaceMenu):
         if start!=self.view.scroll_start:self.view.scroll_start=start;changed=True
         if self.view.screen=='options':
             key_start=min(max(0,int(self.panel.key_scroll_offset()//64)),max(0,self.view.key_total-10))
-            if key_start!=self.view.key_scroll_start:self.view.key_scroll_start=key_start;changed=True
+            if key_start!=self.view.key_scroll_start:
+                self.view.key_scroll_start=key_start
+                if not changed:
+                    self._rebind_scroll_window()
         if changed:self.refresh()

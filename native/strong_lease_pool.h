@@ -79,6 +79,11 @@ public:
         return count;
     }
     bool owns(uint64_t session) const { return session && session==session_; }
+    bool contains_token(uint64_t session,uint64_t token) const {
+        if(!on_thread()||!owns(session)||!token)return false;
+        for(const auto& e:entries_)if(e.token==token)return true;
+        return false;
+    }
     bool owns_object(uint64_t session,uint64_t token,uint64_t object) const {
         if(!owns(session) || !token || !object) return false;
         for(const auto& e:entries_) if(e.token==token) {

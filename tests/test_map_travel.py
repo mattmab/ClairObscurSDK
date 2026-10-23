@@ -14,6 +14,17 @@ spec.loader.exec_module(mod)
 
 
 class MapTravelTests(unittest.TestCase):
+    def test_pause_entry_uses_copied_host_readiness_and_keeps_legacy_default(self):
+        from types import SimpleNamespace
+        model=mod.Mod();model.native=object()
+        ready=lambda:None
+        for provider,expected in ((ready,ready),(False,None),(None,None)):
+            model.session=SimpleNamespace(_session=SimpleNamespace(_menu_readiness=provider))
+            with patch.object(mod,'PauseMenuEntry') as entry:
+                model._new_pause_entry()
+            self.assertIs(entry.call_args.kwargs['readiness'],expected)
+            self.assertEqual(entry.call_args.kwargs['label'],'Map Travel')
+
     def test_route_rejection_keeps_sdk_and_menu_alive(self):
         model = mod.Mod()
         model.native = Mock()
@@ -176,6 +187,7 @@ class MapTravelTests(unittest.TestCase):
         panel.menu.bind_controls.side_effect = lambda pairs: list(pairs)
         menu = Mock(panel=panel, view=view, frame=frame, failure=None, _presentation_suspended=False)
         menu.actions = []
+        menu._retain_scroll_callbacks = False
         for first in (0, 20, 41, 57, 15, 0):
             menu._scroll_poll = 0
             panel.scroll_offset.return_value = first * 84
@@ -198,7 +210,10 @@ class MapTravelTests(unittest.TestCase):
         view = mod.MapView(registry, model)
         frame = view.render()
         panel = Mock()
+        from expedition33._menu_latency import MenuLatency
+        panel.latency=MenuLatency()
         panel.layout_mode = 'editor'
+        panel.key_row_capacity = 12
         for attr in ('surface_slots', 'panel_title_slots', 'surfaces', 'panel_titles'):
             setattr(panel, attr, [Mock() for _ in range(3)])
         panel.button_slots = [Mock() for _ in range(105)]

@@ -4,8 +4,11 @@ Boolean and choice settings support click editing. Numeric/text/JSON editors and
 key capture remain pending; submit() accepts validated typed input from a future
 editor without creating separate state or bypassing Registry validation.
 """
+from .frontend_rejection import known_rejection
 import logging
 import textwrap
+from functools import lru_cache
+from ._menu_latency import MenuLatency, measure_method
 from contextlib import nullcontext
 
 from .management_view import ManagementView
@@ -14,12 +17,14 @@ from .widgets import OwnedMenuPanel
 from ._reader import ReadBatch
 
 
+@lru_cache(maxsize=256)
 def display_line(text, width):
     """Bound a single visual row without changing registry metadata."""
     text = ' '.join(text.split())
     return text if len(text) <= width else text[:width - 1] + '…'
 
 
+@lru_cache(maxsize=128)
 def display_detail(text, *, width=42, height=18):
     """Explicit newlines for the current base TextBlock; full results stay logged.
 
@@ -38,6 +43,8 @@ class NativeManagementMenu:
     def __init__(self, session, registry, *, cached_planning=False, cached_construction=False, selected_results=False, read_batches=False, reusable=False, view_factory=ManagementView, panel_factory=None):
         if type(cached_planning) is not bool or type(cached_construction) is not bool:
             raise ValueError('Planning options must be bool')
+        self.latency = MenuLatency()
+        self._button_colors = {}
         self._cached_planning = cached_planning
         if type(read_batches) is not bool:
             raise ValueError('read_batches must be bool')
@@ -51,11 +58,17 @@ class NativeManagementMenu:
         self.actions = []
         self.error = None
         self.failure = None
+        self._frontend_rejection = None
         self._accept_input = False
         self._presentation_suspended = False
         self._presentation_dirty = False
         self._logged_detail = None
 
+    def prepared_view_state(self):
+        from copy import deepcopy
+        return (type(self.view),id(self.view),deepcopy({k:v for k,v in vars(self.view).items() if k!='registry'}))
+
+    @measure_method('menu.open_total')
     def open(self):
         # A prepared tree already has metadata and menu call plans. Starting a
         # read-worker process on this hot path would add a new startup delay.
@@ -74,22 +87,30 @@ class NativeManagementMenu:
             raise ManagementError('Menu is not prepared for opening')
         if self.view.closed:
             self.view = self._view_factory(self.view.registry)
-        self.frame = self.view.render()
-        self._paint()
+        reuse=getattr(self,'_reuse_prepared_frame',False) and not self.view.closed
+        self._reuse_prepared_frame=False
+        if not reuse:
+            self.frame = self._render_view()
+            self._paint()
         self.panel.open()
         self._bind()
         return self.frame
 
+    @measure_method('menu.detached_prepare')
     def prepare(self):
         """Build and paint while detached, before reporting UI readiness."""
         self.panel.build()
         if self._cached_planning:
             self.panel.enable_cached_planning()
-        self.frame = self.view.render()
+        self.frame = self._render_view()
         self._paint()
         if self._reusable:
             self.panel.prime_menu_plan()
         return self.frame
+
+    @measure_method('menu.presenter_render')
+    def _render_view(self):
+        return self.view.render()
 
     def _revoke(self):
         # Stop dispatch first; do not rebind while any removal is deferred.
@@ -103,8 +124,23 @@ class NativeManagementMenu:
         if self._presentation_suspended and not presentation_restore:
             self._presentation_dirty = True
             return
-        with self.panel.paint_batch():
-            self._paint_frame()
+        try:
+            with self.latency.measure('menu.paint_total'):
+                with self.panel.paint_batch():
+                    self._paint_frame()
+        except BaseException:
+            # Queued caches are tentative until the native paint batch returns.
+            self._button_colors.clear()
+            raise
+
+    def _set_button_color(self,index,color):
+        value=tuple(color)
+        if self._button_colors.get(index)==value:
+            self.latency.count('paint.color_cache_hits');return
+        self.panel._render_call(self.panel.buttons[index],'Button','SetBackgroundColor',
+            InBackgroundColor=dict(zip(('R','G','B','A'),(*value,1.))))
+        self._button_colors[index]=value
+        self.latency.count('paint.color_setters')
 
     def _paint_frame(self):
         frame = self.frame
@@ -121,6 +157,7 @@ class NativeManagementMenu:
             self.panel.set_enabled(index, bool(control and control.enabled))
             self.panel.set_visible(index, control is not None)
 
+    @measure_method('menu.bind_controls')
     def _bind(self):
         frame = self.frame
         bindings = []
@@ -172,16 +209,32 @@ class NativeManagementMenu:
             return frame
         except BaseException as error:
             self._accept_input = False
+            self._frontend_rejection = known_rejection(error) or getattr(self,'_frontend_rejection',None)
             self.failure = f'{type(error).__name__}: {error}'
             raise
 
+    @measure_method('menu.refresh_detached')
+    def refresh_detached(self):
+        if (self.panel.state != 'built' or self.panel.menu is not None
+                or any(getattr(action,'active',False) for action in self.actions)):
+            raise ManagementError('Detached refresh requires acknowledged native detach')
+        if self._presentation_suspended:
+            raise ManagementError('Detached refresh cannot replace a suspended presentation')
+        self._accept_input = False
+        if self.view.closed:
+            self.view = self._view_factory(self.view.registry)
+        self.frame = self._render_view()
+        self._paint()
+        return self.frame
+
+    @measure_method('menu.refresh')
     def refresh(self):
         if self._presentation_suspended:
-            self.frame = self.view.render()
+            self.frame = self._render_view()
             self._presentation_dirty = True
             return self.frame
         self._revoke()
-        self.frame = self.view.render()
+        self.frame = self._render_view()
         self._paint()
         self._bind()
         return self.frame
@@ -201,16 +254,30 @@ class NativeManagementMenu:
             self._presentation_dirty = False
         except BaseException as error:
             self._accept_input = False
+            self._frontend_rejection = known_rejection(error) or getattr(self,'_frontend_rejection',None)
             self.failure = f'{type(error).__name__}: {error}'
             raise
 
     def hide(self):
         self._accept_input = False
-        self.view.close()
+        suspend = getattr(self.view, 'suspend_frame', None)
+        if callable(suspend) and not self.view.closed and not self.frame.closed:
+            self.frame = suspend(self.frame)
+        else:
+            self.view.close()
         if not self.panel.hide():
             return False
         self.actions.clear()
         return True
+
+    def retire_world(self, *, native_retirement_ack=False):
+        self._accept_input=False
+        result=self.panel.retire_world(native_retirement_ack=native_retirement_ack)
+        if result=='ack':
+            self.actions.clear()
+            # No view.close(): some views route that into model.stop().
+            if hasattr(self.view,'closed'):self.view.closed=True
+        return result
 
     def close(self):
         with self._read_operation():
@@ -221,7 +288,11 @@ class NativeManagementMenu:
         self.view.close()
         # Panel's native close revokes every registration, including any whose
         # partial bind/removal did not return a usable Python handle.
-        result = self.panel.close()
+        # Explicit owned-tree contract: detach input, clear/read back RootWidget,
+        # then release the wholly owned hierarchy without per-child removals.
+        # Custom/legacy panels retain their ordinary close contract.
+        close_owned = getattr(self.panel, 'close_owned_tree', None)
+        result = close_owned() if callable(close_owned) else self.panel.close()
         if result:
             self.actions.clear()
         return result

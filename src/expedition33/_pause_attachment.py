@@ -6,14 +6,17 @@ from . import _invocation_wire as call
 HEADER = struct.Struct('<IIQQII')
 SIZE = HEADER.size + call.SIZE
 
-def validate_request(data):
+def validate_request(data,*,allow_retired=False):
     if type(data) is not bytes or len(data) != SIZE:
         raise ValueError('Invalid pause attachment size')
     version, op, owner, lease, error, state = HEADER.unpack_from(data)
-    if version != 1 or op not in range(1, 8) or not owner or error or state:
+    if version != 1 or op not in range(1,9 if allow_retired else 8) or not owner or error or state:
         raise ValueError('Invalid pause attachment header')
-    if (op in (1,3,4) and not lease) or (op in (2,7) and (lease or any(data[HEADER.size:]))) or (op in (5,6) and lease):
+    if (op in (1,3,4) and not lease) or (op in (2,7,8) and (lease or any(data[HEADER.size:]))) or (op in (5,6) and lease):
         raise ValueError('Invalid pause attachment ownership')
+
+class PauseCaptureDeferred(RuntimeError):
+    """Native preparation is not ready; its temporary collector remains owned."""
 
 class PauseAttachment:
     def __init__(self, scope):
@@ -26,7 +29,7 @@ class PauseAttachment:
         session._check()
         body = call.encode_plan(plan) if plan is not None else bytes(call.SIZE)
         sent = HEADER.pack(1, op, self.owner, lease, 0, 0) + body
-        validate_request(sent)
+        validate_request(sent,allow_retired=getattr(session._transport,'retired_world_cleanup_protocol',0)==1)
         self.state = 'unknown'
         try:
             response = session._transport.command('pause-attachment', sent)
@@ -34,13 +37,19 @@ class PauseAttachment:
             if len(data) != SIZE or data[:24] != sent[:24] or data[32:] != sent[32:]:
                 raise ValueError('Pause attachment acknowledgement mismatch')
             error, state = HEADER.unpack_from(data)[4:]
+            if error==407 and state==2 and op in (1,2,8):
+                self.state='capture_pending'
+                if op==1:raise PauseCaptureDeferred('Pause preparation cleanup deferred; retain owner')
+                return False
             if error == 407 and state == 1:
                 self.state = 'armed'
                 return False
-            if error or state != (0 if op == 2 else 1):
+            if error or state != (0 if op in (2,8) else 1):
                 raise RuntimeError(f'Pause attachment rejected ({error}, state {state})')
             self.state = 'armed' if state else 'closed'
             return True
+        except PauseCaptureDeferred:
+            raise
         except BaseException:
             session._abort_ownership()
             raise
@@ -52,8 +61,16 @@ class PauseAttachment:
 
     def close(self):
         if self.state in ('empty', 'closed'): return True
-        if self.state != 'armed': raise RuntimeError('Pause detach outcome unknown; native cleanup owns it')
+        if self.state not in ('armed','capture_pending'): raise RuntimeError('Pause detach outcome unknown; native cleanup owns it')
         return self._send(2)
+
+    def retire_world(self):
+        if self.state in ('empty','closed'):return True
+        if self.state not in ('armed','capture_pending'):raise RuntimeError('Pause detach outcome unknown; preserve native journal')
+        transport=self.scope._session._transport
+        if type(getattr(transport,'retired_world_cleanup_protocol',0)) is not int or transport.retired_world_cleanup_protocol!=1:
+            raise RuntimeError('Native retired-world cleanup unavailable')
+        return self._send(8)
 
     def arm_restore(self, lease, opacity, enabled):
         if self.state != 'armed' or not lease.active or lease not in self.scope._leases:

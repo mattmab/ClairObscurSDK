@@ -1,5 +1,9 @@
 #pragma once
 #include "engine_profiles.h"
+#ifdef E33_RETIRED_WORLD_SESSION
+#include "retired_world_target.h"
+#include "retired_world_release.h"
+#endif
 #include <chrono>
 #include "static_mesh_registry.h"
 #pragma warning(push)
@@ -16,6 +20,9 @@ class Owner {
     std::vector<Asset> assets_;
     uint64_t owner_=0;
     bool quarantined_=false;
+#ifdef E33_RETIRED_WORLD_SESSION
+    e33_retired_world::Anchor epoch_;bool retiring_=false;
+#endif
     uint32_t step_=0;
     struct Row {CallIdentity actor,component;uint64_t lease=0;bool destroyed=false;};
     std::vector<Row> rows_;
@@ -65,7 +72,8 @@ class Owner {
         step_=3;
         rows_.push_back({actor,{},0,false});auto& row=rows_.back();
         TargetStrongReferenceOps ops{b,actor};
-        if(pool.acquire(ops,session,actor.address,row.lease)!=StrongLeaseResult::Ok)return false;
+        const auto acquired=pool.acquire(ops,session,actor.address,row.lease);
+        if(acquired!=StrongLeaseResult::Ok){if(acquired==StrongLeaseResult::Quarantined)quarantined_=true;return false;}
         step_=4;
         clear();if(!call(b,4,actor))return false;row.component=call_capture(b,pointer());
         if(!row.component.address)return false;
@@ -91,34 +99,112 @@ class Owner {
     }
 public:
     void quarantine(){quarantined_=true;}
+#ifdef E33_RETIRED_WORLD_SESSION
+    bool protects(uint64_t token)const{
+        if(!owner_||!token)return false;
+        if(token==epoch_.token())return true;
+        for(const auto&row:rows_)if(row.lease==token)return true;
+        for(const auto&asset:assets_)if(asset.lease==token)return true;
+        return false;
+    }
+#endif
     template<class Pool> uint32_t close(uint64_t b,uint64_t session,Pool& pool) {
         if(quarantined_)return 2109;
+#ifdef E33_RETIRED_WORLD_SESSION
+        if(owner_){
+            e33_retired_world::TargetOps proof{b};
+            if(!epoch_.established()){
+                if(!rows_.empty()||!assets_.empty())return 2109;
+                const auto released=epoch_.release(proof,pool,session);if(released)return released;
+                epoch_.reset();owner_=0;retiring_=false;return 0;
+            }
+            const auto result=epoch_.prove(proof);
+            if(result==e33_retired_world::Result::Pending)return 407;
+            if(result==e33_retired_world::Result::Unknown)return 2109;
+            if(result==e33_retired_world::Result::Retired)retiring_=true;
+        }
+#endif
+#ifdef E33_RETIRED_WORLD_SESSION
+        if(retiring_){
+            const auto released=e33_retired_world::release_reverse(rows_,[&](const Row&row)->uint32_t{
+                if(!row.lease)return 0;
+                if(!pool.owns_retirement_storage(session,row.lease,row.actor.address))return 2109;
+                TargetStrongReferenceOps refs{b,{}};const auto result=pool.release(refs,session,row.lease);
+                return result==StrongLeaseResult::Ok?0:result==StrongLeaseResult::Deferred?407:2107;
+            });
+            if(released)return released;
+        }
+#endif
         while(!rows_.empty()) {
             auto& row=rows_.back();
-            if(!row.destroyed && call_identity(b,row.actor)){clear();if(!call(b,2,row.actor))return 2106;row.destroyed=true;}
+            if(!row.destroyed &&
+#ifdef E33_RETIRED_WORLD_SESSION
+               !retiring_ &&
+#endif
+               call_identity(b,row.actor)){clear();if(!call(b,2,row.actor))return 2106;row.destroyed=true;}
             TargetStrongReferenceOps ops{b,{-1,0,0}};
-            if(row.lease && pool.release(ops,session,row.lease)!=StrongLeaseResult::Ok)return 2107;
+            if(row.lease){const auto released=pool.release(ops,session,row.lease);
+                if(released!=StrongLeaseResult::Ok)return released==StrongLeaseResult::Deferred?407:2107;}
             rows_.pop_back();
         }
         while(!assets_.empty()) {
             TargetStrongReferenceOps ops{b,{-1,0,0}};
-            if(pool.release(ops,session,assets_.back().lease)!=StrongLeaseResult::Ok)return 2107;
+#ifdef E33_RETIRED_WORLD_SESSION
+            if(retiring_&&!pool.owns_retirement_storage(session,assets_.back().lease,assets_.back().mesh.address))return 2109;
+#endif
+            const auto released=pool.release(ops,session,assets_.back().lease);
+            if(released!=StrongLeaseResult::Ok)return released==StrongLeaseResult::Deferred?407:2107;
             assets_.pop_back();
         }
+#ifdef E33_RETIRED_WORLD_SESSION
+        e33_retired_world::TargetOps proof{b};const auto released=epoch_.release(proof,pool,session);
+        if(released)return released;
+        epoch_.reset();retiring_=false;
+#endif
         owner_=0;return 0;
     }
     template<class Pool> void command(uint64_t b,uint64_t session,Pool& pool,MeshPacket& p) {
         auto* raw=reinterpret_cast<uint8_t*>(&p);const auto op=p.operation;
-        if(p.version!=3 || p.error || p.state || !p.owner || op<93 || op>97){p.error=2100;return;}
-        if(quarantined_){p.error=2109;return;}
+        if(p.version!=3 || p.error || p.state || !p.owner || op<93 || op>
+#ifdef E33_RETIRED_WORLD_SESSION
+            98
+#else
+            97
+#endif
+){p.error=2100;return;}
+        if(quarantined_){p.error=2109;
+#ifdef E33_RETIRED_WORLD_SESSION
+            if(op==98){p.state=owner_?1:0;const auto count=uint32_t(rows_.size());std::memcpy(raw+3564,&count,4);}
+#endif
+            return;}
         if(owner_ && owner_!=p.owner){p.error=2101;return;}
+#ifdef E33_RETIRED_WORLD_SESSION
+        if(op==98){
+            if(std::any_of(raw+24,raw+sizeof(p),[](uint8_t c){return c!=0;})){p.error=2100;return;}
+            if(owner_&&epoch_.established()){e33_retired_world::TargetOps proof{b};const auto result=epoch_.prove(proof);
+                if(result!=e33_retired_world::Result::Retired){p.error=result==e33_retired_world::Result::Pending?407:2109;p.state=1;const auto count=uint32_t(rows_.size());std::memcpy(raw+3564,&count,4);return;}
+                retiring_=true;
+            }
+            p.error=close(b,session,pool);p.state=owner_?1:0;
+            const auto count=uint32_t(rows_.size());std::memcpy(raw+3564,&count,4);return;
+        }
+#endif
         if(op==93) {
             if(owner_||!rows_.empty()){p.error=2102;return;}
             std::memcpy(ids_,raw+88,sizeof(ids_));
             for(auto id:ids_)if(!call_identity(b,id)){p.error=2103;return;}
             if(!named(b,ids_[4].address,"StaticMeshActor","/Script/Engine") || !call_is_class(b,ids_[4].address) ||
                !named(b,ids_[5].address,"StaticMesh","/Script/Engine") || !call_is_class(b,ids_[5].address) || !current(b)){p.error=2103;return;}
+#ifdef E33_RETIRED_WORLD_SESSION
+            e33_retired_world::TargetOps proof{b};e33_retired_world::Snapshot observed{};
+            if(!proof.observe(observed)||!e33_retired_world::same(observed.world,ids_[2])||!proof.controller_world(ids_[0],ids_[2])){p.error=2103;return;}
+#endif
             owner_=p.owner;
+#ifdef E33_RETIRED_WORLD_SESSION
+            const auto anchored=epoch_.capture(proof,pool,session,ids_[0]);
+            if(anchored){p.error=anchored;p.state=1;return;}
+            ids_[2]=epoch_.world();
+#endif
         } else if(op==95) {
             p.error=close(b,session,pool);
         } else if(!owner_){p.error=2102;return;}
@@ -140,7 +226,8 @@ public:
                 if(!call_identity(b,mesh)||!call_derives(b,local_read<uint64_t>(mesh.address+16),ids_[5].address)){p.error=2113;return;}
                 assets_.push_back({path,mesh,0});auto& asset=assets_.back();
                 TargetStrongReferenceOps ops{b,mesh};
-                if(pool.acquire(ops,session,mesh.address,asset.lease)!=StrongLeaseResult::Ok){assets_.pop_back();p.error=2114;return;}
+                const auto acquired=pool.acquire(ops,session,mesh.address,asset.lease);
+                if(acquired!=StrongLeaseResult::Ok){if(acquired==StrongLeaseResult::Quarantined)quarantined_=true;assets_.pop_back();p.error=2114;return;}
             }
             if(!call_identity(b,mesh)){p.error=2113;return;}
             std::memcpy(raw+4096,&mesh,16);

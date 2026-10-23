@@ -1,6 +1,6 @@
 # Expedition 33 SDK — installable release candidate
 
-This package is SDK **0.1.0-rc17**. See `docs/RELEASE_0.1.0_RC17.md` in the
+This package is SDK **0.1.0-rc18**. See `docs/RELEASE_0.1.0_RC18.md` in the
 source repository for release notes.
 
 This candidate supports the verified Windows Steam executable with SHA-256
@@ -16,9 +16,10 @@ containing `Sandfall`, so `SDK` and `SDK_Mods` sit beside it. If
 installation first; do not overwrite an unidentified DLL. This package contains
 an independently built Windows export forwarder, not CineReplay's supplied DLL.
 
-Start the game normally and load a save. The bootstrap launches bundled Python
-in the background, waits for the game runtime, and attaches the SDK. Open Pause
-and select Mods, or use the native console's `mods ui` command. The SDK does not
+Start the game normally. The bootstrap launches bundled Python in the background.
+The title-screen Mods button manages desired options and enabled states before
+loading a save; gameplay mods activate after a loaded world is admitted. In game,
+open Pause and select Mods, or use the native console's `mods ui` command. The SDK does not
 require a terminal command on normal game startup.
 
 The RC12 Mods menu includes inline enable toggles, a text-size slider (Reset:

@@ -11,7 +11,7 @@ from expedition33._scope import SessionScope
 from expedition33._reader import ReadBatch
 from expedition33.assets import load_asset
 from expedition33.catalog import capture_selected
-from expedition33.values import read_object_reference,read_values
+from expedition33.values import read_object_reference,read_values,read_values_many
 import json,re,time,logging
 from pathlib import Path
 
@@ -24,9 +24,11 @@ SHA256='269cd1e6ec20415ffc70b613288d7b9650faad0ea43ab7c9be8d1855d8006ea3'
 
 class NotReady(RuntimeError):pass
 
-def controller_context(session):
+def controller_context(session, *, project=False):
     """Fresh persistent LocalPlayer reference, not an enumerated old controller."""
-    try:return _controller_context_once(session)
+    if type(project) is not bool:raise ValueError('Controller projection must be bool')
+    try:return (_controller_context_once(session,project=True) if project
+                else _controller_context_once(session))
     except RuntimeQueryError as error:
         if str(error)=='Object identity changed or belongs to another process':
             # All observations above are discarded. The next bounded poll starts
@@ -34,14 +36,16 @@ def controller_context(session):
             raise NotReady('controller_context: '+str(error)) from error
         raise
 
-def _controller_context_once(session):
+def _controller_context_once(session, *, project=False):
     catalog=capture_matching(session.pid,classes=('LocalPlayer',))
     rows=tuple(o for o in catalog.objects if o.class_name=='LocalPlayer' and not o.object_flags&0x30)
     if not rows:raise NotReady('Local player is not available yet')
     local=_one(rows)
-    observed=read_values(catalog,local)
+    observed=(read_values_many(catalog,(local,),fields=('PlayerController',))[local.index]
+              if project else read_values(catalog,local))
     owner=catalog.by_index[_one(key[0] for key in observed.types if key[1]=='PlayerController')]
-    player,catalog=read_object_reference(catalog,local,owner,'PlayerController')
+    player,catalog=(read_object_reference(catalog,local,owner,'PlayerController',project=True)
+                    if project else read_object_reference(catalog,local,owner,'PlayerController'))
     if player is None:raise NotReady('Player controller is not available yet')
     worlds=tuple(o for o in catalog.outer_chain(player) if o.class_name=='World')
     if not worlds:raise NotReady('Controller world is not available yet')

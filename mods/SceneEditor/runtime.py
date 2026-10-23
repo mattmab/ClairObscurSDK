@@ -72,7 +72,7 @@ class Runtime:
     @property
     def authoring(self):return self.scope is not None and self.last['state'] in ('authoring','timeline_playing')
 
-    def _command(self,op,ids=(),payload=b''):
+    def _command(self,op,ids=(),payload=b'',*,retired=False):
         transport=self.session._session._transport
         if getattr(transport,'runtime_scene_protocol',0)!=7:
             raise RuntimeError('Use the isolated Scene Editor candidate; installed backend is unchanged')
@@ -82,7 +82,11 @@ class Runtime:
         if op!=70 and ids:raise ValueError('Only prepare accepts identities')
         for i,obj in enumerate(ids):IDENTITY.pack_into(packet,88+16*i,obj.index,obj.serial,obj.address)
         if payload:packet[88:88+len(payload)]=payload
-        validate_request(bytes(packet),protocol=7)
+        if retired:
+            if op!=72 or type(getattr(transport,'retired_world_cleanup_protocol',0)) is not int or transport.retired_world_cleanup_protocol!=1:
+                raise RuntimeError('Native retired-world Scene cleanup unavailable')
+            struct.pack_into('<I',packet,24,0x45504f43)
+        validate_request(bytes(packet),protocol=7,allow_retired=retired)
         self.uncertain=True
         raw=bytes.fromhex(transport.command('mesh',bytes(packet))['mesh_packet'])
         author_reply=len(raw)==SIZE and struct.unpack_from('<I',raw,12)[0] in (7,8)
@@ -449,6 +453,20 @@ class Runtime:
     def status(self,_=None):
         return dict(self.last,uncertain=self.uncertain,game_music_components=self.music_components,duration_seconds=getattr(self,'scene_duration',20),characters=getattr(self,'scene_characters',['Lune','Maelle']),
             assets=dict(mesh=MESH,animation=ANIMATION,sound=SOUND))
+
+    def retire_world(self):
+        if self.scope is None:return 'ack'
+        if self.uncertain:return 'unknown'
+        transport=self.session._session._transport
+        if type(getattr(transport,'retired_world_cleanup_protocol',0)) is not int or transport.retired_world_cleanup_protocol!=1:return 'unknown'
+        self._command(72,retired=True)
+        if self.last.get('error')==407:return 'pending'
+        if self.last.get('private_leases')!=0:return 'unknown'
+        for name in ('preview_scope','audio_load_scope','scope'):
+            scope=getattr(self,name)
+            if scope is not None:scope.close();setattr(self,name,None)
+        self.audio_slots={};self.audio_event_slots={};self.animation_slots={}
+        return 'ack'
 
     def disable(self):
         if self.scope is not None:

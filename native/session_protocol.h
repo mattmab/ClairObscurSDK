@@ -1,4 +1,23 @@
 #pragma once
+#ifdef E33_METADATA_STABILIZE_SESSION
+#ifndef E33_LEASE_SESSION
+#error Metadata stabilization requires object leases
+#endif
+#ifndef E33_GROWING_LEASE_SESSION
+#error Metadata stabilization requires process lease owner accounting
+#endif
+#include "metadata_stabilization_protocol.h"
+constexpr uint32_t SessionStableLeaseAcquire=139;
+#endif
+#ifdef E33_CONSOLE_COLORS_SESSION
+#include "console_color_status_protocol.h"
+#endif
+#ifdef E33_LEASE_RELEASE_BATCH_SESSION
+#ifndef E33_LEASE_SESSION
+#error Lease release batching requires native lease ownership
+#endif
+#include "lease_release_batch_protocol.h"
+#endif
 #ifdef E33_MESH_SESSION
 #include "mesh_protocol.h"
 #endif

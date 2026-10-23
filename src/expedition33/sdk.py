@@ -529,13 +529,21 @@ class Session:
         self._leases.remove(lease)
         return True
 
+    def _release_leases(self, leases):
+        from ._lease_release_batch import release_many
+        return release_many(self, leases)
+
     def _release_pending_leases(self):
         for menu in tuple(getattr(self, '_menus', ())):
             if menu.close_pending:
                 menu.close()
-        for lease in tuple(getattr(self, '_leases', ())):
-            if lease.release_pending and not any(menu.protects(lease) for menu in getattr(self, '_menus', ())):
-                self._release_lease(lease)
+        pending=tuple(lease for lease in getattr(self, '_leases', ()) if lease.release_pending and
+            not any(menu.protects(lease) for menu in getattr(self, '_menus', ())))
+        from ._lease_release_batch import available
+        if pending and available(self._transport):
+            self._release_leases(pending)
+        else:
+            for lease in pending:self._release_lease(lease)
 
     def invoke(self, obj, function, **arguments):
         """Invoke an observed native UFunction through the opt-in v6 backend.
@@ -633,9 +641,17 @@ class Session:
             return
         leases_closed = False
         transport_was_closed = getattr(self._transport, '_closed', False)
+        metadata_error=None
         try:
-            self._transport.close()
-            leases_closed = not transport_was_closed
+            try:
+                metadata_owner=getattr(self,'_metadata_preparation',None)
+                if metadata_owner is not None:metadata_owner.close()
+            except BaseException as error:
+                metadata_error=error
+            finally:
+                # Owner cleanup failure must never skip native close/ACK.
+                self._transport.close()
+                leases_closed = not transport_was_closed
         finally:
             for trace in getattr(self, '_traces', ()):
                 trace._state = 'session_closed' if leases_closed else 'unknown'
@@ -661,6 +677,7 @@ class Session:
             self._hooks.clear()
             self._enabled = False
             self._closed = True
+        if metadata_error is not None:raise metadata_error
 
     def __enter__(self):
         return self

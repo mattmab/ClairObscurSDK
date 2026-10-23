@@ -15,9 +15,12 @@ class StartupTests(unittest.TestCase):
     def test_core_menu_waits_for_current_pause_widget_not_gameplay_pawn(self):
         for pause, expected in ((None, False), (N(class_name='OtherWidget'), False),
                                 (N(class_name='WBP_PauseMenu_C'), True)):
-            catalog=N(by_index={1: object(), 2: object()})
-            with self.subTest(pause=pause), patch.object(m, 'ReadBatch'), patch.object(m, 'controller_context', return_value={'controller': (7, 1, 2, 3)}), patch.object(m, 'capture_selected', return_value=catalog), patch.object(m, 'read_values', return_value=N(types={(2,'PauseMenuWidget'): 'ObjectProperty'})), patch.object(m, 'read_object_reference', return_value=(pause, catalog)) as read:
+            catalog=N(by_index={1: N(index=1), 2: object()})
+            with self.subTest(pause=pause), patch.object(m, 'ReadBatch'), patch.object(m, 'controller_context', return_value={'controller': (7, 1, 2, 3)}) as context, patch.object(m, 'capture_selected', return_value=catalog), patch.object(m, 'read_values_many', return_value={1: N(types={(2,'PauseMenuWidget'): 'ObjectProperty'})}) as values, patch.object(m, 'read_object_reference', return_value=(pause, catalog)) as read:
                 self.assertEqual(m.menu_ready(7), expected)
+                context.assert_called_once()
+                self.assertTrue(context.call_args.kwargs['project'])
+                values.assert_called_once_with(catalog, (catalog.by_index[1],), fields=('PauseMenuWidget',))
                 read.assert_called_once_with(catalog, catalog.by_index[1], catalog.by_index[2], 'PauseMenuWidget', project=True)
 
     def test_title_screen_is_not_ready_for_saved_gameplay_mods(self):

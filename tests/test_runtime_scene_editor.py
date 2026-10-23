@@ -14,6 +14,21 @@ from expedition33.management import ManagementError
 WORLD='/Game/Levels/WorldMap/Level_WorldMap_Main_V2.Level_WorldMap_Main_V2'
 
 class SceneTests(unittest.TestCase):
+    def test_disable_revokes_all_queued_world_intents_before_deferred_cleanup(self):
+        from unittest.mock import Mock
+        model=package.Mod();document={'name':'Unsaved local draft'};model.document=document;model.dirty=True
+        flags=('want_open','want_play','reopen','want_saved','want_photo','want_timeline','want_author','want_stop','want_visibility','want_audio_library','cursor_pinned','photo_author')
+        pending=('photo_transfer','next_screen','pending_clip','pending_audio_preview','pending_edit','timeline_selection')
+        for name in flags:setattr(model,name,True)
+        for name in pending:setattr(model,name,object())
+        def deferred():
+            self.assertTrue(all(getattr(model,name) is False for name in flags))
+            self.assertTrue(all(getattr(model,name) is None for name in pending))
+            raise RuntimeError('Native cleanup pending')
+        model.runtime=SimpleNamespace(disable=deferred);model._close_author_ui=Mock()
+        with self.assertRaisesRegex(RuntimeError,'cleanup pending'):model.disable()
+        self.assertIs(model.document,document);self.assertTrue(model.dirty)
+
     def test_photo_start_wire_and_flight_fallback(self):
         packet=bytearray(20984);struct.pack_into('<4IQ',packet,0,7,75,0,0,1)
         validate_request(bytes(packet),protocol=7)

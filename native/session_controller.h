@@ -302,8 +302,18 @@ inline void run_runtime_session(DWORD pid, DWORD thread, int32_t object_index, i
 #ifdef E33_REFLECTED_SESSION
               << ",\"reflected_protocol\":1"
 #endif
+#ifdef E33_CONSOLE_COLORS_SESSION
+              << ",\"console_color_status_protocol\":1"
+#endif
 #ifdef E33_LEASE_SESSION
               << ",\"lease_protocol\":1"
+#ifdef E33_METADATA_STABILIZE_SESSION
+              << ",\"metadata_stabilization_protocol\":1,\"metadata_stabilization_capacity\":128,\"stable_lease_protocol\":1"
+#endif
+
+#ifdef E33_LEASE_RELEASE_BATCH_SESSION
+              << ",\"lease_release_batch_protocol\":1,\"lease_release_batch_capacity\":128"
+#endif
 #endif
 #ifdef E33_RETAINED_SESSION
               << ",\"retained_protocol\":1"
@@ -319,6 +329,9 @@ inline void run_runtime_session(DWORD pid, DWORD thread, int32_t object_index, i
 #endif
 #ifdef E33_VIEWER_MENU_SESSION
               << ",\"menu_input_protocol\":1"
+#endif
+#ifdef E33_MENU_OPEN_FOCUS_SESSION
+              << ",\"menu_open_focus_protocol\":1"
 #endif
 #ifdef E33_SCALAR_ASSIGNMENT_SESSION
               << ",\"scalar_assignment_protocol\":1"
@@ -370,6 +383,9 @@ inline void run_runtime_session(DWORD pid, DWORD thread, int32_t object_index, i
 #endif
 #ifdef E33_PAUSE_MENU_SESSION
               << ",\"pause_attachment_protocol\":2,\"trace_renew_protocol\":1"
+#ifdef E33_RETIRED_WORLD_SESSION
+              << ",\"retired_world_cleanup_protocol\":1"
+#endif
 #endif
 #ifdef E33_MEDIA_SESSION
               << ",\"media_owner_protocol\":1"
@@ -537,6 +553,30 @@ inline void run_runtime_session(DWORD pid, DWORD thread, int32_t object_index, i
                 throw std::runtime_error("SOUND_EVENT_PAYLOAD_ENCODING"); };
             for(size_t i=0;i<sizeof(CinematicSoundEventPacket);++i) destination[i]=static_cast<uint8_t>(digit(encoded[i*2])*16+digit(encoded[i*2+1]));
             command.resize(separator); separator=std::string::npos;
+        }
+#endif
+#ifdef E33_METADATA_STABILIZE_SESSION
+        bool metadata_stabilize=command.substr(0,separator)=="metadata-stabilize";
+        if(metadata_stabilize){
+            require(separator!=std::string::npos,"METADATA_PAYLOAD_MISSING");const auto encoded=command.substr(separator+1);
+            require(encoded.size()==sizeof(e33_metadata::Packet)*2,"METADATA_PAYLOAD_SIZE");
+            auto* destination=reinterpret_cast<uint8_t*>(packet.console_text);
+            auto digit=[](char c)->unsigned{if(c>='0'&&c<='9')return c-'0';if(c>='a'&&c<='f')return c-'a'+10;throw std::runtime_error("METADATA_PAYLOAD_ENCODING");};
+            for(size_t i=0;i<sizeof(e33_metadata::Packet);++i)destination[i]=static_cast<uint8_t>(digit(encoded[i*2])*16+digit(encoded[i*2+1]));
+            require(e33_metadata::valid(*reinterpret_cast<e33_metadata::Packet*>(packet.console_text)),"METADATA_REQUEST_INVALID");
+            command.resize(separator);separator=std::string::npos;
+        }
+#endif
+#ifdef E33_LEASE_RELEASE_BATCH_SESSION
+        bool lease_batch=command.substr(0,separator)=="lease-release-batch";
+        if(lease_batch){
+            require(separator!=std::string::npos,"LEASE_BATCH_PAYLOAD_MISSING");const auto encoded=command.substr(separator+1);
+            require(encoded.size()==sizeof(e33_lease_batch::Packet)*2,"LEASE_BATCH_PAYLOAD_SIZE");
+            auto* destination=reinterpret_cast<uint8_t*>(packet.console_text);
+            auto digit=[](char c)->unsigned{if(c>='0'&&c<='9')return c-'0';if(c>='a'&&c<='f')return c-'a'+10;throw std::runtime_error("LEASE_BATCH_PAYLOAD_ENCODING");};
+            for(size_t i=0;i<sizeof(e33_lease_batch::Packet);++i)destination[i]=static_cast<uint8_t>(digit(encoded[i*2])*16+digit(encoded[i*2+1]));
+            require(e33_lease_batch::valid(*reinterpret_cast<e33_lease_batch::Packet*>(packet.console_text)),"LEASE_BATCH_REQUEST_INVALID");
+            command.resize(separator);separator=std::string::npos;
         }
 #endif
 #ifdef E33_MUSIC_AUDIO_SESSION
@@ -789,6 +829,9 @@ inline void run_runtime_session(DWORD pid, DWORD thread, int32_t object_index, i
         auto tag=command.substr(0,separator);
         DWORD lease_action=tag=="lease-acquire" ? SessionLeaseAcquire :
             tag=="lease-release" ? SessionLeaseRelease : tag=="lease-status" ? SessionLeaseStatus : 0;
+#ifdef E33_METADATA_STABILIZE_SESSION
+        if(tag=="stable-lease-acquire")lease_action=SessionStableLeaseAcquire;
+#endif
         leased=lease_action!=0;
         if(leased) {
             require(separator!=std::string::npos,"LEASE_PAYLOAD_MISSING");
@@ -881,12 +924,26 @@ inline void run_runtime_session(DWORD pid, DWORD thread, int32_t object_index, i
 #endif
 #ifdef E33_GROWING_LEASE_SESSION
         if(lease_policy) action=SessionLeasePolicy;
+#ifdef E33_METADATA_STABILIZE_SESSION
+        if(metadata_stabilize)action=e33_metadata::Action;
+#endif
+
 #endif
 #ifdef E33_CINEMATIC_WIDGET_SESSION
         if(widget_hook) action=SessionCinematicWidget;
 #endif
 #ifdef E33_CINEMATIC_SOUND_EVENT_SESSION
         if(sound_event) action=SessionCinematicSoundEvent;
+#endif
+#ifdef E33_LEASE_RELEASE_BATCH_SESSION
+        if(lease_batch)action=e33_lease_batch::Action;
+#endif
+#ifdef E33_CONSOLE_COLORS_SESSION
+        if(command=="console-color-status"){
+            action=e33_console_color::Action;
+            const e33_console_color::Packet color_status{};
+            std::memcpy(packet.console_text,&color_status,sizeof(color_status));
+        }
 #endif
         require(action != 0, "SESSION_UNKNOWN_COMMAND");
         connection.command(action);
@@ -1114,6 +1171,33 @@ inline void run_runtime_session(DWORD pid, DWORD thread, int32_t object_index, i
             std::string encoded(sizeof(CallPacket)*2,'0');
             for(size_t i=0;i<sizeof(CallPacket);++i) { encoded[i*2]=digits[source[i]>>4]; encoded[i*2+1]=digits[source[i]&15]; }
             std::cout << ",\"call_packet\":" << quote(encoded);
+        }
+#endif
+#ifdef E33_LEASE_RELEASE_BATCH_SESSION
+        if(lease_batch){
+            static const char digits[]="0123456789abcdef";const auto* source=reinterpret_cast<const uint8_t*>(packet.console_text);
+            std::string encoded(sizeof(e33_lease_batch::Packet)*2,'0');
+            for(size_t i=0;i<sizeof(e33_lease_batch::Packet);++i){encoded[i*2]=digits[source[i]>>4];encoded[i*2+1]=digits[source[i]&15];}
+            std::cout << ",\"lease_release_batch_packet\":" << quote(encoded);
+        }
+#endif
+#ifdef E33_CONSOLE_COLORS_SESSION
+        if(action==e33_console_color::Action || action==SessionConsolePoll){
+            const auto* status_bytes=action==SessionConsolePoll ? reinterpret_cast<const void*>(&packet.events) : reinterpret_cast<const void*>(packet.console_text);
+            e33_console_color::Packet status;
+            std::memcpy(&status,status_bytes,sizeof(status));
+            require(status.version==1 && status.bound<=1 && status.disabled<=1 && status.unsupported<=1 && !status.reserved,"CONSOLE_COLOR_STATUS_INVALID");
+            std::cout << ",\"console_color_status\":{\"version\":" << status.version << ",\"native_version\":" << status.native_version
+                      << ",\"bound\":" << status.bound << ",\"disabled\":" << status.disabled << ",\"unsupported\":" << status.unsupported
+                      << ",\"frames\":" << status.frames << ",\"fallbacks\":" << status.fallbacks << ",\"faults\":" << status.faults << "}";
+        }
+#endif
+#ifdef E33_METADATA_STABILIZE_SESSION
+        if(metadata_stabilize){
+            static const char digits[]="0123456789abcdef";const auto* source=reinterpret_cast<const uint8_t*>(packet.console_text);
+            std::string encoded(sizeof(e33_metadata::Packet)*2,'0');
+            for(size_t i=0;i<sizeof(e33_metadata::Packet);++i){encoded[i*2]=digits[source[i]>>4];encoded[i*2+1]=digits[source[i]&15];}
+            std::cout << ",\"metadata_stabilization_packet\":" << quote(encoded);
         }
 #endif
         std::cout << "}\n" << std::flush;

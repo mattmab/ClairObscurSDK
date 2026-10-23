@@ -30,6 +30,10 @@ class Owner {
     StrongLeasePool<8> preview_leases_;
     StrongLeasePool<4> cue_leases_[23];
     OriginalAudioPause music_pause_;
+#ifdef E33_RETIRED_WORLD_SESSION
+    e33_retired_world::Anchor retired_anchor_;
+    bool retired_cleanup_=false;
+#endif
     CallIdentity sounds_[23]{},preview_sound_{};bool preview_active_=false;double preview_limit_=5.;
     std::chrono::steady_clock::time_point preview_clock_;
     CallIdentity audio_component(unsigned i)const{return i>=9 && sounds_[i-9].address?sounds_[i-9]:audio_;}
@@ -586,6 +590,28 @@ public:
     bool visual_stage_active()const{return pool_ && visual_staging_;}
     void quarantine(){error_=2015;state_=3;}
     uint32_t close(uint32_t reason=0){
+#ifdef E33_RETIRED_WORLD_SESSION
+        if(pool_){
+            e33_retired_world::TargetOps epoch{base_};
+            if(!retired_anchor_.established()){
+                if(loading_){TargetStrongReferenceOps refs{base_,{}};const auto loaded=loading_leases_.close(refs,owner_);
+                    if(loaded!=StrongLeaseResult::Ok)return loaded==StrongLeaseResult::Deferred?407:2014;loading_=false;}
+                const auto anchor_error=retired_anchor_.release(epoch,leases_,owner_);
+                if(anchor_error)return anchor_error;
+                TargetStrongReferenceOps refs{base_,{}};const auto result=leases_.close(refs,owner_);
+                if(result!=StrongLeaseResult::Ok)return result==StrongLeaseResult::Deferred?407:2014;
+                pool_=false;primary_lease_=0;retired_anchor_.reset();state_=5;return 0;
+            }
+            const auto proof=retired_anchor_.prove(epoch);
+            if(proof==e33_retired_world::Result::Pending)return 407;
+            if(proof==e33_retired_world::Result::Unknown)return 2052;
+            if(proof==e33_retired_world::Result::Retired){
+                retired_cleanup_=true;state_=3;reason_=reason;
+                timeline_flags_=0;editor_input_=true;mouse_valid_=left_down_=false;
+            }
+            if(retired_cleanup_ && visual_arena_requested_)return 2055;
+        }
+#endif
         if(loading_){TargetStrongReferenceOps ops{base_,{}};if(loading_leases_.close(ops,owner_)!=StrongLeaseResult::Ok)return 407;loading_=false;}
         if(!pool_)return 0;
         // Revoke visual parameter authority before touching arena temporaries,
@@ -595,13 +621,23 @@ public:
            (!e33_enemy_spawn::close_arena_binding_temporary(visual_arena_binding_,visual_arena_state_) ||
             !visual_arena_binding_.close_owned_value()))return 407;
         timeline_flags_=0;timeline_widget_={};timeline_add_={};photo_hud_={};
-        {const auto music_error=music_pause_.close();if(music_error)return music_error;}
+        {const auto music_error=
+#ifdef E33_RETIRED_WORLD_SESSION
+            retired_cleanup_?music_pause_.retire_world(retired_anchor_):
+#endif
+            music_pause_.close();if(music_error)return music_error;}
         if(!stop_preview())return 2010;
         for(unsigned i=0;i<23;++i)if(!clear_cue(i))return 2010;
         for(auto& component:effects_){if(component.address && valid(component)){clear();put(0,component.address);if(!call(component,22))return 2010;}component={};}
         if(!TargetPodSchemaOps{base_}.context())return 407;
         state_=3;reason_=reason;
         if(audio_.address){if(valid(audio_)){clear();if(!call(audio_,21))return 2010;clear();put(0,audio_.address);if(!call(audio_,22))return 2010;}audio_={};}
+#ifdef E33_RETIRED_WORLD_SESSION
+        if(retired_cleanup_){
+            // Epoch proof is native; never restore old gameplay presentation.
+            view_armed_=look_ignored_=move_ignored_=scene_cursor_owned_=false;
+        }
+#endif
         if(view_armed_ && current()){
             clear();if(!call(ids_[1],6))return 2011;
             if(get<uint64_t>()==camera_.address && valid(saved_)){
@@ -609,7 +645,11 @@ public:
             }
         }
         view_armed_=false;
+#ifdef E33_RETIRED_WORLD_SESSION
+        if(!retired_cleanup_ && !scene_cursor(false))return 2012;
+#else
         if(!scene_cursor(false))return 2012;
+#endif
         if(look_ignored_){if(valid(ids_[1])){clear();if(!call(ids_[1],23))return 2012;}look_ignored_=false;}
         if(move_ignored_){if(valid(ids_[1])){clear();if(!call(ids_[1],7))return 2012;}move_ignored_=false;}
         for(auto& id:characters_){if(id.address && valid(id)){clear();if(!call(id,2))return 2013;}id={};}
@@ -624,6 +664,9 @@ public:
         if(result==StrongLeaseResult::Deferred)return 407;
         if(result!=StrongLeaseResult::Ok)return 2014;
         pool_=false;visual_staging_=false;primary_lease_=0;
+#ifdef E33_RETIRED_WORLD_SESSION
+        retired_anchor_.reset();retired_cleanup_=false;
+#endif
         visual_arena_requested_=false;visual_world_={};visual_arena_binding_={};visual_arena_state_={};
         visual_ground_requested_=false;visual_ground_={};visual_ground_result_=e33_npc_presentation::PreviewPlacementResult::Rejected;
         std::memset(visual_ground_scale_,0,sizeof(visual_ground_scale_));
@@ -635,6 +678,13 @@ public:
         if(!pool_)return;
         if(state_==3){if(error_==407)error_=close(reason_);return;}
         if(!TargetPodSchemaOps{base_}.context())return;
+#ifdef E33_RETIRED_WORLD_SESSION
+        {e33_retired_world::TargetOps epoch{base_};
+            if(!epoch.current_binding(retired_anchor_.engine(),retired_anchor_.viewport(),retired_anchor_.world())){
+                error_=close(1);return;
+            }
+        }
+#endif
         elapsed_=std::chrono::duration<double>(std::chrono::steady_clock::now()-clock_).count();
         if(!current()){error_=close(1);return;}
         if(preview_active_ && std::chrono::duration<double>(std::chrono::steady_clock::now()-preview_clock_).count()>=preview_limit_ && !stop_preview()){error_=2010;state_=3;return;}
@@ -668,6 +718,14 @@ public:
 #endif
             ) || !packet.owner || packet.error || packet.state){packet.error=2000;return;}
         auto* raw=reinterpret_cast<uint8_t*>(&packet);
+#ifdef E33_RETIRED_WORLD_SESSION
+        if(pool_ && op!=72 && op!=73){
+            e33_retired_world::TargetOps epoch{base_};
+            if(!retired_anchor_.established()||!epoch.current_binding(retired_anchor_.engine(),retired_anchor_.viewport(),retired_anchor_.world())){
+                packet.error=2052;packet.state=state_;return;
+            }
+        }
+#endif
         if(op==98){
             CallIdentity animation{};std::memcpy(&animation,raw+88,16);uint32_t slot=0;std::memcpy(&slot,raw+104,4);
             Plan candidate{};std::memcpy(&candidate,raw+112,sizeof(candidate));
@@ -852,8 +910,34 @@ public:
             if(timeline_drag_.selected_kind==2 && (timeline_drag_.selected_index<0 || plan_.audio[timeline_drag_.selected_index]<0.))timeline_drag_.selected_kind=timeline_drag_.selected_index=-1;
             if(!editor_place() || !editor_seek(std::min(editor_time_,plan_.duration))){failed_step_=step_;error_=2008;const auto e=close(2);if(e)error_=e;}
         }
+#ifdef E33_RETIRED_WORLD_SESSION
+        uint32_t retirement_marker=0;std::memcpy(&retirement_marker,raw+24,4);
+        const bool request_retired=op==72&&retirement_marker==0x45504f43U;
+        if(request_retired){
+            if(std::any_of(raw+28,raw+sizeof(packet),[](uint8_t c){return c!=0;}) ||
+               (active() && owner_!=packet.owner) || base_!=base){packet.error=2000;return;}
+            error_=0;
+            if(pool_&&retired_anchor_.established()){e33_retired_world::TargetOps epoch{base_};const auto proof=retired_anchor_.prove(epoch);
+                if(proof!=e33_retired_world::Result::Retired)error_=proof==e33_retired_world::Result::Pending?407:2052;
+                else retired_cleanup_=true;
+            }
+            if(!error_)error_=close(1);
+            if(error_==407)state_=3;
+            packet.error=error_;packet.state=state_;
+            packet.section_id=leases_.active()+preview_leases_.active();
+            for(const auto&cue:cue_leases_)packet.section_id+=cue.active();
+            if(music_pause_.active())packet.sections|=1U<<29;
+            return;
+        }
+#endif
         const bool editor_values=op==77 || op==78 || op==79;
-        if(std::any_of(raw+24,raw+88,[](uint8_t c){return c!=0;}) ||
+        if(std::any_of(raw+
+#ifdef E33_RETIRED_WORLD_SESSION
+           (request_retired?28:24)
+#else
+           24
+#endif
+           ,raw+88,[](uint8_t c){return c!=0;}) ||
            (op!=76 && std::any_of(raw+(op==70?88+16*inputs:editor_values?104:op==75?136:op==149?168:op==150?248:88),raw+sizeof(packet),[](uint8_t c){return c!=0;}))){packet.error=2000;return;}
         double value=0.,option=0.;if(editor_values){std::memcpy(&value,raw+88,8);std::memcpy(&option,raw+96,8);if(!std::isfinite(value) || !std::isfinite(option)){packet.error=2022;return;}}
         if((op>=75 && op<=79) && (!pool_ || owner_!=packet.owner || conflict || !current() || (op==75?state_!=1:state_!=7 && state_!=8))){packet.error=2022;return;}
@@ -876,6 +960,10 @@ public:
                !palette_named(ids_[104].address,"M_DebugEmissive1","/Game/LevelTools/FreeAimTargets/M_DebugEmissive1") ||
                !palette_named(ids_[102].address,"Cube","/Engine/BasicShapes/Cube") || !named(base_,local_read<uint64_t>(ids_[102].address+16),"StaticMesh","/Script/Engine") ||
                !named(base_,ids_[11].address,"CameraComponent","/Script/Engine") || !current() || !assets()){packet.error=2004;packet.step=failed_step_;return;}
+#ifdef E33_RETIRED_WORLD_SESSION
+            {e33_retired_world::TargetOps epoch{base_};e33_retired_world::Snapshot observed{};
+                if(!epoch.observe(observed)||!epoch.controller_world(ids_[1],observed.world)){packet.error=2051;return;}}
+#endif
             if(leases_.begin(owner_)!=StrongLeaseResult::Ok){packet.error=2005;return;}
             pool_=true;state_=1;clock_=std::chrono::steady_clock::now();
             bool ok=true;for(size_t i=0;i<inputs;++i){
@@ -887,6 +975,12 @@ public:
                 if(before.serial==0 && ids_[i].serial>0)
                     for(size_t j=i+1;j<inputs;++j)if(same(ids_[j],before))ids_[j]=ids_[i];
             }
+#ifdef E33_RETIRED_WORLD_SESSION
+            if(ok){e33_retired_world::TargetOps epoch{base_};
+                const auto captured=retired_anchor_.capture(epoch,leases_,owner_,ids_[1]);
+                if(captured){error_=captured;state_=3;packet.error=captured;packet.state=state_;return;}
+            }
+#endif
             if(ok){clear();ok=call(ids_[1],6);saved_=call_capture(base_,get<uint64_t>());ok=ok && hold(saved_);}
             if(ok){clear();ok=call(ids_[2],3);std::memcpy(origin_,args_,24);}
             if(ok){clear();ok=call(ids_[2],4);yaw_=get<double>(8);const double rad=yaw_*3.141592653589793/180.;origin_[0]+=std::cos(rad)*300.;origin_[1]+=std::sin(rad)*300.;

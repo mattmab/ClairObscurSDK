@@ -1,5 +1,8 @@
 #pragma once
 #include "menu_lifetime.h"
+#ifdef E33_RETIRED_WORLD_SESSION
+#include "retired_world_target.h"
+#endif
 #include "menu_call_contract.h"
 #include "target_menu_focus.h"
 #include "strong_lease_pool.h"
@@ -23,6 +26,10 @@
 // contains SEH around every operation. No v14 transport is installed yet.
 struct TargetMenuStorage {
     uint32_t preparation_diagnostic=0;
+#ifdef E33_RETIRED_WORLD_SESSION
+    e33_retired_world::Anchor epoch;
+    bool epoch_cleanup=false;
+#endif
 #ifdef E33_VIEWER_MENU_SESSION
     bool ui_input_owned=false;
 #endif
@@ -41,7 +48,7 @@ struct TargetMenuStorage {
 #ifdef E33_MULTI_BUTTON_SESSION
     TargetMultiButtonActions multi_actions;
     // Focus references live until menu detach, across recycled tab bindings.
-    MenuFocusControls<128> control_focus;
+    MenuFocusControls<kMenuFocusOwnedControlCapacity> control_focus;
 #endif
 };
 template<class Pool>
@@ -54,10 +61,24 @@ struct TargetMenuOps {
         return call_is_class(data.base,cls) && exact_name(data.base,cls+0x18,name) &&
             exact_name(data.base,local_read<uint64_t>(cls+0x20)+0x18,package);
     }
+    bool retired_root_purged() const {
+#ifdef E33_RETIRED_WORLD_SESSION
+        return data.epoch_cleanup && !call_identity(data.base,data.widget) &&
+            leases.owns_retirement_storage(data.session,data.widget_lease,data.widget.address) &&
+            leases.owns_retirement_storage(data.session,data.child_lease,data.child.address);
+#else
+        return false;
+#endif
+    }
     bool objects_valid() const {
         auto base=data.base;
         if(!call_identity(base,data.widget) || !call_identity(base,data.child) ||
-           !call_identity(base,data.player) || !call_identity(base,data.library) ||
+#ifdef E33_RETIRED_WORLD_SESSION
+           (!data.epoch_cleanup && !call_identity(base,data.player)) ||
+#else
+           !call_identity(base,data.player) ||
+#endif
+           !call_identity(base,data.library) ||
            !leases.owns_object(data.session,data.widget_lease,data.widget.address) ||
            !leases.owns_object(data.session,data.child_lease,data.child.address)) return false;
         if(!exact_class(data.widget.address,"CommonActivatableWidget","/Script/CommonUI") ||
@@ -78,8 +99,30 @@ struct TargetMenuOps {
            local_read<uint8_t>(base+0x9272cea)) return MenuContext::Terminal;
         if(local_read<uint8_t>(base+0x9272cfc) || local_read<uint8_t>(base+0x934e968))
             return MenuContext::Deferred;
-        return objects_valid() ? MenuContext::Ready : MenuContext::Terminal;
+#ifdef E33_RETIRED_WORLD_SESSION
+        if(data.epoch.established()) {
+            e33_retired_world::TargetOps proof{base};
+            // Normal menu operations need only the fresh exact bound chain.
+            // A mismatch revokes them until independent double observation
+            // proves retirement; the fast check never authorizes retirement.
+            if(!proof.current_binding(data.epoch.engine(),data.epoch.viewport(),data.epoch.world())){
+                const auto epoch=data.epoch.prove(proof);
+                if(epoch==e33_retired_world::Result::Pending)return MenuContext::Deferred;
+                if(epoch==e33_retired_world::Result::Unknown)return MenuContext::Terminal;
+                if(epoch==e33_retired_world::Result::Retired)data.epoch_cleanup=true;
+            }
+        }
+#endif
+        return (retired_root_purged() || objects_valid()) ? MenuContext::Ready : MenuContext::Terminal;
     }
+#ifdef E33_RETIRED_WORLD_SESSION
+    MenuResult admit_world_actions(){
+        const auto ready=context();
+        if(ready==MenuContext::Deferred)return MenuResult::Deferred;
+        if(ready!=MenuContext::Ready)return MenuResult::Quarantined;
+        return data.epoch_cleanup?MenuResult::Invalid:MenuResult::Ok;
+    }
+#endif
     CallIdentity target(MenuCall op) const {
 #ifdef E33_VIEWER_MENU_SESSION
         if(op==MenuCall::UIInput || op==MenuCall::GameInput) return data.library;
@@ -134,6 +177,9 @@ struct TargetMenuOps {
         data.preparation_diagnostic=901;
         if(session!=data.session || owner!=data.owner || widget!=data.widget_lease ||
            child!=data.child_lease || context()!=MenuContext::Ready) return false;
+#ifdef E33_RETIRED_WORLD_SESSION
+        if(data.epoch_cleanup)return false;
+#endif
         for(uint32_t i=0;i<kMenuCalls;++i) {
             data.preparation_diagnostic=910+i;
             if(!plan_valid(static_cast<MenuCall>(i))) return false;
@@ -147,6 +193,12 @@ struct TargetMenuOps {
         return true;
     }
     MenuResult capture_baseline() {
+#ifdef E33_RETIRED_WORLD_SESSION
+        e33_retired_world::TargetOps proof{data.base};CallIdentity owning{};
+        if(!proof.owning_player(data.widget,owning)||!e33_retired_world::same(owning,data.player))return MenuResult::Invalid;
+        const auto anchored=data.epoch.capture(proof,leases,data.session,owning);
+        if(anchored)return anchored==407?MenuResult::Deferred:MenuResult::Quarantined;
+#endif
         auto result=data.focus.capture(data.base,data.engine);
         if(result!=SlateReferenceResult::Ok)
             data.preparation_diagnostic=data.focus.capture_diagnostic ? data.focus.capture_diagnostic : 902;
@@ -158,8 +210,25 @@ struct TargetMenuOps {
         if(result==SlateReferenceResult::Deferred) return MenuResult::Deferred;
         return MenuResult::Quarantined;
     }
+#ifdef E33_RETIRED_WORLD_SESSION
+    MenuResult release_epoch_anchor() {
+        e33_retired_world::TargetOps proof{data.base};
+        const auto error=data.epoch.release(proof,leases,data.session);
+        if(error)return error==407?MenuResult::Deferred:MenuResult::Quarantined;
+        data.epoch.reset();data.epoch_cleanup=false;return MenuResult::Ok;
+    }
+#endif
     bool invoke(MenuCall op,bool* result=nullptr) {
-        if(context()!=MenuContext::Ready || !plan_valid(op)) return false;
+        if(context()!=MenuContext::Ready)return false;
+        if(retired_root_purged()){
+            if(op==MenuCall::Active || op==MenuCall::InViewport){if(result)*result=false;return true;}
+            return op==MenuCall::Deactivate || op==MenuCall::Remove;
+        }
+        if(!plan_valid(op)) return false;
+#ifdef E33_RETIRED_WORLD_SESSION
+        if(data.epoch_cleanup && op!=MenuCall::Deactivate && op!=MenuCall::Remove &&
+           op!=MenuCall::Active && op!=MenuCall::InViewport)return false;
+#endif
         // Local packet is only a transient dispatch buffer. All lifecycle and
         // prior-focus ownership is already durable in data before this call.
         auto packet=data.plans[static_cast<uint32_t>(op)];
@@ -207,6 +276,9 @@ struct TargetMenuOps {
             check(MenuCall::KeyboardFocus,true) && check(MenuCall::UserFocus,true);
     }
     MenuFocusOwner focus_owner() {
+#ifdef E33_RETIRED_WORLD_SESSION
+        if(data.epoch_cleanup)return MenuFocusOwner::Unrelated;
+#endif
         TargetMenuFocusSnapshot current{};
         if(!data.focus.observe(data.base,current)) return MenuFocusOwner::Invalid;
         if(current.focused==current.viewport && current.focused_controller==current.viewport_controller)
@@ -224,6 +296,9 @@ struct TargetMenuOps {
         return user ? MenuFocusOwner::Owned : MenuFocusOwner::Unrelated;
     }
     bool restore() {
+#ifdef E33_RETIRED_WORLD_SESSION
+        if(data.epoch_cleanup){data.ui_input_owned=false;return true;}
+#endif
         auto current=focus_owner();
 #ifdef E33_VIEWER_MENU_SESSION
         if(data.ui_input_owned && (current==MenuFocusOwner::Prior || current==MenuFocusOwner::Owned)) {
@@ -243,6 +318,21 @@ struct TargetMenuOps {
         return invoke(MenuCall::Deactivate) && check(MenuCall::Active,false);
     }
     bool detach() { return invoke(MenuCall::Remove) && check(MenuCall::InViewport,false); }
+#ifdef E33_RETIRED_WORLD_SESSION
+    MenuResult release_baseline_result() {
+#ifdef E33_MULTI_BUTTON_SESSION
+        TargetButtonReferenceOps refs{data.base};
+        auto controls=data.control_focus.release(refs);
+        if(controls!=SlateReferenceResult::Ok)return controls==SlateReferenceResult::Deferred?MenuResult::Deferred:MenuResult::Quarantined;
+#endif
+#ifdef E33_BUTTON_REFERENCE_SESSION
+        auto child=data.child_slate.release(data.base);
+        if(child!=SlateReferenceResult::Ok)return child==SlateReferenceResult::Deferred?MenuResult::Deferred:MenuResult::Quarantined;
+#endif
+        auto focus=data.focus.release(data.base);
+        return focus==SlateReferenceResult::Ok?MenuResult::Ok:focus==SlateReferenceResult::Deferred?MenuResult::Deferred:MenuResult::Quarantined;
+    }
+#endif
     bool release_baseline() {
 #ifdef E33_MULTI_BUTTON_SESSION
         TargetButtonReferenceOps refs{data.base};

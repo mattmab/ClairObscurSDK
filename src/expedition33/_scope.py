@@ -16,6 +16,8 @@ class ScopedConsole:
             raise ValueError('A callback and lifecycle owner are required')
         def guarded(arguments):
             self._scope._check()
+            if not self._scope._callbacks_ready():
+                raise RuntimeError('Scoped console callback is waiting for its admitted world')
             return callback(arguments)
         handle = self._scope._session.console.register(name, guarded, owner=self)
         self._commands.append((owner, handle))
@@ -116,6 +118,7 @@ class SessionScope:
     supported methods avoid exposing a second independent transport lifecycle.
     """
     def __init__(self, session, *, lease_owner=None):
+        self._world_callback_readiness=getattr(session,'_world_callback_readiness',None)
         self._parent = None
         self._children = []
         inherited_owner=None
@@ -173,6 +176,16 @@ class SessionScope:
             raise ValueError('Native owner must belong to this scope and provide close()')
         if not any(item is owner for item in self._native_owners):
             self._native_owners.append(owner)
+
+    def _callbacks_ready(self):
+        if getattr(self,'_closed',False):return False
+        readiness=getattr(self,'_world_callback_readiness',None)
+        if readiness is None:return True
+        if not callable(readiness):raise TypeError('World callback readiness must be callable')
+        ready=readiness()
+        if ready is not None and type(ready) is not bool:
+            raise TypeError('World callback readiness must return bool or None')
+        return ready is True
 
     @property
     def supports_traces(self):
@@ -324,7 +337,7 @@ class SessionScope:
         def guarded(context):
             if not self._closed:
                 self._check()
-                callback(context)
+                if self._callbacks_ready():callback(context)
         handle = self._session.hook(obj, target, guarded)
         self._hooks.append(handle)
         return handle
@@ -347,7 +360,9 @@ class SessionScope:
         try:
             return prepare(self._session, widget, child, player, self._leases, z_order=z_order, catalog=catalog)
         finally:
-            self._menus.extend(self._session._menus - before)
+            created=self._session._menus - before
+            for menu in created:menu._world_callback_readiness=self._callbacks_ready
+            self._menus.extend(created)
 
     @property
     def supports_menu_ownership(self):
@@ -457,14 +472,21 @@ class SessionScope:
                 menus_closed = False
                 errors.append(type(error).__name__)
         self._menus.clear()
-        for lease in reversed(self._leases):
-            if not menus_closed:
-                if lease._state == 'active': lease._state = 'pending_release'
-                continue
+        from ._lease_release_batch import available as lease_batch_available
+        if menus_closed and lease_batch_available(getattr(self._session, '_transport', None)):
             try:
-                lease.release()
+                self._session._release_leases(tuple(reversed(self._leases)))
             except BaseException as error:
                 errors.append(type(error).__name__)
+        else:
+            for lease in reversed(self._leases):
+                if not menus_closed:
+                    if lease._state == 'active': lease._state = 'pending_release'
+                    continue
+                try:
+                    lease.release()
+                except BaseException as error:
+                    errors.append(type(error).__name__)
         self._leases.clear()
         for hook in reversed(self._hooks):
             try:

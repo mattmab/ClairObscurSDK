@@ -232,12 +232,37 @@ class Mod:
         self._play_started = False
         self._paused = False
         self._rate = 1.
+        self._static_catalog_inputs=None
+        self.static_preparation_error=None
 
     def management(self):
         return ModDefinition('sdk.cinematics', 'Cinematics', version='0.1-browser',
             description='Mapped original cinematic travel/play plus isolated title and video adapters. Save history is shown separately.',
             actions=(Action('status', 'Cinematic discovery status', self.status),
                      Action('refresh', 'Refresh current-save history', self.discover)))
+
+    def prepare_startup(self, context):
+        # Files/profile validation needs no process or world. A missing local
+        # manifest must not prevent current-save history discovery later.
+        try:self._catalog_inputs()
+        except (OSError,UnicodeError,ValueError,KeyError,RuntimeError) as error:
+            self.static_preparation_error=str(error)
+
+    def _catalog_inputs(self):
+        manifest=game_root() / 'Manifest_UFSFiles_Win64.txt'
+        source=Path(__file__).with_name('catalog.json')
+        signature=tuple((str(path),path.stat().st_mtime_ns,path.stat().st_size)
+                        for path in (source,manifest))
+        cached=self._static_catalog_inputs
+        if cached is None or cached[0]!=signature:
+            catalog=json.loads(source.read_text(encoding='utf8'))
+            manifest_bytes=manifest.read_bytes()
+            # Validate installed mapping, duplicates and exact static profiles
+            # before publishing the cache. Current history is always read live.
+            catalog_scenes({},False,catalog,manifest_bytes,original_action_available=True)
+            self._static_catalog_inputs=(signature,catalog,manifest_bytes)
+            self.static_preparation_error=None
+        return self._static_catalog_inputs[1:]
 
     def enable(self, session):
         self.session = session
@@ -270,12 +295,11 @@ class Mod:
                 all_scenes.extend(dict(id=name, title=name.replace('CS_', '').replace('_', ' ') + ' [locked]',
                     supported=False, unlocked=False, reason='Not unlocked in current-session game history. Replay is disabled.')
                     for name, seen in history.items.items() if seen is False)
-                manifest = game_root() / 'Manifest_UFSFiles_Win64.txt'
                 try:
-                    catalog=json.loads(Path(__file__).with_name('catalog.json').read_text(encoding='utf8'))
+                    catalog,manifest_bytes=self._catalog_inputs()
                     all_scenes=catalog_scenes(history.items,
                         type(getattr(transport,'media_owner_protocol',0)) is int and transport.media_owner_protocol==1,
-                        catalog,manifest.read_bytes(), title_profile_ids=tuple(p.profile_id for p in TITLE_PROFILES.values() if p.available(transport)),original_action_available=original_available(transport))
+                        catalog,manifest_bytes, title_profile_ids=tuple(p.profile_id for p in TITLE_PROFILES.values() if p.available(transport)),original_action_available=original_available(transport))
                     mapped_ids={s['saved_id'] for s in all_scenes}
                     self.discovery['unmapped_history']=[s for s in self.discovery['confirmed'] if s['id'] not in mapped_ids]
                     self.discovery['confirmed']=[s for s in all_scenes if s['unlocked'] is True]
@@ -297,9 +321,8 @@ class Mod:
             transport=getattr(getattr(self.session,'_session',None),'_transport',None)
             if original_available(transport):
                 try:
-                    catalog=json.loads(Path(__file__).with_name('catalog.json').read_text(encoding='utf8'))
-                    manifest=game_root() / 'Manifest_UFSFiles_Win64.txt'
-                    self.discovery['all']=catalog_scenes({},False,catalog,manifest.read_bytes(),original_action_available=True)
+                    catalog,manifest_bytes=self._catalog_inputs()
+                    self.discovery['all']=catalog_scenes({},False,catalog,manifest_bytes,original_action_available=True)
                 except (OSError,UnicodeError,ValueError,KeyError) as catalog_error:self.discovery['catalog_error']=str(catalog_error)
         LOG.info('Cinematic discovery: %s', self.discovery)
         return self.status()
@@ -507,6 +530,35 @@ class Mod:
                 # the shared menu defers the newest frame until cleanup.
                 self.native.parent.refresh()
             self.native.poll()
+
+    def revoke_world(self,context):
+        self._retirement_token=context.previous_token
+        self.playback_status='World retired; gameplay callbacks revoked'
+
+    def begin_world_retirement(self,context):
+        return self.poll_world_retirement(context)
+
+    def poll_world_retirement(self,context):
+        if getattr(self,'_retirement_token',None)!=context.previous_token:return 'unknown'
+        # Ordinary stop restores presentation, original music and camera/input.
+        # Never invoke that compensation against a retired epoch.
+        if self.video is not None:return 'unknown'
+        replay=self.title_replay
+        if replay is not None and any(getattr(replay,key,None) is not None for key in ('sequence','adapters','presentation')):
+            return 'unknown'
+        if self.pause is not None:
+            result=self.pause.retire_world()
+            if result!='ack':return result
+            self.pause=None
+        if self.original_replay is not None:
+            prepared=self.original_replay.prepared
+            if prepared is not None:prepared.close();self.original_replay.prepared=None
+            # Original actions are game-owned. Revoke polling/travel progression,
+            # not the campaign action itself; no Stop or new target is invoked.
+            self.original_replay=None
+        self.title_replay=self.native=self.session=None
+        self.discovery={'state':'world_retired','confirmed':[]}
+        return 'ack'
 
     def disable(self):
         if self.stop() is False:

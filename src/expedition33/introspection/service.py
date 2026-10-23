@@ -28,6 +28,7 @@ class FileService:
         self._owner = threading.get_ident()
         self._busy = False
         self._enabled = True
+        self._closed = False
         self._last_poll = self._last_heartbeat = 0.0
         for directory in (self.data, self.data / 'requests', self.data / 'responses'):
             directory.mkdir(parents=True, exist_ok=True)
@@ -101,10 +102,16 @@ class FileService:
         finally:
             self._busy = False
 
+    def revoke(self):
+        """Stop claiming queued requests; existing claims are never replayed."""
+        self._check()
+        self._enabled = False
+
     def close(self):
         self._check()
         if self._busy:
             raise RuntimeError('Cannot close file service during dispatch')
-        if self._enabled:
+        if not self._closed:
             self._enabled = False
             self.heartbeat()
+            self._closed = True

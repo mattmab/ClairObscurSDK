@@ -24,10 +24,19 @@ class Mod:
 
     def enable(self, session):
         self.registry = session.mods
+        process_ui=getattr(session._session,'_process_ui',None)
+        if process_ui is not None:
+            from expedition33.process_ui_routes import ProcessMenuRoute,ProcessEntryRoute
+            self.native=ProcessMenuRoute(process_ui)
+            self.pause=ProcessEntryRoute(process_ui)
+            session._session._native_menu_service=self.native
+            self.menu=ConsoleMenu(session.mods,session.console,native=self.native)
+            return
+        readiness = getattr(session._session, '_menu_readiness', None)
         self.native = NativeMenuService(session, session.mods,
-            view_factory=ScrollWorkspaceView, menu_factory=ScrollWorkspaceMenu)
+            view_factory=ScrollWorkspaceView, menu_factory=ScrollWorkspaceMenu, readiness=readiness)
         session._session._native_menu_service = self.native
-        self.pause = PauseMenuEntry(session,self.native)
+        self.pause = PauseMenuEntry(session,self.native,readiness=readiness)
         self.menu = ConsoleMenu(session.mods, session.console, native=self.native)
 
     def prepare(self):
@@ -58,7 +67,8 @@ class Mod:
         if self.native is not None:
             # A travel reset must reattach the pause entry before rebuilding
             # the detached menu on a subsequent poll.
-            if self.pause is not None and self.pause.available and self.pause.state == 'new':
+            if (self.pause is not None and self.pause.available and self.pause.state == 'new'
+                    and getattr(self.native, 'ui_ready', True)):
                 return
             self.native.poll()
             if self.native.menu is not None and hasattr(self.native.menu, 'poll_scroll'):

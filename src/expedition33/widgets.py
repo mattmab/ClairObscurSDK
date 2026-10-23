@@ -7,11 +7,13 @@ Construction is explicit so callers retain the owner even if a mutation fails.
 import logging
 import time
 from contextlib import contextmanager
+from ._menu_latency import MenuLatency, measure_method
 
 from .catalog import capture, capture_selected, capture_matching
 from .enums import describe_enums
 from .values import read_values, read_object_reference
 from ._scope import SessionScope
+from .invocation import InvocationError
 
 
 _WIDGET_DEFINITIONS = frozenset((
@@ -65,6 +67,7 @@ class OwnedMenuPanel:
         self._paint_queue = None
         self._layout_queue = None
         self.timings = {}
+        self.latency = MenuLatency()
         self._construction = None
 
     @contextmanager
@@ -80,7 +83,9 @@ class OwnedMenuPanel:
             yield
             # Sparse views may change all three setters on each reusable row.
             # Preserve the native bound and stop immediately if a group fails.
+            self.latency.count('paint.queued_setters',len(self._paint_queue))
             for start in range(0, len(self._paint_queue), _ui_batch.LIMIT):
+                self.latency.count('paint.batch_dispatches')
                 self._mutate(_ui_batch.invoke_setters, self.scope,
                              self._paint_queue[start:start + _ui_batch.LIMIT])
         except BaseException:
@@ -118,11 +123,20 @@ class OwnedMenuPanel:
         self._defaults[name] = result
         return result
 
+    @measure_method('widget.mutation')
     def _mutate(self, method, *args, **kwargs):
         if self.uncertain:
             raise RuntimeError('Widget mutation outcome unknown; no retry is permitted')
         self.uncertain = True
-        result = method(*args, **kwargs)
+        self.latency.count('mutation.'+getattr(method,'__name__','callable'))
+        try:
+            result = method(*args, **kwargs)
+        except InvocationError as error:
+            # A correlated rejection proves this operation did not execute.
+            # Earlier acknowledged operations stand; do not replay this call.
+            if error.outcome == 'not_dispatched':
+                self.uncertain = False
+            raise
         self.uncertain = False
         return result
 
@@ -212,6 +226,7 @@ class OwnedMenuPanel:
         return read_values(catalog, catalog.resolve(self.tree)).values[
             self._class('WidgetTree').index, 'RootWidget']
 
+    @measure_method('widget.build')
     def build(self):
         if self.state != 'new':
             raise RuntimeError('Construct each panel once; close it before making another')
@@ -219,44 +234,52 @@ class OwnedMenuPanel:
         started = time.perf_counter()
         log = logging.getLogger(__name__)
         log.info('Building owned native menu panel with %d reusable controls', self.count)
-        self.catalog = capture_matching(self.scope.pid, names=widget_definition_names((
-            'Widget', 'UserWidget', 'CommonActivatableWidget', 'WidgetTree',
-            'CanvasPanel', 'CanvasPanelSlot', 'Button', 'TextBlock', 'Border',
-            'CommonTextBlock', 'WBP_BaseButton_C', 'CTS_B1_SmallLine_Outline_C', 'SetStyle',
-            'Overlay', 'OverlaySlot', 'TextLayoutWidget', 'AddChildToOverlay',
-            'SetHorizontalAlignment', 'SetVerticalAlignment', 'SetJustification',
-            'EHorizontalAlignment', 'EVerticalAlignment', 'ETextJustify',
-            'WidgetBlueprintLibrary', 'GameplayStatics',
-            'Default__WidgetBlueprintLibrary', 'Default__GameplayStatics',
-            'ESlateVisibility', 'Vector2D', 'LinearColor', 'Margin', 'Anchors',
-            'Create', 'SpawnObject', 'AddChildToCanvas', 'SetPosition', 'SetSize',
-            'SetAnchors', 'SetIsEnabled', 'SetVisibility', 'SetBackgroundColor', 'SetBrushColor',
-            'SetText', 'AddToViewport', 'IsInViewport', 'ActivateWidget',
-            'IsActivated', 'SetUserFocus', 'HasKeyboardFocus', 'HasUserFocus',
-            'DeactivateWidget', 'RemoveFromParent', 'SetFocusToGameViewport',
-            'SetInputMode_UIOnlyEx','SetInputMode_GameOnly','EMouseLockMode') + self.EXTRA_NAMES),
-            classes=('GameEngine',)) if self._selected_results else capture()
-        if self.catalog.pid != self.scope.pid:
-            raise ValueError('Widget catalog belongs to another process')
-        if self._selected_results:
-            from .cinematics.original_game_action import controller_context
-            current = controller_context(self.scope)
-            observed = capture_selected(self.scope.pid, (current['controller'][1:],))
-            self.catalog = self.catalog.with_observations(observed)
-            self.player = self.catalog.by_index[current['controller'][1]]
-        else:
-            self.player = self._one(o for o in self.catalog.select('PlayerController')
-                                    if not o.object_flags & 0x10)
-        if self._selected_results:
-            # Exact-name discovery also finds transient instances (notably an
-            # old panel's WidgetTree). Do not merge those unowned registry slots
-            # with future retained creation results after GC recycles them.
-            descriptors = {'Function', 'ScriptStruct', 'Enum'}
-            engines = {o.index for o in self.catalog.select('GameEngine')}
-            self.catalog = self.catalog.subset(o for o in self.catalog.objects
-                if o.index in self.catalog.classes or o.class_name in descriptors
-                or o.name in ('Default__GameplayStatics', 'Default__WidgetBlueprintLibrary')
-                or o.index == self.player.index or o.index in engines)
+        def discover_metadata():
+            catalog = capture_matching(self.scope.pid, names=widget_definition_names((
+                'Widget', 'UserWidget', 'CommonActivatableWidget', 'WidgetTree',
+                'CanvasPanel', 'CanvasPanelSlot', 'Button', 'TextBlock', 'Border',
+                'CommonTextBlock', 'WBP_BaseButton_C', 'CTS_B1_SmallLine_Outline_C', 'SetStyle',
+                'Overlay', 'OverlaySlot', 'TextLayoutWidget', 'AddChildToOverlay',
+                'SetHorizontalAlignment', 'SetVerticalAlignment', 'SetJustification',
+                'EHorizontalAlignment', 'EVerticalAlignment', 'ETextJustify',
+                'WidgetBlueprintLibrary', 'GameplayStatics',
+                'Default__WidgetBlueprintLibrary', 'Default__GameplayStatics',
+                'ESlateVisibility', 'Vector2D', 'LinearColor', 'Margin', 'Anchors',
+                'Create', 'SpawnObject', 'AddChildToCanvas', 'SetPosition', 'SetSize',
+                'SetAnchors', 'SetIsEnabled', 'SetVisibility', 'SetBackgroundColor', 'SetBrushColor',
+                'SetText', 'AddToViewport', 'IsInViewport', 'ActivateWidget',
+                'IsActivated', 'SetUserFocus', 'HasKeyboardFocus', 'HasUserFocus',
+                'DeactivateWidget', 'RemoveFromParent', 'SetFocusToGameViewport',
+                'SetInputMode_UIOnlyEx','SetInputMode_GameOnly','EMouseLockMode') + self.EXTRA_NAMES),
+                classes=('GameEngine',)) if self._selected_results else capture()
+            if catalog.pid != self.scope.pid:
+                raise ValueError('Widget catalog belongs to another process')
+            if self._selected_results:
+                from .cinematics.original_game_action import controller_context
+                current = controller_context(self.scope)
+                observed = capture_selected(self.scope.pid, (current['controller'][1:],))
+                catalog = catalog.with_observations(observed)
+                self.player = catalog.by_index[current['controller'][1]]
+            else:
+                self.player = self._one(o for o in catalog.select('PlayerController')
+                                        if not o.object_flags & 0x10)
+            if self._selected_results:
+                # Exact-name discovery also finds transient instances (notably an
+                # old panel's WidgetTree). Do not merge those unowned registry slots
+                # with future retained creation results after GC recycles them.
+                descriptors = {'Function', 'ScriptStruct', 'Enum'}
+                engines = {o.index for o in catalog.select('GameEngine')}
+                catalog = catalog.subset(o for o in catalog.objects
+                    if o.index in catalog.classes or o.class_name in descriptors
+                    or o.name in ('Default__GameplayStatics', 'Default__WidgetBlueprintLibrary')
+                    or o.index == self.player.index or o.index in engines)
+            return catalog
+        from ._metadata_stabilization import available,prepare_discovery
+        self._metadata_stable_ui=False
+        if self._selected_results and available(getattr(self.scope._session,'_transport',None)):
+            self.catalog,uncovered=prepare_discovery(self.scope._session,discover_metadata)
+            self.metadata_uncovered_count=len(uncovered);self._metadata_stable_ui=True
+        else:self.catalog=discover_metadata()
         enum = self.catalog.find_path('/Script/UMG.ESlateVisibility', 'Enum')
         descriptor = describe_enums(self.catalog, [enum])[enum.index]
         def visibility(name):
@@ -269,6 +292,7 @@ class OwnedMenuPanel:
         if self._cached_construction:
             self._planner = self.scope.invocation_planner(
                 selected_results=self._selected_results, catalog=self.catalog)
+            self._planner._require_stable_ui_identities=self._metadata_stable_ui
             from . import _ui_batch
             if _ui_batch.layout_available(self.scope._session):
                 self._layout_queue = []
@@ -284,6 +308,17 @@ class OwnedMenuPanel:
             current = capture()
             self.tree = read_values(current, current.resolve(self.widget)).values[
                 self._class('UserWidget').index, 'WidgetTree']
+        from ._stable_lease import available as stable_tree_available, stabilize_owned_tree, rediscover_owned_tree
+        if (self.tree is not None and self.tree.serial==0 and
+                stable_tree_available(self.scope._session._transport)):
+            stable_tree, _ = stabilize_owned_tree(self.scope, current, self.widget,
+                self.tree, self._class('UserWidget'))
+            # The old tree's serial changed intentionally. Discard its catalog;
+            # never merge the replacement identity through with_observations.
+            self.catalog,self.tree,current = rediscover_owned_tree(self.scope.pid,
+                discover_metadata,self.widget,stable_tree,self._class('UserWidget').index)
+            if self._planner is not None:
+                self._planner.refresh_from(self.catalog)
         if self._planner is not None:
             # Create also initializes WidgetTree, which is a child and therefore
             # outside the returned widget's outer/class dependency closure.
@@ -353,8 +388,11 @@ class OwnedMenuPanel:
             raise RuntimeError('Enable cached planning after a successful build, before opening')
         if self._planner is None:
             self._planner = self.scope.invocation_planner()
+        self._planner._require_stable_ui_identities=getattr(self,'_metadata_stable_ui',False)
 
+    @measure_method('widget.render_plan')
     def _render_call(self, obj, owner, name, **arguments):
+        self.latency.count('setter.'+owner+'.'+name)
         function = self._function(owner, name)
         if self._planner is None:
             result = self._mutate(self.scope.invoke_retained, obj, function, **arguments)
@@ -365,9 +403,29 @@ class OwnedMenuPanel:
             if self._paint_queue is not None:
                 self._paint_queue.append(prepared)
                 return
-            result = self._mutate(prepared.invoke)
+            try:
+                result = self._mutate(prepared.invoke)
+            except InvocationError as error:
+                if error.outcome == 'not_dispatched' and error.native_error == 202:
+                    self._diagnose_rejected_identity(obj, function)
+                raise
         with result:
             pass
+
+    def _diagnose_rejected_identity(self, target, function):
+        # Post-rejection observation only. Never retries a failed invocation,
+        # changes its outcome, logs arguments, or grants dispatch authority.
+        for role, obj in (('target', target), ('function', function)):
+            identity = (obj.index, obj.serial, obj.address)
+            try:
+                observed = capture_selected(self.scope.pid, (identity,)).by_index[obj.index]
+                logging.getLogger(__name__).error(
+                    'UI rejection202 %s index=%d serial=%d address=%#x observed_flags=%#x',
+                    role, obj.index, obj.serial, obj.address, observed.object_flags)
+            except Exception as diagnostic_error:
+                logging.getLogger(__name__).error(
+                    'UI rejection202 %s index=%d serial=%d address=%#x observation_failed=%s',
+                    role, obj.index, obj.serial, obj.address, type(diagnostic_error).__name__)
 
     def set_text(self, label, text):
         if self.state not in ('built', 'open'):
@@ -390,6 +448,7 @@ class OwnedMenuPanel:
                 self._render_call(self.button_art[index], 'Widget', 'SetIsEnabled', bInIsEnabled=enabled)
             self._enabled[index] = enabled
 
+    @measure_method('widget.open_attach_focus')
     def open(self):
         if self.state != 'built':
             raise RuntimeError('Build and paint the panel before opening it')
@@ -419,6 +478,7 @@ class OwnedMenuPanel:
             raise
         self.state = 'open'
 
+    @measure_method('widget.prime_menu_plan')
     def prime_menu_plan(self):
         """Prepare copied call descriptions, without focus/viewport ownership."""
         if self.state != 'built' or self.uncertain or self._planner is None:
@@ -458,6 +518,22 @@ class OwnedMenuPanel:
         self.menu = None
         self.state = 'built'
         return True
+
+    def retire_world(self, *, native_retirement_ack=False):
+        """Release this SDK-owned hierarchy without old-world UI restoration."""
+        if self.state=='closed':return 'ack'
+        if self.uncertain:return 'unknown'
+        if self.menu is not None:
+            if not self.menu.retire_world():return 'pending'
+        elif self.state=='open':
+            # Noninteractive overlays have no native input owner. Only a
+            # preceding native domain retirement ACK permits their detach.
+            if not native_retirement_ack:return 'unknown'
+            self._render_call(self.widget,'Widget','RemoveFromParent')
+        if self._planner is not None:self._planner.close();self._planner=None
+        self.scope.close()
+        self.menu=None;self.assigned=False;self.children.clear()
+        self.state='closed';return 'ack'
 
     def close(self):
         return self._close_tree(detach_children=True)

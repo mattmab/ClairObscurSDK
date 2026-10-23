@@ -52,6 +52,9 @@ static bool validate_target_enum(uint64_t base,uint64_t property,const CallIdent
 #include "strong_lease_pool.h"
 #ifdef E33_STABLE_SESSION
 #include "stable_identity.h"
+#ifdef E33_METADATA_STABILIZE_SESSION
+#include "stable_lease_runtime.h"
+#endif
 #endif
 static StrongLeasePool<> session_leases;
 static uint64_t lease_session=0;
@@ -60,6 +63,9 @@ static uint64_t lease_session=0;
 static SchedulePacket target{};
 static ObserverBuffer session_events{};
 static uint64_t runtime_base = 0, target_object = 0, target_function = 0;
+#ifdef E33_CONSOLE_COLORS_SESSION
+#include "runtime_console_colors.h"
+#endif
 #ifdef E33_AUDIO_ISOLATION_SESSION
 #include "picto_batch.h"
 static PictoBatch session_picto_batch;
@@ -205,6 +211,7 @@ static MenuResult close_menu_actions() {
 #endif
     return MenuResult::Ok;
 }
+#include "menu_open_pipeline.h"
 static MenuResult menu_command(MenuPacket& wire) {
     auto& s=session_menu;
     TargetMenuOps<StrongLeasePool<>> ops{s,session_leases};
@@ -234,7 +241,13 @@ static MenuResult menu_command(MenuPacket& wire) {
         auto result=s.menu.prepare(ops,s.session,s.owner,s.widget_lease,s.child_lease);
 #ifdef E33_VIEWER_MENU_SESSION
         if(operation==MenuOperation::Open && result==MenuResult::Ok) {
-            result=s.menu.attach(ops,s.session,s.owner);
+            result=attach_open_menu(s.menu,ops,s.session,s.owner,
+#ifdef E33_MENU_OPEN_FOCUS_SESSION
+                true
+#else
+                false
+#endif
+            );
 
         }
 #endif
@@ -244,7 +257,25 @@ static MenuResult menu_command(MenuPacket& wire) {
     switch(operation) {
     case MenuOperation::Attach: return s.menu.attach(ops,lease_session,wire.owner);
     case MenuOperation::Focus: return s.menu.focus(ops,lease_session,wire.owner);
+#ifdef E33_RETIRED_WORLD_SESSION
+    case MenuOperation::Retire:
+#endif
     case MenuOperation::Close: {
+#ifdef E33_RETIRED_WORLD_SESSION
+        if(s.menu.active()){
+            const auto ready=ops.context();
+            if(ready!=MenuContext::Ready)return ready==MenuContext::Deferred?MenuResult::Deferred:MenuResult::Quarantined;
+            if(operation==MenuOperation::Retire && !s.epoch_cleanup)return MenuResult::Invalid;
+            if(s.epoch_cleanup){
+#ifdef E33_SEQUENCE_PLAYER_SESSION
+                if(session_sequence.active())return MenuResult::Quarantined;
+#endif
+#ifdef E33_MEDIA_SESSION
+                if(session_media.active())return MenuResult::Quarantined;
+#endif
+            }
+        }
+#endif
 #ifdef E33_SEQUENCE_PLAYER_SESSION
         auto sequence=guarded_sequence_close();
         if(sequence) return sequence==407 ? MenuResult::Deferred : MenuResult::Quarantined;
@@ -287,6 +318,21 @@ static void guarded_menu_command(MenuPacket& wire) {
 }
 static MenuResult guarded_menu_close() {
     __try {
+#ifdef E33_RETIRED_WORLD_SESSION
+        if(session_menu.menu.active()){
+            TargetMenuOps<StrongLeasePool<>> proof{session_menu,session_leases};
+            const auto ready=proof.context();
+            if(ready!=MenuContext::Ready)return ready==MenuContext::Deferred?MenuResult::Deferred:MenuResult::Quarantined;
+            if(session_menu.epoch_cleanup){
+#ifdef E33_SEQUENCE_PLAYER_SESSION
+                if(session_sequence.active())return MenuResult::Quarantined;
+#endif
+#ifdef E33_MEDIA_SESSION
+                if(session_media.active())return MenuResult::Quarantined;
+#endif
+            }
+        }
+#endif
 #ifdef E33_SEQUENCE_PLAYER_SESSION
         auto sequence=guarded_sequence_close();
         if(sequence) return sequence==407 ? MenuResult::Deferred : MenuResult::Quarantined;
@@ -560,12 +606,82 @@ static uint32_t guarded_pause_close(bool terminal) {
     __except(EXCEPTION_EXECUTE_HANDLER) { return 1303; }
 }
 #endif
+#ifdef E33_LEASE_SESSION
+static bool lease_release_protected(uint64_t token){
+#ifdef E33_PAUSE_MENU_SESSION
+    if(pause_attachment.protects(token))return true;
+#endif
+#ifdef E33_MENU_SESSION
+    if(session_menu.menu.protects(lease_session,token)
+#ifdef E33_RETIRED_WORLD_SESSION
+       ||(session_menu.menu.active() && token && token==session_menu.epoch.token())
+#endif
+#ifdef E33_MULTI_BUTTON_SESSION
+       ||session_menu.multi_actions.protects_lease(token)
+#endif
+    )return true;
+#endif
+#ifdef E33_MEDIA_SESSION
+    if(session_media.protects(token))return true;
+#endif
+#ifdef E33_SEQUENCE_PLAYER_SESSION
+    if(session_sequence.protects(token))return true;
+#endif
+#ifdef E33_AUDIO_ISOLATION_SESSION
+    if(session_override.protects(token))return true;
+#endif
+#ifdef E33_MUSIC_AUDIO_SESSION
+    if(session_music_audio.protects(token))return true;
+#endif
+#ifdef E33_CINEMATIC_SOUND_EVENT_SESSION
+    if(session_sound_event.protects(token))return true;
+#endif
+#ifdef E33_CINEMATIC_WIDGET_SESSION
+    if(session_widget_hook.protects(token))return true;
+#endif
+#if defined(E33_RETIRED_WORLD_SESSION) && defined(E33_MESH_SESSION)
+    if(session_map_runtime.protects(token))return true;
+#endif
+    return false;
+}
+#endif
+#ifdef E33_LEASE_RELEASE_BATCH_SESSION
+#include "lease_release_batch_runtime.h"
+static uint32_t guarded_lease_release_token(uint64_t token){
+    __try{
+        if(lease_release_protected(token))return uint32_t(StrongLeaseResult::Busy);
+        TargetStrongReferenceOps ops{runtime_base,{-1,0,0}};
+        return uint32_t(session_leases.release(ops,lease_session,token));
+    }__except(EXCEPTION_EXECUTE_HANDLER){return uint32_t(StrongLeaseResult::Quarantined);}
+}
+struct LeaseReleaseBatchOps {
+    uint32_t admit(uint64_t token)const{
+        if(!session_leases.contains_token(lease_session,token))return uint32_t(StrongLeaseResult::Stale);
+        return lease_release_protected(token)?uint32_t(StrongLeaseResult::Busy):0;
+    }
+    uint32_t release(uint64_t token)const{return guarded_lease_release_token(token);}
+    uint32_t active()const{return session_leases.active();}
+};
+static void lease_release_batch(e33_lease_batch::Packet& packet){
+    LeaseReleaseBatchOps ops;e33_lease_batch::run(packet,ops);
+}
+#endif
+#ifdef E33_METADATA_STABILIZE_SESSION
+#include "metadata_stabilization_target.h"
+#endif
 uint32_t backend_command(SessionPacket* packet) {
     if (!lifetime_valid()) return 61;
 #ifdef E33_GROWING_LEASE_SESSION
     if(!session_leases.set_owner(lease_session,packet->lease_owner)) return 404;
 #endif
     switch (packet->request.action) {
+#ifdef E33_METADATA_STABILIZE_SESSION
+    case e33_metadata::Action:{
+        MetadataStabilizationOps<decltype(session_leases)> ops{runtime_base,lease_session,session_leases};
+        e33_metadata::run(*reinterpret_cast<e33_metadata::Packet*>(packet->console_text),ops);return 0;
+    }
+#endif
+
 #ifdef E33_MESH_SESSION
     case SessionMesh: {
         auto& p=*reinterpret_cast<MeshPacket*>(packet->console_text);
@@ -809,7 +925,11 @@ uint32_t backend_command(SessionPacket* packet) {
             return 0;
         }
 #endif
-        if(p.operation>=93 && p.operation<=97) {
+        if(p.operation>=93 && (p.operation<=97
+#ifdef E33_RETIRED_WORLD_SESSION
+            ||(p.version==3 && p.operation==98)
+#endif
+            )) {
             __try {session_map_runtime.command(runtime_base,lease_session,session_leases,p);}
             __except(EXCEPTION_EXECUTE_HANDLER) {session_map_runtime.quarantine();p.error=2109;}
             return 0;
@@ -1089,6 +1209,26 @@ uint32_t backend_command(SessionPacket* packet) {
     }
 #endif
 #ifdef E33_LEASE_SESSION
+#ifdef E33_LEASE_RELEASE_BATCH_SESSION
+    case e33_lease_batch::Action:
+        lease_release_batch(*reinterpret_cast<e33_lease_batch::Packet*>(packet->console_text));return 0;
+#endif
+#ifdef E33_CONSOLE_COLORS_SESSION
+    case e33_console_color::Action: {
+        e33_console_color::Packet status;
+        std::memcpy(&status,packet->console_text,sizeof(status));
+        if(!e33_console_color::valid(status))return 1701;
+        ConsoleColorsRuntime::status(status);
+        std::memcpy(packet->console_text,&status,sizeof(status));return 0;
+    }
+#endif
+#ifdef E33_METADATA_STABILIZE_SESSION
+    case SessionStableLeaseAcquire: {
+        auto& lease=packet->lease;
+        TargetStrongReferenceOps ops{runtime_base,lease.object};
+        stable_lease_acquire(lease,ops,session_leases,lease_session);return 0;
+    }
+#endif
     case SessionLeaseAcquire:
     case SessionLeaseRelease:
     case SessionLeaseStatus: {
@@ -1107,42 +1247,8 @@ uint32_t backend_command(SessionPacket* packet) {
         if(packet->request.action==SessionLeaseAcquire)
             result=session_leases.acquire(ops,lease_session,lease.object.address,lease.token);
         else if(packet->request.action==SessionLeaseRelease) {
-#ifdef E33_PAUSE_MENU_SESSION
-            if(pause_attachment.protects(lease.token)) result=StrongLeaseResult::Busy;
+            if(lease_release_protected(lease.token))result=StrongLeaseResult::Busy;
             else
-#endif
-#ifdef E33_MENU_SESSION
-            if(session_menu.menu.protects(lease_session,lease.token)
-#ifdef E33_MULTI_BUTTON_SESSION
-               || session_menu.multi_actions.protects_lease(lease.token)
-#endif
-            ) result=StrongLeaseResult::Busy;
-            else
-#endif
-#ifdef E33_MEDIA_SESSION
-            if(session_media.protects(lease.token)) result=StrongLeaseResult::Busy;
-            else
-#endif
-#ifdef E33_SEQUENCE_PLAYER_SESSION
-            if(session_sequence.protects(lease.token)) result=StrongLeaseResult::Busy;
-            else
-#endif
-#ifdef E33_AUDIO_ISOLATION_SESSION
-            if(session_override.protects(lease.token)) result=StrongLeaseResult::Busy;
-            else
-#endif
-#ifdef E33_MUSIC_AUDIO_SESSION
-            if(session_music_audio.protects(lease.token)) result=StrongLeaseResult::Busy;
-            else
-#endif
-#ifdef E33_CINEMATIC_SOUND_EVENT_SESSION
-            if(session_sound_event.protects(lease.token)) result=StrongLeaseResult::Busy;
-            else
-#endif
-#ifdef E33_CINEMATIC_WIDGET_SESSION
-            if(session_widget_hook.protects(lease.token)) result=StrongLeaseResult::Busy;
-            else
-#endif
             result=session_leases.release(ops,lease_session,lease.token);
         }
         lease.error=static_cast<uint32_t>(result);
@@ -1172,10 +1278,20 @@ uint32_t backend_command(SessionPacket* packet) {
         if (!attachment_valid(runtime_base)) return 132;
         if (!set_console_names(packet->console_text)) return 134;
         packet->request.result=0; return 0;
-    case SessionConsolePoll:
+    case SessionConsolePoll: {
         if (!attachment_valid(runtime_base)) return 132;
         packet->request.result=poll_console_command(packet->console_text)?1:0;
-        packet->console_dropped=console_dropped; console_dropped=0; return 0;
+        packet->console_dropped=console_dropped; console_dropped=0;
+#ifdef E33_CONSOLE_COLORS_SESSION
+        // ConsolePoll does not use observer output. SessionDrain independently
+        // copies session_events, so this view cannot enter observer delivery.
+        static_assert(sizeof(e33_console_color::Packet)<=sizeof(packet->events));
+        e33_console_color::Packet color_status;
+        ConsoleColorsRuntime::status(color_status);
+        std::memcpy(&packet->events,&color_status,sizeof(color_status));
+#endif
+        return 0;
+    }
     case SessionConsoleExecute:
     case SessionConsolePrint: {
         if (!attachment_valid(runtime_base)) return 132;

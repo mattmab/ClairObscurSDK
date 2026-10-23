@@ -102,6 +102,7 @@ class SessionTransport:
             self.enemy_current_world_staging_protocol = ready.get('enemy_current_world_staging_protocol', 0)
             self.enemy_extra_spots_protocol = ready.get('enemy_extra_spots_protocol', 0)
             self.map_runtime_protocol = ready.get('map_runtime_protocol', 0)
+            self.retired_world_cleanup_protocol = ready.get('retired_world_cleanup_protocol', 0)
             self.runtime_cinematic_protocol = ready.get('runtime_cinematic_protocol', 0)
             self.runtime_scene_protocol = ready.get('runtime_scene_protocol', 0)
             self.native_visual_staging_protocol = ready.get('native_visual_staging_protocol', 0)
@@ -109,6 +110,10 @@ class SessionTransport:
             self.native_visual_grounding_protocol = ready.get('native_visual_grounding_protocol', 0)
             self.reflected_protocol = ready.get('reflected_protocol', 0)
             self.lease_protocol = ready.get('lease_protocol', 0)
+            self.console_color_status_protocol = ready.get('console_color_status_protocol', 0)
+            self.lease_release_batch_protocol = ready.get('lease_release_batch_protocol', 0)
+            self.metadata_stabilization_protocol = ready.get('metadata_stabilization_protocol',0)
+            self.stable_lease_protocol = ready.get('stable_lease_protocol',0)
             self.lease_policy_protocol = ready.get('lease_policy_protocol', 0)
             self.lease_limit = 4096 if self.lease_policy_protocol==1 else 128
             self._lease_owner = 0
@@ -117,6 +122,7 @@ class SessionTransport:
             self.stable_identity_protocol = ready.get('stable_identity_protocol', 0)
             self.object_assignment_protocol = ready.get('object_assignment_protocol', 0)
             self.menu_input_protocol = ready.get('menu_input_protocol', 0)
+            self.menu_open_focus_protocol = ready.get('menu_open_focus_protocol', 0)
             self.scalar_assignment_protocol = ready.get('scalar_assignment_protocol', 0)
             self.pod_value_protocol = ready.get('pod_value_protocol', 0)
             self.string_value_protocol = ready.get("string_value_protocol", 0)
@@ -333,12 +339,27 @@ class SessionTransport:
             raise ValueError('Native session does not support object assignment')
         if retained and getattr(self, 'retained_protocol', 0) != 1:
             raise ValueError('Native session does not support retained invocation')
-        leased = command in ('lease-acquire', 'lease-release', 'lease-status')
+        color_status = command == 'console-color-status'
+        if color_status:
+            cap = getattr(self, 'console_color_status_protocol', 0)
+            if type(cap) is not int or cap != 1 or payload is not None:
+                raise ValueError('Native console color status unavailable or invalid payload')
+        metadata_stabilize=command=='metadata-stabilize'
+        if metadata_stabilize:
+            from ._metadata_stabilization import available
+            if not available(self):raise ValueError('Metadata stabilization unavailable')
+        lease_batch = command == 'lease-release-batch'
+        if lease_batch:
+            from ._lease_release_batch import available
+            if not available(self):raise ValueError('Native lease release batching unavailable')
+        leased = command in ('lease-acquire', 'stable-lease-acquire', 'lease-release', 'lease-status')
+        if command=='stable-lease-acquire' and (type(getattr(self,'stable_lease_protocol',0)) is not int or self.stable_lease_protocol!=1):
+            raise ValueError('Native stable acquisition unavailable')
         if leased and getattr(self, 'lease_protocol', 0) != 1:
             raise ValueError('Native session does not support object leases')
         if reflected and getattr(self, 'reflected_protocol', 0) != 1:
             raise ValueError('Native session does not support reflected invocation')
-        if not qa_encounter and not zone and not mesh and not picto_batch and not picto_progress and not lease_policy and not widget_hook and not sound_event and not music_audio and not override and not sequence and not media and not pause and not ui_batch and not keys and not trace and not reflected and not leased and not retained and not assignment and not text and not menu and not button_action and not multi_button and command not in ('enable', 'disable', 'invoke', 'drain', 'ping', 'close', 'console-attach', 'console-detach', 'console-status', 'console-poll', 'console-execute', 'console-print', 'console-names', 'console-key'):
+        if not metadata_stabilize and not color_status and not lease_batch and not qa_encounter and not zone and not mesh and not picto_batch and not picto_progress and not lease_policy and not widget_hook and not sound_event and not music_audio and not override and not sequence and not media and not pause and not ui_batch and not keys and not trace and not reflected and not leased and not retained and not assignment and not text and not menu and not button_action and not multi_button and command not in ('enable', 'disable', 'invoke', 'drain', 'ping', 'close', 'console-attach', 'console-detach', 'console-status', 'console-poll', 'console-execute', 'console-print', 'console-names', 'console-key'):
             raise ValueError('Unsupported native session command')
         suffix = ''
         if zone:
@@ -357,8 +378,9 @@ class SessionTransport:
         elif mesh:
             parameter_mesh=(type(payload) is bytes and len(payload)>=8 and 124<=int.from_bytes(payload[4:8],'little')<=130)
             enemy_mesh=(type(payload) is bytes and len(payload)>=8 and (110<=int.from_bytes(payload[4:8],'little')<=123 or int.from_bytes(payload[4:8],'little') in (131,132,133)))
-            map_mesh=(type(payload) is bytes and len(payload)>=8 and 93<=int.from_bytes(payload[4:8],'little')<=97)
-            scene_mesh=(type(payload) is bytes and len(payload)>=8 and getattr(self,'runtime_scene_protocol',0) in (1,2,3,4,5,6,7) and
+            map_mesh=(type(payload) is bytes and len(payload)>=8 and (93<=int.from_bytes(payload[4:8],'little')<=97 or
+                    int.from_bytes(payload[:4],'little')==3 and int.from_bytes(payload[4:8],'little')==98))
+            scene_mesh=(not map_mesh and type(payload) is bytes and len(payload)>=8 and getattr(self,'runtime_scene_protocol',0) in (1,2,3,4,5,6,7) and
                     (70<=int.from_bytes(payload[4:8],'little')<=92 or int.from_bytes(payload[4:8],'little')==98))
             npc_admission=(type(payload) is bytes and len(payload)>=8 and int.from_bytes(payload[4:8],'little')==134)
             npc_membership=(type(payload) is bytes and len(payload)>=8 and int.from_bytes(payload[4:8],'little')==135)
@@ -474,6 +496,8 @@ class SessionTransport:
             elif map_mesh:
                 if getattr(self,'map_runtime_protocol',0)!=1:
                     raise ValueError('Native session does not support independent map ownership')
+                if int.from_bytes(payload[4:8],'little')==98 and (type(getattr(self,'retired_world_cleanup_protocol',0)) is not int or self.retired_world_cleanup_protocol!=1):
+                    raise ValueError('Native session does not support retired map ownership')
                 from .map_runtime import validate_request
             elif scene_mesh:
                 from ._runtime_scene_wire import validate_request
@@ -484,7 +508,7 @@ class SessionTransport:
                 from ._runtime_cinematic_wire import validate_request
             else:
                 from .procedural_mesh import validate_request
-            if scene_mesh:validate_request(payload,protocol=self.runtime_scene_protocol)
+            if scene_mesh:validate_request(payload,protocol=self.runtime_scene_protocol,allow_retired=type(getattr(self,'retired_world_cleanup_protocol',0)) is int and self.retired_world_cleanup_protocol==1)
             else:validate_request(payload)
             suffix = ' ' + payload.hex()
         elif qa_encounter:
@@ -525,7 +549,7 @@ class SessionTransport:
             suffix = ' ' + payload.hex()
         elif pause:
             from ._pause_attachment import validate_request
-            validate_request(payload)
+            validate_request(payload,allow_retired=type(getattr(self,'retired_world_cleanup_protocol',0)) is int and self.retired_world_cleanup_protocol==1)
             suffix = ' ' + payload.hex()
         elif ui_batch:
             from ._ui_batch import validate_request
@@ -583,6 +607,14 @@ class SessionTransport:
                      'stable_identity_protocol', 'retained_protocol', 'lease_protocol', 'reflected_protocol')):
                 raise ValueError('Native session does not support enum invocation')
             suffix = ' ' + payload.hex()
+        elif metadata_stabilize:
+            from ._metadata_stabilization import validate_request
+            validate_request(payload)
+            suffix=' '+payload.hex()
+        elif lease_batch:
+            from ._lease_release_batch import validate_request
+            validate_request(payload)
+            suffix = ' ' + payload.hex()
         elif leased:
             from ._lease_wire import SIZE
             if type(payload) is not bytes or len(payload) != SIZE:
@@ -632,6 +664,16 @@ class SessionTransport:
                     raise RuntimeQueryError('Native session close was not confirmed')
             elif response.get('closed') is not False:
                 raise RuntimeQueryError('Native session closed unexpectedly')
+            status_cap = getattr(self, 'console_color_status_protocol', 0)
+            if color_status or (command == 'console-poll' and type(status_cap) is int and status_cap == 1):
+                status = response.get('console_color_status')
+                names = ('version', 'native_version', 'bound', 'disabled', 'unsupported', 'frames', 'fallbacks', 'faults')
+                if (type(status) is not dict or set(status) != set(names) or
+                        any(type(status[name]) is not int for name in names) or status['version'] != 1 or
+                        not 1 <= status['native_version'] <= 1000000 or
+                        any(status[name] not in (0, 1) for name in ('bound', 'disabled', 'unsupported')) or
+                        any(not 0 <= status[name] < 2**64 for name in ('frames', 'fallbacks', 'faults'))):
+                    raise RuntimeQueryError('Invalid native console color status')
             return response
         except BaseException as error:
             # Keep the first wire failure: a menu service can catch it before

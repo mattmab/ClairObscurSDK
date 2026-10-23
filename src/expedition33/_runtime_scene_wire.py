@@ -10,10 +10,14 @@ MULTI_PLAN=struct.Struct('<II380d')
 EDIT_PLAN=struct.Struct('<II412d')
 LEGACY_PLAN=struct.Struct('<II67d')
 
-def validate_request(data,*,protocol=None):
+def validate_request(data,*,protocol=None,allow_retired=False):
     if type(data) is not bytes or len(data)!=SIZE:raise ValueError('Scene packet size')
     version,op,error,state,owner=struct.unpack_from('<4IQ',data)
     packet_version=version
+    if (allow_retired and version==7 and op==72 and struct.unpack_from('<I',data,24)[0]==0x45504f43):
+        if error or state or not owner or any(data[28:]):raise ValueError('Retired-world scene request')
+        if protocol is not None and protocol!=7:raise ValueError('Scene backend mismatch')
+        return
     if version not in (3,4,5,6,7) or op not in (*range(70,93),98) or error or state or not owner or any(data[24:88]):raise ValueError('Scene packet header')
     if protocol is not None and packet_version!=protocol:raise ValueError('Scene backend mismatch')
     if version==3 and op in range(75,80):raise ValueError('Authoring requires protocol four')

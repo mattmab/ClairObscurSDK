@@ -30,6 +30,21 @@ class PauseMenuLifecycleTests(unittest.TestCase):
         o.service.open.side_effect = RuntimeError('native_error=811')
         with self.assertLogs('expedition33.pause_menu', level='ERROR'):
             o.poll()
+        self.assertEqual(events, ['active', 'conceal', 'viewport', 'restore', 'active', 'button'])
+        self.assertEqual(o.state, 'failed')
+        o.poll()
+        o.service.open.assert_called_once()
+
+    def test_cold_failed_open_keeps_loading_feedback_and_restoration(self):
+        o = self.entry(); events = []
+        o.service.menu.panel.state = 'new'
+        o.observer.read.return_value = [object()]
+        o.attachment.show_busy.side_effect = lambda *a: events.append('conceal') or True
+        o.attachment.restore.side_effect = lambda: events.append('restore') or True
+        o.invoke.side_effect = lambda call: events.append(call) or True
+        o.service.open.side_effect = RuntimeError('native_error=811')
+        with self.assertLogs('expedition33.pause_menu', level='ERROR'):
+            o.poll()
         self.assertEqual(events, ['active', 'loading', 'conceal', 'viewport', 'restore', 'active', 'button', 'normal'])
         self.assertEqual(o.state, 'failed')
         o.poll()
@@ -106,11 +121,11 @@ class PauseMenuLifecycleTests(unittest.TestCase):
         o.service.dispose_menu.assert_not_called()
 
     def test_selection_uses_controller_reference_not_retained_old_widget(self):
-        catalog=Mock();player=SimpleNamespace(object_flags=0)
+        catalog=Mock();player=SimpleNamespace(index=5,object_flags=0)
         catalog.select.return_value=[player]
         local=SimpleNamespace(class_name='LocalPlayer')
         pause=SimpleNamespace(class_name='WBP_PauseMenu_C')
-        with patch('expedition33.pause_menu.read_values',return_value=SimpleNamespace(values={(1,'Player'):local,(2,'PauseMenuWidget'):pause})):
+        with patch('expedition33.pause_menu.read_values_many',return_value={5:SimpleNamespace(values={(1,'Player'):local,(2,'PauseMenuWidget'):pause})}):
             self.assertEqual(PauseMenuEntry.current_entry(catalog),(player,pause))
 
     def test_gc_flag_changes_do_not_trigger_rebuild(self):

@@ -1,11 +1,15 @@
 """Camera-free, independently owned static props for gameplay map loaders."""
 import secrets
+import logging
+import time
 import struct
 from types import SimpleNamespace
 from .catalog import capture_matching
 from .values import read_values_with_references
 from ._reader import ReadBatch
 from ._scope import SessionScope
+
+LOG = logging.getLogger("expedition33.map_runtime")
 
 SIZE = 20984
 FUNCTIONS = ('GameplayStatics.BeginDeferredActorSpawnFromClass',
@@ -19,7 +23,7 @@ def validate_request(data):
     if type(data) is not bytes or len(data) != SIZE:
         raise ValueError('Map runtime packet size')
     version, op, error, state, owner = struct.unpack_from('<4IQ', data)
-    if version != 3 or op not in (93, 94, 95, 96, 97) or error or state or not owner or any(data[24:88]):
+    if version != 3 or op not in (93, 94, 95, 96, 97, 98) or error or state or not owner or any(data[24:88]):
         raise ValueError('Map runtime header')
     if op == 93:
         for at in range(88, 360, 16):
@@ -43,7 +47,7 @@ def validate_request(data):
         path=data[2000:2512].split(b'\0',1)[0]
         if not re.fullmatch(rb'/Game/[A-Za-z0-9_/-]+\.[A-Za-z0-9_]+',path) or len(path)>=512 or any(data[88:2000]) or any(data[2000+len(path):]):
             raise ValueError('Map runtime static-mesh path')
-    elif op == 95:
+    elif op in (95, 98):
         if any(data[88:]):
             raise ValueError('Map runtime cleanup padding')
     elif any(data[88:2000]) or any(data[2004:]) or struct.unpack_from('<I', data, 2000)[0] >= 6000:
@@ -93,9 +97,29 @@ class MapRuntime:
         self.uncertain = False
         self.objects = {}
         self.visit = None
+        self.profile = {}
+        self._retirement_result = None
+        self._closed = False
         scope._reference_owners.append(self)
 
+    def _mark(self, stage, started, *, count=1):
+        """Aggregate timings only: never map IDs, asset paths or scene contents."""
+        elapsed = (time.perf_counter() - started) * 1000
+        row = self.profile.setdefault(stage, dict(calls=0, items=0, total_ms=0., max_ms=0.))
+        row['calls'] += 1
+        row['items'] += count
+        row['total_ms'] += elapsed
+        row['max_ms'] = max(row['max_ms'], elapsed)
+        return elapsed
+
     def _send(self, op, *, ids=(), rows=(), index=0, path=None):
+        started = time.perf_counter()
+        try:
+            return self._send_packet(op, ids=ids, rows=rows, index=index, path=path)
+        finally:
+            self._mark('native_' + str(op), started, count=len(rows) if op == 94 else 1)
+
+    def _send_packet(self, op, *, ids=(), rows=(), index=0, path=None):
         packet = bytearray(SIZE)
         struct.pack_into('<4IQ', packet, 0, 3, op, 0, 0, self.owner)
         for i, obj in enumerate(ids):
@@ -134,6 +158,8 @@ class MapRuntime:
             self.uncertain = True
             raise
         error = struct.unpack_from('<I', raw, 8)[0]
+        if op == 98 and error == 407:
+            return raw # Exact cleanup owner remains native; caller validates state.
         if error:
             if error == 2109:
                 self.uncertain = True
@@ -164,13 +190,17 @@ class MapRuntime:
             ids = [pc, pawn, world, one('Default__GameplayStatics'), c.find_path('/Script/Engine.StaticMeshActor'), c.by_index[one('Default__StaticMesh').class_index]]
             ids += [c.find_path('/Script/Engine.'+f.replace('.', ':')) for f in FUNCTIONS]
             ids += [one('Default__KismetSystemLibrary'),c.find_path('/Script/Engine.KismetSystemLibrary:LoadAsset_Blocking')]
+        self._closed = False
         self.started = True  # Also close after a partial or rejected initialization.
         self._send(93, ids=ids)
         self.visit = expected['visit']
 
     def load(self, data, expected):
         from .worldbuilder_maps import validate
+        total_started = time.perf_counter()
+        started = time.perf_counter()
         data = validate(data, expected['world'])
+        self._mark('validate', started, count=len(data['objects']))
         rows = [r for r in data['objects'] if r['kind'] != 'world_edit']
         if any(r['kind'] != 'mesh' or r.get('component_edits') for r in rows):
             raise ValueError('Version 1 supports static-mesh props without component edits; unsupported actor types were not spawned')
@@ -181,7 +211,10 @@ class MapRuntime:
         assets = {}
         load_scope = SessionScope(self.scope)
         try:
+            started = time.perf_counter()
             self._prepare(expected)
+            self._mark('prepare', started)
+            started = time.perf_counter()
             # Resolve registered FNames natively, including numbered names.
             # Every asset is retained and validated before any actor is created.
             for path in dict.fromkeys(r['asset'] for r in rows):
@@ -201,6 +234,8 @@ class MapRuntime:
                 assets[path]=mesh
                 if len(assets)%16==0:
                     __import__('logging').getLogger(__name__).info('Map runtime asset preflight: %d ready',len(assets))
+            self._mark('asset_preflight', started, count=len(assets))
+            started = time.perf_counter()
             at = 0
             while at < len(rows):
                 # Native current() checks the exact pawn/world before every
@@ -218,17 +253,51 @@ class MapRuntime:
                         raise RuntimeError('Missing runtime actor identity')
                     self.objects[r['id']] = dict(asset=r['asset'], actor=actor, transform=r['transform'])
                 at += done
+            self._mark('spawn', started, count=len(rows))
             return dict(objects=len(rows), skipped_world_edits=len(data['objects'])-len(rows))
         except Exception:
             if self.started and not self.uncertain:
                 self.close()
             raise
         finally:
-            load_scope.close()
+            try:
+                load_scope.close()
+            finally:
+                self._mark('load_total', total_started, count=len(rows))
+                LOG.info('Map runtime timing: %s', self.profile)
 
     def snapshot(self, index):
         raw = self._send(96, index=index)
         return dict(actor=struct.unpack_from('<iiQ', raw, 4096), transform=list(struct.unpack_from('<12d', raw, 4112)))
+
+    def retire_world(self):
+        """Release exact old-world owned leases; never replay gameplay callbacks."""
+        result=getattr(self,'_retirement_result',None)
+        if result in ('ack','unknown'):return result
+        if self.uncertain:
+            self._retirement_result='unknown';return 'unknown'
+        if not self.started:
+            self._retirement_result='unknown' if self.objects else 'ack'
+            if self._retirement_result=='ack':self._closed=True
+            return self._retirement_result
+        capability=getattr(self.scope._session._transport,'retired_world_cleanup_protocol',0)
+        if type(capability) is not int or capability!=1:
+            self._retirement_result='unknown';return 'unknown'
+        try:
+            raw=self._send(98)
+            error,state=struct.unpack_from('<II',raw,8)
+            done,remaining=struct.unpack_from('<II',raw,3560)
+            if done or remaining>6000:
+                raise RuntimeError('Map retirement acknowledgement bounds')
+            if error==407 and state==1:
+                self._retirement_result='pending';return 'pending'
+            if error or state or remaining:
+                raise RuntimeError('Map retirement did not acknowledge exact owner release')
+            self.started=False;self.objects.clear();self.visit=None
+            self._closed=True;self._retirement_result='ack';return 'ack'
+        except BaseException:
+            self.uncertain=True;self._retirement_result='unknown'
+            return 'unknown'
 
     def close(self):
         if self.uncertain:
@@ -238,4 +307,5 @@ class MapRuntime:
             self.started = False
         self.objects.clear()
         self.visit = None
+        self._closed = True
         return True

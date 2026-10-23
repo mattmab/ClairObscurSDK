@@ -10,6 +10,56 @@ spec=importlib.util.spec_from_file_location('picto_control_test',ROOT/'mods/Pict
 mod=importlib.util.module_from_spec(spec);spec.loader.exec_module(mod)
 
 class Controls(unittest.TestCase):
+    def test_activation_finishes_gameplay_restore_without_starting_optional_ui(self):
+        editor=Mock();editor.operation=nullcontext;editor.preferences.profiles={'fixture':{'cost':2}}
+        editor.baselines.capture.return_value={'fixture':{}}
+        editor.timings={};session=Mock();session.pid=1
+        model=mod.Mod()
+        with patch.object(mod,'StockEditor',return_value=editor),patch('expedition33.picto_restore.restore',return_value={'applied':['fixture'],'missing':[]}) as restore:
+            model.enable(session)
+        restore.assert_called_once_with(session,editor.preferences.profiles,catalog=editor.progression_catalog.return_value)
+        editor.restore_queue.clear.assert_called_once_with()
+        editor.prepare_catalog.assert_not_called();editor.poll.assert_not_called()
+        self.assertEqual(model.startup_restore['applied'],['fixture'])
+        self.assertIn('restore_ms',editor.timings)
+
+    def test_failed_startup_is_not_success_and_disable_never_compensates_unknown_writes(self):
+        editor=Mock();editor.operation=nullcontext;editor.preferences.profiles={'fixture':{'cost':2}}
+        editor.baselines.capture.return_value={'fixture':{}};editor.timings={}
+        session=Mock();session.pid=1;model=mod.Mod()
+        with patch.object(mod,'StockEditor',return_value=editor),patch('expedition33.picto_restore.restore',side_effect=RuntimeError('dispatch outcome unknown')) as restore:
+            with self.assertRaisesRegex(RuntimeError,'startup restoration failed'):model.enable(session)
+            self.assertTrue(model._startup_failed)
+            model.disable()
+        self.assertEqual(restore.call_count,1);editor.close_failed_startup.assert_called_once_with()
+        editor.close.assert_not_called();editor.prepare_catalog.assert_not_called();editor.poll.assert_not_called()
+        session.console.expose.assert_not_called()
+
+    def test_failed_startup_reader_cleanup_has_no_gameplay_or_layout_callbacks(self):
+        editor=mod.StockEditor.__new__(mod.StockEditor)
+        for name in ('scope','attachment','native_catalog','unlock_bulk','unlock_transaction','bulk_job','catalog_future','refresh_future','worker_reader'):
+            setattr(editor,name,None)
+        editor.restore_queue=['pending'];editor.catalog_request=object()
+        editor.refresh_worker=Mock();editor.main_reader=Mock()
+        editor.restore_originals=Mock(side_effect=AssertionError('compensation replay'))
+        editor.card_layout=Mock();editor.close_failed_startup()
+        self.assertEqual(editor.state,'closed');self.assertEqual(editor.restore_queue,[])
+        editor.restore_originals.assert_not_called();editor.card_layout.close.assert_not_called()
+        editor.main_reader.close.assert_called_once_with();editor.refresh_worker.shutdown.assert_called_once_with(wait=True,cancel_futures=True)
+
+    def test_failed_startup_unexpected_job_preserves_owner_without_tick(self):
+        editor=mod.StockEditor.__new__(mod.StockEditor)
+        for name in ('scope','attachment','native_catalog','unlock_bulk','unlock_transaction'):
+            setattr(editor,name,None)
+        editor.bulk_job=Mock();editor.refresh_worker=Mock()
+        with self.assertRaisesRegex(RuntimeError,'retain native journal'):editor.close_failed_startup()
+        editor.bulk_job.tick.assert_not_called();editor.refresh_worker.submit.assert_not_called()
+
+    def test_normal_disable_keeps_existing_baseline_restoration(self):
+        model=mod.Mod();model.editor=Mock();model._startup_failed=False;model.disable()
+        model.editor.close.assert_called_once_with(restore_originals=True)
+        model.editor.close_failed_startup.assert_not_called()
+
     def test_clear_confirmation_is_bound_to_selection_and_bulk_waits(self):
         e=self.editor();e.paint_value=Mock();e.text=Mock();e.status_label='status'
         e.pid=123;e.baselines=Mock();e.baselines.targets.return_value={};e.scope=Mock();e.operation=nullcontext;e.progression_catalog=Mock();e.refresh_current=Mock();e.ownership=Mock();e.panel=None

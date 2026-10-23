@@ -1,6 +1,10 @@
 #pragma once
 #include "menu_call_contract.h"
-enum class MenuOperation : uint32_t { Prepare=1, Attach, Focus, Close, Status, Open };
+enum class MenuOperation : uint32_t { Prepare=1, Attach, Focus, Close, Status, Open
+#ifdef E33_RETIRED_WORLD_SESSION
+,Retire
+#endif
+};
 enum class MenuOutcome : uint32_t { NotStarted, Unknown, Returned };
 #pragma pack(push,1)
 struct MenuPacket {
@@ -13,7 +17,9 @@ struct MenuPacket {
 static_assert(sizeof(MenuPacket)==128+sizeof(CallPacket)*kMenuCalls);
 inline bool valid_menu_request(const MenuPacket& p) {
     if(p.version!=1 || p.operation<1 || p.operation>
-#ifdef E33_VIEWER_MENU_SESSION
+#ifdef E33_RETIRED_WORLD_SESSION
+       7
+#elif defined(E33_VIEWER_MENU_SESSION)
        6
 #else
        5

@@ -5,14 +5,17 @@ The SDK installer includes **SDK Management**, **Introspection Harness** and
 Mods below are separate downloads with independent release tags and MIT licenses.
 They use the SDK runtime; do not install separate controllers.
 
-The current SDK release is **RC16**. [Download the SDK and current mod packages](https://github.com/mattmab/ClairObscurSDK/releases/tag/v0.1.0-rc16).
+The current SDK release is **RC18**. [Download the SDK and current mod packages](https://github.com/mattmab/ClairObscurSDK/releases/tag/v0.1.0-rc18).
 World Builder **0.32.1** adds P (play from camera), H (hide/show HUD), and F7
 construction feedback. [Map Travel 0.2.2](MapTravel/README.txt) opens grouped map
-choices and uses normal entrance transitions. Both require the matching RC16 SDK.
+choices and uses normal entrance transitions. Both require the matching RC18 SDK.
 
 | Mod | Download / release | Purpose |
 | --- | --- | --- |
 | World Builder — EXPERIMENTAL | [0.30.1](https://github.com/mattmab/ClairObscurSDK/releases/tag/world-builder-v0.30.1) | RC12 required. Free camera, prop catalog, placement and saved maps. |
+| WorldBuilder Map Loader | [RC18](https://github.com/mattmab/ClairObscurSDK/releases/tag/v0.1.0-rc18) | Normal-gameplay saved maps; replaces E33MapOverlays. Install only one map loader. |
+| Scene Editor | [RC18](https://github.com/mattmab/ClairObscurSDK/releases/tag/v0.1.0-rc18) | Owned scene actors, camera, animation, audio and timeline editing. |
+| Enemy Spawner | [RC18](https://github.com/mattmab/ClairObscurSDK/releases/tag/v0.1.0-rc18) | Original and isolated encounter routes; `-` opens the catalog. |
 | ContinentFlight | [0.1.0-rc1](https://github.com/mattmab/ClairObscurSDK/releases/tag/mod-continentflight-v0.1.0-rc1) | Exploration flight |
 | Picto Editor | [0.1.0-rc1](https://github.com/mattmab/ClairObscurSDK/releases/tag/mod-pictoeditor-v0.1.0-rc1) | Stock-menu Picto editing and saved overrides |
 | Statistics | [0.1.0-rc1](https://github.com/mattmab/ClairObscurSDK/releases/tag/mod-statistics-v0.1.0-rc1) | Combat records and verified summary counters |

@@ -25,12 +25,18 @@ class Mod:
             description='Edit the verified sample actors and event timestamps, preview, save and reload your scene. Experimental v12 recoil is preserved.',
             actions=(Action('open','Open Scene Editor',self.open),Action('stop','Stop scene safely',self.stop)),
             keybinds=(Keybind('open','Open Scene Editor / return from preview','Insert',self.open),Keybind('stop','Stop scene preview','End',self.stop),Keybind('timeline','Pin / release timeline cursor','Home',self.toggle_timeline),Keybind('timeline_visibility','Show / hide timeline','Backspace',self.toggle_timeline_visibility),Keybind('audition','Preview selected animation','PageDown',self.preview_selected),Keybind('snap_camera','Snap flight to frame camera','PageUp',self.snap_camera),Keybind('capture_camera','Place camera at current view','.',self.capture_camera)))
+    def prepare_startup(self,context):
+        self._prepare_static()
+    def _prepare_static(self):
+        if getattr(self,'_scene_view',None) is None:
+            from .view import SceneView
+            self._scene_view=SceneView
     def enable(self,session):
         if getattr(session._session._transport,'runtime_scene_protocol',0)!=7:raise RuntimeError('Scene Editor requires its v27 or newer isolated native candidate backend')
         self.shared=getattr(session._session,'_native_menu_service',None)
         if self.shared is None:raise RuntimeError('Enable SDK Management before Scene Editor')
-        from .view import SceneView
-        self.native=self.shared.for_view(lambda registry:SceneView(registry,self))
+        self._prepare_static()
+        self.native=self.shared.for_view(lambda registry:self._scene_view(registry,self))
         self.session=session;self.runtime.session=session
         session.console.expose('scene_editor',self)
         session.console.register('scene.editor',lambda arg:self.open() if arg.strip() in ('','open') else self.stop() if arg.strip()=='stop' else self.status(),owner=self)
@@ -39,6 +45,9 @@ class Mod:
         self.runtime.editor_control(6)
         self.message='Photo camera snapped to the current frame.' if getattr(self.runtime,'photo_mode',False) else 'Frame camera view (including FOV). Move to resume 90-degree flight.'
         return self.message
+    def startup_ready(self):
+        # Feature entry is available; scene-specific assets remain demand-loaded.
+        return self.session is not None and self.shared.ui_ready is True
     def capture_camera(self,_=None):
         if not self.runtime.authoring:return 'Enter live editing first'
         self.runtime.editor_control(7)
@@ -446,8 +455,53 @@ class Mod:
             except Exception as error:
                 self.message='Preview failed: '+str(error)+' | If the game is paused, resume gameplay and reopen with Insert.'
                 self.want_open=self.runtime.scope is None;self.reopen=False
+    def _revoke_world_intents(self):
+        # Revocation precedes cleanup: a deferred native owner must not replay
+        # old editor input when its scope is later activated again.
+        self.want_open=self.want_play=self.reopen=False
+        self.want_saved=self.want_photo=self.want_timeline=self.want_author=self.want_stop=False
+        self.want_visibility=self.want_audio_library=False
+        self.photo_transfer=self.next_screen=self.pending_clip=None
+        self.pending_audio_preview=self.pending_edit=None
+        self.timeline_selection=None;self.cursor_pinned=False;self.photo_author=False
+
+    def revoke_world(self,context):
+        self._revoke_world_intents();self._retirement_token=context.previous_token
+
+    def begin_world_retirement(self,context):
+        return self.poll_world_retirement(context)
+
+    def poll_world_retirement(self,context):
+        if getattr(self,'_retirement_token',None)!=context.previous_token:return 'unknown'
+        if any(getattr(self.runtime,name,None) is not None for name in ('scope','preview_scope','audio_load_scope')):
+            result=self.runtime.retire_world()
+            if result!='ack':return result
+        if self.timeline is not None:
+            # Native retirement already revoked the timeline binding. Do not
+            # unregister through editor_control or touch borrowed photo help.
+            self.timeline.registered=False
+            result=self.timeline.retire_world(native_retirement_ack=True)
+            if result!='ack':return result
+            if self.timeline.mirror is not None:
+                result=self.timeline.mirror.retire_world(native_retirement_ack=True)
+                if result!='ack':return result
+                self.timeline.mirror=None
+            self.timeline=None
+        if self.saved_menu is not None:
+            result=self.saved_menu.retire_world(native_retirement_ack=True)
+            if result!='ack':return result
+            self.saved_menu=None
+        if self.hud is not None:
+            self.hud.photo_help=None
+            result=self.hud.retire_world(native_retirement_ack=True)
+            if result!='ack':return result
+            self.hud=None
+        self.saved_menu=self.timeline=self.native=None;self.shared=None
+        self.session=None;self.runtime.session=None
+        return 'ack'
+
     def disable(self):
-        self.want_open=self.want_play=False;self.reopen=False;self.want_photo=False;self.photo_transfer=None
+        self._revoke_world_intents()
         self._close_author_ui()
         if self.saved_menu is not None:self.saved_menu.close();self.saved_menu=None
         self.runtime.disable()

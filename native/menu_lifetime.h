@@ -124,8 +124,14 @@ public:
         }
         if(state_==MenuState::ReleasePending) {
             ready=context(ops); if(ready!=MenuResult::Ok) return ready;
+#ifdef E33_RETIRED_WORLD_SESSION
+            const auto released=ops.release_baseline_result();
+            if(released==MenuResult::Deferred)return released;
+            if(released!=MenuResult::Ok)return quarantine();
+#else
             state_=MenuState::ReleaseUnknown;
             if(!ops.release_baseline()) return quarantine();
+#endif
             clear();
             return MenuResult::Ok;
         }

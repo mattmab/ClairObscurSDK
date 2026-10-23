@@ -6,6 +6,7 @@ from unittest.mock import Mock, patch
 
 from expedition33 import _ui_batch
 from expedition33.management_native import NativeManagementMenu
+from expedition33._menu_latency import MenuLatency
 
 ROOT = Path(__file__).resolve().parents[1]
 from expedition33 import widgets
@@ -17,6 +18,7 @@ spec.loader.exec_module(cinematics)
 class SparsePaintTests(unittest.TestCase):
     def menu(self):
         panel = widgets.OwnedMenuPanel.__new__(widgets.OwnedMenuPanel)
+        panel.latency = MenuLatency()
         panel.scope = SimpleNamespace(_session=SimpleNamespace(_transport=SimpleNamespace(ui_batch_protocol=1)))
         panel._planner = SimpleNamespace(prepare=Mock(side_effect=lambda obj, function, **args: (obj, function, args)))
         panel._function = lambda owner, name: name
@@ -35,6 +37,8 @@ class SparsePaintTests(unittest.TestCase):
             reason='Current save manager has no loaded save object')
         view = cinematics.BrowserView(registry, model)
         menu = NativeManagementMenu.__new__(NativeManagementMenu)
+        menu.latency = MenuLatency()
+        menu._button_colors = {}
         menu._presentation_suspended = False
         menu._presentation_dirty = False
         menu.panel, menu.frame = panel, view.render()

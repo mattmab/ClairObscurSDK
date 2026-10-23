@@ -40,6 +40,18 @@ class FileServiceTests(unittest.TestCase):
         self.service.pump()
         return json.loads((self.data / 'responses' / (name + '.json')).read_text())
 
+    def test_revocation_leaves_queued_requests_unclaimed_and_fresh_session_rejects_them(self):
+        request=dict(op='status',session=self.service.session,expires=time.time()+60)
+        path=self.data/'requests'/'retired.json';path.write_text(json.dumps(request))
+        self.service.revoke();self.service.pump()
+        self.assertTrue(path.exists());self.assertFalse(self.harness.calls)
+        self.service.close()
+        self.assertFalse(json.loads((self.data/'status.json').read_text())['enabled'])
+        fresh=FileService(self.data,self.harness,123)
+        self.addCleanup(fresh.close);fresh.pump()
+        response=json.loads((self.data/'responses'/'retired.json').read_text())
+        self.assertFalse(response['ok']);self.assertFalse(self.harness.calls)
+
     def test_sessions_expiry_and_exception_recovery(self):
         self.assertTrue(self.publish()['ok'])
         self.assertFalse(self.publish('stale', session='old')['ok'])

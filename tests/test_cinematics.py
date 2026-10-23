@@ -129,3 +129,27 @@ class CinematicsViewTests(TestCase):
             self.assertIsNone(scene['unlocked'])
             self.assertFalse(scene['supported'])
             self.assertIn('unlock unknown', scene['title'])
+
+
+class StaticPreparationTests(TestCase):
+    def test_startup_caches_only_files_and_rechecks_changed_installation(self):
+        import tempfile
+        from unittest.mock import patch
+        with tempfile.TemporaryDirectory() as temporary:
+            root=Path(temporary);manifest=root/'Manifest_UFSFiles_Win64.txt';source=root/'catalog.json'
+            def write(data):
+                manifest.write_bytes(data)
+                source.write_text(json.dumps({'version':1,'manifest_sha256':hashlib.sha256(data).hexdigest(),'scenes':[]}))
+            write(b'fixture');model=module.Mod()
+            with patch.object(module,'game_root',return_value=root),patch.object(module,'__file__',str(root/'mod.py')),patch('subprocess.Popen',side_effect=AssertionError('process access')):
+                model.prepare_startup(None);first=model._catalog_inputs()
+                self.assertIsNone(model.session);self.assertIsNone(model.static_preparation_error)
+                self.assertIs(model._catalog_inputs()[0],first[0]);self.assertEqual(first[1],b'fixture')
+                write(b'changed fixture')
+                current=model._catalog_inputs();self.assertIsNot(current[0],first[0]);self.assertEqual(current[1],b'changed fixture')
+    def test_missing_manifest_does_not_fail_pure_preparation(self):
+        from unittest.mock import patch
+        model=module.Mod()
+        with patch.object(module,'game_root',side_effect=RuntimeError('unavailable installation')):
+            model.prepare_startup(None)
+        self.assertEqual(model.static_preparation_error,'unavailable installation');self.assertIsNone(model.session)

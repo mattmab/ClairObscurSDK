@@ -4,7 +4,7 @@ Frames are immutable display snapshots. Every control carries a frame revision;
 refresh/navigation revokes old controls before any registry mutation. Native
 renderers may reuse their bounded set of widgets across these pages.
 """
-from dataclasses import dataclass
+from dataclasses import dataclass, replace
 import json
 
 from .management import ManagementError, Selection, Report
@@ -72,6 +72,16 @@ class ManagementView:
     def _invalidate(self):
         self._revision += 1
         self._commands.clear()
+
+    def suspend_frame(self, frame):
+        """Revoke old callbacks while retaining this exact immutable display."""
+        self._check()
+        if not isinstance(frame, MenuFrame) or frame.closed or frame.revision != self._revision:
+            raise ManagementError('Native menu frame is stale')
+        self._revision += 1
+        # Commands retain the same tokens; only callbacks bound to the new
+        # revision can reach them after an acknowledged detach and reopen.
+        return replace(frame, revision=self._revision)
 
     def close(self):
         self.registry._check()

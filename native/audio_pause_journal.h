@@ -36,6 +36,12 @@ public:
         }
         return AudioPauseResult::Ok;
     }
+    AudioPauseResult abandon_retired_world() {
+        // Validate all entries first; never partially erase an unknown setter.
+        for(size_t i=0;i<count_;++i)if(stages_[i]==Uncertain)return AudioPauseResult::Unknown;
+        for(size_t i=0;i<count_;++i)stages_[i]=Restored;
+        return AudioPauseResult::Ok;
+    }
     template<class Ops> AudioPauseResult close(Ops& ops) {
         bool unknown=false,deferred=false;
         for(size_t i=0;i<count_;++i) {

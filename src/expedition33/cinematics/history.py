@@ -29,12 +29,15 @@ def field(observed, name, kind):
     return observed.values[key]
 
 
-def anchor(catalog):
+def anchor(catalog, *, project=False):
+    if type(project) is not bool:
+        raise ValueError('Anchor projection must be bool')
     engine = one(o for o in catalog.select('GameEngine') if not o.object_flags & 0x10)
     def reference(obj, owner_name, name):
         nonlocal catalog
         owner = catalog.by_index[catalog.find_class(owner_name).index]
-        result, catalog = read_object_reference(catalog, obj, owner, name)
+        result, catalog = (read_object_reference(catalog, obj, owner, name, project=True)
+                           if project else read_object_reference(catalog, obj, owner, name))
         identity(result)
         return result
     viewport = reference(engine, 'Engine', 'GameViewport')

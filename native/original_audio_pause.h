@@ -1,5 +1,8 @@
 #pragma once
 #include "audio_pause_journal.h"
+#ifdef E33_RETIRED_WORLD_SESSION
+#include "retired_world_target.h"
+#endif
 
 // Exact shipping AudioComponent pause state, corroborated by GetPlayState
 // 0x3539e10 and SetPaused 0x353bae0. No client-supplied memory offsets.
@@ -73,6 +76,22 @@ public:
         }
         return journal_.open(*this,refs_.count)==AudioPauseResult::Ok ? 0 : 1513;
     }
+#ifdef E33_RETIRED_WORLD_SESSION
+    uint32_t retire_world(const e33_retired_world::Anchor&anchor) {
+        if(!active_)return 0;
+        if(!anchor.retired())return 1513;
+        TargetObjectAssignmentOps context{base_};if(!context.context())return 407;
+        if(journal_.abandon_retired_world()!=AudioPauseResult::Ok)return 1513;
+        for(unsigned i=0;i<refs_.count;++i)if(tokens_[i]){
+            TargetStrongReferenceOps ops{base_,refs_.items[i]};const auto result=leases_.release(ops,session_,tokens_[i]);
+            if(result!=StrongLeaseResult::Ok)return result==StrongLeaseResult::Deferred?407:1513;
+            tokens_[i]=0;
+        }
+        TargetStrongReferenceOps ops{base_,{}};const auto result=leases_.close(ops,session_);
+        if(result!=StrongLeaseResult::Ok)return result==StrongLeaseResult::Deferred?407:1513;
+        active_=false;return 0;
+    }
+#endif
     uint32_t close() {
 #ifdef E33_AUDIO_CLEANUP_DIAGNOSTICS_SESSION
         if(!diagnostic_terminal_) diagnostic_error_=diagnostic_outcome_=0;

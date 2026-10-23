@@ -125,6 +125,97 @@ class NativeServiceTests(unittest.TestCase):
         route.close()  # An inactive route cannot close the default view.
         self.assertEqual(original.panel.state, 'open')
 
+    def test_unchanged_warmed_first_open_skips_paint_but_attaches_and_binds(self):
+        service=self.service();service.prepare();menu=service.menu
+        menu._paint=Mock(wraps=menu._paint);menu._render_view=Mock(wraps=menu._render_view)
+        service.open()
+        menu._paint.assert_not_called();menu._render_view.assert_not_called()
+        self.assertIn('open',menu.panel.operations)
+        self.assertIn('bind',menu.panel.operations)
+
+    def test_unchanged_reopen_skips_render_and_revokes_previous_revision(self):
+        service=self.service();service.open();menu=service.menu
+        old=menu.frame;service.close_menu()
+        menu._paint=Mock(wraps=menu._paint);menu._render_view=Mock(wraps=menu._render_view)
+        service.open()
+        menu._paint.assert_not_called();menu._render_view.assert_not_called()
+        self.assertNotEqual(menu.frame.revision,old.revision)
+        with self.assertRaises(ManagementError):menu.submit(old.revision,old.controls[0].token)
+        self.assertEqual(menu.panel.operations.count('open'),2)
+
+    def test_hidden_registry_or_view_change_requires_repaint(self):
+        for mutation in ('registry','view'):
+            service=self.service();service.open();menu=service.menu
+            service.close_menu()
+            if mutation=='registry':self.loader.enable('Specimen')
+            else:menu.view.query='changed while hidden'
+            menu._paint=Mock(wraps=menu._paint)
+            service.open();menu._paint.assert_called_once()
+            service.close()
+            if mutation=='registry':self.loader.disable('Specimen')
+
+    def test_changed_registry_or_view_forces_fresh_paint(self):
+        for mutation in ('registry','view'):
+            service=self.service();service.prepare();menu=service.menu
+            if mutation=='registry':self.loader.enable('Specimen')
+            else:menu.view.query='different'
+            menu._paint=Mock(wraps=menu._paint)
+            service.open();menu._paint.assert_called_once()
+            service.close()
+            if mutation=='registry':self.loader.disable('Specimen')
+
+    def test_title_snapshot_ignores_hidden_world_progress_but_observes_preferences(self):
+        from expedition33.title_management import TitleWorkspaceView
+        service=self.service();service._view_options['view_factory']=TitleWorkspaceView
+        service.prepare();menu=service.menu
+        menu.panel.buttons=list(range(105))
+        self.registry._startup_progress={'completed':1,'total':5,'finished':False,'failed':0}
+        menu._paint=Mock(wraps=menu._paint)
+        service.open();menu._paint.assert_not_called()
+        service.close_menu()
+        self.loader.enable('Specimen')
+        service.open();menu._paint.assert_called_once()
+
+    def test_external_settings_file_change_invalidates_warmed_frame(self):
+        service=self.service();service.prepare();menu=service.menu
+        path=self.registry._settings.path
+        path.write_bytes(b'{}')
+        menu._paint=Mock(wraps=menu._paint)
+        service.open();menu._paint.assert_called_once()
+
+    def test_dirty_detached_frame_refreshes_once_without_attach_or_bind(self):
+        service=self.service();service.prepare();menu=service.menu
+        menu._paint=Mock(wraps=menu._paint);menu._bind=Mock(wraps=menu._bind)
+        self.loader.enable('Specimen')
+        service.poll()
+        menu._paint.assert_called_once();menu._bind.assert_not_called()
+        self.assertNotIn('open',menu.panel.operations)
+        self.assertFalse(menu._accept_input);self.assertIsNone(menu.panel.menu)
+        service._next_poll=0;service.poll()
+        menu._paint.assert_called_once()
+        service.open();menu._paint.assert_called_once();menu._bind.assert_called_once()
+
+    def test_detached_refresh_revokes_old_revision_and_requires_readiness(self):
+        service=self.service();service.open();menu=service.menu;old=menu.frame
+        service.close_menu();menu.view.query='different'
+        service._readiness=lambda:None
+        paint=Mock(wraps=menu._paint);menu._paint=paint
+        service.poll();paint.assert_not_called()
+        service._readiness=lambda:True;service._next_poll=0;service.poll()
+        paint.assert_called_once()
+        with self.assertRaises(ManagementError):menu.view.activate(old.revision,old.controls[0].token)
+        self.assertFalse(menu._accept_input);self.assertIsNone(menu.panel.menu)
+
+    def test_detached_refresh_failure_latches_without_replay(self):
+        service=self.service();service.prepare();menu=service.menu
+        self.loader.enable('Specimen')
+        menu.refresh_detached=Mock(side_effect=RuntimeError('detached paint unknown'))
+        with self.assertLogs('expedition33.management_service',level='ERROR'):service.poll()
+        service._next_poll=0;service.poll()
+        menu.refresh_detached.assert_called_once()
+        self.assertIn('detached paint unknown',service.status()['error'])
+        self.assertIs(service.menu,menu)
+
     def test_dispose_releases_hidden_cache_without_automatic_recreation(self):
         service = self.service(); service.prepare()
         owner = service.menu

@@ -10,11 +10,11 @@ OPERATIONS = {'prepare': 1, 'attach': 2, 'focus': 3, 'close': 4, 'status': 5, 'o
 FOCUS_CAPTURE_DIAGNOSTICS = frozenset((*range(90201,90211),90220,90230))
 
 
-def request(operation, owner, *, leases=None, identities=None, plans=None):
-    if operation not in OPERATIONS or type(owner) is not int or not 0 < owner < 2**64:
+def request(operation, owner, *, leases=None, identities=None, plans=None, allow_retired=False):
+    if (operation not in OPERATIONS and not (operation=='retire' and allow_retired)) or type(owner) is not int or not 0 < owner < 2**64:
         raise ValueError('Invalid menu operation or owner')
     packet = bytearray(PLANS_AT+CALL_SIZE*len(plans) if plans is not None else SIZE)
-    struct.pack_into('<6IQ', packet, 0, 1, OPERATIONS[operation], 0, 0, 0, 0, owner)
+    struct.pack_into('<6IQ', packet, 0, 1, (7 if operation=='retire' else OPERATIONS[operation]), 0, 0, 0, 0, owner)
     if operation in ('prepare','open'):
         if (leases is None or len(leases) != 2 or
                 any(type(token) is not int or not 0 < token < 2**64 for token in leases) or leases[0] == leases[1]):

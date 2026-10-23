@@ -1,6 +1,7 @@
 import struct
 import unittest
 from types import SimpleNamespace
+from unittest.mock import patch
 from expedition33.menu import NativeMenu, MenuError
 from expedition33._scope import SessionScope
 from expedition33.sdk import Session
@@ -25,6 +26,14 @@ class FakeSession:
 
 
 class MenuOwnershipTests(unittest.TestCase):
+    def test_combined_open_focus_capability_avoids_second_dispatch(self):
+        from expedition33 import menu as module
+        for capability,expected in ((1,1),(0,2),(True,2)):
+            s,m=self.make();s._transport.menu_open_focus_protocol=capability
+            with patch.object(module.wire,'request',return_value=bytes(module.wire.SIZE)),patch.object(module.wire,'decode',return_value=SimpleNamespace(error=0,outcome='returned',active=True)):
+                m._send('open');m.attach();m.focus()
+            self.assertEqual(len(s.calls),expected)
+
     def make(self):
         session = FakeSession()
         menu = NativeMenu(session, ())

@@ -1,5 +1,6 @@
 #pragma once
 #include "fixed_invocation.h"
+#include "console_spawn_resolution.h"
 
 // One controlled creation experiment. No viewport write or console input hook.
 inline uint64_t console_find(uint64_t base, const char* name, const char* class_name) {
@@ -20,6 +21,37 @@ inline uint64_t console_find(uint64_t base, const char* name, const char* class_
     }
     return found;
 }
+// Internal resolution for this one verified native engine function. It reads a
+// fresh exact identity; it does not relax zero-serial matching for any caller.
+struct ConsoleSpawnOps {
+    uint64_t base,owner;
+    bool context() const {
+        return GetCurrentThreadId()==local_read<DWORD>(base+0x9272d30) &&
+            !local_read<uint8_t>(base+0x9272cfc) && !local_read<uint8_t>(base+0x934e968) &&
+            !local_read<uint8_t>(base+0x9272cea);
+    }
+    ConsoleSpawnResolution::Identity capture(int32_t index) const {
+        const auto count=local_read<int32_t>(base+0x9361b84),chunks_count=local_read<int32_t>(base+0x9361b8c);
+        if(index<0 || index>=count || count>1000000 || chunks_count<=0 || chunks_count>8192 || (index>>16)>=chunks_count)return {};
+        const auto chunks=local_read<uint64_t>(base+0x9361b70);if(!chunks)return {};
+        const auto chunk=local_read<uint64_t>(chunks+uint64_t(index>>16)*8);if(!chunk)return {};
+        const auto slot=chunk+uint64_t(index&65535)*24;
+        const auto serial=local_read<int32_t>(slot+0x10);const auto object=local_read<uint64_t>(slot);
+        if(serial<0 || object<0x10000 || (object&7) || fixed_slot(base,index,serial)!=object)return {};
+        return {index,serial,object};
+    }
+    bool live(uint64_t object) const {
+        if(object<0x10000 || (object&7))return false;
+        const auto identity=capture(local_read<int32_t>(object+12));
+        return identity.address==object && !(local_read<uint32_t>(object+8)&0x40000000);
+    }
+    uint64_t class_of(uint64_t object) const {return local_read<uint64_t>(object+0x10);}
+    uint64_t outer_of(uint64_t object) const {return local_read<uint64_t>(object+0x20);}
+    bool named(uint64_t object,const char* name) const {return exact_name(base,object+0x18,name);}
+    bool provenance(const ConsoleSpawnResolution::Identity& identity) const {
+        return ConsoleSpawnResolution::native_provenance(*this,identity.address,owner);
+    }
+};
 inline uint32_t construct_console_body(SchedulePacket* packet) {
     uint32_t prerequisite = invoke_fixed_body(packet);
     if (prerequisite) return prerequisite;
@@ -32,7 +64,9 @@ inline uint32_t construct_console_body(SchedulePacket* packet) {
     uint64_t library = console_find(base, "Default__GameplayStatics", "GameplayStatics");
     uint64_t viewport = console_find(base, nullptr, "CustomGameViewportClient");
     // SpawnObject can occur on other classes; select its verified owner explicitly.
-    uint64_t function = fixed_slot(base, 18293, 0);
+    ConsoleSpawnOps spawn_ops{base,library_cls};
+    const auto spawn_identity=ConsoleSpawnResolution::resolve(spawn_ops);
+    uint64_t function = spawn_identity.address;
     if (!console_cls || !library_cls || !library || !viewport || !function ||
         !exact_name(base,function+0x18,"SpawnObject") || local_read<uint64_t>(function+0x20)!=library_cls ||
         local_read<uint64_t>(library+0x10)!=library_cls || local_read<uint64_t>(viewport+0x40)!=0) return 102;
@@ -53,6 +87,7 @@ inline uint32_t construct_console_body(SchedulePacket* packet) {
     if (dispatch!=base+0x1393330) return 106;
     struct { uint64_t cls, outer, result; } params{console_cls,viewport,0};
     using Dispatch = void(__fastcall*)(void*,void*,void*);
+    if(!ConsoleSpawnResolution::revalidate(spawn_ops,spawn_identity))return 111;
     reinterpret_cast<Dispatch>(dispatch)(reinterpret_cast<void*>(library),reinterpret_cast<void*>(function),&params);
     if (!params.result) return 107;
     // The engine owns this unreferenced specimen; leave normal GC to reclaim it.

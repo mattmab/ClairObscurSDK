@@ -103,9 +103,11 @@ class Mod:
     def __init__(self):
         self.session = self.native = self.pause = self.request = None
         self.maps = []
+        self._prepared_maps=None;self._manifest_signature=None
         self.message = 'Ready'
         self.pending_open = False
         self.pending_travel = None
+        self._world_retiring=False;self._retirement_result=None
 
     @property
     def busy(self):
@@ -117,22 +119,50 @@ class Mod:
             actions=(Action('open', 'Open Map Travel', self.open_menu),
                      Action('status', 'Travel status', self.status),))
 
+    def prepare_startup(self, context):
+        # Installed package names are filesystem facts, not engine/world state.
+        self._prepare_installed_maps()
+
+    def _prepare_installed_maps(self):
+        path=game_root()/'Manifest_UFSFiles_Win64.txt'
+        signature=lambda stat:(stat.st_dev,stat.st_ino,stat.st_size,stat.st_mtime_ns)
+        before=signature(path.stat())
+        with path.open(encoding='utf-8-sig') as stream:rows=installed_maps(stream)
+        if signature(path.stat())!=before:
+            raise ManagementError('Installed manifest changed during preparation')
+        if not rows:raise ManagementError('No standalone maps found in the installed manifest')
+        self._prepared_maps=tuple(tuple(row.items()) for row in rows)
+        self._manifest_signature=before
+
+    def _activation_maps(self):
+        path=game_root()/'Manifest_UFSFiles_Win64.txt'
+        stat=path.stat();current=(stat.st_dev,stat.st_ino,stat.st_size,stat.st_mtime_ns)
+        if self._prepared_maps is None or current!=self._manifest_signature:
+            self._prepare_installed_maps()
+        # Fresh mutable dictionaries: route attachment must never contaminate
+        # the immutable process-prepared package list or another world cycle.
+        return [dict(row) for row in self._prepared_maps]
+
     def enable(self, session):
+        if self._retirement_result == 'ack':self.request=None
+        self._world_retiring=False;self._retirement_result=None
         if not available(session._session._transport):
             raise ManagementError('Map Travel requires the normal zone-transition SDK runtime (v67)')
         shared = getattr(session._session, '_native_menu_service', None)
         if shared is None:
             raise ManagementError('Enable SDK Management first')
         self.session = session
-        with (game_root() / 'Manifest_UFSFiles_Win64.txt').open(encoding='utf-8-sig') as stream:
-            self.maps = installed_maps(stream)
-        if not self.maps:
-            raise ManagementError('No standalone maps found in the installed manifest')
+        self.maps=self._activation_maps()
         attach_routes(self.maps, routes(session.pid))
         self.native = shared.for_view(lambda registry: MapView(registry, self))
-        self.pause = PauseMenuEntry(session, self.native, label='Map Travel')
+        self.pause = self._new_pause_entry()
         session.console.expose('map_travel', self)
         session.actions.register('map_travel.status', self.status, mutates=False)
+
+    def _new_pause_entry(self):
+        readiness=getattr(self.session._session,'_menu_readiness',None)
+        if not callable(readiness):readiness=None
+        return PauseMenuEntry(self.session,self.native,label='Map Travel',readiness=readiness)
 
     def open_menu(self, _=None):
         self.pending_open = True
@@ -199,9 +229,10 @@ class Mod:
         if self.native.parent.travel_recovery is request:
             self.native.parent.travel_recovery = None
         if self.pause is None:
-            self.pause = PauseMenuEntry(self.session, self.native, label='Map Travel')
+            self.pause = self._new_pause_entry()
 
     def poll(self):
+        if self._world_retiring:return
         if self.pending_open:
             self.pending_open = False
             self.native.parent.close_menu()
@@ -222,6 +253,41 @@ class Mod:
                     state=self.request.state if self.request else 'idle',
                     error=self.request.error if self.request else None,
                     pause_state=self.pause.state if self.pause else None)
+
+    def revoke_world(self,context):
+        self._world_retiring=True
+        self.pending_open=False;self.pending_travel=None
+
+    def begin_world_retirement(self,context):
+        if self._retirement_result is not None:return self._retirement_result
+        self._world_retiring=True
+        return self.poll_world_retirement(context)
+
+    def poll_world_retirement(self,context):
+        if self._retirement_result in ('ack','unknown'):return self._retirement_result
+        entry=self.pause
+        attachment=getattr(entry,'attachment',None) if entry is not None else None
+        # PauseAttachment.close restores borrowed game state before detaching.
+        # Until an epoch-aware close exists, retain every active owner untouched.
+        held=(entry is not None and (entry.state not in ('new','closed')
+              or entry.observer is not None
+              or attachment is not None and attachment.state not in ('empty','closed')))
+        ambiguous=self.request is not None and self.request.state=='unknown'
+        if ambiguous:
+            self._retirement_result='unknown';return 'unknown'
+        if held:
+            retire=getattr(entry,'retire_world',None)
+            if not callable(retire):
+                self._retirement_result='unknown';return 'unknown'
+            try:
+                outcome=retire()
+                if type(outcome) is not str or outcome not in ('ack','pending'):raise RuntimeError('Invalid pause retirement ACK')
+            except BaseException:
+                self._retirement_result='unknown';return 'unknown'
+            self._retirement_result=outcome
+            if outcome=='ack':self.pause=None
+        else:self._retirement_result='ack'
+        return self._retirement_result
 
     def disable(self):
         if self.busy:

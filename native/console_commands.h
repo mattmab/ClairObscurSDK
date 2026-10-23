@@ -4,6 +4,11 @@
 
 struct ConsoleString { const wchar_t* data; int32_t count, capacity; };
 using ConsoleTextFn = void(__fastcall*)(void*,const ConsoleString*);
+#ifdef E33_CONSOLE_COLORS_SESSION
+using ConsoleRenderFn=void(__fastcall*)(void*,void*);
+static ConsoleRenderFn console_original_render=nullptr;
+static void __fastcall console_color_render(void*,void*);
+#endif
 static uint64_t console_shadow[124]{}; // RTTI locator plus 123 primary virtual slots.
 static ConsoleTextFn console_original_command=nullptr, console_output=nullptr;
 static std::atomic<uint64_t> command_console{0};
@@ -72,11 +77,18 @@ inline bool install_console_commands(uint64_t base,uint64_t object) {
     uint64_t table=base+0x7818778;
     if (local_read<uint64_t>(object)!=table || local_read<uint64_t>(table+0x2c8)!=base+0x3dc4d30 ||
         local_read<uint64_t>(table+0x2d8)!=base+0x3dde5a0) return false;
+#ifdef E33_CONSOLE_COLORS_SESSION
+    if(local_read<uint64_t>(table+0x368)!=base+0x3ddf4b0)return false;
+#endif
     if (!console_original_command) {
         std::memcpy(console_shadow,reinterpret_cast<void*>(table-8),sizeof(console_shadow));
         console_original_command=reinterpret_cast<ConsoleTextFn>(base+0x3dc4d30);
         console_output=reinterpret_cast<ConsoleTextFn>(base+0x3dde5a0);
         console_shadow[1+0x2c8/8]=reinterpret_cast<uint64_t>(&console_command_hook);
+#ifdef E33_CONSOLE_COLORS_SESSION
+        console_original_render=reinterpret_cast<ConsoleRenderFn>(base+0x3ddf4b0);
+        console_shadow[1+0x368/8]=reinterpret_cast<uint64_t>(&console_color_render);
+#endif
     }
     command_console=object; command_table=table; command_thread=GetCurrentThreadId();
     console_head=console_count=console_dropped=0;

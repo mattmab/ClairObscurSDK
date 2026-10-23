@@ -76,17 +76,19 @@ class NativeMenu:
         if not reply.active:
             self._state = 'closed'
             session._menus.discard(self)
-        elif operation == 'close' or (operation in ('prepare','open') and reply.error):
+        elif operation in ('close','retire') or (operation in ('prepare','open') and reply.error):
             self._state = 'close_pending'
         elif not reply.error:
             self._state = {'prepare':'prepared', 'attach':'attached', 'focus':'focused','open':'attached'}[operation]
+            if operation=='open' and type(getattr(session._transport,'menu_open_focus_protocol',0)) is int and session._transport.menu_open_focus_protocol==1:
+                self._state='focused'
         else:
             self._state = previous
         if reply.error == 813:
             return False
         if reply.error:
             raise MenuError('Native menu request rejected', outcome=reply.outcome, native_error=reply.error)
-        if reply.active != (operation != 'close'):
+        if reply.active != (operation not in ('close','retire')):
             self._state = 'unknown'
             session._abort_ownership()
             raise MenuError('Native menu acknowledgement has inconsistent ownership', outcome='unknown')
@@ -102,14 +104,25 @@ class NativeMenu:
         if self._state != 'attached': raise MenuError('Menu must be attached before focus', outcome='not_started')
         return self._send('focus')
 
+    def retire_world(self):
+        session=self._session()
+        if session is None:raise MenuError('Menu session unavailable',outcome='unknown')
+        if self._state=='closed':return True
+        cap=getattr(session._transport,'retired_world_cleanup_protocol',0)
+        if type(cap) is not int or cap!=1:raise MenuError('Native retired-world menu cleanup unavailable',outcome='not_started')
+        return self._close_owned('retire',allow_retired=True)
+
     def close(self):
+        return self._close_owned('close')
+
+    def _close_owned(self,operation,**kwargs):
         session = self._session()
         if session is not None: session._transport._check_thread()
         if self._state == 'closed': return True
         action = self._action
         if action is not None: action._revoke('menu_closing')
         if self._controls is not None: self._controls.revoke('menu_closing')
-        result = self._send('close')
+        result = self._send(operation,**kwargs)
         if result and action is not None: action._revoke()
         if result and self._controls is not None: self._controls.revoke()
         return result
@@ -191,15 +204,15 @@ def prepare(session, widget, child, player, leases, *, z_order=1000, catalog=Non
              (library,'WidgetBlueprintLibrary','SetFocusToGameViewport',{}))
     ui_input = getattr(session._transport, 'menu_input_protocol', 0) == 1
     if ui_input:
-        from .enums import describe_enums
         enum=one(o for o in catalog.objects if o.class_name=='Enum' and o.name=='EMouseLockMode')
-        mode=describe_enums(catalog,(enum,))[enum.index].value('EMouseLockMode::DoNotLock')
         specs=list(specs)
         specs.append((library,'WidgetBlueprintLibrary','SetInputMode_UIOnlyEx',
-                  {'PlayerController':player,'InWidgetToFocus':child,'InMouseLockMode':mode,'bFlushInput':False}))
+                  {'PlayerController':player,'InWidgetToFocus':child,'InMouseLockMode':None,'bFlushInput':False}))
         specs.append((library,'WidgetBlueprintLibrary','SetInputMode_GameOnly',{'PlayerController':player,'bFlushInput':False}))
     def encode_menu_plan(obj,fn,args):
         plan=prepare_call(catalog,obj,fn,args,enum_values=ui_input and fn.name=='SetInputMode_UIOnlyEx')
+        from ._metadata_stabilization import available,require_positive_plan_identities
+        if available(getattr(session,'_transport',None)):require_positive_plan_identities(plan)
         if plan.wire_version==4:
             from ._enum_wire import encode_plan as encode_enum
             from ._invocation_wire import SIZE
@@ -211,11 +224,15 @@ def prepare(session, widget, child, player, leases, *, z_order=1000, catalog=Non
     # function identity cannot reuse the previous plan set.
     functions = tuple(function(owner, name) for _, owner, name, _ in specs)
     key = (z_order, tuple((o.pid, o.index, o.serial, o.address)
-                        for o in (engine, widget, child, player, library, *functions)))
+                        for o in (engine, widget, child, player, library, *functions, *((enum,) if ui_input else ()))))
     cached = getattr(session, '_menu_plan_cache', None)
     if cached is not None and cached[0] == key:
         plans = cached[1]
     else:
+        if ui_input:
+            from .enums import describe_enums
+            mode=describe_enums(catalog,(enum,))[enum.index].value('EMouseLockMode::DoNotLock')
+            specs[-2][3]['InMouseLockMode']=mode
         plans = tuple(encode_menu_plan(obj, fn, args)
                       for (obj, _, _, args), fn in zip(specs, functions))
         session._menu_plan_cache = (key, plans)

@@ -136,8 +136,8 @@ class LicenseManifestTests(unittest.TestCase):
         for name in ('src/expedition33/__init__.py', 'scripts/run_release_sdk.py',
                      'scripts/sdk_command.py', 'docs/INSTALLABLE_RELEASE.md', 'LICENSE',
                      'THIRD_PARTY_NOTICES.md',
-                     'build/release/research-probe-cinematic-v202-extra-spots/research_probe.exe',
-                     'build/release/runtime-session-cinematic-v202/runtime_session_cinematic_v202.dll',
+                     'build/release/research-probe-cinematic-v209-lease-batch/research_probe.exe',
+                     'build/release/runtime-session-cinematic-v209/runtime_session_cinematic_v209.dll',
                      'build/readonly-worker-strings-v1/research_probe.exe', 'build/release/thumbnail-worker-v2/thumbnail_worker.dll', 'build/bootstrap/version.dll', 'mods/SDKManagement/mod.py',
                      'mods/IntrospectionHarness/mod.py', 'mods/LiveObjectViewer/mod.py'):
             self.write(name, b'# fixture\n')
@@ -149,9 +149,12 @@ class LicenseManifestTests(unittest.TestCase):
         self.assertEqual(result['mods'], 3)
         with zipfile.ZipFile(result['archive']) as archive:
             self.assertIn('SDK_Mods/LiveObjectViewer.sdkmod', archive.namelist())
+            self.assertIn('SDK/build/research-probe-cinematic-v209-lease-batch/research_probe.exe',archive.namelist())
+            self.assertIn('SDK/build/runtime-session-cinematic-v209/runtime_session_cinematic_v209.dll',archive.namelist())
+            self.assertFalse(any('v202' in name for name in archive.namelist()))
             self.assertNotIn('SDK_Mods/E33WorldBuilder.sdkmod', archive.namelist())
             self.assertFalse(any('/settings/' in name or '/logs/' in name for name in archive.namelist()))
-            self.assertIn('SDK/build/runtime-session-cinematic-v202/runtime_session_cinematic_v202.dll', archive.namelist())
+            self.assertIn('SDK/build/runtime-session-cinematic-v209/runtime_session_cinematic_v209.dll', archive.namelist())
             self.assertEqual(archive.read('SDK/licenses/Expat/COPYING'),
                              b'copyright and permission fixture\n')
         self.write('runtime/new.dll', b'new')

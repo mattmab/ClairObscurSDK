@@ -6,6 +6,9 @@
 // Menu lifetime ownership, independent of callback registration. A removed
 // callback may leave its control focused. Never release these identities until
 // focus restoration and viewport detachment have completed.
+// The fixed keybind workspace can own 917 controls plus non-button input
+// widgets. This lifetime bound is separate from the 64 active callbacks.
+constexpr size_t kMenuFocusOwnedControlCapacity=1024;
 template<size_t Capacity=16>
 class MenuFocusControls {
     std::array<OwnedSlateReference,Capacity> references_{};

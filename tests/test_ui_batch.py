@@ -69,6 +69,27 @@ class UIBatchTests(unittest.TestCase):
             bad = bytearray(reply); struct.pack_into('<I', bad, offset, value)
             with self.assertRaises(ValueError): wire.decode(self.requests(), bad.hex())
 
+    def test_failed_46th_multi_button_reply_preserves_bounded_inner_diagnostic(self):
+        from expedition33 import _multi_button_wire as multi
+        child=SimpleNamespace(index=2,serial=3,address=0x10000)
+        sent=multi.request('bind',7,8,action=9,child=child)
+        requests=[('multi-button',sent)]*48
+        parts=[]
+        for i in range(46):
+            reply=bytearray(sent)
+            struct.pack_into('<4I',reply,8,1012 if i==45 else 0,2,0,0 if i==45 else 2)
+            if i!=45:struct.pack_into('<Q',reply,64,i+1)
+            packed=wire.pack_sparse(reply);parts.append(wire.ITEM.pack(109,len(packed))+packed)
+        body=b''.join(parts)
+        reply=wire.HEADER.pack(1,48,wire.HEADER.size+len(body),46,1203)+body
+        with self.assertRaises(wire.UIBatchError) as caught:wire.decode(requests,reply.hex())
+        error=caught.exception
+        self.assertEqual((error.completed,error.batch_error,error.failed_command,error.inner_error,error.inner_outcome),(46,1203,'multi-button',1012,'returned'))
+        self.assertNotIn(sent.hex(),str(error))
+        malformed=bytearray(reply);struct.pack_into('<I',malformed,wire.HEADER.size,104)
+        with self.assertRaises(wire.UIBatchError) as caught:wire.decode(requests,malformed.hex())
+        self.assertIsNone(caught.exception.inner_error)
+
     def test_unknown_reply_aborts_once_without_retry(self):
         session = SimpleNamespace(_check=Mock(), _abort_ownership=Mock(),
             _transport=SimpleNamespace(command=Mock(return_value={'ui_batch_packet': '00'})))

@@ -1,5 +1,5 @@
 """Original-world enemy catalog on the standard SDK mod lifecycle."""
-from expedition33.management import ModDefinition, Action, Report
+from expedition33.management import ModDefinition, Action, Keybind, Report
 
 
 class Mod:
@@ -55,15 +55,32 @@ class Mod:
                      Action('spawn', 'Spawn selected â€” Isolated (default)', self.isolated),
                      Action('spawn-original', 'Spawn selected â€” Original campaign actions', self.original),
                      Action('remove', 'Remove owned enemy', self.remove),
-                     Action('status', 'Encounter status / mode details', self.status)))
+                     Action('status', 'Encounter status / mode details', self.status)),
+            keybinds=(Keybind('open', 'Open enemy catalog', '-', self.open),))
+
+    def prepare_startup(self, context):
+        self._prepare_static()
+
+    def _prepare_static(self, catalog=None):
+        if catalog is None and self.catalog is not None:
+            return
+        from expedition33.enemy_spawning import load_catalog
+        from expedition33.original_helper_encounters import catalog_recipes
+        from expedition33._original_trigger_fight import direct_fight_recipes
+        value = load_catalog() if catalog is None else catalog
+        helpers = catalog_recipes(value)
+        direct = direct_fight_recipes(value)
+        # Publish only a complete validated static catalog preparation.
+        self.catalog = value
+        self.helper_catalog = helpers
+        self.direct_catalog = direct
 
     def enable(self, session):
         self.session = session
         from expedition33.enemy_spawning import EnemySpawner
         self.spawner = EnemySpawner(session)
-        self.catalog = self.spawner.catalog
-        self.helper_catalog = self.spawner.original_helper_catalog()
-        self.direct_catalog = self.spawner.original_fight_catalog()
+        if self.catalog != self.spawner.catalog:
+            self._prepare_static(self.spawner.catalog)
         self.selected = next(row['id'] for row in self.catalog['entries'] if row['spawn_available'])
         self.request = self.queue
         self.inspect = self.current_status
@@ -380,9 +397,55 @@ class Mod:
             ('Original campaign actions', 'Keeps the Blueprintâ€™s authored post-battle game action. Completing the encounter may change campaign progress. Uses a unique spawn ID.'),
             ('Availability', 'World recipes preserve authored encounters. Choose an observed arena for experimental grounded spawning outside QA. Encounter group adds exact stored battle definitions to an active owned fight; unresolved records remain available for review.'),))
 
-    def disable(self):
+    def _revoke_world_intents(self):
+        # Revoke queued world intent even when owned cleanup must wait.
+        self.want_open = False
+        self._pending = self._pending_addition = None
+        self._pending_arena = self._pending_positions = None
+        self._pending_activate = True
+        self._helper_pending = None
+        self._helper_begin = False
+        self._npc_pending = None
+        self._npc_remove = False
+        self._npc_dialogue_choice = None
+        self._npc_dialogue_presented = False
+        self._pending_tuning = None
         self._original_pending = None
         self._direct_pending = None
+
+    def revoke_world(self,context):
+        self._revoke_world_intents();self._retirement_token=context.previous_token
+        self._retired_npc=self._retired_spawner=False
+
+    def begin_world_retirement(self,context):
+        return self.poll_world_retirement(context)
+
+    def poll_world_retirement(self,context):
+        if getattr(self,'_retirement_token',None)!=context.previous_token:return 'unknown'
+        # The tuning close path restores saved battle-manager fields while
+        # its old world/controller still validate. It has no epoch-aware native
+        # retirement yet; retain active tuning rather than compensate an old save.
+        owners=(self.npc_encounter,self.spawner,
+            getattr(self.spawner,'helper_encounter',None) if self.spawner is not None else None)
+        for owner in owners:
+            tuning=getattr(owner,'_tuning',None) if owner is not None else None
+            if tuning is not None and tuning.attempted is True and tuning.closed is not True:return 'unknown'
+        if not self._retired_npc and self.npc_encounter is not None:
+            if self.npc_encounter.close() is not True:return 'pending'
+            self._retired_npc=True
+        if not self._retired_spawner and self.spawner is not None:
+            current=getattr(self.spawner,'original_fight',None)
+            if current is not None:current._world_replaced=True
+            if self.spawner.close() is not True:return 'pending'
+            self._retired_spawner=True
+        # NativeMenuRoute is a presenter only; SDKManagement owns its tree.
+        self.npc_encounter=self.spawner=self.native=None
+        self.request=self.inspect=self.session=None
+        self.arenas=self.arena_identity=self.group_capacity=None
+        return 'ack'
+
+    def disable(self):
+        self._revoke_world_intents()
         if self.npc_encounter is not None and not self.npc_encounter.close():raise RuntimeError('NPC cleanup deferred until its owned encounter can retire')
         if self.spawner is not None and not self.spawner.close():
             raise RuntimeError('Enemy cleanup deferred until the owned encounter can retire')

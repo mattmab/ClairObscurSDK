@@ -30,6 +30,7 @@ class ManagementKeysTests(unittest.TestCase):
 
     def test_punctuation_names_and_persistence(self):
         for alias, canonical, vk in [(',', ',', 188), ('Comma', ',', 188),
+                                      ('-', '-', 189), ('Minus', '-', 189), ('hyphen', '-', 189),
                                       ('.', '.', 190), ('Period', '.', 190), ('dot', '.', 190)]:
             self.assertEqual(normalize_key(alias),canonical)
             self.assertEqual(VIRTUAL_KEYS[canonical],vk)

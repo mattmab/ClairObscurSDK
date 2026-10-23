@@ -8,6 +8,7 @@ from dataclasses import dataclass, field
 import json
 import math
 import threading
+import time
 
 from .settings import identifier, _json_value
 from .keys import normalize_key, VIRTUAL_KEYS
@@ -218,12 +219,17 @@ class Registry:
     def view(self, selection):
         entry = self._entry(selection)
         definition = entry.definition
+        active = self._enabled(entry)
         return {'id': definition.id, 'name': definition.title, 'folder': entry.name,
                 'description': definition.description, 'author': definition.author,
                 'version': definition.version, 'protected': definition.protected,
-                'enabled': self._enabled(entry), 'generation': entry.generation,
+                'enabled': active, 'generation': entry.generation,
+                'desired_enabled': entry.preferences.get('enabled', active),
+                'staged_pending': entry.preferences.get('enabled', active) != active,
                 'error': entry.error, 'persistence': self._settings is not None,
                 'cleanup_error': next((getattr(s, 'cleanup_error', None)
+                    for s in self._loader.status() if s.name == entry.name), None),
+                'preparation_error': next((getattr(s, 'preparation_error', None)
                     for s in self._loader.status() if s.name == entry.name), None),
                 'source_sha256': next((getattr(s, 'source_sha256', None)
                     for s in self._loader.status() if s.name == entry.name), None),
@@ -272,6 +278,42 @@ class Registry:
         operation(entry.name)
         return self.select(selection.mod_id)
 
+    def stage_enabled(self, selection, enabled):
+        """Persist a desired choice without invoking any mod lifecycle callback."""
+        entry = self._entry(selection)
+        if type(enabled) is not bool:
+            raise ManagementError('Enabled must be a boolean')
+        if not enabled and entry.definition.protected:
+            raise ManagementError('This core mod is protected; stop the controller to unload it')
+        preferences = copy.deepcopy(entry.preferences)
+        preferences.update(enabled=enabled, folder=entry.name)
+        if self._settings is not None:
+            self._settings.save(selection.mod_id, preferences)
+        entry.preferences = preferences
+        entry.generation = self._next()
+        return self.select(selection.mod_id)
+
+    def stage_saved_enabled(self, mod_id, enabled):
+        """Stage an already known saved folder without importing legacy code."""
+        self._check()
+        identifier(mod_id)
+        if type(enabled) is not bool:
+            raise ManagementError('Enabled must be a boolean')
+        if mod_id in self._entries:
+            return self.stage_enabled(self.select(mod_id), enabled)
+        if self._settings is None or mod_id not in self._settings.records():
+            raise ManagementError('No saved mod identity is available for staging')
+        preferences = self._settings.get(mod_id)
+        folder = preferences.get('folder')
+        if folder not in self.installed():
+            raise ManagementError('Saved mod folder is missing')
+        if not enabled and (mod_id in ('sdk.management', 'sdk.introspection') or
+                folder in ('SDKManagement', 'IntrospectionHarness')):
+            raise ManagementError('This core mod is protected')
+        preferences['enabled'] = enabled
+        self._settings.save(mod_id, preferences)
+        return mod_id
+
     def startup_order(self):
         self._check()
         ids=list(self._settings.records()) if self._settings is not None else []
@@ -312,27 +354,45 @@ class Registry:
         self._check()
         if self._settings is None:
             return
-        installed = set(self.installed())
-        for mod_id in self.startup_order():
+        attempted = set()
+        while True:
             self._check()
+            # Read current order/choices after every yield. A newly staged ID
+            # can join pending startup; attempted mutations are never replayed.
+            mod_id = next((key for key in self.startup_order() if key not in attempted
+                and self._settings.get(key).get('enabled') is True), None)
+            if mod_id is None:
+                return
+            attempted.add(mod_id)
             preference = self._settings.get(mod_id)
-            if preference.get('enabled') is not True:
-                continue
             folder = preference.get('folder')
             failure = None
+            enable_ms = None
             try:
-                if folder not in installed:
+                if folder not in self.installed():
                     raise ManagementError('Saved mod folder is missing')
                 selection = self.load(folder)
                 if selection.mod_id != mod_id:
                     raise ManagementError('Saved mod identity does not match installed mod')
                 entry = self._entry(selection)
                 if not self._enabled(entry):
-                    self._loader.enable(folder)
+                    started = time.perf_counter()
+                    if not hasattr(self, '_startup_activation_started'):
+                        self._startup_activation_started = {}
+                    self._startup_activation_started[mod_id] = started
+                    try:
+                        self._loader.enable(folder)
+                    finally:
+                        enable_ms = (time.perf_counter() - started) * 1000
+                else:
+                    enable_ms = 0.0
             except Exception as error:
                 failure = f'{type(error).__name__}: {error}'
                 if mod_id in self._entries:
                     self._entries[mod_id].error = failure
+            if not hasattr(self, '_startup_enable_timings'):
+                self._startup_enable_timings = {}
+            self._startup_enable_timings[mod_id] = enable_ms
             yield mod_id, failure
 
     def unload(self, selection):
@@ -382,6 +442,25 @@ class Registry:
         entry.error = None
         if self._enabled(entry) and option.on_change is not None:
             self._callback(selection, option.on_change, value, 'Option saved, but application failed')
+        return copy.deepcopy(value)
+
+    def stage_option(self, selection, option_id, value, *, reset=False):
+        """Validate/save an option without calling its world-dependent handler."""
+        entry = self._entry(selection)
+        if selection.mod_id in self._dispatching:
+            raise ManagementError('Recursive management dispatch is not supported')
+        if type(reset) is not bool:
+            raise ManagementError('Reset must be a boolean')
+        option = next((item for item in entry.definition.options if item.id == option_id), None)
+        if option is None:
+            raise ManagementError(f'Unknown option {option_id!r}')
+        value = option.validate(option.default if reset else value)
+        preferences = copy.deepcopy(entry.preferences)
+        preferences.setdefault('options', {})[option_id] = value
+        if self._settings is not None:
+            self._settings.save(selection.mod_id, preferences)
+        entry.preferences = preferences
+        entry.generation = self._next()
         return copy.deepcopy(value)
 
     def apply_options(self, name):
@@ -443,9 +522,11 @@ class Registry:
         self._check()
         conflicts = self.key_conflicts()
         routes = []
+        lifecycle=getattr(self._loader,'world_lifecycle',None)
         for mod_id, entry in self._entries.items():
             if not self._enabled(entry):
                 continue
+            if lifecycle is not None and not lifecycle.allows(entry.name):continue
             selection = self.select(mod_id)
             for binding in entry.definition.keybinds:
                 key = self.keybind(selection, binding.id)
@@ -467,6 +548,9 @@ class Registry:
 
     def _callback(self, selection, callback, argument, phase):
         entry = self._entry(selection)
+        lifecycle=getattr(self._loader,'world_lifecycle',None)
+        if lifecycle is not None and not lifecycle.allows(entry.name):
+            raise ManagementError('Gameplay callback is waiting for its admitted world')
         if selection.mod_id in self._dispatching:
             raise ManagementError('Recursive management dispatch is not supported')
         self._dispatching.add(selection.mod_id)

@@ -32,7 +32,7 @@ int main() {
     s.press(65,true,true);drain=request(Drain,3);s.command(drain,0);assert(!drain.count);
     s.press(65,false,true);drain=request(Drain,3);s.command(drain,0);assert(drain.count==1);
     auto restored=request(Replace,4);s.command(restored,0);assert(!s.capturing());
-    for(uint32_t key : {188u,190u}) {
+    for(uint32_t key : {188u,189u,190u}) {
         auto punctuation=request(Capture,key);punctuation.count=1;punctuation.bindings[0]={1,key};
         s.command(punctuation,0);assert(!punctuation.error);
         s.press(key,false,true);auto result=request(Drain,key);s.command(result,0);

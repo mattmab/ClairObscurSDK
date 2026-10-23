@@ -23,9 +23,13 @@ log = logging.getLogger(__name__)
 class PauseMenuEntry:
     _entries = WeakSet()
 
-    def __init__(self, scope, service, *, label='Mods'):
+    def __init__(self, scope, service, *, label='Mods', readiness=None):
+        if readiness is not None and not callable(readiness):
+            raise TypeError('readiness must be a callable or None')
         if type(label) is not str or not label or len(label) > 32:
             raise ValueError('Pause entry label must contain 1 to 32 characters')
+        self._readiness = readiness
+        self._waiting_ready = False
         self.label = label
         self.parent_scope, self.service = scope, service
         self.scope = self.planner = self.observer = None
@@ -42,6 +46,20 @@ class PauseMenuEntry:
         self.timings = {}
         self._base_row = None
         self._entries.add(self)
+
+    def _timed(self,name,callback,*args,**kwargs):
+        started=time.perf_counter()
+        try:return callback(*args,**kwargs)
+        finally:
+            row=self.timings.setdefault('operations',{}).setdefault(name,dict(count=0,total_ms=0.,max_ms=0.))
+            elapsed=(time.perf_counter()-started)*1000
+            row['count']+=1;row['total_ms']+=elapsed;row['max_ms']=max(row['max_ms'],elapsed)
+
+    def _has_prepared_shell(self):
+        # Routes share the parent's owned panel even when another view is bound.
+        parent=getattr(self.service,'parent',self.service)
+        menu=getattr(parent,'menu',None)
+        return menu is not None and menu.panel.state=='built' and not getattr(parent,'_failure',None)
 
     def _choose_row(self, rows):
         # Keep the game's rows untouched. Share the original append boundary
@@ -65,9 +83,10 @@ class PauseMenuEntry:
         cannot distinguish them from the current controller's pause widget.
         """
         candidates = []
-        for player in catalog.select('PlayerController'):
-            if player.object_flags & 0x10: continue
-            values = read_values(catalog, player).values
+        players=tuple(player for player in catalog.select('PlayerController') if not player.object_flags & 0x10)
+        observed=read_values_many(catalog,players,fields=('Player','PauseMenuWidget'))
+        for player in players:
+            values = observed[player.index].values
             def field(name):
                 found = [value for (_, key), value in values.items() if key == name]
                 return found[0] if len(found) == 1 else None
@@ -129,9 +148,36 @@ class PauseMenuEntry:
                 if o.outer_index == index and o.name == name)
         return self._functions[key]
 
+    def stabilize_borrowed_targets(self,objects):
+        from ._stable_lease import available,acquire_stable,fresh_catalog_replacing
+        leases={}
+        if not available(self.scope._session._transport):return leases
+        for obj in objects:
+            if obj.serial==0 and obj.index not in leases:
+                lease,_=acquire_stable(self.scope,obj)
+                leases[obj.index]=lease
+        if leases:
+            catalog=fresh_catalog_replacing(self.planner._catalog,
+                tuple(lease.object for lease in leases.values()))
+            self.planner.refresh_from(catalog)
+        return leases
+
     def reference(self, obj, owner, name):
-        found, catalog = read_object_reference(self.planner._catalog, obj, self.cls(owner), name, project=True)
-        self.planner.adopt_observations(catalog)
+        owner_class=self.cls(owner)
+        found, catalog = read_object_reference(self.planner._catalog, obj, owner_class, name, project=True)
+        from ._stable_lease import available, stabilize_owned_tree, refresh_owned_tree_catalog
+        owned_parent=available(self.scope._session._transport) and any(lease.active and lease._object is not None and
+            (lease._object.index,lease._object.serial,lease._object.address)==(obj.index,obj.serial,obj.address)
+            for lease in self.scope._leases)
+        stable_field=((owner=='UserWidget' and name=='WidgetTree') or
+                      (owner=='WBP_BaseButton_C' and name=='ButtonContent'))
+        if (owned_parent and stable_field and found is not None and found.serial==0):
+            field_args={} if name=='WidgetTree' else {'field':'ButtonContent'}
+            stable_tree,_=stabilize_owned_tree(self.scope,catalog,obj,found,owner_class,**field_args)
+            found,catalog=refresh_owned_tree_catalog(catalog,obj,found,stable_tree,owner_class.index,**field_args)
+            self.planner.refresh_from(catalog)
+        else:
+            self.planner.adopt_observations(catalog)
         return found
 
     def layout(self, obj, owner, name, **args):
@@ -151,14 +197,18 @@ class PauseMenuEntry:
                 for obj, owner, name, args in calls[start:start + _ui_batch.LIMIT]])
 
     def call(self, obj, owner, name, **args):
-        with self.planner.prepare(obj, self.fn(owner, name), **args).invoke(refresh_from_result=True) as result:
-            return result.return_value
+        def run():
+            with self.planner.prepare(obj,self.fn(owner,name),**args).invoke(refresh_from_result=True) as result:
+                return result.return_value
+        return self._timed(owner+'.'+name,run)
 
     def create(self, obj, owner, name, **args):
         # Result remains scope-owned until complete entry teardown.
-        return self.planner.prepare(obj, self.fn(owner, name), **args).invoke(refresh_from_result=True).return_value
+        def run():return self.planner.prepare(obj,self.fn(owner,name),**args).invoke(refresh_from_result=True).return_value
+        return self._timed(owner+'.'+name,run)
 
     def install(self):
+        if self._readiness is not None and self._readiness() is not True:return False
         if self.state != 'new' or not self.available: return False
         started = time.perf_counter()
         names = ('WBP_PauseMenu_C','WBP_BaseButton_C','CommonButtonBase','CommonActivatableWidget',
@@ -176,16 +226,25 @@ class PauseMenuEntry:
         with ReadBatch(self.parent_scope.pid):
             # Capture descriptors and candidate owners only. Discover children
             # through this grid's verified getters, not all widget instances.
-            catalog = capture_matching(self.parent_scope.pid, names=names,
-                classes=('PlayerController','LocalPlayer','WBP_PauseMenu_C'))
+            def discover_metadata():
+                return capture_matching(self.parent_scope.pid,names=names,
+                    classes=('PlayerController','LocalPlayer','WBP_PauseMenu_C'))
+            from ._metadata_stabilization import available,prepare_discovery
+            if available(getattr(self.parent_scope._session,'_transport',None)):
+                catalog,uncovered=prepare_discovery(self.parent_scope._session,discover_metadata)
+                self.metadata_uncovered_count=len(uncovered);self._metadata_stable_ui=True
+            else:catalog=discover_metadata()
+            self.timings['catalog_ms']=(time.perf_counter()-started)*1000
             if catalog.pid != self.parent_scope.pid:
                 raise RuntimeError('Pause inventory belongs to another process')
             current = self.current_entry(catalog)
             if current is None: return False
+            self.timings['current_entry_ms']=(time.perf_counter()-started)*1000-self.timings['catalog_ms']
             self.player, self.pause = current
             self.scope = SessionScope(self.parent_scope)
             self.state = 'building'
             self.planner = self.scope.invocation_planner(selected_results=True,catalog=catalog)
+            self.planner._require_stable_ui_identities=getattr(self,'_metadata_stable_ui',False)
             self.local_player = self.reference(self.player,'PlayerController','Player')
             local_values = read_values_many(self.planner._catalog, (self.local_player,),
                 fields=('PlayerController',))[self.local_player.index]
@@ -204,6 +263,12 @@ class PauseMenuEntry:
                 if o.outer_index == pause_tree.index and o.name == 'CommonTextBlock_178')
             style = self.reference(source_text,'CommonTextBlock','Style')
             if style is None: raise RuntimeError('Pause text style is unavailable')
+            self.stabilize_borrowed_targets((self.pause,self.grid))
+            self.pause=self.planner._catalog.by_index[self.pause.index]
+            self.grid=self.planner._catalog.by_index[self.grid.index]
+            bound=self.current_entry(self.planner._catalog)
+            if bound is None or bound!=(self.player,self.pause):
+                raise RuntimeError('Pause authority changed during target preparation')
             count = self.call(self.grid,'PanelWidget','GetChildrenCount')
             if type(count) is not int or not 1 <= count <= 16:
                 raise RuntimeError('Unexpected pause grid child count')
@@ -221,6 +286,7 @@ class PauseMenuEntry:
             if not 1 <= self.row <= 16: raise RuntimeError('Unexpected pause grid row count')
             padding = slot_values[source_slot.index].values[self.cls('GridSlot').index,'Padding']
             self.timings['discovery_ms'] = (time.perf_counter() - started) * 1000
+            creation_started=time.perf_counter()
             self.button = self.create(self.library,'WidgetBlueprintLibrary','Create',
                 WorldContextObject=self.player, WidgetType=self.cls('WBP_BaseButton_C'), OwningPlayer=self.player)
             self.attachment = PauseAttachment(self.scope) # Publish before arming native cleanup.
@@ -243,8 +309,17 @@ class PauseMenuEntry:
                 InMinHeight=resume_values[self.cls('CommonButtonBase').index,'MinHeight'])
             self.layout(self.button,'CommonButtonBase','SetIsSelectable',bInIsSelectable=False)
             self.layout(self.button,'CommonButtonBase','SetIsToggleable',bInIsToggleable=False)
+            self.timings['button_contents_ms']=(time.perf_counter()-creation_started)*1000
+            attachment_started=time.perf_counter()
             pause_panel = self.reference(self.pause,'WBP_PauseMenu_C','PausePanel')
-            panel_lease = self.scope.retain(pause_panel)
+            stable_panels=self.stabilize_borrowed_targets((pause_panel,))
+            pause_panel=self.planner._catalog.by_index[pause_panel.index]
+            bound=self.current_entry(self.planner._catalog)
+            actual_panel=self.reference(self.pause,'WBP_PauseMenu_C','PausePanel')
+            if bound is None or bound!=(self.player,self.pause) or actual_panel!=pause_panel:
+                raise RuntimeError('Pause restore panel authority changed during preparation')
+            panel_lease = stable_panels.get(pause_panel.index)
+            if panel_lease is None:panel_lease=self.scope.retain(pause_panel)
             original_opacity = self.call(pause_panel,'Widget','GetRenderOpacity')
             original_enabled = self.call(pause_panel,'Widget','GetIsEnabled')
             def simple(name, **args):
@@ -263,6 +338,7 @@ class PauseMenuEntry:
             self.layout(slot,'GridSlot','SetHorizontalAlignment',InHorizontalAlignment=0)
             self.layout(slot,'GridSlot','SetVerticalAlignment',InVerticalAlignment=0)
             self.flush_layout()
+            self.timings['attachment_ms']=(time.perf_counter()-attachment_started)*1000
             self._active_call = self.planner.prepare(self.pause,self.fn('CommonActivatableWidget','IsActivated'))
             self._viewport_focus = self.planner.prepare(self.library,self.fn('WidgetBlueprintLibrary','SetFocusToGameViewport'))
             self._button_focus = self.planner.prepare(self.button,self.fn('Widget','SetUserFocus'),PlayerController=self.player)
@@ -292,15 +368,17 @@ class PauseMenuEntry:
 
     def _open_from_pause(self):
         if self.service.menu is None or self.service.menu.panel.state != 'open':
-            self.invoke(self._loading_label)
-            if not self.attachment.show_busy(self._hide_enabled):
+            opened_started=time.perf_counter()
+            warm=self._has_prepared_shell()
+            if not warm:self._timed('open_loading_label',self.invoke,self._loading_label)
+            if not self._timed('open_conceal',self.attachment.show_busy,self._hide_enabled):
                 raise RuntimeError('Pause conceal deferred; restore through cleanup')
             try:
                 # Disabling the old panel can move focus. Establish the
                 # required viewport baseline after that transition.
-                self.invoke(self._viewport_focus)
-                self.service.open()
-                if not self.attachment.hide_busy(self._hide_opacity):
+                self._timed('open_viewport',self.invoke,self._viewport_focus)
+                self._timed('open_service',self.service.open)
+                if not self._timed('open_hide',self.attachment.hide_busy,self._hide_opacity):
                     raise RuntimeError('Pause hide deferred')
             except BaseException:
                 # Restore the borrowed pause UI even when SDK preparation
@@ -310,7 +388,9 @@ class PauseMenuEntry:
                 if self.invoke(self._active_call): self.invoke(self._button_focus)
                 raise
             finally:
-                self.invoke(self._normal_label)
+                if not warm:self._timed('open_normal_label',self.invoke,self._normal_label)
+                self.timings['open_total_ms']=(time.perf_counter()-opened_started)*1000
+                log.info('Pause entry open timing: %s',self.timings)
             self._return_focus = True
             log.info('Native Mods pause click opened SDK menu')
 
@@ -352,6 +432,20 @@ class PauseMenuEntry:
             raise
 
     def poll(self):
+        if self._readiness is not None:
+            readiness = self._readiness()
+            if readiness is None:return
+            if type(readiness) is not bool:raise TypeError('readiness must return bool or None')
+            if readiness is False:
+                # Never install at title; close old owners through normal cleanup.
+                # A failed close keeps the owner and retries only its cleanup.
+                if self.state not in ('new', 'closed'):
+                    self.close()
+                    self._waiting_ready = True
+                return
+            if self._waiting_ready:
+                parent, service, label, readiness = self.parent_scope, self.service, self.label, self._readiness
+                self.__init__(parent, service, label=label, readiness=readiness)
         if not self.available or self.state == 'closed': return
         if self.state == 'failed':
             if (self.error != 'RuntimeError: Pause click observer expired or stopped; no silent reinstallation'
@@ -394,7 +488,7 @@ class PauseMenuEntry:
                     self.service.dispose_menu()
                     self.service._warmup_attempted = False
                     parent, service = self.parent_scope, self.service
-                    self.__init__(parent, service, label=self.label)
+                    self.__init__(parent, service, label=self.label, readiness=self._readiness)
                     log.info('Pause owner changed after travel; old entry removed, rebuilding for current controller')
                     return
             self._update_readiness()
@@ -423,6 +517,16 @@ class PauseMenuEntry:
                 return
             self.state, self.error = 'failed', f'{type(error).__name__}: {error}'
             log.exception('Pause entry suspended; owner retained for cleanup')
+
+    def retire_world(self):
+        if self.state == 'closed':return 'ack'
+        self._return_focus=False
+        if self._world_reader is not None:self._world_reader.close();self._world_reader=None
+        if self.observer is not None:self.observer.close();self.observer=None
+        if self.attachment is not None:
+            if not self.attachment.retire_world():return 'pending'
+        if self.scope is not None:self.scope.close()
+        self.state='closed';return 'ack'
 
     def close(self):
         if self.state == 'closed': return

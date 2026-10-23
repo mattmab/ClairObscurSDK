@@ -10,6 +10,12 @@ class Console:
         self._polling = False
         self.dispatcher = CommandDispatcher(session, self.execute, self._sync_commands)
         self.dropped_commands = 0
+        self._native_color_status = None
+
+    @property
+    def native_color_status(self):
+        self._session._check()
+        return dict(self._native_color_status) if self._native_color_status is not None else None
 
     def enable(self):
         self._session._check()
@@ -90,6 +96,10 @@ class Console:
         try:
             for _ in range(8):
                 response = self._session._transport.command('console-poll')
+                if 'console_color_status' in response:
+                    # Transport validates the same strict status schema before
+                    # returning it. Copy only metadata, never console text.
+                    self._native_color_status = dict(response['console_color_status'])
                 self.dropped_commands += response['console_dropped']
                 if not response['result']:
                     break

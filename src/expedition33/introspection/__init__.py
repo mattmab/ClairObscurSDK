@@ -584,12 +584,13 @@ class Harness:
             self.SUPPORTED |= frozenset(('trace_start', 'trace_read', 'trace_stop'))
         self._closed = False
         self._running = False
+        self._retiring = False
 
     def request(self, request):
         if threading.get_ident() != self._owner:
             raise RuntimeError('Harness requests must run on the owning Python thread')
-        if self._closed or self._running:
-            raise RuntimeError('Harness is closed or request dispatch is reentrant')
+        if self._closed or self._running or self._retiring:
+            raise RuntimeError('Harness is closed, retiring or request dispatch is reentrant')
         if not isinstance(request, dict) or not isinstance(request.get('op'), str):
             raise ValueError('Request requires an operation string')
         if request['op'] not in self.SUPPORTED:
@@ -667,8 +668,13 @@ class Harness:
             self._backend.clear()
             self._running = False
 
+    def revoke(self):
+        if threading.get_ident() != self._owner:
+            raise RuntimeError('Harness revocation must run on the owning Python thread')
+        self._retiring = True
+
     def poll(self):
-        if threading.get_ident() != self._owner or self._closed or self._running:
+        if threading.get_ident() != self._owner or self._closed or self._running or self._retiring:
             raise RuntimeError('Harness expiry requires an idle owning thread')
         try:
             self._explorer.expire()

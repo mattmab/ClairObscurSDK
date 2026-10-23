@@ -174,6 +174,7 @@ std::string read_name(const Reader& reader, uint64_t pool, uint32_t id, uint32_t
 #include "thread_ping.h"
 #include "fixed_observer_controller.h"
 #include "session_controller.h"
+#include "session_specimen_filter.h"
 #include "reader_session.h"
 
 int run_query(int argc, char** argv) {
@@ -529,6 +530,8 @@ int run_query(int argc, char** argv) {
             if (!item.object) { ++null_slots; continue; }
             auto object = reader.get<ObjectHeader>(item.object);
             if (object.index != i || !object.cls) { ++changing_slots; continue; }
+            if (runtime_session && !session_specimen_candidate(
+                    read_name(reader, pool, object.name_id, object.name_number))) continue;
             auto cls = reader.get<ObjectHeader>(object.cls);
             require(item_at(cls.index).object == object.cls, "CLASS_NOT_REGISTERED");
             auto meta = reader.get<ObjectHeader>(cls.cls);
