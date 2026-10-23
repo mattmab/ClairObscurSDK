@@ -1,7 +1,5 @@
 """Read-only flight discovery and schema preparation during save loading."""
-import time
-import logging
-from concurrent.futures import ThreadPoolExecutor
+from expedition33.admission_monitor import ReadOnlyAdmissionMonitor
 
 
 def prepare_static(pid,session=None):
@@ -32,13 +30,13 @@ def prepare_static(pid,session=None):
         return metadata
 
 
-def prepare_snapshot(pid,static=None):
+def prepare_snapshot(pid,static=None,cached=None):
     from expedition33._reader import ReadBatch
     from expedition33._planning_metadata import MetadataObservations
     from expedition33.invocation import prepare_call
     from . import discover_snapshot, flight_calls
     with ReadBatch(pid):
-        snapshot=discover_snapshot(pid)
+        snapshot=discover_snapshot(pid,cached) if cached is not None else discover_snapshot(pid)
         catalog,pawn,movement=snapshot
         metadata=MetadataObservations()
         if static is not None:metadata._entries=dict(static._entries)
@@ -49,11 +47,32 @@ def prepare_snapshot(pid,static=None):
         return snapshot,metadata
 
 
+class FlightObserver:
+    """Worker-owned copied discovery, independent of owner-thread UI builds."""
+    def __init__(self,pid,static):
+        from expedition33._reader import ReadBatch
+        self.pid=pid;self.static=static;self.catalog=None
+        self.reader=ReadBatch(pid,share=True)
+
+    def observe(self):
+        from . import ExplorationNotReady
+        with self.reader.bind():
+            try:
+                result=prepare_snapshot(self.pid,self.static,self.catalog)
+            except ExplorationNotReady:
+                self.catalog=None
+                return None
+            self.catalog=result[0][0]
+            return result
+
+    def close(self):
+        self.reader.close();self.catalog=None
+
+
 class LoadingFlight:
     def __init__(self,mod,session):
         self.mod=mod;self.session=session;self.pid=session.pid;self.context=None
-        self.worker=None;self.future=None;self.signature=None
-        self.next_attempt=0.;self.closed=False;self.failed=False;self.reader=None
+        self.monitor=None;self.closed=False;self.reader=None;self._observing=False
 
     def prepare(self,context):
         self.context=context
@@ -61,49 +80,74 @@ class LoadingFlight:
         self.mod._loading_static=self.static
         self.mod._loading_owner=self
         self._prepare_reader()
+        self._ensure_monitor()
+
+    def _ensure_monitor(self):
+        if self._observing:return True
+        if self.monitor is not None:
+            if not self.monitor.close(timeout=0.):return False
+            self.monitor=None
+        # Capture only pid/copied metadata: no Session or scopes on the worker.
+        pid,static=self.pid,self.static
+        self.monitor=ReadOnlyAdmissionMonitor(lambda:FlightObserver(pid,static),interval=.1,max_age=1.)
+        self._observing=True
+        return True
+
+    def activated(self):
+        # Activation already consumed the copied result. Stop sampling without
+        # waiting on a read-only query; retain its owner until cleanup ACKs.
+        self._observing=False
+        if self.monitor is not None and self.monitor.close(timeout=0.):self.monitor=None
 
     def _prepare_reader(self):
         if self.reader is None and self.mod.reader is None:
-            from expedition33._reader import ReadBatch
+            from expedition33._reader import ReadBatch,active_reader
             self.reader=ReadBatch(self.pid,share=True)
-            with self.reader.bind():pass # Process validation only; no world observations.
+            # A menu callback can already own shared IO. Store our unstarted
+            # owner there; the mod borrows that operation and binds its own
+            # worker later, without retaining or closing the caller's reader.
+            if active_reader() is None:
+                with self.reader.bind():pass
 
     def observe_title(self,context):
+        self.context=context;self.mod._loading_flight=None
         self._prepare_reader()
+        if self.mod.session is None or self.mod.disabled:self._ensure_monitor()
 
     def take_reader(self):
         reader,self.reader=self.reader,None
         return reader
 
+    @staticmethod
+    def matches(context,result):
+        from expedition33.cinematics.history import identity
+        catalog,pawn,_=result[0]
+        pc=catalog.by_index.get(context.controller[1])
+        if pc is None or identity(pc)!=context.controller:return False
+        worlds=[o for o in catalog.outer_chain(pawn) if o.class_name=='World']
+        pc_worlds=[o for o in catalog.outer_chain(pc) if o.class_name=='World']
+        return (len(worlds)==len(pc_worlds)==1 and
+            identity(worlds[0])==identity(pc_worlds[0])==context.world)
+
     def bind(self,context,*,preparing=False):
-        if self.closed or self.failed:return
-        if self.context.signature!=context.signature:
-            self.mod._loading_flight=None;self.context=context
-        if self.future is not None:
-            if not self.future.done():return
-            future,self.future=self.future,None
-            try:result=future.result()
-            except Exception as error:
-                # Discovery is read-only. A loading pawn may not exist yet;
-                # no engine mutation or native invocation has been attempted.
-                from . import ExplorationNotReady
-                from expedition33 import RuntimeQueryError
-                if not (isinstance(error,ExplorationNotReady) or
-                        isinstance(error,RuntimeQueryError) and any(code in str(error) for code in
-                            ('READ_FAILED','Object identity changed','SELECTED_DEPENDENCY_CHANGED'))):
-                    self.failed=True
-                    logging.getLogger(__name__).exception('Flight loading preparation unavailable')
-                result=None
-            if self.signature==context.signature and result is not None:
-                self.mod._loading_flight=(context.signature,result)
-        if self.failed or self.mod._loading_flight is not None or time.monotonic()<self.next_attempt:return
-        self.next_attempt=time.monotonic()+.25
-        if self.worker is None:self.worker=ThreadPoolExecutor(max_workers=1,thread_name_prefix='flight-loading')
-        self.signature=context.signature
-        self.future=self.worker.submit(prepare_snapshot,self.pid,self.static)
+        if self.closed:return
+        self.context=context;self.mod._loading_flight=None
+        if self.mod.session is not None and not self.mod.disabled:return
+        self._prepare_reader()
+        if not self._ensure_monitor():return
+        observation=self.monitor.snapshot() if self.monitor is not None else None
+        result=observation.admission if observation is not None else None
+        if result is not None and self.matches(context,result):
+            self.mod._loading_flight=(context.signature,result)
+
+    def take_snapshot(self):
+        # Harvest the latest worker result at enable, even if UI construction
+        # kept the owner from polling the loading coordinator in the meantime.
+        if self.context is not None:self.bind(self.context)
+        result,self.mod._loading_flight=self.mod._loading_flight,None
+        return result
 
     def close(self):
         self.closed=True;self.mod._loading_flight=None
         if self.reader is not None:self.reader.close();self.reader=None
-        if self.future is not None:self.future.cancel()
-        if self.worker is not None:self.worker.shutdown(wait=False,cancel_futures=True)
+        if self.monitor is not None and self.monitor.close(timeout=2.):self.monitor=None

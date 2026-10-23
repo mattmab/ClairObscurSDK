@@ -69,7 +69,7 @@ ImageAnchors observed_image_anchors(DWORD pid, const MODULEENTRY32W& module) {
 bool reader_arguments(const std::vector<std::string>& args, DWORD pid) {
     if (args.size() == 1 && args[0] == "--catalog") return true;
     if (args.size() != 3 || args[1] != std::to_string(pid)) return false;
-    return args[0] == "--catalog-select" || args[0] == "--catalog-match" || args[0] == "--describe" ||
+    return args[0] == "--catalog-values" || args[0] == "--catalog-select" || args[0] == "--catalog-match" || args[0] == "--describe" ||
         args[0] == "--read-values" || args[0] == "--read-table" || args[0] == "--describe-enums";
 }
 
@@ -82,7 +82,7 @@ int run_reader_session(const std::string& expected_pid, int (*query)(int, char**
         require(value > 0 && value <= 0xffffffffULL, "READER_PID_INVALID");
         ReaderSessionGate gate(static_cast<DWORD>(value));
         active_reader_gate = &gate;
-        std::cout << "{\"event\":\"reader_ready\",\"version\":1,\"pid\":" << gate.pid << "}\n" << std::flush;
+        std::cout << "{\"event\":\"reader_ready\",\"version\":2,\"pid\":" << gate.pid << "}\n" << std::flush;
         uint64_t sequence = 0;
         while (true) {
             std::string line;

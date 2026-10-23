@@ -1,5 +1,4 @@
 import importlib
-from concurrent.futures import Future
 from types import SimpleNamespace as N
 import unittest
 from unittest.mock import Mock,MagicMock,patch
@@ -11,30 +10,29 @@ class LoadingModPreparationTests(unittest.TestCase):
         module,_=package_fixture.Tests.load(self,name)
         return module
 
-    def test_flight_result_from_another_world_is_discarded(self):
+    def test_flight_harvests_latest_worker_at_enable_and_discards_other_world(self):
         module=self.load('ContinentFlight')
         loading=importlib.import_module(module.__name__+'.loading')
-        mod=module.Mod();owner=loading.LoadingFlight(mod,N(pid=7))
-        title=N(signature=('title',));first=N(signature=('world',1));second=N(signature=('world',2))
-        with patch.object(loading,'prepare_static',return_value=N(_entries={})), patch('expedition33._reader.ReadBatch'):
+        mod=module.Mod();owner=loading.LoadingFlight(mod,N(pid=7));monitor=Mock()
+        title=N(signature=('title',));world=N(signature=('world',1))
+        result=('copied snapshot','copied metadata')
+        with patch.object(loading,'prepare_static',return_value=N(_entries={})), patch('expedition33._reader.ReadBatch'), patch.object(loading,'ReadOnlyAdmissionMonitor',return_value=monitor):
             owner.prepare(title)
-        future=Future();worker=Mock();worker.submit.return_value=future
-        with patch.object(loading,'ThreadPoolExecutor',return_value=worker):
-            owner.bind(first,preparing=True)
-            self.assertIsNone(mod._loading_flight)
-            owner.bind(second,preparing=True)
-            future.set_result(('copied snapshot','copied schemas'))
-            owner.bind(second,preparing=True)
-            self.assertIsNone(mod._loading_flight)
-            self.assertEqual(worker.submit.call_count,1)
-        owner.close()
-        worker.shutdown.assert_called_once_with(wait=False,cancel_futures=True)
+        monitor.snapshot.return_value=None
+        owner.bind(world,preparing=True);self.assertIsNone(mod._loading_flight)
+        monitor.snapshot.return_value=N(admission=result)
+        with patch.object(owner,'matches',return_value=True):
+            self.assertEqual(owner.take_snapshot(),(world.signature,result))
+        self.assertIsNone(mod._loading_flight)
+        with patch.object(owner,'matches',return_value=False):
+            self.assertIsNone(owner.take_snapshot())
+        owner.close();monitor.close.assert_called_once_with(timeout=2.)
 
     def test_flight_read_worker_transfers_once_and_rewarms_after_retirement(self):
         module=self.load('ContinentFlight')
         loading=importlib.import_module(module.__name__+'.loading')
         mod=module.Mod();owner=loading.LoadingFlight(mod,N(pid=7));reader=MagicMock()
-        with patch.object(loading,'prepare_static',return_value=N(_entries={})), patch('expedition33._reader.ReadBatch',return_value=reader) as factory:
+        with patch.object(loading,'prepare_static',return_value=N(_entries={})), patch('expedition33._reader.ReadBatch',return_value=reader) as factory, patch.object(loading,'ReadOnlyAdmissionMonitor'):
             owner.prepare(N());self.assertIs(owner.take_reader(),reader)
             self.assertIsNone(owner.take_reader())
             mod.reader=reader;owner.observe_title(N());self.assertEqual(factory.call_count,1)
@@ -48,6 +46,24 @@ class LoadingModPreparationTests(unittest.TestCase):
         with patch('expedition33._reader.ReadBatch'):
             with self.assertRaises(module.ExplorationNotReady):loading.prepare_snapshot(7)
         module.discover_snapshot.assert_called_once_with(7)
+
+    def test_flight_stops_sampling_without_waiting_and_restarts_only_after_cleanup_ack(self):
+        module=self.load('ContinentFlight');loading=importlib.import_module(module.__name__+'.loading')
+        mod=module.Mod();owner=loading.LoadingFlight(mod,N(pid=7));old=Mock();new=Mock()
+        old.close.side_effect=(False,False,True)
+        with patch.object(loading,'prepare_static',return_value=N(_entries={})),patch('expedition33._reader.ReadBatch'),patch.object(loading,'ReadOnlyAdmissionMonitor',side_effect=(old,new)) as factory:
+            owner.prepare(N());owner.activated()
+            old.close.assert_called_once_with(timeout=0.)
+            owner.observe_title(N());self.assertIs(owner.monitor,old);self.assertEqual(factory.call_count,1)
+            owner.observe_title(N());self.assertIs(owner.monitor,new);self.assertEqual(factory.call_count,2)
+            self.assertTrue(owner._observing)
+
+    def test_flight_does_not_bind_a_new_owned_reader_inside_a_menu_read_operation(self):
+        module=self.load('ContinentFlight');loading=importlib.import_module(module.__name__+'.loading')
+        owner=loading.LoadingFlight(module.Mod(),N(pid=7));reader=Mock()
+        with patch('expedition33._reader.ReadBatch',return_value=reader),patch('expedition33._reader.active_reader',return_value=object()):
+            owner._prepare_reader()
+        self.assertIs(owner.reader,reader);reader.bind.assert_not_called()
 
     def test_map_monitor_handoff_does_not_close_the_active_mods_worker(self):
         module=self.load('WorldBuilderMapLoader')
@@ -90,6 +106,23 @@ class LoadingModPreparationTests(unittest.TestCase):
             owner.observe_title(N())
             self.assertTrue(owner.released)
             owner.close();scope.close.assert_called_once()
+
+    def test_world_builder_loading_handoff_borrows_the_hosts_reader(self):
+        module=self.load('E33WorldBuilder')
+        loading=importlib.import_module(module.__name__+'.loading_ui')
+        from expedition33._reader import ReadBatch,_active
+        parent=ReadBatch(7,share=True)
+        owner=loading.LoadingUI.__new__(loading.LoadingUI)
+        owner.scope=N(pid=7);owner.context=object();owner.bound=None
+        owner.catalog=object();owner.hud=object()
+        seen=[]
+        owner.proofs=(N(verify=lambda *a,**kw:seen.append(_active.get())),)*2
+        token=_active.set(parent)
+        try:
+            with patch('expedition33._reader.subprocess.Popen',side_effect=AssertionError('must borrow')):
+                owner.bind(N(signature=('world',)),preparing=True)
+            self.assertEqual(seen,[parent,parent]);self.assertFalse(parent._closed)
+        finally:_active.reset(token);parent.close()
 
 
 if __name__=='__main__':unittest.main()

@@ -24,7 +24,7 @@ class Tests(unittest.TestCase):
  def field(self,obj,name,kind,value):
   row=self.rows[obj.index];key=(obj.class_index,name);row.types[key]=kind;row.values[key]=value
  def run_gate(self,values=None,catalog=None):
-  with patch.object(m,'capture_selected',return_value=catalog or self.catalog) as capture,patch.object(m,'read_values_many',side_effect=values,return_value=self.rows) as read:
+  with patch('expedition33.catalog.capture_selected',return_value=catalog or self.catalog) as capture,patch('expedition33.values.read_values_many',side_effect=values,return_value=self.rows) as read:
    result=self.observer.observe_activation()
    return result,capture,read
  def test_complete_two_pass_gate_uses_four_bounded_queries_no_discovery(self):
@@ -61,7 +61,7 @@ class Tests(unittest.TestCase):
   with self.assertRaisesRegex(RuntimeQueryError,'save flags invalid'):self.run_gate()
  def test_stale_selector_exception_is_not_retried(self):
   reader=self.observer._reader
-  with patch.object(m,'capture_selected',side_effect=RuntimeQueryError('SELECTED_DEPENDENCY_CHANGED')) as capture:
+  with patch('expedition33.catalog.capture_selected',side_effect=RuntimeQueryError('SELECTED_DEPENDENCY_CHANGED')) as capture:
    with self.assertRaises(RuntimeQueryError):self.observer.observe_activation()
   capture.assert_called_once();reader.close.assert_called_once();self.observer.observe.assert_not_called()
  def test_missing_binding_uses_full_observation_on_next_scheduled_call(self):
@@ -72,7 +72,7 @@ class Tests(unittest.TestCase):
   result,_,_=self.run_gate();self.assertEqual(result.reason,'activation_controller_world_changed')
  def test_scope_owner_thread_is_required_before_any_query(self):
   self.observer._owner=-1
-  with patch.object(m,'capture_selected') as capture:
+  with patch.object(m,'capture_selected_values') as capture:
    with self.assertRaisesRegex(RuntimeError,'owner thread'):self.observer.observe_activation()
   capture.assert_not_called()
  def test_plain_warm_controller_records_current_selector_for_fast_binding(self):

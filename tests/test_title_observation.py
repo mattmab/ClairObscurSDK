@@ -23,6 +23,7 @@ class TitleObservationTests(unittest.TestCase):
         observer=m.UiAdmissionObserver.__new__(m.UiAdmissionObserver)
         observer.pid=7;observer._reader=N(bind=lambda:nullcontext())
         observer._title_prewarm_context=Mock(return_value=None)
+        observer._detached_prewarm_context=Mock(return_value=None)
         resolver=Mock(side_effect=results)
         with patch.object(m.WarmAdmissionObserver,'observe',return_value=Admission('inactive','save_not_loaded')), \
              patch.dict(sys.modules,{'expedition33.title_menu':N(resolve_title_context=resolver,

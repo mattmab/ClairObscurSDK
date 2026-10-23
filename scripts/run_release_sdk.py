@@ -127,6 +127,7 @@ def main():
             if args.early_init:
                 from expedition33.process_ui import ProcessUI
                 process_ui = ProcessUI(session,loader.registry)
+                process_ui.prepare_queries()
                 session._process_ui = process_ui
                 from expedition33.loading_preparation import LoadingPreparation
                 loading_preparation=LoadingPreparation(session,loader)
@@ -321,7 +322,13 @@ def main():
                         if not runtime_polling_started:
                             session.poll() # No generic mod/key polling before first admission.
                         process_ui.observe(observation.admission if observation is not None else None)
-                        loading_ui_ready=loading_preparation.observe(observation.admission if observation is not None else None)
+                        loading_packet=observation.admission if observation is not None else None
+                        loading_context=(getattr(loading_packet,'ui_context',None) or getattr(loading_packet,'prewarm_context',None))
+                        if loading_context is not None and loading_context.kind=='world':
+                            with process_ui._read_operation():
+                                loading_ui_ready=loading_preparation.observe(loading_packet)
+                        else:
+                            loading_ui_ready=loading_preparation.observe(loading_packet)
                         if not loading_ui_ready:activation_candidate=False
                         if title_readiness is True:
                             process_console.title_active()
@@ -367,6 +374,9 @@ def main():
                                 loader.registry._startup_activation_started = {}
                                 loader.registry._startup_enable_timings = {}
                                 console_info.begin_world_cycle()
+                                # Publish the world transition before queued
+                                # activation messages from this restoration.
+                                console_info.poll(world_active=True,title_ready=False)
                             else:
                                 activation_candidate = False
                         if (ui_ready and activation_candidate and late_core_pending and
@@ -385,6 +395,7 @@ def main():
                             not (args.early_init and activation_candidate and restoration is not None
                                  and not startup_gate.pending(time.monotonic()))):
                         loader.poll()
+                    restore_service_at=time.monotonic()+.1
                     while restoration is not None and not loader.stop_requested and time.monotonic() >= next_restore and (not args.early_init or activation_candidate) and not startup_gate.pending(time.monotonic()):
                         management = loader._loaded['SDKManagement'][1]
                         # Restore saved mods even while Pause/Mods is open.
@@ -428,7 +439,7 @@ def main():
                                         console_info.activation(view.get('name') or folder or startup_pending_result[0],
                                             not startup_pending_result[1] and actual is not None and actual.enabled,
                                             getattr(loader.registry,'_startup_enable_timings',{}).get(startup_pending_result[0]),
-                                            getattr(loader,'_startup_preparation_timings',{}).get(folder))
+                                            getattr(loader,'_startup_preparation_timings',{}).get(folder),defer=True)
                                     startup_pending_result = None
                                 if not startup_counts_refreshed:
                                     # Title staging may change the desired set
@@ -457,9 +468,17 @@ def main():
                         # same detached menu or polling every earlier mod after
                         # each enable. Fresh admission still gates EVERY enable;
                         # asynchronous readiness yields to the ordinary loop.
-                        # Console commands can change pending preferences.
-                        session.console.poll()
-                        session.poll()
+                        # Bound console/input servicing latency to this burst
+                        # budget rather than draining two native transports after
+                        # every synchronous enable. Each enable still gets its
+                        # own fresh world check; preferences are sampled again
+                        # after every serviced console command.
+                        if (time.monotonic()>=restore_service_at or busy or
+                                not gameplay_confirmed or restoration is None):
+                            if args.early_init:console_info.flush_activations()
+                            session.console.poll()
+                            session.poll()
+                            restore_service_at=time.monotonic()+.1
                         if busy or not gameplay_confirmed:break
                         next_restore = time.monotonic()
                     if args.early_init:
@@ -507,11 +526,14 @@ def main():
                                 admission_observer.close()
                         finally:
                             try:
-                                if console_readiness is not None:
-                                    console_readiness.close()
+                                if args.early_init:process_ui.close_queries()
                             finally:
-                                if server:
-                                    server.close()
+                                try:
+                                    if console_readiness is not None:
+                                        console_readiness.close()
+                                finally:
+                                    if server:
+                                        server.close()
     finally:
         try:
             lock.close()

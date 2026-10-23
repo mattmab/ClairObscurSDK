@@ -206,7 +206,8 @@ int run_query(int argc, char** argv) {
         const bool resolve_export_names = argc == 4 && std::string(argv[1]) == "--resolve-export-names";
         const bool resolve_asset_names = resolve_export_names || (argc == 4 && std::string(argv[1]) == "--resolve-asset-names");
         std::string asset_package,asset_name;
-        const bool selected_catalog = matching_catalog || (argc == 4 && std::string(argv[1]) == "--catalog-select");
+        const bool catalog_values = argc == 4 && std::string(argv[1]) == "--catalog-values";
+        const bool selected_catalog = catalog_values || matching_catalog || (argc == 4 && std::string(argv[1]) == "--catalog-select");
         std::unordered_set<std::string> match_names, match_classes;
         if (selected_catalog) catalog = true;
         if (catalog) limit = 0;
@@ -255,7 +256,7 @@ int run_query(int argc, char** argv) {
         else if (argc == 4 && (selected_catalog || std::string(argv[1]) == "--describe" || std::string(argv[1]) == "--describe-script" || std::string(argv[1]) == "--read-values" || std::string(argv[1]) == "--read-table" || std::string(argv[1]) == "--describe-enums")) {
             read_script = std::string(argv[1]) == "--describe-script";
             read_table = std::string(argv[1]) == "--read-table";
-            read_values = read_table || std::string(argv[1]) == "--read-values";
+            read_values = catalog_values || read_table || std::string(argv[1]) == "--read-values";
             read_enums = std::string(argv[1]) == "--describe-enums";
             descriptor_pid = std::stoul(argv[2]);
             std::string selectors=argv[3];
@@ -283,7 +284,9 @@ int run_query(int argc, char** argv) {
             require(!descriptors.empty(), "DESCRIPTOR_SELECTORS_EMPTY"); limit = 0;
         }
         else require(argc == 1 || catalog || thread_ping || invoke_proof || observe_proof || runtime_session || console_construction, "USAGE: research_probe.exe [--catalog | --limit N | --reflect-class NAME | --read-bools OBJECT | --reflect-function OWNER.NAME | --thread-ping | --invoke-proof | --observe-proof | --session]");
-        const bool reflection = !reflect_class.empty() || !bool_object.empty() || !function_name.empty() || (!descriptors.empty() && !selected_catalog);
+        std::unordered_set<int32_t> value_targets;
+        if(catalog_values) for(const auto& selected:descriptors)value_targets.insert(selected.first);
+        const bool reflection = catalog_values || !reflect_class.empty() || !bool_object.empty() || !function_name.empty() || (!descriptors.empty() && !selected_catalog);
         DWORD pid = discover_process();
         if (runtime_session) {
             wchar_t expected_pid[16]{};
@@ -389,9 +392,40 @@ int run_query(int argc, char** argv) {
             // is re-read by the existing strict closure emitter below.
             std::unordered_map<uint64_t, bool> type_matches;
             std::unordered_map<uint32_t,std::string> candidate_names;
+            // Candidate enumeration only: copy allocator blocks once per query,
+            // rather than issuing three remote reads for every distinct name.
+            // Names appended after this copy use the original direct reader.
+            // No copied block survives this request. The closure emitter below
+            // independently re-reads selected identities and their actual names.
+            const auto name_block=reader.get<uint32_t>(pool+8),name_cursor=reader.get<uint32_t>(pool+12);
+            require(name_block<8192 && name_cursor<=0x20000,"MATCH_NAME_POOL_BOUNDS");
+            std::unordered_map<uint32_t,std::vector<uint8_t>> name_blocks;
+            auto copied_name = [&](uint32_t id) {
+                const auto block=id>>16,offset=(id&0xffff)*2;
+                if(block>name_block)return read_name(reader,pool,id);
+                // Keep temporary memory bounded even for unusually large pools.
+                if(name_blocks.size()>=512 && !name_blocks.count(block)) return read_name(reader,pool,id);
+                auto known=name_blocks.find(block);
+                if(known==name_blocks.end()) {
+                    const auto pointer=reader.get<uint64_t>(pool+16+uint64_t(block)*8);
+                    std::vector<uint8_t> bytes(block==name_block ? name_cursor : 0x20000);
+                    if(!bytes.empty()) reader.read(pointer,bytes.data(),bytes.size());
+                    require(reader.get<uint64_t>(pool+16+uint64_t(block)*8)==pointer,"MATCH_NAME_BLOCK_CHANGED");
+                    known=name_blocks.emplace(block,std::move(bytes)).first;
+                }
+                const auto& bytes=known->second;
+                if(offset+2>bytes.size())return read_name(reader,pool,id);
+                uint16_t entry;std::memcpy(&entry,bytes.data()+offset,2);
+                const uint32_t length=entry>>6,width=(entry&1) ? 2 : 1;
+                if(!length || length>1023 || offset+2+length*width>bytes.size())return read_name(reader,pool,id);
+                if(width==2) return read_name(reader,pool,id);
+                std::string value(reinterpret_cast<const char*>(bytes.data()+offset+2),length);
+                for(unsigned char c:value) require(c>=32 && c<127,"NON_ASCII_NARROW_NAME");
+                return value;
+            };
             auto candidate_name = [&](const ObjectHeader& header) {
                 auto found=candidate_names.find(header.name_id);
-                if(found==candidate_names.end()) found=candidate_names.emplace(header.name_id,read_name(reader,pool,header.name_id)).first;
+                if(found==candidate_names.end()) found=candidate_names.emplace(header.name_id,copied_name(header.name_id)).first;
                 return header.name_number ? found->second+"_"+std::to_string(header.name_number-1) : found->second;
             };
             std::unordered_set<uint64_t> visiting;
@@ -615,7 +649,7 @@ int run_query(int argc, char** argv) {
                       << ",\"class_index\":" << cls.index;
             if (catalog) std::cout << ",\"outer_index\":" << outer_index
                                   << ",\"outer_serial\":" << outer_serial;
-            if (reflection) {
+            if (reflection && (!catalog_values || value_targets.count(i))) {
                 // Candidate slot corroborated by two name-lookup callers.
                 // Expose research evidence only; never invoke it here.
                 auto dispatch = reader.get<uint64_t>(object.vtable + 0x268);
@@ -739,7 +773,7 @@ int run_query(int argc, char** argv) {
                     std::cout<<"]}\n";
                 }
             }
-            if (reflection) {
+            if (reflection && (!catalog_values || value_targets.count(i))) {
                 // DataTable rows use the same reflected value decoder as objects.
                 // Only the verified native row-map accessor supplies row addresses.
                 struct TableRow { std::string name; uint64_t address; };

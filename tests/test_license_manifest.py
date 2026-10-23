@@ -138,7 +138,7 @@ class LicenseManifestTests(unittest.TestCase):
                      'THIRD_PARTY_NOTICES.md',
                      'build/release/research-probe-cinematic-v210-lease-batch/research_probe.exe',
                      'build/release/runtime-session-cinematic-v210/runtime_session_cinematic_v210.dll',
-                     'build/readonly-worker-strings-v1/research_probe.exe', 'build/release/thumbnail-worker-v2/thumbnail_worker.dll', 'build/bootstrap/version.dll', 'mods/SDKManagement/mod.py',
+                     'build/readonly-worker-strings-v1/research_probe.exe', 'build/readonly-worker-values-v2/research_probe.exe', 'build/release/thumbnail-worker-v2/thumbnail_worker.dll', 'build/bootstrap/version.dll', 'mods/SDKManagement/mod.py',
                      'mods/IntrospectionHarness/mod.py', 'mods/LiveObjectViewer/mod.py'):
             self.write(name, b'# fixture\n')
         original = package_release_candidate.ROOT

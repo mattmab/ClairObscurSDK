@@ -6,7 +6,7 @@ from types import SimpleNamespace
 from . import RuntimeQueryError
 from ._reader import ReadBatch
 from .catalog import capture_matching, capture_selected
-from .values import read_object_reference, read_values_many, read_values_with_references, StoredArray
+from .values import read_object_reference, read_values_many, read_values_with_references, StoredArray, capture_selected_values
 from .cinematics.history import anchor, identity, field
 from .cinematics.original_game_action import controller_context, NotReady
 
@@ -218,7 +218,7 @@ class WarmAdmissionObserver:
                 self._discard()
 
     def observe_activation(self):
-        """Four bounded fresh queries for a previously fully admitted binding.
+        """Two fresh class/value passes for a previously fully admitted binding.
 
         Only selectors are retained. Any changed selector/link withholds this
         operation; the next scheduled call rediscovers through ordinary observe.
@@ -254,7 +254,9 @@ class WarmAdmissionObserver:
         self._activation_binding=binding
 
     def _activation_pass(self,binding):
-        catalog=capture_selected(self.pid,tuple(row[1:] for row in binding))
+        fields=('GameViewport','World','OwningGameInstance','SaveManager','LocalPlayers',
+            'SaveLoaded','GameInstanceReference','LoadIsInProgress','SelectedSlot','PlayerController','Player','Pawn')
+        catalog,observed=capture_selected_values(self.pid,tuple(row[1:] for row in binding),fields=fields)
         objects=tuple(catalog.by_index[row[1]] for row in binding)
         if tuple(identity(obj) for obj in objects)!=binding:
             return Admission('observation_pending','activation_identity_changed')
@@ -265,9 +267,6 @@ class WarmAdmissionObserver:
                 (gi,'BP_jRPG_GI_Custom_C'),(manager,'BP_SaveManager_C'),(local,'LocalPlayer'),(pc,'PlayerController')):
             if catalog.find_class(kind).index not in catalog.ancestors(obj.class_index):
                 raise RuntimeQueryError('Activation selected class provenance mismatch')
-        fields=('GameViewport','World','OwningGameInstance','SaveManager','LocalPlayers',
-            'SaveLoaded','GameInstanceReference','LoadIsInProgress','SelectedSlot','PlayerController','Player','Pawn')
-        observed=read_values_many(catalog,objects[:-1],fields=fields)
         def value(obj,name,kind):
             row=observed[obj.index]
             keys=[key for key in row.types if key[1]==name]

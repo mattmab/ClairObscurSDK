@@ -182,7 +182,7 @@ class Mod:
             raise
 
     def management(self):
-        return ModDefinition('continent-flight', 'Continent Flight', version='0.4.1',
+        return ModDefinition('continent-flight', 'Continent Flight', version='0.4.2',
             description='Toggle flight on the current exploration character, then hold the configured ascend or descend key. Space remains jump. Travel resets flight. Bindings can be changed in Mod keybinds.',
             actions=(Action('status', 'Flight status', self.status),
                      Action('refresh', 'Find current exploration character', self.refresh),
@@ -200,9 +200,11 @@ class Mod:
             raise RuntimeError('Continent Flight requires Vector support. Use the native Mods launcher (unified pause-menu runtime).')
         if not getattr(session, 'supports_scalar_assignment', False):
             raise RuntimeError('Fast flight requires the SDK scalar assignment runtime')
-        self.session = session
         owner=getattr(self,'_loading_owner',None)
+        prepared=owner.take_snapshot() if owner is not None else None
         if self.reader is None and owner is not None:self.reader=owner.take_reader()
+        self.session = session
+        self._loading_flight=prepared
         self.disabled = False
         self.user32 = ctypes.WinDLL('user32', use_last_error=True)
         self.user32.GetAsyncKeyState.argtypes = [ctypes.c_int]
@@ -222,7 +224,8 @@ class Mod:
         session.actions.register('continent_flight.toggle', self.toggle)
         session.actions.register('continent_flight.land', self.land)
         self.enable_ms = (time.perf_counter() - started) * 1000
-        LOG.info('Ready in %.1f ms: Comma toggles flight; Space remains jump', self.enable_ms)
+        if owner is not None:owner.activated()
+        LOG.info('Ready in %.1f ms (loading snapshot=%s): Comma toggles flight; Space remains jump', self.enable_ms,getattr(self,'prepared_during_loading',False))
 
     def refresh(self, _):
         self.discovery_generation += 1
@@ -239,6 +242,7 @@ class Mod:
         try:
             with self.operation():
                 prepared=self._loading_flight
+                self.prepared_during_loading=prepared is not None
                 self._loading_flight=None
                 if prepared is not None:
                     snapshot,metadata=prepared[1]

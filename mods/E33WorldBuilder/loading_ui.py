@@ -1,6 +1,6 @@
 """Detached, GameInstance-owned catalog/HUD prepared before gameplay activation."""
 from expedition33._scope import SessionScope
-from expedition33._reader import ReadBatch
+from expedition33._reader import ReadBatch,active_reader
 from expedition33.ui_shell_proof import OwnedUiProof,UiProofPending,prepare_panel_metadata
 
 class LoadingUI:
@@ -48,7 +48,7 @@ class LoadingUI:
     def bind(self,context,*,preparing=False):
         if self.bound==context.signature:return
         if self.context is None:raise UiProofPending('World Builder detached preparation is incomplete')
-        with ReadBatch(self.scope.pid,share=True):
+        with ReadBatch(self.scope.pid,share=active_reader() is None):
             for panel,proof in zip((self.catalog,self.hud),self.proofs):
                 proof.verify(panel,context,rebind=True,preparing=preparing)
         self.bound=context.signature

@@ -155,7 +155,7 @@ class Mod:
         self.hud_hidden = hidden
 
     def management(self):
-        return ModDefinition('e33.world-builder', 'World Builder', version='0.32.3-experimental',
+        return ModDefinition('e33.world-builder', 'World Builder', version='0.32.4-experimental',
             description='F8 freecam. WASD fly, mouse look, Space/Ctrl up/down (E/Q also work), Shift faster. Hold left mouse to grab a world prop; release to place. Numpad 8/2 forward/back, 4/6 left/right, 9/3 up/down, 7/1 yaw; Alt precise; Alt+Z undo. F9 restores edits and clears spawned props. F7 opens folders, previews, spawning, galleries and saved maps.',
             actions=(Action('catalog', 'Open asset catalog', self.open_catalog),Action('toggle', 'Enter / leave builder camera', self.toggle),
                      Action('restore', 'Restore all edited geometry', self.restore),

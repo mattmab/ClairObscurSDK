@@ -5,6 +5,7 @@ its independent gameplay lifecycle decision. In particular this does not fix
 legacy world-mod retirement or the host's runtime_polling_started latch.
 """
 import threading
+from contextlib import contextmanager
 from .ui_shell_proof import OwnedUiProof,UiProofPending,UiProofMismatch,UiProofPreflightRejected
 
 
@@ -46,8 +47,13 @@ class UiEntryOwner:
         self.ready=True;self.journal=LeaseJournal()
         factory=TitleMenuEntry if context.kind=='title' else PauseMenuEntry
         self.entry=factory(self.scope,service,readiness=lambda:self.ready)
+        if context.kind=='world':self.entry._expected_controller=context.controller
     def poll(self):
         self.entry.poll()
+        return self.entry.state=='attached'
+    def prepare(self):
+        # Loading may attach a current pause widget, but never dispatch clicks.
+        if self.entry.state=='new':self.entry.install()
         return self.entry.state=='attached'
     def close(self):
         self.ready=False;self.journal.capture(self.scope)
@@ -80,14 +86,16 @@ class CachedProcessShell:
 
     def prepare(self,context):
         self.needs_capacity_rebuild() # Reject an unsupported registry before any build.
+        from .pause_preparation import prepare as prepare_pause
+        prepare_pause(self.scope._session)
         self.ready=True;self.service._view_options['view_factory']=self._factory(context.kind)
         self.service.prepare()
         if self.service._failure:raise UiFrontendHeld('Prepared process UI frontend failed; retain its owner')
         menu=self.service.menu
         if menu is None or menu.panel.state!='built':return False
-        from ._reader import ReadBatch
+        from ._reader import ReadBatch,shared_operation
         from .ui_shell_proof import prepare_panel_metadata
-        with ReadBatch(self.scope.pid,share=True):
+        with shared_operation(self.scope.pid):
             prepare_panel_metadata(menu.panel)
             self.proof.verify(menu.panel,context)
             # Proof metadata stabilization invalidates the process menu plan.
@@ -124,10 +132,10 @@ class CachedProcessShell:
         return True
 
     def rebind(self,context,*,preparing=False):
-        from ._reader import ReadBatch
+        from ._reader import ReadBatch,shared_operation
         # One read-only worker for proof and detached repaint. Nested operation
         # batches borrow it without redoing executable validation at each step.
-        with ReadBatch(self.scope.pid,share=True):
+        with shared_operation(self.scope.pid):
             return self._rebind(context,preparing=preparing)
 
     def _rebind(self,context,*,preparing=False):
@@ -157,7 +165,7 @@ class CachedProcessShell:
         menu._reuse_prepared_frame=False
         # Rebinding creates a fresh planner. Keep detached render planning on
         # one bounded reader, as initial preparation does.
-        from ._reader import ReadBatch
+        from ._reader import ReadBatch,shared_operation
         with ReadBatch(self.scope.pid):
             menu.frame=menu._render_view();menu._paint()
         # The detached repaint has fully acknowledged. Preserve exactly the
@@ -195,9 +203,12 @@ class ProcessUI:
     before creating a new entry. None inhibits construction and retains owners.
     Unknown failures latch this router; no alternate shell or mutation replay.
     """
-    def __init__(self,session,registry,*,shell_factory=CachedProcessShell,entry_factory=UiEntryOwner):
+    def __init__(self,session,registry,*,shell_factory=CachedProcessShell,entry_factory=UiEntryOwner,reader_factory=None):
         self.session=session;self.registry=registry;self._owner=threading.get_ident()
         self._shell_factory=shell_factory;self._entry_factory=entry_factory
+        from ._reader import ReadBatch
+        self._reader_factory=reader_factory or (lambda pid:ReadBatch(pid,share=True))
+        self._read_worker=None
         self.shell=self.entry=self.context=None;self.failed=False;self.phase='inactive';self._shell_key=None
         self._entry_context=None
         self._rebuild_requested=False
@@ -208,6 +219,27 @@ class ProcessUI:
     def _check(self):
         if threading.get_ident()!=self._owner:raise RuntimeError('Process UI requires its Session owner thread')
         self.session._check()
+
+    @contextmanager
+    def _read_operation(self):
+        self._check()
+        if self._read_worker is None:self._read_worker=self._reader_factory(self.session.pid)
+        reader=self._read_worker
+        try:
+            with reader.bind():yield
+        finally:
+            if reader._closed:
+                reader.close();self._read_worker=None
+
+    def prepare_queries(self):
+        """Warm process validation during loading; copy no UObject observations."""
+        with self._read_operation():pass
+
+    def close_queries(self):
+        """Read-only IO may close even while engine UI owners await cleanup."""
+        self._check()
+        if self._read_worker is not None:
+            self._read_worker.close();self._read_worker=None
 
     @property
     def service(self):return None if self.shell is None else self.shell.service
@@ -229,11 +261,21 @@ class ProcessUI:
 
     def observe(self,packet):
         """Copied scheduling only; actual handoff independently proves context."""
+        context=(getattr(packet,'ui_context',None) or getattr(packet,'prewarm_context',None)) if packet is not None else None
+        if context is not None and context.kind=='world':
+            with self._read_operation():return self._observe(packet)
+        return self._observe(packet)
+
+    def _observe(self,packet):
         context=getattr(packet,'ui_context',None) if packet is not None else None
         prewarm=getattr(packet,'prewarm_context',None) if packet is not None else None
         if prewarm is not None and prewarm.kind=='world':
             # Build/rebind detached widgets while the loading screen still owns
             # presentation. No pause entry, input, or gameplay enable is granted.
+            stage=(getattr(packet,'menu_ready',None) is True and
+                not getattr(getattr(packet,'admission',None),'activation_ready',False))
+            if stage and self.shell is not None:
+                return self.poll(prewarm,_prepare_only=True,_stage_entry=True)
             if self.shell is not None and self._prewarmed_signature==prewarm.signature:
                 if getattr(packet,'menu_ready',None) is not True:return False
             elif self.shell is not None:
@@ -318,7 +360,14 @@ class ProcessUI:
         if record is None:record=getattr(getattr(service,'menu',None),'_frontend_rejection',None)
         return record if isinstance(record,FrontendRejection) else None
 
-    def poll(self,context,*,_prepare_only=False):
+    def _prepare_entry(self,context):
+        if self.entry is None:
+            self.entry=self._entry_factory(self.session,self.shell.service,context)
+            self._entry_context=context
+        self.entry.prepare()
+        self.entry.ready=None
+
+    def poll(self,context,*,_prepare_only=False,_stage_entry=False):
         self._check()
         if self.failed:raise RuntimeError('Process UI outcome is unknown; retain owners and close explicitly')
         if self.frontend_failed is not None:
@@ -333,7 +382,11 @@ class ProcessUI:
             if self.entry is not None:self.entry.ready=None
             self.phase='observation_pending';return False
         try:
+            if _prepare_only and self._prewarmed_signature==context.signature:
+                if _stage_entry:self._prepare_entry(context)
+                self.phase='prewarmed';self.shell.ready=None;return False
             if self.entry is not None and self._entry_context is not None and self._entry_context.signature==context.signature:
+                self.shell.ready=True
                 self.entry.ready=True
                 if self.entry.poll() is False:self.phase='entry_pending';return False
                 self.context=context;self._entry_context=None;self.phase='ready';return True
@@ -384,6 +437,7 @@ class ProcessUI:
                     return False
             if _prepare_only:
                 self._prewarmed_signature=context.signature
+                if _stage_entry:self._prepare_entry(context)
                 self.phase='prewarmed';self.shell.ready=None;return False
             self.phase='entry'
             self.entry=self._entry_factory(self.session,self.shell.service,context)
@@ -418,6 +472,7 @@ class ProcessUI:
 
     def close(self):
         self._check();self.phase='closing'
+        self.close_queries()
         if self.shell is not None:
             # Explicit retirement of a failed shell uses its full acknowledged
             # close path, never a reuse attempt or an alternate construction.

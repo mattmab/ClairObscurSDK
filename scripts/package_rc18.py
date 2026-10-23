@@ -50,14 +50,14 @@ PUBLIC_SOURCE_MODS=OPTIONAL|{'SDKManagement','IntrospectionHarness','LiveObjectV
 ROOT_FILES={'.gitattributes','.gitignore','DEVELOPMENT.md','LICENSE','README.md','THIRD_PARTY_NOTICES.md',
     'launch-cinematics.cmd','launch-flight.cmd','launch-native-mods.cmd','launch-picto.cmd','launch-sdk.cmd','launch.cmd'}
 REQUIRED_SOURCES={
-    'gpu/bridge.h','scripts/build-early-lifecycle-runtime.cmd','scripts/build-rc18-native.cmd','scripts/package_rc18.py',
+    'gpu/bridge.h','scripts/build-early-lifecycle-runtime.cmd','scripts/build-readonly-worker-values.cmd','scripts/build-rc18-native.cmd','scripts/package_rc18.py',
     'scripts/run_release_sdk.py','scripts/prepare_runtime.py','scripts/build-bootstrap.cmd',
     'scripts/package_release_candidate.py','scripts/package_mods.py','scripts/package_world_builder.py',
     'docs/RELEASE_0.1.0_RC18.md','src/expedition33/_stable_lease.py',
     'src/expedition33/_metadata_stabilization.py','src/expedition33/title_menu.py',
     'src/expedition33/title_management.py','src/expedition33/process_title_ui.py',
     'src/expedition33/admission_monitor.py','src/expedition33/world_admission.py','src/expedition33/ui_admission.py',
-    'src/expedition33/process_ui.py','src/expedition33/process_ui_routes.py',
+    'src/expedition33/process_ui.py','src/expedition33/pause_preparation.py','src/expedition33/process_ui_routes.py',
     'src/expedition33/ui_shell_proof.py','src/expedition33/world_lifecycle.py',
     'src/expedition33/process_console.py','native/menu_open_pipeline.h',
     'native/stable_lease_runtime.h','native/metadata_stabilization_target.h',

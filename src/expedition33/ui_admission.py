@@ -47,17 +47,20 @@ class UiAdmissionObserver(WarmAdmissionObserver):
                 # not a save manager or borrowed title widgets. The independent
                 # double proof rejects gameplay worlds and changed identities.
                 context=self._title_prewarm_context() if self._reader is not None else None
-                if context is None and admission.state=='loading' and self._reader is not None:
+                if context is None and self._reader is not None:
                     context=self._detached_prewarm_context('world')
-                return UiAdmission(admission,False,prewarm_context=context)
+                return self._prewarm_packet(admission,context)
             if admission.state=='inactive' and admission.reason=='save_not_loaded':
                 packet=self._title_observation(admission)
                 if packet.title_ready is True or self._reader is None:return packet
-                return replace(packet,prewarm_context=self._title_prewarm_context())
+                context=self._title_prewarm_context()
+                if context is None:context=self._detached_prewarm_context('world')
+                prepared=self._prewarm_packet(admission,context)
+                return replace(prepared,title_ready=packet.title_ready,title_token=packet.title_token)
             context=(self._detached_prewarm_context('world')
                 if getattr(self,'_reader',None) is not None and admission.state in ('loading','observation_pending') else None)
-            return UiAdmission(admission,False if admission.state in ('loading','inactive') else None,
-                prewarm_context=context)
+            if context is not None:return self._prewarm_packet(admission,context)
+            return UiAdmission(admission,False if admission.state in ('loading','inactive') else None)
         try:
             with self._reader.bind():
                 # Exact controller selected from the successful fresh double
@@ -89,6 +92,25 @@ class UiAdmissionObserver(WarmAdmissionObserver):
         except BaseException:
             self._discard()
             raise
+
+    def _prewarm_packet(self,admission,context):
+        # SaveLoaded may still be false after the new world/controller and its
+        # pause widget exist. This grants UI preparation only, never activation.
+        ready=False
+        if context is not None and getattr(context,'kind',None)=='world':
+            with self._reader.bind():
+                catalog=capture_selected(self.pid,(context.controller[1:],))
+                controller=catalog.by_index[context.controller[1]]
+                worlds=tuple(o for o in catalog.outer_chain(controller) if o.class_name=='World')
+                if (len(worlds)==1 and
+                        (worlds[0].pid,worlds[0].index,worlds[0].serial,worlds[0].address)==context.world):
+                    observed=read_values_many(catalog,(controller,),fields=('PauseMenuWidget',))[controller.index]
+                    owners=[key[0] for key in observed.types if key[1]=='PauseMenuWidget']
+                    if len(owners)==1:
+                        pause,_=read_object_reference(catalog,controller,catalog.by_index[owners[0]],
+                            'PauseMenuWidget',project=True)
+                        ready=pause is not None and pause.class_name=='WBP_PauseMenu_C'
+        return UiAdmission(admission,ready,prewarm_context=context)
 
     def _title_prewarm_context(self):
         """No borrowed title widget/input authority; verify engine/PC twice."""

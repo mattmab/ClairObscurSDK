@@ -86,6 +86,16 @@ class ReadBatchTests(unittest.TestCase):
         with patch('expedition33._reader.subprocess.Popen', side_effect=AssertionError('no restart')):
             with self.assertRaisesRegex(RuntimeQueryError, 'closed'): ReadBatch(17).__enter__()
 
+    def test_shared_operation_borrows_io_without_creating_a_second_owner(self):
+        from expedition33._reader import shared_operation
+        owner=self.batch(['fresh\n','{"event":"reader_result","sequence":1,"code":0}\n'])
+        owner._share=True
+        with patch('expedition33._reader.subprocess.Popen',side_effect=AssertionError('no new worker')):
+            with shared_operation(17) as borrowed:
+                self.assertIs(borrowed._borrowed,owner)
+                self.assertEqual(borrowed.query(['--catalog']),'fresh\n')
+        self.assertFalse(owner._closed);owner._process.wait.assert_not_called()
+
 
 class ReaderBindingTests(unittest.TestCase):
     def owner(self):
@@ -120,3 +130,17 @@ class ReaderBindingTests(unittest.TestCase):
         with patch('expedition33._reader.subprocess.Popen', side_effect=AssertionError('no restart')):
             with self.assertRaisesRegex(RuntimeQueryError, 'closed'):
                 with owner.bind(): pass
+
+class ReaderHandshakeTests(unittest.TestCase):
+    def test_protocol_version_capability_and_strict_handshake(self):
+        import json
+        for ready,expected in (({'event':'reader_ready','pid':17,'version':1},False),({'event':'reader_ready','pid':17,'version':2},True),([],None),({'event':'reader_ready','pid':17,'version':True},None),({'event':'reader_ready','pid':18,'version':2},None),({'event':'reader_ready','pid':17,'version':2,'extra':1},None)):
+            process=SimpleNamespace(stdin=io.StringIO(),stdout=io.StringIO(),wait=Mock(return_value=0),kill=Mock())
+            batch=ReadBatch(17,_executable='worker.exe');batch._line=Mock(return_value=json.dumps(ready))
+            with self.subTest(ready=ready),patch('expedition33._reader.subprocess.Popen',return_value=process):
+                if expected is None:
+                    with self.assertRaises(RuntimeQueryError):batch.__enter__()
+                    self.assertTrue(batch._closed)
+                else:
+                    with batch:self.assertIs(batch.supports_catalog_values,expected)
+                self.assertIsNone(_active.get())

@@ -11,11 +11,22 @@ import time
 from . import RuntimeQueryError
 
 _active = ContextVar('expedition33_read_batch', default=None)
-_SELECTED = frozenset(('--catalog-select', '--catalog-match', '--describe', '--read-values', '--read-table', '--describe-enums'))
+_SELECTED = frozenset(('--catalog-values', '--catalog-select', '--catalog-match', '--describe', '--read-values', '--read-table', '--describe-enums'))
 
 
 def active_reader():
     return _active.get()
+
+
+@contextmanager
+def shared_operation(pid):
+    """A local operation shares an existing owner or owns its own worker.
+
+    Unlike a retained ReadBatch(share=True), this context is never stored for
+    later use. A borrower cannot acquire or close its enclosing owner's IO.
+    """
+    with ReadBatch(pid,share=active_reader() is None) as reader:
+        yield reader
 
 
 class ReadBatch:
@@ -43,6 +54,7 @@ class ReadBatch:
         self._stop = threading.Event()
         self._closed = False
         self._sequence = 0
+        self.supports_catalog_values = False
 
     def _check(self):
         if threading.get_ident() != self._owner:
@@ -93,7 +105,9 @@ class ReadBatch:
                 raise RuntimeQueryError('Read batches cannot be nested across owners or processes')
             self._borrowed = parent
             return self
-        executable = self._executable or Path(__file__).resolve().parents[2] / 'build/readonly-worker-strings-v1/research_probe.exe'
+        root=Path(__file__).resolve().parents[2]
+        combined=root/'build/readonly-worker-values-v2/research_probe.exe'
+        executable = self._executable or (combined if combined.is_file() else root/'build/readonly-worker-strings-v1/research_probe.exe')
         try:
             self._process = subprocess.Popen([str(executable), '--reader-session', str(self.pid)],
                 stdin=subprocess.PIPE, stdout=subprocess.PIPE, stderr=subprocess.STDOUT,
@@ -101,8 +115,11 @@ class ReadBatch:
             self._thread = threading.Thread(target=self._read, name='e33-read-worker', daemon=True)
             self._thread.start()
             ready = json.loads(self._line(time.monotonic() + 120))
-            if ready != {'event': 'reader_ready', 'version': 1, 'pid': self.pid}:
+            if (type(ready) is not dict or set(ready)!={'event','version','pid'}
+                    or ready.get('event')!='reader_ready' or type(ready.get('version')) is not int
+                    or ready['version'] not in (1,2) or ready.get('pid')!=self.pid):
                 raise RuntimeQueryError(f'Read worker rejected startup: {ready}')
+            self.supports_catalog_values=ready['version']>=2
             self._token = _active.set(self)
             return self
         except BaseException:

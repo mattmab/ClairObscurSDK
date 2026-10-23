@@ -99,6 +99,18 @@ class PauseMenuEntry:
             raise RuntimeError('Multiple local pause-menu owners; refusing ambiguous attachment')
         return candidates[0] if candidates else None
 
+    @staticmethod
+    def _same_bound_object(left,right):
+        # GC flags are mutable observations. Identity, class and outer ownership
+        # must still match after every fresh property/selected-object read.
+        keys=('pid','index','serial','address','name','class_index','outer_index','outer_serial')
+        return left is not None and right is not None and all(
+            getattr(left,key)==getattr(right,key) for key in keys)
+
+    def _same_binding(self,bound):
+        return type(bound) is tuple and len(bound)==2 and all(self._same_bound_object(current,expected)
+            for current,expected in zip(bound,(self.player,self.pause)))
+
     def _readiness_text(self):
         if self.label != 'Mods':
             return self.label
@@ -245,18 +257,8 @@ class PauseMenuEntry:
         if self._readiness is not None and self._readiness() is not True:return False
         if self.state != 'new' or not self.available: return False
         started = time.perf_counter()
-        names = ('WBP_PauseMenu_C','WBP_BaseButton_C','CommonButtonBase','CommonActivatableWidget',
-            'CommonTextBlock','TextBlock','TextLayoutWidget','Widget','UserWidget','WidgetTree',
-            'GridPanel','GridSlot','PanelSlot','ContentWidget','WidgetBlueprintLibrary','GameplayStatics',
-            'Default__WidgetBlueprintLibrary','Default__GameplayStatics','Margin',
-            'Create','SpawnObject','SetContent','AddChildToGrid','SetPadding','SetHorizontalAlignment',
-            'SetVerticalAlignment','SetText','SetStyle','SetJustification','SetMinDimensions',
-            'SetIsSelectable','SetIsToggleable','SetFocusToGameViewport','SetUserFocus',
-            'IsActivated','RemoveFromParent','HandleButtonClicked',
-            'Overlay','OverlaySlot','PanelWidget','AddChildToOverlay',
-            'GetRenderOpacity','SetRenderOpacity','GetIsEnabled','SetIsEnabled',
-            'GetChildrenCount','GetChildAt','CommonTextBlock_178',
-            'ETextJustify','EHorizontalAlignment','EVerticalAlignment')
+        from .pause_preparation import NAMES,capture as capture_prepared
+        names=NAMES
         with ReadBatch(self.parent_scope.pid):
             # Capture descriptors and candidate owners only. Discover children
             # through this grid's verified getters, not all widget instances.
@@ -264,7 +266,10 @@ class PauseMenuEntry:
                 return capture_matching(self.parent_scope.pid,names=names,
                     classes=('PlayerController','LocalPlayer','WBP_PauseMenu_C'))
             from ._metadata_stabilization import available,prepare_discovery
-            if available(getattr(self.parent_scope._session,'_transport',None)):
+            catalog=capture_prepared(self.parent_scope._session,controller=getattr(self,'_expected_controller',None))
+            if catalog is not None:
+                self.metadata_uncovered_count=0;self._metadata_stable_ui=True
+            elif available(getattr(self.parent_scope._session,'_transport',None)):
                 catalog,uncovered=prepare_discovery(self.parent_scope._session,discover_metadata)
                 self.metadata_uncovered_count=len(uncovered);self._metadata_stable_ui=True
             else:catalog=discover_metadata()
@@ -305,7 +310,7 @@ class PauseMenuEntry:
             self.pause=self.planner._catalog.by_index[self.pause.index]
             self.grid=self.planner._catalog.by_index[self.grid.index]
             bound=self.current_entry(self.planner._catalog)
-            if bound is None or bound!=(self.player,self.pause):
+            if not self._same_binding(bound):
                 raise RuntimeError('Pause authority changed during target preparation')
             slots=self.grid_slots()
             if not any((slot.index,slot.serial,slot.address)==(source_slot.index,source_slot.serial,source_slot.address)
@@ -346,7 +351,7 @@ class PauseMenuEntry:
             pause_panel=self.planner._catalog.by_index[pause_panel.index]
             bound=self.current_entry(self.planner._catalog)
             actual_panel=self.reference(self.pause,'WBP_PauseMenu_C','PausePanel')
-            if bound is None or bound!=(self.player,self.pause) or actual_panel!=pause_panel:
+            if not self._same_binding(bound) or not self._same_bound_object(actual_panel,pause_panel):
                 raise RuntimeError('Pause restore panel authority changed during preparation')
             panel_lease = stable_panels.get(pause_panel.index)
             if panel_lease is None:panel_lease=self.scope.retain(pause_panel)

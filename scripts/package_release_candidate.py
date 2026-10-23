@@ -42,6 +42,7 @@ def build(destination, version):
         copy('build/release/research-probe-cinematic-v210-lease-batch/research_probe.exe', f'build/{directory}/research_probe.exe')
     copy('build/release/runtime-session-cinematic-v210/runtime_session_cinematic_v210.dll', 'build/runtime-session-cinematic-v210/runtime_session_cinematic_v210.dll')
     copy('build/readonly-worker-strings-v1/research_probe.exe', 'build/readonly-worker-strings-v1/research_probe.exe')
+    copy('build/readonly-worker-values-v2/research_probe.exe', 'build/readonly-worker-values-v2/research_probe.exe')
     copy('build/release/thumbnail-worker-v2/thumbnail_worker.dll', 'build/thumbnail-worker-v2/thumbnail_worker.dll')
     # Launchers inside SDK are install-relative and never search a dev checkout.
     (sdk / 'launch-sdk.cmd').write_text('@echo off\r\ncd /d "%~dp0"\r\n"%~dp0runtime\\python.exe" -I -S -B "%~dp0scripts\\run_release_sdk.py" %*\r\n', encoding='ascii')
