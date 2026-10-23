@@ -68,6 +68,11 @@ def build(output, *, source_only=False):
             for folder in sorted(OPTIONAL):
                 archive.write(output / 'optional' / (folder + '.sdkmod'), 'SDK_Mods/' + folder + '.sdkmod')
             archive.write(ROOT / 'LICENSE', 'LICENSE')
+        for folder in ('SceneEditor', 'EnemySpawner'):
+            with zipfile.ZipFile(output / (folder+'-RC17.zip'), 'w', zipfile.ZIP_DEFLATED) as archive:
+                archive.write(output/'optional'/(folder+'.sdkmod'), 'SDK_Mods/'+folder+'.sdkmod')
+                archive.write(ROOT/'LICENSE', 'LICENSE')
+                archive.writestr('README.txt', 'Install SDK 0.1.0-rc17 first. Extract beside Sandfall, then enable '+folder+' in Pause > Mods. See the RC17 release notes for experimental limits.\n')
         with zipfile.ZipFile(output / 'AssetConverter-RC17.zip', 'w', zipfile.ZIP_DEFLATED) as archive:
             for name in ('LICENSE', 'README.txt', 'convert.py', 'eye_materials.py', 'run.py'):
                 archive.write(ROOT / 'tools/asset_converter' / name, name)
