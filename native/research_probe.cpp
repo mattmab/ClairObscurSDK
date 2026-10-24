@@ -903,7 +903,9 @@ int run_query(int argc, char** argv) {
                                           << (type == "StructProperty" ? ",\"struct_index\":" : ",\"enum_index\":")
                                           << target.index
                                           << (type == "StructProperty" ? ",\"struct_serial\":" : ",\"enum_serial\":")
-                                          << target_item.serial;
+                                          << target_item.serial
+                                          << (type == "StructProperty" ? ",\"struct_address\":" : ",\"enum_address\":")
+                                          << quote(hex(reference));
                             }
                         }
                         // Target type-name virtuals: 14136e440 reads the class
