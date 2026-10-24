@@ -16,6 +16,9 @@
 inline bool (*cinematic_empty_trap_armed)(const CallIdentity&)=nullptr;
 inline uint32_t (*cinematic_play_preflight)(uint64_t,const CallPacket&)=nullptr;
 #endif
+#ifdef E33_SEQUENCE_ORIGIN_SESSION
+inline uint32_t (*sequence_origin_play_preflight)(uint64_t,const CallPacket&)=nullptr;
+#endif
 
 // Uses the target's own dispatcher, with no thunk ABI emulation or promise that
 // an RPC body ran. The optional retention sink owns object outputs before return.
@@ -335,6 +338,11 @@ inline uint32_t reflected_call(uint64_t base,CallPacket& packet,const CallRetent
 #ifdef E33_EMPTY_TITLE_SESSION
     if(cinematic_play_preflight) {
         if(auto error=cinematic_play_preflight(base,packet)) return error;
+    }
+#endif
+#ifdef E33_SEQUENCE_ORIGIN_SESSION
+    if(sequence_origin_play_preflight) {
+        if(auto error=sequence_origin_play_preflight(base,packet)) return error;
     }
 #endif
 #ifdef E33_GAME_OWNED_CINEMATIC_SESSION

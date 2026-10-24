@@ -35,7 +35,19 @@ class OwnedLevelSequence:
         cls=self._class(owner)
         return self._one(o for o in self.catalog.objects if o.outer_index==cls.index and o.name==name and o.class_name=='Function')
 
-    def build(self,panel,path,*,rate=1.,capture_camera=False):
+    def build(self,panel,path,*,rate=1.,capture_camera=False,origin_translation=None):
+        """Create without autoplay; optionally translate absolute sections.
+
+        origin_translation is a delta, not a destination. It changes only the
+        new actor's private instance data, never the shared sequence asset.
+        It does not relocate possessable bindings, relative/additive tracks,
+        events, or world dependencies. Adapters must qualify those separately.
+        """
+        if origin_translation is not None:
+            from ._sequence_origin import encode
+            encode(origin_translation)
+            if getattr(self.scope._session._transport,'sequence_origin_protocol',0)!=1:
+                raise RuntimeError('Verified native sequence origin capability required')
         if type(capture_camera) is not bool:
             raise ValueError('capture_camera must be a boolean')
         if capture_camera and getattr(self.scope._session._transport,'sequence_camera_protocol',0)!=1:
@@ -91,6 +103,8 @@ class OwnedLevelSequence:
         if self.player is None or self.actor is None: raise RuntimeError('Sequence factory returned no player')
         self.planner.refresh_from(current)
         if self.owner.status()!='armed': raise RuntimeError('Native sequence ownership not armed')
+        if origin_translation is not None:
+            self.owner.configure_origin(origin_translation)
         self.uncertain=False
         self.state='ready'
         return self

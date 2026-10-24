@@ -480,6 +480,9 @@ inline void run_runtime_session(DWORD pid, DWORD thread, int32_t object_index, i
 #ifdef E33_SEQUENCE_CAMERA_SESSION
               << ",\"sequence_camera_protocol\":1"
 #endif
+#ifdef E33_SEQUENCE_ORIGIN_SESSION
+              << ",\"sequence_origin_protocol\":1"
+#endif
 #ifdef E33_CATALOG_GAME_OWNED_SESSION
               << ",\"original_game_action_protocol\":1"
 #ifdef E33_ZONE_TRAVEL_SESSION

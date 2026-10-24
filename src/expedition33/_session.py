@@ -175,6 +175,7 @@ class SessionTransport:
             self.frame_time_values_protocol = ready.get('frame_time_values_protocol', 0)
             self.cinematic_empty_title_protocol = ready.get('cinematic_empty_title_protocol', 0)
             self.sequence_camera_protocol = ready.get('sequence_camera_protocol', 0)
+            self.sequence_origin_protocol = ready.get('sequence_origin_protocol', 0)
             self.sequence_binding_query_protocol = ready.get('sequence_binding_query_protocol', 0)
             self.original_game_action_protocol = ready.get('original_game_action_protocol', 0)
             self.zone_travel_protocol = ready.get('zone_travel_protocol', 0)

@@ -1,6 +1,10 @@
 #pragma once
 #include "sequence_owner_protocol.h"
 #include "sequence_settings_schema.h"
+#ifdef E33_SEQUENCE_ORIGIN_SESSION
+#include "sequence_origin_owner.h"
+#include "sequence_cleanup_admission.h"
+#endif
 #ifdef E33_EMPTY_TITLE_SESSION
 #include "cinematic_empty_title.h"
 #endif
@@ -20,6 +24,31 @@ class SequenceOwner {
     uint64_t owner_=0, tokens_[2]{};
     CallPacket plans_[2]{};
     uint32_t state_=0,step_=0;
+#ifdef E33_SEQUENCE_ORIGIN_SESSION
+    SequenceOriginOwner origin_;
+    CallIdentity origin_context_{};
+    SequenceCleanupAdmission<CallPacket> cleanup_admission_;
+    uint32_t cleanup_stop(uint64_t base,CallPacket& call) {
+        if(!cleanup_admission_.begin(call,plans_[0])) return 1593;
+        __try {return reflected_call(base,call);}
+        __finally {cleanup_admission_.end();}
+    }
+    inline static SequenceOwner* origin_owner_=nullptr;
+    static uint32_t before_origin_play(uint64_t base,const CallPacket& call) {
+        auto* self=origin_owner_;
+        if(!self || std::memcmp(&call.target,&self->plans_[0].target,sizeof(CallIdentity))) return 0;
+        if(self->cleanup_admission_.allows(call)) return 0;
+        const auto fn=call_identity(base,call.function);
+        if(!fn) return 1593;
+        const auto owner=local_read<uint64_t>(fn+32);
+        // Every invocation against the owned player closes configuration,
+        // including reverse/loop/seek/evaluate methods and future methods.
+        // Merely observing status may conservatively close it too. Python
+        // configures immediately after creation, before exposing the player.
+        (void)owner;
+        return self->state_==1 && self->origin_.before_evaluation() ? 0 : 1593;
+    }
+#endif
 #ifdef E33_SEQUENCE_BINDING_QUERY_SESSION
     SequenceBindingQueryOwner binding_query_;
     CallIdentity binding_asset_{};
@@ -111,7 +140,11 @@ public:
 #endif
             auto call=plans_[step_];
             state_=2;
-            const auto error=reflected_call(base,call);
+            const auto error=
+#ifdef E33_SEQUENCE_ORIGIN_SESSION
+                step_==0 ? cleanup_stop(base,call) :
+#endif
+                reflected_call(base,call);
             if(error==201 && call.outcome==CallNotDispatched) { state_=1; return 407; }
             if(error || call.outcome!=CallDispatchReturned) return 1473;
             ++step_; state_=1;
@@ -120,11 +153,16 @@ public:
         if(empty_title_owner_==this) empty_title_owner_=nullptr;
         empty_title_={};
 #endif
+#ifdef E33_SEQUENCE_ORIGIN_SESSION
+        if(origin_owner_==this) origin_owner_=nullptr;
+#endif
         state_=0; return 0;
     }
     void command(uint64_t base,const TargetMenuStorage& menu,SequenceOwnerPacket& p) {
         if(p.version!=1 || !p.owner || p.reserved || p.error || p.state || p.operation<1 || p.operation>
-#ifdef E33_SEQUENCE_BINDING_QUERY_SESSION
+#ifdef E33_SEQUENCE_ORIGIN_SESSION
+            6
+#elif defined(E33_SEQUENCE_BINDING_QUERY_SESSION)
             5
 #elif defined(E33_SEQUENCE_CAMERA_SESSION)
             4
@@ -133,6 +171,24 @@ public:
 #endif
             ) { p.error=1470; return; }
         p.state=state_;
+#ifdef E33_SEQUENCE_ORIGIN_SESSION
+        if(p.operation==6) {
+            SequenceOriginPacket origin{};std::memcpy(&origin,&p.stop,sizeof(origin));
+            const auto* payload=reinterpret_cast<const uint8_t*>(&p.stop);
+            if(state_!=1 || p.owner!=owner_ || !menu.menu.active() ||
+               std::memcmp(&menu.player,&origin_context_,sizeof(CallIdentity)) ||
+               !call_identity(base,origin_context_) ||
+               !call_identity(base,plans_[1].target) ||
+               local_read<uint64_t>(origin_context_.address+32)!=local_read<uint64_t>(plans_[1].target.address+32) ||
+               !sequence_origin_packet(origin) || !empty(payload+32,sizeof(p.stop)+sizeof(p.destroy)-32)) {p.error=1591;return;}
+            // A fault between the private-data write and verification must
+            // quarantine the composite owner, including its strong leases.
+            state_=2;
+            p.error=origin_.configure(base,plans_[1].target,origin_context_,origin);
+            if(p.error!=1593) state_=1;
+            p.state=state_;return;
+        }
+#endif
 #ifdef E33_SEQUENCE_BINDING_QUERY_SESSION
         if(p.operation==5) {
             SequenceBindingQueryPacket query{};std::memcpy(&query,&p.stop,sizeof(query));
@@ -140,6 +196,9 @@ public:
             if(state_!=1 || p.owner!=owner_ || query.magic!=0x51423345 || query.version!=1 ||
                (query.profile!=1 && query.profile!=2) || query.reserved ||
                !empty(&query.completed,32) || !empty(payload+64,sizeof(p.stop)+sizeof(p.destroy)-64)) {p.error=1581;return;}
+#ifdef E33_SEQUENCE_ORIGIN_SESSION
+            if(!origin_.before_evaluation()) {p.error=1593;return;}
+#endif
             p.error=binding_query_.run(base,binding_session_,plans_[0].target,plans_[1].target,binding_asset_,query);
             std::memcpy(&p.stop,&query,sizeof(query));return;
         }
@@ -172,6 +231,10 @@ public:
         }
         plans_[0]=p.stop; plans_[1]=p.destroy; tokens_[0]=tokens_[1]=0;
         owner_=p.owner; step_=0; state_=p.state=3;
+#ifdef E33_SEQUENCE_ORIGIN_SESSION
+        origin_=SequenceOriginOwner{};
+        origin_context_={};
+#endif
     }
     template<class Pool>
     uint32_t create(uint64_t base,uint64_t session,Pool& leases,const TargetMenuStorage& menu,
@@ -233,6 +296,10 @@ public:
 #endif
 #ifdef E33_SEQUENCE_CAMERA_SESSION
         if(camera_.active() && !camera_.created(player)) return 1573;
+#endif
+#ifdef E33_SEQUENCE_ORIGIN_SESSION
+        origin_context_=menu.player;
+        origin_owner_=this;sequence_origin_play_preflight=&before_origin_play;
 #endif
         state_=1; return 0;
     }

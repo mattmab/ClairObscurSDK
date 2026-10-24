@@ -4,6 +4,7 @@ import struct
 from dataclasses import replace
 from . import _invocation_wire as call
 from . import _sequence_binding_query as binding_query
+from . import _sequence_origin as origin
 
 HEADER=struct.Struct('<IIQQII')
 SIZE=HEADER.size+2*call.SIZE
@@ -33,7 +34,7 @@ class SequenceCleanupDeferred(RuntimeError):
 def validate_request(data):
     if type(data) is not bytes or len(data)!=SIZE: raise ValueError('Sequence owner size')
     version,op,owner,reserved,error,state=HEADER.unpack_from(data)
-    if version!=1 or op not in (1,2,3,4,5) or not owner or reserved or error or state:
+    if version!=1 or op not in (1,2,3,4,5,6) or not owner or reserved or error or state:
         raise ValueError('Sequence owner header')
     if op in (2,3) and any(data[HEADER.size:]): raise ValueError('Unexpected sequence owner payload')
     if op==4 and (any(data[HEADER.size:HEADER.size+call.SIZE]) or
@@ -42,6 +43,9 @@ def validate_request(data):
     if op==5:
         binding_query.validate_request(data[32:96])
         if any(data[96:]): raise ValueError('Unexpected sequence binding query tail')
+    if op==6:
+        origin.validate_request(data[32:64])
+        if any(data[64:]): raise ValueError('Unexpected sequence origin tail')
 
 class NativeSequenceOwner:
     def __init__(self,scope):
@@ -51,15 +55,19 @@ class NativeSequenceOwner:
         self.cleanup_diagnostics=None
         self.binding_diagnostics=None
         self.binding_error=None
+        self.origin_error=None
 
-    def _send(self,op,plans=(),query=None):
+    def _send(self,op,plans=(),query=None,translation=None):
         session=self.scope._session
         session._check()
         if self.state=='unknown': raise RuntimeError('Unknown sequence ownership outcome')
         if self.state=='cleanup_pending' and op!=2:
             raise RuntimeError('Only sequence cleanup may run while composite cleanup is pending')
         request=HEADER.pack(1,op,self.owner,0,0,0)
-        if op==5:
+        if op==6:
+            if plans or query is not None: raise ValueError('Sequence origin requires translation only')
+            request+=origin.encode(translation)+bytes(SIZE-64)
+        elif op==5:
             if plans or query is None: raise ValueError('Sequence binding query payload required')
             binding_query.validate_request(query)
             request+=query+bytes(SIZE-96)
@@ -90,6 +98,13 @@ class NativeSequenceOwner:
             elif data[32:]!=request[32:]:
                 raise ValueError('Sequence ownership acknowledgement mismatch')
             error,state=HEADER.unpack_from(data)[4:]
+            if op==6:
+                if state!=1:
+                    raise ValueError('Sequence origin acknowledgement requires an armed owner')
+                if error==1591:
+                    self.origin_error=error
+                    self.state='cleanup_pending'
+                    return False
             if op==5 and state==1 and error in (1581,407):
                 # Native reports a known rejection/defer with a closeable owner.
                 # The validated diagnostic above already excludes uncertainty.
@@ -155,6 +170,21 @@ class NativeSequenceOwner:
             return self.state
         self._send(3)
         return self.state
+
+    def configure_origin(self, translation):
+        """Configure private native-owned instance data before any evaluation.
+
+        This grants no binding, asset-safety, or Play permission. The runtime
+        independently rejects evaluated owners and verifies private ownership.
+        """
+        if self.state!='armed':
+            raise RuntimeError('Origin requires a created native-owned sequence')
+        if getattr(self.scope._session._transport,'sequence_origin_protocol',0)!=1:
+            raise RuntimeError('Verified native sequence origin capability required')
+        origin.encode(translation)
+        if not self._send(6,translation=translation):
+            raise RuntimeError(f'Native sequence origin rejected ({self.origin_error}); close required')
+        return True
 
     def query_authored_bindings(self, profile, function):
         """Inspect a finite authored profile; never starts sequence playback."""
