@@ -336,8 +336,10 @@ def _prepare(catalog, target, function, descriptor, arguments, *, pod_values=Fal
         raise ValueError(f'Argument names mismatch; missing={sorted(expected_inputs - arguments.keys())}, extra={sorted(arguments.keys() - expected_inputs)}')
     text_fields = [p for p in parameters if p.kind in ('TextProperty', 'StrProperty')]
     string_fields = [p for p in parameters if p.kind == 'StrProperty']
-    if string_fields and (len(parameters) != 1 or int(info['entry_rva'],16) != 0x320b2d0 or info['flags'] != 0x4020403):
-        raise UnsupportedInvocation('FString call signature has not been audited')
+    if string_fields:
+        from ._string_wire import audited_signature
+        if not audited_signature(int(info['entry_rva'],16), info['flags'], size, extent, returned, parameters):
+            raise UnsupportedInvocation('FString call signature has not been audited')
     enum_fields = [p for p in parameters if p.kind == 'EnumProperty']
     if text_fields and enum_fields:
         raise UnsupportedInvocation('Mixed text/enum transport is not connected yet')

@@ -15,6 +15,20 @@ SIZE = SLOTS_AT + MAX_SLOTS * SLOT_SIZE
 assert SIZE == 91800
 
 
+def audited_signature(entry, flags, size, extent, returned, parameters):
+    """Only the two exact audited native signatures use FString transport."""
+    shape = tuple((p.name, p.kind, p.offset, p.width, p.dimension, p.flags,
+                   getattr(p.constraint, 'name', None)) for p in parameters)
+    if (entry, flags, size, extent, returned) == (0x320b2d0, 0x4020403, 16, 16, 65535):
+        return shape == (('Path', 'StrProperty', 0, 16, 1, 0x18000000000280, None),)
+    if (entry, flags, size, extent, returned) == (0x3854c30, 0x4022403, 32, 32, 24):
+        return shape == (
+            ('WorldContextObject', 'ObjectProperty', 0, 8, 1, 0x18001000000280, 'Object'),
+            ('Filename', 'StrProperty', 8, 16, 1, 0x18000000000280, None),
+            ('ReturnValue', 'ObjectProperty', 24, 8, 1, 0x18001000000780, 'Texture2D'))
+    return False
+
+
 def encode_units(value):
     if type(value) is not str or '\0' in value:
         raise ValueError('Text arguments require str without embedded NUL')
@@ -35,9 +49,9 @@ enabled. The session sends it only through the v12 retained text path.
 """
     if type(plan.wire_version) is not int or plan.wire_version != VERSION or type(values) is not dict:
         raise ValueError('Expected a candidate version5 plan and exact text inputs')
-    if (plan.entry_rva != 0x320b2d0 or plan.function_flags != 0x4020403 or plan.parameter_size != 16 or
-            len(plan.parameters) != 1 or plan.parameters[0].flags != 0x18000000000280 or plan.parameters[0].name != 'Path'):
-        raise ValueError('FString input is restricted to the audited SetFilePath signature')
+    if not audited_signature(plan.entry_rva, plan.function_flags, plan.parameter_size,
+                             plan.allocation_extent, plan.return_offset, plan.parameters):
+        raise ValueError('FString input requires an exact audited signature')
     fields = [(i,p) for i,p in enumerate(plan.parameters) if p.kind == 'StrProperty']
     if not 0 < len(fields) <= MAX_SLOTS:
         raise ValueError('Text calls require one through eight text fields')

@@ -1,19 +1,85 @@
 """Start passive, copied map observations before gameplay activation."""
+from pathlib import Path
 from expedition33.admission_monitor import ReadOnlyAdmissionMonitor
 from .context_observer import ContextObserver
 
 
 class LoadingContext:
     def __init__(self,mod,session):
-        self.mod=mod;self.pid=session.pid;self.monitor=None;self.released=False
+        self.mod=mod;self.session=session;self.pid=session.pid;self.monitor=None;self.released=False
 
     def prepare(self,context):
         pid=self.pid
-        self.monitor=ReadOnlyAdmissionMonitor(lambda:ContextObserver(pid),interval=.25,max_age=1.)
+        self.monitor=ReadOnlyAdmissionMonitor(lambda:ContextObserver(pid),interval=.1,max_age=1.)
         self.mod._loading_context=self
+        self._prepare_gate(context)
+        self._prepare_assets()
+
+    def _prepare_assets(self):
+        from expedition33.map_runtime import prepare_metadata
+        from expedition33.map_readiness import prepare_readiness_metadata
+        from expedition33.map_asset_preparation import AssetPreparation
+        if getattr(getattr(self.session,'_transport',None),'map_asset_preparation_protocol',0)!=1:return
+        prepare_metadata(self.session)
+        prepare_readiness_metadata(self.session)
+        assets=getattr(self.mod,'_asset_preparation',None)
+        if assets is None or assets.closed:
+            assets=AssetPreparation(self.session);self.mod._asset_preparation=assets
+        store=getattr(self.mod,'_startup_store',None)
+        for world,key in getattr(self.mod,'_startup_assignments',{}).items():
+            try:plan=store.read_plan(key,world)
+            except (OSError,ValueError,KeyError,TypeError):continue
+            assets.prepare(plan.assets)
+
+    def _prepare_gate(self,context):
+        transport=getattr(self.session,'_transport',None)
+        if getattr(transport,'map_load_gate_protocol',0)!=1:return
+        gate=getattr(self.mod,'_native_gate',None)
+        from expedition33.map_load_gate import MapLoadGate
+        from .state import Assignments
+        from expedition33.paths import settings_dir
+        assignments=Assignments(settings_dir()/'WorldBuilderMapLoader'/'assignments.json')
+        worlds=tuple(assignments.values)
+        if gate is not None and not gate.closed and gate.status()['state']==4:
+            gate.close()
+        if gate is not None and not gate.closed:
+            gate.update_worlds(worlds)
+        elif worlds:
+            gate=MapLoadGate(self.session,context,worlds)
+            self.mod._native_gate=gate
+        if worlds and gate is not None and not gate.closed:
+            if getattr(transport,'map_loading_presentation_protocol',0)==1 and gate.overlay is None:
+                from expedition33.map_loading_overlay import MapLoadingOverlay
+                overlay=getattr(self.mod,'_loading_overlay',None)
+                if overlay is not None and overlay.state not in ('built','closed'):
+                    overlay.close();overlay=None
+                if overlay is None or overlay.state=='closed':
+                    overlay=MapLoadingOverlay(self.session,context,
+                        art_path=Path(__file__).resolve().parent/'assets'/'map-loading.png')
+                    self.mod._loading_overlay=overlay
+                    overlay.build()
+                gate.attach_cover(overlay)
+
+    def observe_title(self,context):
+        registry=self.session._process_ui.registry
+        enabled=registry._settings.get('e33.worldbuilder-map-loader').get('enabled') is True
+        if enabled:self._prepare_gate(context)
+        else:
+            gate=getattr(self.mod,'_native_gate',None)
+            if gate is not None and not gate.closed:
+                gate.close()
+                overlay=getattr(self.mod,'_loading_overlay',None)
+                if overlay is not None:overlay.release_native()
 
     def bind(self,context,*,preparing=False):
-        pass # Read worker owns sampling; never invokes gameplay callbacks.
+        # Only the owner thread may hold the current possessed pawn. Begin
+        # during loading rather than waiting for gameplay-mod activation.
+        if self.released or self.mod.session is not None or context.kind!='world':return
+        observation=self.monitor.snapshot() if self.monitor is not None else None
+        value=observation.admission if observation is not None else None
+        if value is None or not value.ready or tuple(context.world)[-3:]!=value.visit:return
+        if not getattr(self.mod,'_startup_assignments',{}).get(value.world):return
+        self.mod.hold_player(self.session,value.copy())
 
     def take(self):
         monitor,self.monitor=self.monitor,None
@@ -21,4 +87,5 @@ class LoadingContext:
         return monitor
 
     def close(self):
+        if not self.released:self.mod.release_player()
         if self.monitor is not None and self.monitor.close(timeout=2.):self.monitor=None

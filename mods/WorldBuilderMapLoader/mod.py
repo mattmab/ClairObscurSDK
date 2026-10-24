@@ -1,7 +1,8 @@
 """WorldBuilder Map Loader: independent runtime maps during normal gameplay."""
-import time,textwrap,logging
+import time,logging
 LOG=logging.getLogger("expedition33.worldbuilder_map_loader")
 from expedition33.management import ModDefinition,Action,Keybind
+from expedition33.management_native import display_detail,display_line
 from expedition33.paths import settings_dir
 from .state import Assignments,Visits
 from expedition33.map_runtime import MapRuntime,context
@@ -27,8 +28,10 @@ class Mod:
         self._context_monitor=None
         self._world_retiring=False;self._retirement_result=None
         self._disable_preparing=False
+        self._player_hold=None
+        self._native_gate=None
     def management(self):
-        return ModDefinition('e33.worldbuilder-map-loader','WorldBuilder Map Loader',version='0.2.2',
+        return ModDefinition('e33.worldbuilder-map-loader','WorldBuilder Map Loader',version='0.2.4',
             description='Load finished WorldBuilder maps during exploration. F2: choose one map per vanilla world. No editor required.',
             actions=(Action('open','Choose map for current world',self.open_menu),Action('status','Map loader status',self.status),Action('unload','Unload placed map',self.unload)),
             keybinds=(Keybind('open','Choose WorldBuilder map','F2',self.open_menu),))
@@ -41,10 +44,18 @@ class Mod:
         # Read legacy choices without migration writes; normal enable preserves
         # the existing migration and re-reads settings changed after preparation.
         assignments=Assignments(current if current.exists() else legacy)
+        self._startup_assignments=dict(assignments.values)
         self._startup_store=PreparedMapStore(root/'E33WorldBuilder'/'maps')
         self._startup_store.prepare(assignments.values.values())
         self._mark('startup_prepare',started)
     def enable(self,session):
+        try:self._enable(session)
+        except BaseException:
+            # A loading-time hold is process-owned until enable completes.
+            # Failed registration must not leave the character immobilized.
+            self.release_player()
+            raise
+    def _enable(self,session):
         self._world_retiring=False;self._retirement_result=None
         self._disable_preparing=False
         started=time.perf_counter()
@@ -84,7 +95,7 @@ class Mod:
         return elapsed
     def timing_status(self):
         # Explicitly contains no selected map, assignment, world, path or content.
-        return dict(preparation=dict(getattr(getattr(self,'_startup_store',None),'stats',{})),stages={k:dict(v) for k,v in self.timings.items()},runtime={k:dict(v) for k,v in getattr(self.runtime,'profile',{}).items()})
+        return dict(preparation=dict(getattr(getattr(self,'_startup_store',None),'stats',{})),asset_preparation=dict(getattr(getattr(self,'_asset_preparation',None),'profile',{})),stages={k:dict(v) for k,v in self.timings.items()},runtime={k:dict(v) for k,v in getattr(self.runtime,'profile',{}).items()})
     def check_legacy(self):
         # Refuse to overlap even with an unmodified old package. Repeat before
         # every load in case an archive was installed during this session.
@@ -111,6 +122,7 @@ class Mod:
         if expected and expected['visit']!=self.current['visit']:raise RuntimeError('Map changed; choose again')
         if map_id not in {r['id'] for r in self.rows}:raise ValueError('Choose a save belonging to this vanilla map')
         self.assignments.select(self.current['world'],map_id)
+        if self._native_gate is not None and not self._native_gate.closed:self._native_gate.update_worlds(self.assignments.values)
         self.message=('Assigned for the next map visit.' if self.visits.attempted else 'Assigned. Close this menu to load, or use Load now.')
         self.paint();return self.status()
     def clear(self):
@@ -118,6 +130,7 @@ class Mod:
         self.refresh()
         if expected and expected['visit']!=self.current['visit']:raise RuntimeError('Map changed; choose again')
         self.assignments.select(self.current['world'],None)
+        if self._native_gate is not None and not self._native_gate.closed:self._native_gate.update_worlds(self.assignments.values)
         self.message='Automatic loading disabled for this world. Use Unload to remove this loader\'s props.'
         self.paint();return self.status()
     def load_now(self,_=None):
@@ -134,26 +147,101 @@ class Mod:
         self.visits.attempted=True
         total_started=time.perf_counter()
         try:
+            lifecycle=getattr(getattr(getattr(self.session,'mods',None),'_loader',None),'world_lifecycle',None)
+            self._load_generation=getattr(lifecycle,'current_token',None)
             self.check_legacy()
             started=time.perf_counter()
-            data=self.store.read(key)
+            data=self.store.read_plan(key,self.current['world'])
             self._mark('map_read_validate',started)
-            if data['world']!=self.current['world']:raise ValueError('Saved map belongs to a different vanilla world')
+            if data.world!=self.current['world']:raise ValueError('Saved map belongs to a different vanilla world')
+            self.hold_player(self.session,self.current)
             started=time.perf_counter()
             self.runtime.close()
             self._mark('previous_map_cleanup',started)
             started=time.perf_counter()
-            result=self.runtime.load(data,self.current)
-            self._startup_map_loaded=True
+            result=self.runtime.load(data,self.current,asset_preparation=getattr(self,'_asset_preparation',None))
             self._mark('placement',started)
+            self.wait_until_ready()
+            self._startup_map_loaded=True
             self.message=f"Loaded {result['objects']} props. It will load again on the next visit."
             if isinstance(result,dict) and result.get('skipped_world_edits'):
                 self.message=f"Loaded {result['objects']} props; skipped {result['skipped_world_edits']} existing-world edits. Original save unchanged."
         except Exception as exc:self.message='Map not loaded: '+str(exc)
         finally:
+            released=time.perf_counter()
+            self.release_player()
+            self._mark('player_release_and_cover_removal',released)
             self._mark('apply_total',total_started)
             LOG.info('Map loader timing: %s',self.timing_status())
         return self.status()
+    def wait_until_ready(self):
+        """Reveal only this exact save/world generation with real support."""
+        from expedition33.world_admission import observe_admission
+        from expedition33.map_readiness import NativeMapReadiness,ReadinessPending
+        if getattr(self.session._session._transport,'map_readiness_protocol',0)!=1:return
+        started=time.perf_counter()
+        token=getattr(self,'_load_generation',None)
+        if token is None:
+            admitted=observe_admission(self.session.pid)
+            if not admitted.activation_ready or admitted.token is None:raise RuntimeError('Save identity unavailable at map completion')
+            token=admitted.token
+        if token[0][0]!=self.session.pid or tuple(token[0][1:])!=tuple(self.current['visit']):raise RuntimeError('Map load generation changed')
+        query=NativeMapReadiness(self.runtime,self.current,expected_token=token)
+        deadline=time.monotonic()+15.
+        collision_marked=False
+        deferred_reads=0
+        while True:
+            try:
+                receipt=query.query()
+            except ReadinessPending:
+                deferred_reads+=1
+                self._readiness_counts=dict(getattr(self,'_readiness_counts',{}),deferred_reads=deferred_reads)
+                if time.monotonic()>=deadline:raise RuntimeError('Map readiness observation timed out; deferred reads='+str(deferred_reads))
+                time.sleep(.05)
+                continue
+            self._readiness_counts=dict(objects=receipt.rows,live_rows=receipt.live_rows,visible_rows=receipt.visible_rows,
+                support_hits=receipt.support_hits,owned_support_hits=receipt.owned_support_hits,
+                rendered_rows=receipt.rendered_rows,rendered_support_hits=receipt.rendered_support_hits,
+                owned_rendered_support_hits=receipt.owned_rendered_support_hits,streaming_pending=receipt.streaming_pending,
+                flags=receipt.flags,deferred_reads=deferred_reads)
+            if receipt.collision_ready and not collision_marked:
+                self._mark('collision_ready',started)
+                collision_marked=True
+            if receipt.spawn_complete and receipt.collision_ready and receipt.visual_ready:
+                self._mark('visual_ready',started)
+                self._mark('collision_and_scene_ready',started)
+                return
+            if time.monotonic()>=deadline:raise RuntimeError('Map collision or scene readiness timed out: '+str(self._readiness_counts))
+            time.sleep(.05)
+    def hold_player(self,session,ctx):
+        hold=self._player_hold
+        if hold is not None and hold.held and not hold.closed:
+            if hold.expected==ctx:return
+            # A newly observed possession revokes the old pawn's plans.
+            hold.discard()
+        if hold is not None:hold.discard()
+        gate=self._native_gate
+        if gate is not None and not gate.closed:
+            state=gate.status()
+            if state['state'] in (2,4) and state['world']==ctx['visit'] and state['pawn']==ctx['pawn']:
+                from expedition33.map_load_gate import NativePlayerHold
+                self._player_hold=NativePlayerHold(gate,ctx)
+                return
+        from .player_hold import PlayerHold
+        hold=PlayerHold(session,ctx)
+        self._player_hold=hold
+        hold.acquire()
+    def release_player(self):
+        if self._player_hold is not None:
+            self._player_hold.close()
+            self._player_hold=None
+        elif not self._world_retiring and self._native_gate is not None and not self._native_gate.closed:
+            # Validation/enable can fail before Python adopts the native hold.
+            # Release that exact journal too; retirement must leave a newly
+            # held destination pawn for its arriving loader to acknowledge.
+            state=self._native_gate.status()
+            if state['state'] in (2,4) and state['world'][2] and state['pawn'][2]:
+                self._native_gate.release({'visit':state['world'],'pawn':state['pawn']})
     def open_menu(self,_=None):
         with reads(self.session.pid):return self._open_menu()
     def _open_menu(self):
@@ -178,10 +266,10 @@ class Mod:
         p=self.panel;key=self.assignments.values.get(self.current['world']);page=self.rows[self.offset:self.offset+6]
         with p.paint_batch():
             p.set_text(p.title,'WorldBuilder Map Loader - '+self.current['world'].rsplit('.',1)[-1])
-            p.set_text(p.detail,textwrap.fill(self.message,44)+'\n\nOne saved map per vanilla world. '+str(len(self.rows))+' saves here.\nPage '+str(self.offset//6+1)+'/'+str(max(1,(len(self.rows)+5)//6)))
+            p.set_text(p.detail,display_detail(self.message,width=44,height=12)+'\n\nOne saved map per vanilla world. '+str(len(self.rows))+' saves here.\nPage '+str(self.offset//6+1)+'/'+str(max(1,(len(self.rows)+5)//6)))
             for i in range(6):
                 row=page[i] if i<len(page) else None
-                p.set_text(p.labels[i],('[Selected] ' if row and row['id']==key else '')+row['name']+f" ({row['count']} objects)" if row else ('No saves for this map - Close' if i==0 else ''))
+                p.set_text(p.labels[i],display_line(('[Selected] ' if row and row['id']==key else '')+row['name']+f" ({row['count']} objects)",80) if row else ('No saves for this map - Close' if i==0 else ''))
                 p.set_visible(i,row is not None or i==0)
             for i,label in enumerate(('Previous','Next','No automatic map','Load Now / Reload','Close','Unload map'),6):p.set_text(p.labels[i],label)
             p.set_enabled(6,self.offset>0);p.set_enabled(7,self.offset+6<len(self.rows));p.set_enabled(9,bool(key))
@@ -201,13 +289,14 @@ class Mod:
         if self._world_retiring or self._disable_preparing:return
         now=time.monotonic()
         if now<self.next_poll:return
-        self.next_poll=now+1.
+        self.next_poll=now+.1
         try:
             started=time.perf_counter()
+            if self.visits.attempted and self._player_hold is not None:self.release_player()
             if self._context_monitor is None:
                 pid=self.session.pid
                 self._context_monitor=ReadOnlyAdmissionMonitor(
-                    lambda:ContextObserver(pid),interval=1.,max_age=2.)
+                    lambda:ContextObserver(pid),interval=.1,max_age=1.)
             observation=self._context_monitor.snapshot()
             self._mark('context_observation',started)
             # Pending/stale reads are uncertainty, not a missing-world result.
@@ -220,9 +309,14 @@ class Mod:
             if self.runtime.started and ctx and self.runtime.visit!=ctx['visit']:self.runtime.close()
             self.current=ctx
             due=self.visits.observe(ctx,now)
+            # An assigned map provides the floor beneath a saved player. Do not
+            # spend two seconds simulating gravity before restoring that floor.
+            if ctx and ctx['ready'] and not self.visits.attempted and self.assignments.values.get(ctx['world']):
+                due=True
             if due and ctx and not self.panel:
                 key=self.assignments.values.get(ctx['world'])
                 if key:
+                    self.hold_player(self.session,ctx)
                     if self._visit_observed_at is not None:
                         self.timings['visit_to_apply']=dict(calls=1,total_ms=(now-self._visit_observed_at)*1000,max_ms=(now-self._visit_observed_at)*1000)
                     self.apply(key)
@@ -258,6 +352,8 @@ class Mod:
             except BaseException:outcome='unknown'
             outcomes.append(outcome)
             if owner is self.panel and outcome=='ack':self.panel=None
+        if self._player_hold is not None:
+            self._player_hold.discard();self._player_hold=None
         if 'unknown' in outcomes:self._retirement_result='unknown'
         elif not settled or 'pending' in outcomes:self._retirement_result='pending'
         else:self._retirement_result='ack'
@@ -278,5 +374,10 @@ class Mod:
             from expedition33.mods import ModDisablePending
             raise ModDisablePending('Map context observer cleanup pending; disable has not started')
         self.close_menu()
+        self.release_player()
+        if not self._world_retiring and self._native_gate is not None:
+            self._native_gate.close();self._native_gate=None
+            overlay=getattr(self,'_loading_overlay',None)
+            if overlay is not None:overlay.release_native()
         if self.runtime:self.runtime.close()
         self.session=None

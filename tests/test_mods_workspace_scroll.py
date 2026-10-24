@@ -206,6 +206,15 @@ if __name__=='__main__':unittest.main()
 
 
 class ScrollGeometryCacheTests(unittest.TestCase):
+    def test_no_output_visibility_uses_paint_batch_but_focus_remains_direct(self):
+        panel=self.panel();queued=[];panel._paint_queue=queued
+        observations=[]
+        panel._render_call=lambda *args,**kw:observations.append((args[2],panel._paint_queue))
+        panel.direct('widget','Widget','SetVisibility',InVisibility='visible')
+        panel.direct('widget','Widget','SetUserFocus',PlayerController='pc')
+        self.assertEqual(observations,[('SetVisibility',queued),('SetUserFocus',None)])
+        self.assertIs(panel._paint_queue,queued)
+
     def panel(self):
         from expedition33.mods_workspace_scroll import ScrollWorkspacePanel
         from unittest.mock import Mock

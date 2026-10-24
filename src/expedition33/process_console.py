@@ -15,6 +15,7 @@ class StartupConsoleInfo:
         self._enable_total_ms=0.0
         self._usable_results=set()
         self._timing_rows={}
+        self._pending_activations=[]
 
     def _write(self, *lines):
         def prefix(line):
@@ -35,8 +36,9 @@ class StartupConsoleInfo:
         """Start a fresh admitted activation report; process bootstrap stays once."""
         self._results.clear();self._usable_results.clear();self._timing_rows.clear()
         self._enable_total_ms=0.0;self._finished=False;self._world=False
+        self._pending_activations.clear()
 
-    def activation(self, name, succeeded, enable_ms=None, preparation_ms=None):
+    def activation(self, name, succeeded, enable_ms=None, preparation_ms=None,*,defer=False):
         if enable_ms is not None and (isinstance(enable_ms,bool) or
                 not isinstance(enable_ms,(int,float)) or not math.isfinite(enable_ms) or enable_ms<0):
             raise ValueError('Enable duration must be finite nonnegative milliseconds')
@@ -45,11 +47,21 @@ class StartupConsoleInfo:
         if enable_ms is not None:self._enable_total_ms+=enable_ms
         self._timing_rows[name]=dict(preparation_ms=preparation_ms,activation_ms=enable_ms,
             usable_ms=None,usability='pending' if succeeded else 'activation failed',succeeded=succeeded)
-        self._write(f'{name}: '+('activated' if succeeded else 'activation failed'))
+        line=f'{name}: '+('activated' if succeeded else 'activation failed')
+        if defer:self._pending_activations.append(line)
+        else:
+            self.flush_activations();self._write(line)
+
+    def flush_activations(self):
+        """Deliver completed records together; never retry an uncertain print."""
+        if not self.console._enabled or not self._pending_activations:return
+        lines,self._pending_activations=self._pending_activations,[]
+        self._write(*lines)
 
     def command(self, argument=''):
         """Show retained measurements without re-enabling or querying engine state."""
         if argument.strip():return 'Usage: startuptiming'
+        self.flush_activations()
         self._write('Startup timing — measured preparation / activation / time until usable')
         def duration(value):return 'unreported' if value is None else f'{value:.1f} ms'
         for name,row in self._timing_rows.items():
@@ -88,6 +100,7 @@ class StartupConsoleInfo:
 
     def poll(self, *, world_active=False, title_ready=False, frontend_failed=False):
         if not self.console._enabled:return
+        self.flush_activations()
         self._poll_usable()
         native_status=getattr(self.console,'native_color_status',None)
         statuses=tuple(self.loader.status())

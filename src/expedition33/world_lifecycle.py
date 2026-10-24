@@ -192,6 +192,8 @@ class WorldLifecycle:
                     self.loader.registry.changed(name)
                 except BaseException as error:
                     row.state='unknown';row.error=type(error).__name__
+                    import logging
+                    logging.getLogger(__name__).exception('World owner retirement held: %s',name)
         finally:self._polling=False
 
     def status(self):

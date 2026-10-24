@@ -47,6 +47,22 @@ class RouteTests(unittest.TestCase):
         self.route.open();replacement.open.assert_called_once_with(view_factory=None)
         self.assertIs(self.route.menu,replacement.menu)
 
+    def test_mod_route_uses_host_reader_and_borrows_existing_operation(self):
+        from contextlib import contextmanager
+        events=[]
+        @contextmanager
+        def operation():
+            events.append('enter')
+            try:yield
+            finally:events.append('exit')
+        self.owner.context.kind='world';self.owner._read_operation=operation
+        self.service.open.side_effect=lambda **kw:events.append('open')
+        with patch('expedition33._reader.active_reader',return_value=None):self.route.open()
+        self.assertEqual(events,['enter','open','exit'])
+        events.clear()
+        with patch('expedition33._reader.active_reader',return_value=object()):self.route.open()
+        self.assertEqual(events,['open'])
+
     def test_borrower_prepare_poll_close_never_build_or_destroy_host_tree(self):
         self.owner.context.kind='world'
         self.route.prepare();self.route.poll();self.route.close()
@@ -57,6 +73,19 @@ class RouteTests(unittest.TestCase):
     def test_explicit_disposal_preserves_travel_semantics_requests_fresh_tree(self):
         self.owner.context.kind='world';self.route.dispose_menu()
         self.service.dispose_menu.assert_called_once_with();self.assertTrue(self.owner._rebuild_requested)
+
+    def test_travel_detaches_host_entries_without_disposing_process_tree(self):
+        self.owner.context.kind='world';self.owner.quiesce=Mock(return_value=True)
+        self.route.prepare_travel()
+        self.owner.quiesce.assert_called_once();self.service.dispose_menu.assert_not_called()
+        self.owner.quiesce.return_value=False
+        with self.assertRaisesRegex(Exception,'cleanup is still pending'):self.route.prepare_travel()
+
+    def test_travel_request_is_retained_on_owner_across_service_replacement(self):
+        self.owner.context.signature=('world',1)
+        request=object();self.route.travel_recovery=request
+        self.assertIs(self.owner._travel_recovery,request)
+        self.assertEqual(self.owner._travel_origin,('world',1))
 
     def test_sdkmanagement_process_branch_constructs_no_second_service_or_entry(self):
         spec=importlib.util.spec_from_file_location('reuse_sdkmanagement',ROOT/'mods/SDKManagement/mod.py')

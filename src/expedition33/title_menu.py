@@ -3,8 +3,8 @@ import time
 from dataclasses import replace
 from .pause_menu import PauseMenuEntry
 from .catalog import capture_matching,capture_selected
-from .values import read_object_reference,read_values_many
-from ._reader import ReadBatch
+from .values import read_object_reference,read_values_many,capture_selected_values
+from ._reader import ReadBatch,active_reader
 from ._scope import SessionScope
 from ._pause_attachment import PauseAttachment
 from ._pause_clicks import PauseClicks
@@ -17,21 +17,36 @@ TITLE_WORLD='/Game/Levels/UI/MainMenu/Level_MainMenu.Level_MainMenu'
 def resolve_title(scope):
     """Follow the persistent LocalPlayer's controller, never named templates."""
     with ReadBatch(scope.pid):
-        context=controller_context(scope,project=True)
-        if context['world_path']!=TITLE_WORLD:return None
-        catalog=capture_selected(scope.pid,(context['controller'][1:],));player=catalog.by_index[context['controller'][1]]
-        if player.class_name!='BP_jRPG_Controller_MainMenu_C':return None
+        current=resolve_title_context(scope,local_identity=getattr(scope,'_title_local_selector',None))
+        if current is None:return None
+        context=current['context'];catalog=current['catalog'];player=current['player']
+        projections={
+            'BP_jRPG_Controller_MainMenu_C':('Player','MainMenuWidgetReference'),
+            'LocalPlayer':('PlayerController',),
+            'WBP_MM_MainMenu_C':('TitleScreen',),
+            'WBP_MM_TitleScreen_C':('ButtonsBox','WidgetTree','SettingsButton','SettingsText'),
+            'WidgetTree':('RootWidget',),
+            'WBP_BaseButton_C':('Slot',),
+            'WBP_HeadingText_C':('Heading',),
+            'WBP_WrappingText_C':('Text',),
+            'CommonTextBlock':('Style',)}
+        observed={}
         def ref(obj,owner,name,expected=None):
             nonlocal catalog
-            target,catalog=read_object_reference(catalog,obj,catalog.by_index[catalog.find_class(owner).index],name,project=True)
+            identity=_identity(obj)
+            if identity not in observed:
+                fields=projections.get(obj.class_name,('Slot','Parent'))
+                fresh,rows=capture_selected_values(scope.pid,(identity,),fields=fields,references=True)
+                catalog=catalog.with_observations(fresh)
+                observed[identity]=rows[obj.index]
+            row=observed[identity];key=(catalog.find_class(owner).index,name)
+            if (row.types.get(key) not in ('ObjectProperty','ClassProperty') or
+                    key in row.errors or key in row.truncated or key not in row.values):
+                raise RuntimeError('Title reference unavailable: '+name)
+            target=row.values[key]
             if target is None or expected and target.class_name!=expected:raise RuntimeError('Title reference changed: '+name)
             return target
-        local=ref(player,'PlayerController','Player','LocalPlayer')
-        backlink=ref(local,'Player','PlayerController','BP_jRPG_Controller_MainMenu_C')
-        if _identity(backlink)!=_identity(player):raise RuntimeError('Title player backlink changed')
-        main=ref(player,'BP_jRPG_Controller_MainMenu_C','MainMenuWidgetReference','WBP_MM_MainMenu_C')
-        title=ref(main,'WBP_MM_MainMenu_C','TitleScreen','WBP_MM_TitleScreen_C')
-        box=ref(title,'WBP_MM_TitleScreen_C','ButtonsBox','VerticalBox')
+        local=current['local_player'];main=current['main'];title=current['title'];box=current['box']
         restore_tree=ref(title,'UserWidget','WidgetTree','WidgetTree')
         restore_panel=ref(restore_tree,'WidgetTree','RootWidget','Overlay')
         ancestor=box
@@ -48,7 +63,9 @@ def resolve_title(scope):
         wrapping=ref(heading,'WBP_HeadingText_C','Heading','WBP_WrappingText_C')
         text=ref(wrapping,'WBP_WrappingText_C','Text','CommonTextBlock')
         style=ref(text,'CommonTextBlock','Style','BlueprintGeneratedClass')
-        if context!=controller_context(scope,project=True):raise RuntimeError('Title controller changed during discovery')
+        binding=(context,_identity(local),_identity(main),_identity(title),_identity(box))
+        if not title_authority_current(scope,binding,restore_tree=restore_tree,restore_panel=restore_panel):
+            raise RuntimeError('Title controller changed during discovery')
         return dict(context=context,catalog=catalog,local_player=local,player=player,main=main,title=title,box=box,restore_tree=restore_tree,restore_panel=restore_panel,source_button=source,source_slot=slot,style=style)
 
 def _identity(obj):return obj.index,obj.serial,obj.address
@@ -131,8 +148,10 @@ class TitleMenuEntry(PauseMenuEntry):
         self._title_restore_disposition=None
     def _update_readiness(self):pass # The authored title entry always reads Mods.
     def install(self):
-        if self.state!='new' or self._readiness() is not True or not self.available:return False
-        with ReadBatch(self.parent_scope.pid,share=True):
+        if self.state not in ('new','prepared') or self._readiness() is not True or not self.available:return False
+        prepared_button=self.state=='prepared'
+        started=time.perf_counter()
+        with ReadBatch(self.parent_scope.pid,share=active_reader() is None):
             found=resolve_title(self.parent_scope)
             if found is None:return False
             names=('WBP_BaseButton_C','CommonButtonBase','CommonActivatableWidget','CommonTextBlock','TextBlock','TextLayoutWidget','Widget','UserWidget','WidgetTree','VerticalBox','VerticalBoxSlot','PanelSlot','ContentWidget','WidgetBlueprintLibrary','GameplayStatics','Default__WidgetBlueprintLibrary','Default__GameplayStatics','Create','SpawnObject','SetContent','AddChildToVerticalBox','SetPadding','SetHorizontalAlignment','SetVerticalAlignment','SetText','SetStyle','SetJustification','SetMinDimensions','SetIsSelectable','SetIsToggleable','SetFocusToGameViewport','SetUserFocus','IsActivated','RemoveFromParent','HandleButtonClicked','Overlay','OverlaySlot','AddChildToOverlay','GetRenderOpacity','SetRenderOpacity','GetIsEnabled','SetIsEnabled','Margin','EHorizontalAlignment','EVerticalAlignment','ETextJustify','SetInputMode_UIOnlyEx','EMouseLockMode')
@@ -140,36 +159,50 @@ class TitleMenuEntry(PauseMenuEntry):
             if available(getattr(self.parent_scope._session,'_transport',None)):
                 latest=[]
                 def discover_metadata():
-                    refreshed=resolve_title(self.parent_scope)
+                    # The initial discovery is already freshly proven. Only a
+                    # metadata identity transition needs another full discovery.
+                    refreshed=resolve_title(self.parent_scope) if latest else found
                     if refreshed is None:raise RuntimeError('Title changed during metadata preparation')
                     latest[:]=[refreshed]
-                    return refreshed['catalog'].with_observations(capture_matching(self.parent_scope.pid,names=names))
+                    from .pause_preparation import capture_metadata
+                    metadata=capture_metadata(self.parent_scope._session)
+                    if metadata is None:metadata=capture_matching(self.parent_scope.pid,names=names)
+                    return refreshed['catalog'].with_observations(metadata)
                 catalog,uncovered=prepare_discovery(self.parent_scope._session,discover_metadata)
                 self.metadata_uncovered_count=len(uncovered);self._metadata_stable_ui=True
                 found=latest[0]
             else:catalog=found['catalog'].with_observations(capture_matching(self.parent_scope.pid,names=names))
             self.restore_tree=found['restore_tree'];self.restore_panel=found['restore_panel']
             self.player=found['player'];self.pause=found['title'];self.grid=found['box'];self._title_binding=(found['context'],_identity(found['local_player']),_identity(found['main']),_identity(found['title']),_identity(found['box']))
-            self.scope=SessionScope(self.parent_scope);self.state='building'
+            if self.scope is not None:
+                owned=tuple(_identity(lease.object) for lease in self.scope._leases if lease.active and lease._object is not None)
+                catalog=catalog.with_observations(capture_selected(self.parent_scope.pid,tuple(dict.fromkeys(owned))))
+                self.planner.close();self._functions.clear()
+            else:self.scope=SessionScope(self.parent_scope)
             self.planner=self.scope.invocation_planner(selected_results=True,catalog=catalog)
             self.planner._require_stable_ui_identities=getattr(self,'_metadata_stable_ui',False)
-            stable_targets=self._prepare_borrowed_title_targets()
+            stable_targets=self._try_prepare_borrowed_title_targets()
+            if stable_targets is None:return False
+            self.state='building'
             catalog=self.planner._catalog
             self.library=self.one(o for o in catalog.objects if o.name=='Default__WidgetBlueprintLibrary')
             gameplay=self.one(o for o in catalog.objects if o.name=='Default__GameplayStatics')
             dimensions=read_values_many(catalog,(found['source_button'],),fields=('MinWidth','MinHeight'))[found['source_button'].index].values
             padding=read_values_many(catalog,(found['source_slot'],),fields=('Padding',))[found['source_slot'].index].values
-            self.button=self.create(self.library,'WidgetBlueprintLibrary','Create',WorldContextObject=self.player,WidgetType=self.cls('WBP_BaseButton_C'),OwningPlayer=self.player)
+            if prepared_button:
+                if _identity(found['local_player'])!=self._prepared_local:raise RuntimeError('Prepared title LocalPlayer changed')
+                owning=self.call(self.button,'Widget','GetOwningPlayer')
+                local=self.call(self.button,'Widget','GetOwningLocalPlayer')
+                if not self._same_bound_object(owning,self.player) or not self._same_bound_object(local,found['local_player']):
+                    raise RuntimeError('Prepared title button owning player changed')
+                label=self._label_widget
+                self.layout(label,'CommonTextBlock','SetStyle',InStyle=found['style'])
+            else:
+                self._build_title_button(gameplay,found['style'])
+                label=self._label_widget
             self.attachment=PauseAttachment(self.scope)
-            lease=self.one(l for l in self.scope._leases if l.active and l.object==self.button)
+            lease=self.one(l for l in self.scope._leases if l.active and _identity(l.object)==_identity(self.button))
             self.attachment.arm(lease,prepare_call(self.planner._catalog,self.button,self.fn('Widget','RemoveFromParent'),{}))
-            tree=self.reference(self.button,'UserWidget','WidgetTree');content=self.reference(self.button,'WBP_BaseButton_C','ButtonContent')
-            label=self.create(gameplay,'GameplayStatics','SpawnObject',ObjectClass=self.cls('CommonTextBlock'),Outer=tree)
-            self.layout(label,'CommonTextBlock','SetStyle',InStyle=found['style']);self.layout(label,'TextBlock','SetText',InText='Mods');self.layout(label,'TextLayoutWidget','SetJustification',InJustification=1)
-            frame=self.create(gameplay,'GameplayStatics','SpawnObject',ObjectClass=self.cls('Overlay'),Outer=tree)
-            label_slot=self.create(frame,'Overlay','AddChildToOverlay',Content=label)
-            self.layout(label_slot,'OverlaySlot','SetHorizontalAlignment',InHorizontalAlignment=2);self.layout(label_slot,'OverlaySlot','SetVerticalAlignment',InVerticalAlignment=2)
-            self.call(content,'ContentWidget','SetContent',Content=frame)
             self.layout(self.button,'CommonButtonBase','SetMinDimensions',InMinWidth=dimensions[self.cls('CommonButtonBase').index,'MinWidth'],InMinHeight=dimensions[self.cls('CommonButtonBase').index,'MinHeight'])
             self.layout(self.button,'CommonButtonBase','SetIsSelectable',bInIsSelectable=False);self.layout(self.button,'CommonButtonBase','SetIsToggleable',bInIsToggleable=False)
             retained=stable_targets.get(self.restore_panel.index)
@@ -189,8 +222,30 @@ class TitleMenuEntry(PauseMenuEntry):
             self._button_focus=self.prepare(self.button,self.fn('Widget','SetUserFocus'),PlayerController=self.player)
             self._loading_label=self._cleanup_label=self._normal_label=self.prepare(label,self.fn('TextBlock','SetText'),InText='Mods')
             self._title_input=self._prepare_title_input()
+            self.parent_scope._session._pause_button_source=dict(catalog=self.planner._catalog,
+                gi=_identity(self.planner._catalog.by_index[self.button.outer_index]),
+                stable=getattr(self,'_metadata_stable_ui',False),player=self.player,library=self.library,
+                gameplay=gameplay,style=found['style'],local=_identity(found['local_player']),
+                dimensions=(dimensions[self.cls('CommonButtonBase').index,'MinWidth'],
+                            dimensions[self.cls('CommonButtonBase').index,'MinHeight']))
             self._label_widget=label;self.state='attached'
+        import logging
+        logging.getLogger(__name__).info('Native Mods title entry attached (%.1f ms)',(time.perf_counter()-started)*1000)
         return True
+    def _build_title_button(self,gameplay,style):
+        self._build_button(gameplay,style,(0,0),arm=False)
+    def _try_prepare_borrowed_title_targets(self):
+        from .ownership import LeaseError
+        try:return self._prepare_borrowed_title_targets()
+        except LeaseError as error:
+            # No attachment/layout/input has run in this attempt. Any earlier
+            # successful acquisitions remain owned by this exact scope. Only
+            # a native stale/busy rejection with no dispatch can defer to a
+            # fresh authored-title proof on the next poll.
+            if error.outcome!='not_dispatched' or error.native_error not in (402,403):raise
+            import logging
+            logging.getLogger(__name__).info('Title target preparation pending: native_error=%s',error.native_error)
+            return None
     def _prepare_borrowed_title_targets(self):
         leases=self.stabilize_borrowed_targets((self.pause,self.grid,self.restore_panel))
         if leases:
@@ -271,10 +326,11 @@ class TitleMenuEntry(PauseMenuEntry):
         except RuntimeQueryError as error:
             # Before construction starts, title assets may finish loading
             # between the readiness sample and this independent discovery.
-            # No UI dispatch has occurred in state 'new'. A later observation
+            # No borrowed-title UI dispatch has occurred in state 'new' or
+            # 'prepared' (the latter owns only the detached button). A later observation
             # may start a new proof; partial construction/unknown dispatches
             # remain errors and are never replayed here.
-            if self.state=='new' and any(reason in str(error) for reason in
+            if self.state in ('new','prepared') and any(reason in str(error) for reason in
                     ('DESCRIPTOR_IDENTITY_CHANGED','SELECTED_DEPENDENCY_CHANGED','READ_FAILED',
                      'Object identity changed or belongs to another process')):
                 return
@@ -286,7 +342,7 @@ class TitleMenuEntry(PauseMenuEntry):
         if not ready:
             if self.state not in ('new','closed'):self.close()
             return
-        if self.state=='new':self.install();return
+        if self.state in ('new','prepared'):self.install();return
         if self.state!='attached':return
         if time.monotonic()<self._next_poll:return
         self._next_poll=time.monotonic()+.02

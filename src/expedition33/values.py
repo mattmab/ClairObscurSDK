@@ -293,6 +293,68 @@ def read_values_many(catalog, observed, *, fields=None):
     return {index: _decode_values(catalog, requested[index], start, group) for index, group in groups.items()}
 
 
+def capture_selected_values(pid,identities,*,fields,references=False):
+    """Fresh class/outer closures and projected values in one read-only request.
+
+    Two callers' observations are never combined. A v1 worker uses the existing
+    two-query path; v2 emits both parts in one bounded framed response.
+    """
+    from .catalog import capture_selected,_decode_catalog
+    from ._reader import active_reader
+    identities=tuple(identities);fields=tuple(fields)
+    reader=active_reader()
+    if reader is None or getattr(reader,'supports_catalog_values',False) is not True:
+        catalog=capture_selected(pid,identities)
+        if references:
+            result={}
+            for row in identities:
+                result[row[0]],catalog=read_values_with_references(catalog,catalog.by_index[row[0]],fields=fields)
+            return catalog,result
+        return catalog,read_values_many(catalog,tuple(catalog.by_index[row[0]] for row in identities),fields=fields)
+    if type(pid) is not int or not 0<pid<=0xffffffff or not 1<=len(identities)<=1023:
+        raise ValueError('Expected bounded selected-value identities')
+    requested={}
+    for row in identities:
+        if (type(row) is not tuple or len(row)!=3 or any(type(v) is not int for v in row)
+                or not 0<=row[0]<100000000 or not -0x80000000<=row[1]<=0x7fffffff
+                or not 0x10000<=row[2]<=0x7fffffffffff or row[0] in requested):
+            raise ValueError('Invalid selected-value identity')
+        requested[row[0]]=row
+    if (not 1<=len(fields)<=64 or len(set(fields))!=len(fields) or any(
+            type(n) is not str or not 1<=len(n)<=256 or any(ch in n for ch in ';|\r\n\t\0') for n in fields)):
+        raise ValueError('Invalid selected-value projection')
+    selectors=','.join(f'{i}:{serial}:{address:x}' for i,serial,address in identities)+';'+'|'.join(fields)
+    start,rows=_query(['--catalog-values',str(pid),selectors])
+    if start['pid']!=pid:raise RuntimeQueryError('Selected-value process changed')
+    catalog=_decode_catalog(start,[row for row in rows if row['event'] in ('object','class_relation')])
+    if len(catalog.objects)>16384:raise RuntimeQueryError('Selected-value dependency limit exceeded')
+    groups={};current=None
+    for row in rows:
+        if row['event']=='object':
+            current=row['index']
+            if current in requested:
+                if current in groups:raise RuntimeQueryError('Duplicate selected-value target')
+                groups[current]=[]
+        if row['event'] not in ('object','class_relation') and current not in requested:
+            raise RuntimeQueryError('Selected values outside a requested target')
+        if current in requested and row['event']!='class_relation':groups[current].append(row)
+    if set(groups)!=set(requested):raise RuntimeQueryError('Incomplete selected-value targets')
+    result={}
+    for index,(i,serial,address) in requested.items():
+        obj=catalog.by_index.get(index)
+        if obj is None or (obj.serial,obj.address)!=(serial,address):
+            raise RuntimeQueryError('Selected-value identity changed')
+        result[index]=_decode_values(catalog,obj,start,groups[index])
+    if references:
+        missing=_missing_references(catalog,rows)
+        if missing:
+            if len(requested)+len(missing)>1023:raise RuntimeQueryError('Selected reference closure limit')
+            fresh=capture_selected(pid,tuple(requested.values())+tuple(sorted(missing)))
+            catalog=catalog.with_observations(fresh)
+            result={index:_decode_values(catalog,catalog.by_index[index],start,groups[index]) for index in requested}
+    return catalog,result
+
+
 def read_values_with_references(catalog, observed, *, fields=None):
     """Read stored values and capture missing structured reference closures.
 
@@ -312,6 +374,15 @@ def read_values_with_references(catalog, observed, *, fields=None):
         selector += ';' + '|'.join(fields)
     start, rows = _query(['--read-values', str(catalog.pid), selector])
     result = _decode_values(catalog, obj, start, rows)
+    missing=_missing_references(catalog,rows)
+    if missing:
+        fresh = capture_selected(catalog.pid, ((obj.index, obj.serial, obj.address), *sorted(missing)))
+        catalog = catalog.with_observations(fresh)
+        result = _decode_values(catalog, catalog.resolve(obj), start, rows)
+    return result, catalog
+
+
+def _missing_references(catalog,rows):
     missing = set()
     def reference(raw):
         if type(raw) is not dict or set(raw) != {'index', 'serial', 'address', 'name'}:
@@ -335,11 +406,8 @@ def read_values_with_references(catalog, observed, *, fields=None):
             for child in value: walk(child, depth + 1)
     for row in rows:
         if row.get('event') == 'stored_value': walk(row.get('value'))
-    if missing:
-        fresh = capture_selected(catalog.pid, ((obj.index, obj.serial, obj.address), *sorted(missing)))
-        catalog = catalog.with_observations(fresh)
-        result = _decode_values(catalog, catalog.resolve(obj), start, rows)
-    return result, catalog
+    if len(missing)>1023:raise RuntimeQueryError('Nested stored reference limit')
+    return missing
 
 
 def read_object_reference(catalog, observed, owner, name, *, project=False):

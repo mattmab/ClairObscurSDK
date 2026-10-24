@@ -212,6 +212,8 @@ class OwnedMenuPanel:
             prepared = [self._planner.prepare(obj, self._function(owner, name), **args)
                         for obj, owner, name, args in queued[start:start + _ui_batch.LIMIT]]
             self._mutate(_ui_batch.invoke_setters, self.scope, prepared)
+            from .loading_preparation import service_loading_io
+            service_loading_io(getattr(self.scope,'_session',None))
 
     def _root(self):
         if self._selected_results:

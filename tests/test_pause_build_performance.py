@@ -29,6 +29,16 @@ class PauseBuildTests(unittest.TestCase):
         entry.call = Mock()
         return entry
 
+    def test_detached_button_does_not_arm_world_specific_cleanup(self):
+        entry=self.entry();entry.library='library';entry.player='player'
+        entry.create=Mock(side_effect=('button','label','frame','slot'))
+        entry.reference=Mock(side_effect=('tree','content'))
+        entry.layout=Mock();entry._arm_button=Mock()
+        entry._build_button('gameplay','style',(300.,60.),arm=False)
+        entry._arm_button.assert_not_called()
+        self.assertEqual(entry._label_widget,'label')
+        self.assertEqual(entry.button,'button')
+
     def test_reference_projects_and_preserves_validated_metadata(self):
         entry = self.entry()
         with patch('expedition33.pause_menu.read_object_reference', return_value=('tree', 'fresh')) as read:

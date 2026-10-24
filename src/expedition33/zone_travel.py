@@ -7,7 +7,7 @@ import re
 import struct
 from . import _query
 from .catalog import capture_matching, capture_selected
-from ._reader import ReadBatch
+from ._reader import ReadBatch,active_reader
 from .cinematics.original_game_action import controller_context, NotReady
 from .invocation import InvocationError
 
@@ -43,7 +43,7 @@ def parse_routes(records):
     return tuple(r for r in rows if all(type(r.get(k)) is str and TEXT.fullmatch(r[k]) for k in ('level_id','asset_name','entrance_tag')) and r['entrance_tag']!='None')
 
 def routes(pid):
-    with ReadBatch(pid,share=True):
+    with ReadBatch(pid,share=active_reader() is None):
         cat=capture_matching(pid,names=('DT_LevelData',))
         table=_one(o for o in cat.objects if cat.path_name(o)==TABLE and o.class_name=='DataTable')
         _,records=_query(['--read-table',str(pid),f'{table.index}:{table.serial}:{table.address:x}'])

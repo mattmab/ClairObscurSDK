@@ -455,6 +455,11 @@ class ScrollWorkspacePanel(ModsWorkspacePanel):
         return label
 
     def direct(self, obj, owner, name, **args):
+        # Visibility/enabled setters have no outputs or read dependencies.
+        # Keep them in the acknowledged paint batch; focus and unsupported
+        # ScrollBox/SizeBox setters still use their ordinary direct calls.
+        if name in ('SetVisibility','SetIsEnabled') and self._paint_queue is not None:
+            return self._render_call(obj,owner,name,**args)
         queue, self._paint_queue = self._paint_queue, None
         try: return self._render_call(obj, owner, name, **args)
         finally: self._paint_queue = queue

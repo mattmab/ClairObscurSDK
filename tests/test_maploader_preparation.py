@@ -9,6 +9,19 @@ from expedition33.worldbuilder_maps import FORMAT
 def data(name='test'):
     return dict(format=FORMAT,version=1,name=name,world='/Game/Test.Test',objects=[dict(id='a'*32,kind='mesh',asset='/Game/M.M',transform=[0,0,0,1,0,0,0,0,1,1,1,0])],assets=['/Game/M.M'])
 class PreparationTests(unittest.TestCase):
+    def test_menu_bounds_long_error_and_supplementary_unicode_names(self):
+        from contextlib import nullcontext
+        from types import SimpleNamespace
+        model=loader.Mod();model.current={'world':'/Game/Test.Test'}
+        model.assignments=SimpleNamespace(values={})
+        model.message='Read failed: '+('diagnostic '*2000)
+        model.rows=[{'id':'a'*32,'name':'\U0001f600'*5000,'count':1}];model.offset=0
+        model.panel=Mock(title=object(),detail=object(),labels=[object() for _ in range(12)])
+        model.panel.paint_batch.return_value=nullcontext()
+        model._paint()
+        for call in model.panel.set_text.call_args_list:
+            self.assertLessEqual(len(call.args[1].encode('utf-16-le'))//2,4095)
+
     def setUp(self):
         self.temp=tempfile.TemporaryDirectory();self.addCleanup(self.temp.cleanup);self.root=pathlib.Path(self.temp.name)
         self.store=PreparedMapStore(self.root);self.key='b'*32;self.path=self.store.file(self.key);self.path.write_text(json.dumps(data()))
@@ -17,6 +30,24 @@ class PreparationTests(unittest.TestCase):
         with patch('maploader_preparation.prepared_maps.json.loads',side_effect=AssertionError('duplicate parse')):
             second=self.store.read(self.key)
         self.assertEqual(second['objects'][0]['transform'][4],0);self.assertEqual(self.store.stats['hits'],1)
+    def test_prepared_plan_reuses_immutable_spawn_work(self):
+        self.store.prepare([self.key]);plan=self.store.read_plan(self.key,'/Game/Test.Test')
+        self.assertEqual(plan.assets,('/Game/M.M',))
+        with patch('maploader_preparation.prepared_maps.SpawnPlan',side_effect=AssertionError('duplicate planning')):
+            self.assertIs(self.store.read_plan(self.key),plan)
+        with self.assertRaises(AttributeError):plan.rows[0].asset='other'
+        self.assertEqual(self.store.stats['plans'],1)
+    def test_plan_invalidation_rechecks_same_timestamp_bytes_and_wrong_world(self):
+        original=self.store.read_plan(self.key);before=self.path.stat()
+        edited=data('tEst');edited['objects'][0]['transform'][4]=9
+        self.path.write_text(json.dumps(edited));os.utime(self.path,ns=(before.st_atime_ns,before.st_mtime_ns))
+        fresh=self.store.read_plan(self.key)
+        self.assertIsNot(original,fresh);self.assertEqual(fresh.rows[0].transform[4],9)
+        with self.assertRaisesRegex(ValueError,'same game level'):self.store.read_plan(self.key,'/Game/Other.Other')
+    def test_removed_file_invalidates_prepared_plan(self):
+        self.store.read_plan(self.key);self.path.unlink()
+        with self.assertRaises(FileNotFoundError):self.store.read_plan(self.key)
+        self.assertFalse(self.store._plans)
     def test_same_size_same_mtime_edit_invalidates_by_digest(self):
         self.store.read(self.key);before=self.path.stat();self.path.write_text(json.dumps(data('tEst')));os.utime(self.path,ns=(before.st_atime_ns,before.st_mtime_ns))
         self.assertEqual(self.store.read(self.key)['name'],'tEst');self.assertEqual(self.store.stats['invalidated'],1)
@@ -63,7 +94,7 @@ class PreparationTests(unittest.TestCase):
         mod=loader.Mod();mod.current={'world':'/Game/Other.Other'};mod.store=self.store;mod.check_legacy=lambda:None
         mod.runtime=Mock();mod.runtime.profile={};mod.assignments=Mock();mod.status=lambda:None
         mod.apply(self.key);mod.runtime.load.assert_not_called();self.assertTrue(mod.visits.attempted)
-        self.assertIn('different vanilla world',mod.message)
+        self.assertIn('same game level',mod.message)
     def test_missing_gap_and_pawn_change_do_not_clear_attempted(self):
         v=loader.Visits();ctx=dict(world='/Game/Test.Test',visit=[1,2,3],pawn=[4,5,6],ready=True)
         self.assertFalse(v.observe(ctx,0));self.assertFalse(v.observe(ctx,1));self.assertTrue(v.observe(ctx,2));v.attempted=True

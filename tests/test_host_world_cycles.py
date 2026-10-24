@@ -6,7 +6,7 @@ import tempfile
 import sys
 import threading
 import unittest
-from contextlib import ExitStack
+from contextlib import ExitStack,nullcontext
 from unittest.mock import patch
 
 import expedition33.sdk as sdk
@@ -217,6 +217,9 @@ class HostTests(unittest.TestCase):
                 return True
         class TitleDriver:
             def __init__(self,*args):self.active=False;self.gameplay_ui_ready=False;self.service=None;self.context=None
+            def prepare_queries(self):events.append('ui.reads.prepared')
+            def close_queries(self):events.append('ui.reads.close')
+            def _read_operation(self):return nullcontext()
             @property
             def title_cleanup_ready(self):return not self.active
             def observe(self,packet):

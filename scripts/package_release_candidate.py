@@ -8,6 +8,7 @@ import zipfile
 import sys
 
 ROOT = Path(__file__).resolve().parents[1]
+PUBLIC_ASSETS = ('src/expedition33/assets/map-loading.png',)
 sys.path.insert(0, str(ROOT / 'scripts'))
 from package_mods import build_all
 from license_manifest import validate_source, verify_archive
@@ -27,6 +28,8 @@ def build(destination, version):
     for source in sorted((ROOT / 'src/expedition33').rglob('*')):
         if source.is_file() and (source.suffix in ('.py', '.json') or source.name == 'LICENSE'):
             copy(source.relative_to(ROOT), source.relative_to(ROOT))
+    for source in PUBLIC_ASSETS:
+        copy(source, source)
     for source in sorted((ROOT / 'runtime').iterdir()):
         if source.is_file() and source.suffix in ('.exe', '.dll', '.pyd', '.zip', '._pth', '.txt', '.cat'):
             copy(source.relative_to(ROOT), source.relative_to(ROOT))
@@ -38,10 +41,11 @@ def build(destination, version):
     for source in sorted((ROOT / 'licenses').rglob('*')):
         if source.is_file():
             copy(source.relative_to(ROOT), source.relative_to(ROOT))
-    for directory in ('research-probe', 'readonly-worker', 'research-probe-picto-v4', 'research-probe-cinematic-v210-lease-batch'):
-        copy('build/release/research-probe-cinematic-v210-lease-batch/research_probe.exe', f'build/{directory}/research_probe.exe')
-    copy('build/release/runtime-session-cinematic-v210/runtime_session_cinematic_v210.dll', 'build/runtime-session-cinematic-v210/runtime_session_cinematic_v210.dll')
+    for directory in ('research-probe', 'readonly-worker', 'research-probe-picto-v4', 'research-probe-cinematic-v213-lease-batch'):
+        copy('build/release/research-probe-cinematic-v213-lease-batch/research_probe.exe', f'build/{directory}/research_probe.exe')
+    copy('build/release/runtime-session-cinematic-v213/runtime_session_cinematic_v213.dll', 'build/runtime-session-cinematic-v213/runtime_session_cinematic_v213.dll')
     copy('build/readonly-worker-strings-v1/research_probe.exe', 'build/readonly-worker-strings-v1/research_probe.exe')
+    copy('build/readonly-worker-values-v2/research_probe.exe', 'build/readonly-worker-values-v2/research_probe.exe')
     copy('build/release/thumbnail-worker-v2/thumbnail_worker.dll', 'build/thumbnail-worker-v2/thumbnail_worker.dll')
     # Launchers inside SDK are install-relative and never search a dev checkout.
     (sdk / 'launch-sdk.cmd').write_text('@echo off\r\ncd /d "%~dp0"\r\n"%~dp0runtime\\python.exe" -I -S -B "%~dp0scripts\\run_release_sdk.py" %*\r\n', encoding='ascii')

@@ -230,6 +230,12 @@ inline void run_runtime_session(DWORD pid, DWORD thread, int32_t object_index, i
 #ifdef E33_MESH_SESSION
               << ",\"mesh_protocol\":3"
               << ",\"map_runtime_protocol\":1"
+#ifdef E33_MAP_LOAD_GATE_SESSION
+              << ",\"map_load_gate_protocol\":1"
+              << ",\"map_loading_presentation_protocol\":1"
+              << ",\"map_asset_preparation_protocol\":1"
+              << ",\"map_readiness_protocol\":1"
+#endif
 #ifdef E33_ENEMY_SPAWN_SESSION
               << ",\"enemy_combat_placement_protocol\":1"
 #ifdef E33_BATTLE_PARAMETER_FRAME_RESEARCH

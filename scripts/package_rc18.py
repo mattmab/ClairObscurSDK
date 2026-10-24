@@ -11,7 +11,7 @@ import sys
 import zipfile
 
 sys.path.insert(0, str(Path(__file__).resolve().parent))
-from package_release_candidate import build as build_sdk
+from package_release_candidate import build as build_sdk, PUBLIC_ASSETS
 from package_world_builder import build as build_builder
 from package_mods import build_all
 
@@ -50,14 +50,14 @@ PUBLIC_SOURCE_MODS=OPTIONAL|{'SDKManagement','IntrospectionHarness','LiveObjectV
 ROOT_FILES={'.gitattributes','.gitignore','DEVELOPMENT.md','LICENSE','README.md','THIRD_PARTY_NOTICES.md',
     'launch-cinematics.cmd','launch-flight.cmd','launch-native-mods.cmd','launch-picto.cmd','launch-sdk.cmd','launch.cmd'}
 REQUIRED_SOURCES={
-    'gpu/bridge.h','scripts/build-early-lifecycle-runtime.cmd','scripts/build-rc18-native.cmd','scripts/package_rc18.py',
+    'gpu/bridge.h','scripts/build-early-lifecycle-runtime.cmd','scripts/build-readonly-worker-values.cmd','scripts/build-rc18-native.cmd','scripts/package_rc18.py',
     'scripts/run_release_sdk.py','scripts/prepare_runtime.py','scripts/build-bootstrap.cmd',
     'scripts/package_release_candidate.py','scripts/package_mods.py','scripts/package_world_builder.py',
     'docs/RELEASE_0.1.0_RC18.md','src/expedition33/_stable_lease.py',
     'src/expedition33/_metadata_stabilization.py','src/expedition33/title_menu.py',
     'src/expedition33/title_management.py','src/expedition33/process_title_ui.py',
     'src/expedition33/admission_monitor.py','src/expedition33/world_admission.py','src/expedition33/ui_admission.py',
-    'src/expedition33/process_ui.py','src/expedition33/process_ui_routes.py',
+    'src/expedition33/process_ui.py','src/expedition33/pause_preparation.py','src/expedition33/process_ui_routes.py',
     'src/expedition33/ui_shell_proof.py','src/expedition33/world_lifecycle.py',
     'src/expedition33/process_console.py','native/menu_open_pipeline.h',
     'native/stable_lease_runtime.h','native/metadata_stabilization_target.h',
@@ -76,7 +76,7 @@ REQUIRED_SOURCES={
     'src/expedition33/_lease_release_batch.py','src/expedition33/_menu_latency.py',
     'src/expedition33/core_startup.py','src/expedition33/console_startup.py',
     'src/expedition33/frontend_rejection.py','src/expedition33/mod_lifecycle.py',
-    'src/expedition33/startup_metrics.py'}
+    'src/expedition33/startup_metrics.py'} | set(PUBLIC_ASSETS)
 FORBIDDEN_PARTS={'settings','logs','backups','local-backups','custom-source','__pycache__','.git',
     'sdk-capability-review','qabattleexplorer','qabattleexplorer.sdkmod'}
 
@@ -171,7 +171,7 @@ def build(output, *, source_only=False):
         for result in (sdk, builder):
             shutil.copy2(result['archive'], output / Path(result['archive']).name)
         build_all(ROOT / 'mods', output / 'optional', include=OPTIONAL)
-        for folder, filename in (('MapTravel', 'MapTravel-0.2.3.zip'),
+        for folder, filename in (('MapTravel', 'MapTravel-0.2.4.zip'),
                                  ('WorldBuilderMapLoader', 'WorldBuilderMapLoader-RC18.zip')):
             with zipfile.ZipFile(output / filename, 'w', zipfile.ZIP_DEFLATED) as archive:
                 archive.write(output / 'optional' / (folder + '.sdkmod'), 'SDK_Mods/' + folder + '.sdkmod')
