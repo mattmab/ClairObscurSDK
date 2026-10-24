@@ -141,7 +141,8 @@ class AlphaMenuTests(unittest.TestCase):
         view.model=m;view.screen='enemy_original_alpha';view.category='All';view.review=False;view.query='';view.selected=None
         title,description,rows=view._rows()
         self.assertIn('original exploration Simon is not staged',description)
-        self.assertIn('Normal Simon and phase 2',description)
+        self.assertIn('Normal Simon has separate original direct-fight choices',description)
+        self.assertIn('automatic cinematic handoff is not implemented',description)
         self.assertTrue(any(r[1]=='enemy_original_alpha_begin' and r[3] for r in rows))
         m.arena_identity=None
         self.assertTrue(any(r[1]=='enemy_original_alpha_begin' and not r[3] for r in view._rows()[2]))
