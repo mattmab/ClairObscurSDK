@@ -14,17 +14,18 @@ ART_PATH = Path(__file__).resolve().parent / 'assets' / 'map-loading.png'
 MAX_ART_BYTES = 8 * 1024 * 1024
 
 
-def loading_art_path():
-    """Use only the bundled bounded PNG, never a user's settings/map files."""
+def loading_art_path(path=None):
+    """Validate a consuming mod's PNG, with the SDK artwork as a fallback."""
+    path = ART_PATH if path is None else Path(path)
     try:
-        if not 8 <= ART_PATH.stat().st_size <= MAX_ART_BYTES:
+        if not 8 <= path.stat().st_size <= MAX_ART_BYTES:
             return None
-        with ART_PATH.open('rb') as source:
+        with path.open('rb') as source:
             if source.read(8) != b'\x89PNG\r\n\x1a\n':
                 return None
     except OSError:
         return None
-    return ART_PATH
+    return path
 
 
 class MapLoadingOverlay(OwnedMenuPanel):
@@ -41,13 +42,14 @@ class MapLoadingOverlay(OwnedMenuPanel):
              'Default__PlayerController', 'Default__Image', 'SetBrushResourceObject',
              'Default__KismetRenderingLibrary', 'ImportFileAsTexture2D', 'Texture2D')
 
-    def __init__(self, session, context):
+    def __init__(self, session, context, *, art_path=None):
         super().__init__(session, controls=1, cached_construction=True, selected_results=True)
         self.context = context
         self.native_owned = False
         self.attached = False
         self.art_texture = self.art_image = None
         self.art_available = False
+        self.art_path = art_path
 
     def build(self):
         from .catalog import capture_matching, capture_selected
@@ -120,7 +122,9 @@ class MapLoadingOverlay(OwnedMenuPanel):
 
     def _prepare_art(self, gi):
         """Import once during loading; preserve the opaque cover on safe failure."""
-        path = loading_art_path()
+        path = loading_art_path(getattr(self, 'art_path', None))
+        if path is None and getattr(self, 'art_path', None) is not None:
+            path = loading_art_path()
         if path is None:
             LOG.warning('Loading artwork unavailable; using opaque loading cover')
             return

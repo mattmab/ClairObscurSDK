@@ -130,6 +130,18 @@ class MapLoadingArtworkTests(unittest.TestCase):
         self.assertEqual(calls[-2].args, ('owned-image', 'Image', 'SetBrushResourceObject'))
         self.assertEqual(calls[-1].kwargs, {'InVisibility':3})
 
+    def test_consuming_mod_art_is_preferred_with_sdk_fallback(self):
+        for available in (True, False):
+            cover = self.cover()
+            cover.art_path = Path('mod/assets/map-loading.png')
+            cover._construction_call = Mock(return_value=SimpleNamespace(return_value=object()))
+            answers = [cover.art_path] if available else [None, Path('sdk/assets/map-loading.png')]
+            with patch('expedition33.map_loading_overlay.loading_art_path', side_effect=answers) as resolve:
+                cover._prepare_art('game-instance')
+            self.assertEqual(resolve.call_args_list[0].args, (cover.art_path,))
+            self.assertEqual(resolve.call_count, 1 if available else 2)
+            self.assertEqual(cover._construction_call.call_args.kwargs['Filename'], str(answers[-1]))
+
     def test_missing_or_null_art_preserves_plain_cover(self):
         for imported in (False, True):
             cover = self.cover()

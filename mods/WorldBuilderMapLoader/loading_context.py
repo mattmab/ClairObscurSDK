@@ -1,4 +1,5 @@
 """Start passive, copied map observations before gameplay activation."""
+from pathlib import Path
 from expedition33.admission_monitor import ReadOnlyAdmissionMonitor
 from .context_observer import ContextObserver
 
@@ -53,7 +54,8 @@ class LoadingContext:
                 if overlay is not None and overlay.state not in ('built','closed'):
                     overlay.close();overlay=None
                 if overlay is None or overlay.state=='closed':
-                    overlay=MapLoadingOverlay(self.session,context)
+                    overlay=MapLoadingOverlay(self.session,context,
+                        art_path=Path(__file__).resolve().parent/'assets'/'map-loading.png')
                     self.mod._loading_overlay=overlay
                     overlay.build()
                 gate.attach_cover(overlay)

@@ -71,7 +71,10 @@ menu timings depend on the installation and current game state.
   loading preparation. Referenced `/Game/` and `/Engine/` static-mesh assets
   are prepared under process-owned leases before destination spawning; these
   preparations do not retain a gameplay world or spawn into a departing world.
-- An original petal/gold loading texture and opaque fallback are prepared before save loading. The native gate
+- Original petal/gold artwork with ornate ClairObscureSDK lettering is bundled
+  in WorldBuilderMapLoader.sdkmod under assets/map-loading.png. The mod supplies
+  its own image to the SDK overlay; the SDK includes a matching fallback.
+  The texture and opaque fallback are prepared before save loading. The native gate
   observes the game's load and map-change flags and displays that prepared
   cover before destination possession. It does not activate a menu, change
   focus or borrow the destination pause menu. Travel detachments are checked
