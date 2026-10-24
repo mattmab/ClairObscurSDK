@@ -165,6 +165,13 @@ class Session:
             serial=row['serial'], address=int(row['address'], 16), name=row['name'],
             class_name=row['class_name'], metaclass_name=row['metaclass_name'], class_index=row['class_index'])
 
+    @property
+    def capabilities(self):
+        """Copied native protocol diagnostics; not current-world admission."""
+        self._check()
+        from .capabilities import _snapshot
+        return _snapshot(self._transport)
+
     def _check(self):
         self._transport._check_thread()
         if self._closed:

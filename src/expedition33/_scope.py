@@ -169,6 +169,12 @@ class SessionScope:
                 raise RuntimeError('Parent resource scope is closed')
         self._session._check()
 
+    @property
+    def capabilities(self):
+        """Read negotiated protocol diagnostics without exposing transport."""
+        self._check()
+        return self._session.capabilities
+
     def _register_native_owner(self, owner):
         """Register cleanup for a same-scope native service, without granting authority."""
         self._check()
