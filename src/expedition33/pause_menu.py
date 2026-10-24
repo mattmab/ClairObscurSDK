@@ -182,7 +182,12 @@ class PauseMenuEntry:
         leases={}
         if not available(self.scope._session._transport):return leases
         for obj in objects:
-            if obj.serial==0 and obj.index not in leases:
+            existing=next((lease for lease in self.scope._leases if lease.active and
+                lease._object is not None and
+                (lease.object.index,lease.object.serial,lease.object.address)==
+                (obj.index,obj.serial,obj.address)),None)
+            if existing is not None:leases[obj.index]=existing
+            elif obj.serial==0 and obj.index not in leases:
                 lease,_=acquire_stable(self.scope,obj)
                 leases[obj.index]=lease
         if leases:

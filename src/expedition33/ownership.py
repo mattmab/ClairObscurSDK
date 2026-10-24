@@ -12,7 +12,7 @@ class LeaseError(RuntimeQueryError):
     def __init__(self, message, *, outcome, native_error=None):
         self.outcome = outcome
         self.native_error = native_error
-        super().__init__(f'{message} (outcome={outcome}; do not retry unknown operations)')
+        super().__init__(f'{message} (outcome={outcome}; native_error={native_error}; do not retry unknown operations)')
 
 
 class ObjectLease:

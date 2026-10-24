@@ -22,6 +22,10 @@ user settings, saved maps and local custom packages are not included.
 - Public mods can prepare management metadata before a save loads. The title
   screen Mods button stages desired enable states, options and keybinds;
   gameplay activation waits for a loaded-world admission.
+- Title attachment defers confirmed stale/busy reference acquisition and pure
+  discovery races before borrowed UI mutations. Previously these timing races
+  could exit the SDK controller during a cold launch. Completed acquisitions
+  remain owned, and unknown outcomes are not replayed.
 - Title and pause menus retain exact widget and metadata identities before
   caching calls. Owned cleanup and acknowledged native outcomes remain required.
 - Keybind lists use fixed row widgets and bounded active callback windows.
@@ -96,7 +100,7 @@ whose floor is absent may still leave the player unsupported. A cancellation bac
 ## Validation and measured limits
 
 - Native runtime213 and its fixtures compile with MSVC /W4 /WX. The SDK suite
-  passes 2,146 tests with 8 skips; 140 integrated World Builder tests pass, as do 78 tests in the separate project.
+  passes 2,156 tests with 8 skips; 140 integrated World Builder tests pass, as do 78 tests in the separate project.
 - Final cold loading prepared 129 assets during game loading in 4.94 seconds.
   Restoring 1,798 custom props, validating support and revealing the world took
   1.416 seconds beneath the cover; the final travel return took 1.485 seconds.

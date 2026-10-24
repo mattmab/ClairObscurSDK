@@ -161,7 +161,7 @@ work. Ordinary startup stays quiet. Recent rendering is an observable submission
 signal, not a render-thread/GPU fence or a texture-streaming completion guarantee.
 A floor outside the camera frustum can produce a conservative readiness timeout.
 
-The final SDK suite passes 2,146 tests with 8 skips. Native runtime213 and
+The final SDK suite passes 2,156 tests with 8 skips. Native runtime213 and
 its ownership, readiness and bounded FString fixtures compile with MSVC /W4 /WX.
 The integrated World Builder suite passes 140 tests; the separate project passes 78.
 
@@ -188,3 +188,14 @@ support hits; all five floor traces and settled engine streaming remain required
 A cancellation returning to the same non-title world and same pawn has no positive
 cancel identity signal and may retain the cover until the native 60-second recovery
 deadline. Title cancellation has explicit cleanup. No success path uses that deadline.
+
+## Cold-title startup recovery
+
+A subsequent launch exposed an unhandled not-dispatched stable-reference rejection
+while adopting the authored title controls. A clean reproduction also exposed a
+read-only descriptor identity change in the prepared-button state. Neither grants
+authority to attach UI. The title entry now leaves construction unstarted, retains
+its exact acquired references and detached button, and rediscovers current title
+authority. Only stale/busy native rejections before dispatch are deferred; capacity,
+unknown and post-construction failures remain held errors. Existing exact leases
+are reused rather than acquired again. Lease diagnostics now include native codes.

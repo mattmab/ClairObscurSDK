@@ -174,15 +174,16 @@ class TitleMenuEntry(PauseMenuEntry):
             else:catalog=found['catalog'].with_observations(capture_matching(self.parent_scope.pid,names=names))
             self.restore_tree=found['restore_tree'];self.restore_panel=found['restore_panel']
             self.player=found['player'];self.pause=found['title'];self.grid=found['box'];self._title_binding=(found['context'],_identity(found['local_player']),_identity(found['main']),_identity(found['title']),_identity(found['box']))
-            if prepared_button:
+            if self.scope is not None:
                 owned=tuple(_identity(lease.object) for lease in self.scope._leases if lease.active and lease._object is not None)
                 catalog=catalog.with_observations(capture_selected(self.parent_scope.pid,tuple(dict.fromkeys(owned))))
                 self.planner.close();self._functions.clear()
             else:self.scope=SessionScope(self.parent_scope)
-            self.state='building'
             self.planner=self.scope.invocation_planner(selected_results=True,catalog=catalog)
             self.planner._require_stable_ui_identities=getattr(self,'_metadata_stable_ui',False)
-            stable_targets=self._prepare_borrowed_title_targets()
+            stable_targets=self._try_prepare_borrowed_title_targets()
+            if stable_targets is None:return False
+            self.state='building'
             catalog=self.planner._catalog
             self.library=self.one(o for o in catalog.objects if o.name=='Default__WidgetBlueprintLibrary')
             gameplay=self.one(o for o in catalog.objects if o.name=='Default__GameplayStatics')
@@ -233,6 +234,18 @@ class TitleMenuEntry(PauseMenuEntry):
         return True
     def _build_title_button(self,gameplay,style):
         self._build_button(gameplay,style,(0,0),arm=False)
+    def _try_prepare_borrowed_title_targets(self):
+        from .ownership import LeaseError
+        try:return self._prepare_borrowed_title_targets()
+        except LeaseError as error:
+            # No attachment/layout/input has run in this attempt. Any earlier
+            # successful acquisitions remain owned by this exact scope. Only
+            # a native stale/busy rejection with no dispatch can defer to a
+            # fresh authored-title proof on the next poll.
+            if error.outcome!='not_dispatched' or error.native_error not in (402,403):raise
+            import logging
+            logging.getLogger(__name__).info('Title target preparation pending: native_error=%s',error.native_error)
+            return None
     def _prepare_borrowed_title_targets(self):
         leases=self.stabilize_borrowed_targets((self.pause,self.grid,self.restore_panel))
         if leases:
@@ -313,10 +326,11 @@ class TitleMenuEntry(PauseMenuEntry):
         except RuntimeQueryError as error:
             # Before construction starts, title assets may finish loading
             # between the readiness sample and this independent discovery.
-            # No UI dispatch has occurred in state 'new'. A later observation
+            # No borrowed-title UI dispatch has occurred in state 'new' or
+            # 'prepared' (the latter owns only the detached button). A later observation
             # may start a new proof; partial construction/unknown dispatches
             # remain errors and are never replayed here.
-            if self.state=='new' and any(reason in str(error) for reason in
+            if self.state in ('new','prepared') and any(reason in str(error) for reason in
                     ('DESCRIPTOR_IDENTITY_CHANGED','SELECTED_DEPENDENCY_CHANGED','READ_FAILED',
                      'Object identity changed or belongs to another process')):
                 return

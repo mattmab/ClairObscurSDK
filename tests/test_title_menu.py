@@ -105,6 +105,18 @@ class TitleAttachmentTests(unittest.TestCase):
   self.ready=False
   with patch('expedition33.title_menu.resolve_title',side_effect=AssertionError('read while inactive')):self.assertFalse(self.entry.install())
   self.assertEqual(self.events,[])
+ def test_borrowed_target_rejection_keeps_entry_before_construction(self):
+  with patch.object(self.entry,'_try_prepare_borrowed_title_targets',return_value=None):
+   self.assertFalse(self.install())
+  self.assertEqual(self.entry.state,'new');self.assertIs(self.entry.scope,self.scope)
+  self.assertEqual(self.events,[]);self.assertIsNone(self.entry.attachment)
+ def test_already_owned_borrowed_target_is_reused_without_acquisition(self):
+  obj=N(index=2,serial=1001,address=1002)
+  lease=N(active=True,_object=obj,object=obj)
+  self.entry.scope=N(_session=N(_transport=N()),_leases=[lease])
+  self.entry.planner=N(_catalog=self.catalog,refresh_from=lambda catalog:None)
+  with patch('expedition33._stable_lease.available',return_value=True),patch('expedition33._stable_lease.acquire_stable',side_effect=AssertionError('duplicate acquire')),patch('expedition33._stable_lease.fresh_catalog_replacing',return_value=self.catalog):
+   self.assertEqual(self.entry.stabilize_borrowed_targets((obj,)),{obj.index:lease})
  def test_prepared_title_enters_install_without_polling_clicks(self):
   self.entry.state='prepared'
   with patch.object(self.entry,'install',return_value=True) as install:
@@ -201,6 +213,21 @@ class TitleInputRestorationTests(unittest.TestCase):
   self.entry._current_title=lambda:self.current
   self.entry.attachment=N(restore=lambda:self.events.append('overlay') or True)
   self.entry.invoke=lambda plan:True if plan=='active' else self.events.append(plan)
+ def test_title_target_rejection_defers_only_stale_busy_before_dispatch(self):
+  from expedition33.ownership import LeaseError
+  for state in ('new','prepared'):
+   self.entry.state=state
+   for code in (402,403):
+    with patch.object(self.entry,'_prepare_borrowed_title_targets',side_effect=LeaseError('race',outcome='not_dispatched',native_error=code)):
+     self.assertIsNone(self.entry._try_prepare_borrowed_title_targets())
+    self.assertEqual(self.entry.state,state)
+   with patch.object(self.entry,'_prepare_borrowed_title_targets',return_value={'retained':'lease'}):
+    self.assertEqual(self.entry._try_prepare_borrowed_title_targets(),{'retained':'lease'})
+ def test_title_target_unknown_and_capacity_errors_are_not_replayed(self):
+  from expedition33.ownership import LeaseError
+  for outcome,code in (('unknown',402),('completed',402),('not_dispatched',401),('not_dispatched',413)):
+   with patch.object(self.entry,'_prepare_borrowed_title_targets',side_effect=LeaseError('held',outcome=outcome,native_error=code)):
+    with self.assertRaises(LeaseError):self.entry._try_prepare_borrowed_title_targets()
  def test_partial_authority_close_retains_presentation_as_known_pending(self):
   from expedition33.cinematics.original_game_action import NotReady
   self.entry._current_title=lambda:(_ for _ in ()).throw(NotReady('partial link'))
@@ -215,6 +242,7 @@ class TitleInputRestorationTests(unittest.TestCase):
   from expedition33 import RuntimeQueryError
   self.entry._poll_title=lambda:(_ for _ in ()).throw(RuntimeQueryError('DESCRIPTOR_IDENTITY_CHANGED'))
   self.entry.state='new';self.entry.poll()
+  self.entry.state='prepared';self.entry.poll()
   self.entry.state='building'
   with self.assertRaises(RuntimeQueryError):self.entry.poll()
   self.entry.state='new'
