@@ -576,6 +576,18 @@ class ProofGetterTests(unittest.TestCase):
         self.assertEqual(p.pending_results,[])
 
 
+class DisposedShellRecoveryTests(unittest.TestCase):
+    def test_acknowledged_disposal_requests_shell_replacement(self):
+        shell=object.__new__(m.CachedProcessShell)
+        shell.service=N(menu=None,_failure=None)
+        with self.assertRaises(m.UiCapacityRebuild):shell._rebind(context('world'))
+
+    def test_failed_or_undetached_shell_does_not_authorize_replacement(self):
+        shell=object.__new__(m.CachedProcessShell)
+        for menu,failure in ((None,'unknown cleanup'),(N(panel=N(state='open',menu=object())),None)):
+            shell.service=N(menu=menu,_failure=failure)
+            with self.assertRaises(proof.UiProofPending):shell._rebind(context('world'))
+
 class RebindPreparedFrameTests(unittest.TestCase):
     def setUp(self):
         from contextlib import contextmanager

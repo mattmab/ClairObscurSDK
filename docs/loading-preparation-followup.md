@@ -161,7 +161,7 @@ work. Ordinary startup stays quiet. Recent rendering is an observable submission
 signal, not a render-thread/GPU fence or a texture-streaming completion guarantee.
 A floor outside the camera frustum can produce a conservative readiness timeout.
 
-The final SDK suite passes 2,156 tests with 8 skips. Native runtime213 and
+The final SDK suite passes 2,160 tests with 8 skips. Native runtime213 and
 its ownership, readiness and bounded FString fixtures compile with MSVC /W4 /WX.
 The integrated World Builder suite passes 140 tests; the separate project passes 78.
 
@@ -199,3 +199,15 @@ its exact acquired references and detached button, and rediscovers current title
 authority. Only stale/busy native rejections before dispatch are deferred; capacity,
 unknown and post-construction failures remain held errors. Existing exact leases
 are reused rather than acquired again. Lease diagnostics now include native codes.
+
+## Controller replacement preserves the process menu
+
+A gameplay controller replacement could be observed by the old pause entry before
+the admission worker published the new context. The standalone pause recovery
+path disposed the shared menu, bypassing the process owner's rebuild request.
+Subsequent rebinds waited indefinitely for that absent tree to become detached.
+Process-owned entries now acknowledge their own retirement and leave the shared
+tree to Process UI. If an earlier acknowledged disposal already removed the
+tree, rebind requests shell retirement and reconstruction through the existing
+ACK barrier. Open, failed or unknown trees do not authorize that replacement.
+The 2,160-test suite includes both controller retirement and missing-tree recovery.

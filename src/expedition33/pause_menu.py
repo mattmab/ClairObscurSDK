@@ -605,6 +605,9 @@ class PauseMenuEntry:
                     # Complete acknowledged cleanup before relinquishing ownership.
                     # Any failure below keeps this instance failed with its owners.
                     self.close()
+                    if getattr(self,'_process_owned_shell',False):
+                        log.info('Pause controller changed; entry retired, process-owned menu retained for handoff')
+                        return
                     self.service.dispose_menu()
                     self.service._warmup_attempted = False
                     parent, service = self.parent_scope, self.service

@@ -47,6 +47,7 @@ class UiEntryOwner:
         self.ready=True;self.journal=LeaseJournal()
         factory=TitleMenuEntry if context.kind=='title' else PauseMenuEntry
         self.entry=factory(self.scope,service,readiness=lambda:self.ready)
+        self.entry._process_owned_shell=True
         if context.kind=='world':self.entry._expected_controller=context.controller
         else:self.scope._title_local_selector=context.local_player[1:]
     def poll(self):
@@ -145,6 +146,11 @@ class CachedProcessShell:
 
     def _rebind(self,context,*,preparing=False):
         menu=self.service.menu
+        if menu is None and not self.service._failure:
+            # dispose_menu clears this reference only after acknowledged tree
+            # cleanup. Retire the shell owner before constructing a replacement;
+            # waiting for a disposed tree to become detached cannot progress.
+            raise UiCapacityRebuild('Disposed process UI shell requires acknowledged replacement')
         if menu is None or menu.panel.state!='built' or menu.panel.menu is not None:
             raise UiProofPending('Detached process UI shell required')
         # Deferred legacy definitions may add bindings after title preparation.
