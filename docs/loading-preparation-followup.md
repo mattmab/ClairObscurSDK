@@ -30,11 +30,11 @@ can attach behind the Press Any Button screen. Gameplay activation still waits
 for fresh possession and world admission. Read-only GC races defer proof and
 untouched preparation owners; they do not replay uncertain native mutations.
 
-Public mod versions: Continent Flight 0.4.3, Map Travel 0.2.4 and World Builder
+Earlier title/loading refresh versions: Continent Flight 0.4.3, Map Travel 0.2.4 and World Builder
 0.32.5-experimental. The SDK version remains 0.1.0-rc18 with native runtime210.
 This refresh uses a new release tag; earlier assets remain immutable.
 
-## Validation and remaining limits
+## Earlier title/loading baseline: validation and remaining limits
 
 The Python suite passed 2,060 tests with 8 skips; the separate World Builder
 suite passed 140 tests. Live checks covered cold launch, title menu fade-in,
@@ -86,7 +86,7 @@ scheduling correction recovered that session without restarting. A subsequent
 Ancient Sanctuary to Blades Graveyard transition then restored all seven mods
 automatically, with no controller abort or retained-preparation stall.
 
-## Assigned-map collision protection
+## Earlier runtime211 assigned-map collision protection
 
 WorldBuilder Map Loader 0.2.3 and native runtime 211 protect a saved player
 whose supporting floor is supplied by an assigned WorldBuilder map. A native
@@ -119,3 +119,72 @@ A final clean launch verified the loaded DLL against the reviewed runtime211
 file hash, loaded the saved world without a live Python patch, restored the
 same 1,798 props in 4.94 seconds, and confirmed movement on the custom floor.
 The installed release manifest verification passed after this check.
+
+## Runtime213 custom-map preparation and reveal
+
+WorldBuilder Map Loader 0.2.4 separates process preparation from destination
+restoration. Assigned map files are decoded and validated into immutable plans
+before gameplay. Static-mesh assets from `/Game/` and `/Engine/` are prepared
+during loading under process ownership. Actor placement still requires a fresh
+destination binding; no actor or world ownership is moved to a worker thread,
+and the preparation cache never pins a departing world.
+
+The loading presentation is a small, opaque, process-owned widget tree prepared
+before save selection. The native gate observes SaveManager loading and
+GameInstance map-change flags before destination possession. It shows the
+prepared tree without activating CommonUI, taking focus or constructing a
+destination pause menu. Native polling checks viewport membership so travel's
+widget removal cannot silently leave the cover detached. Confirmed cancellation,
+normal-world arrival, release and shutdown each have explicit cleanup paths.
+Exact identities prevent a retiring world's callback from releasing the next
+destination's presentation or movement hold.
+
+Spawn completion, collision support and visual readiness are distinct evidence.
+After placement, native queries verify that all owned actors/components remain
+live and visible, run five downward traces near the saved pawn's feet, inspect
+collision-enabled components, check recent rendering of SDK-owned supporting geometry,
+and require no pending level-streaming state. The same query validates the
+current world, pawn and save-generation binding. Python releases the captured
+movement mode and cover only after this restoration contract succeeds.
+
+The readiness loop has a 15-second failure deadline. The native cover has an
+independent 60-second recovery deadline for a stalled or disconnected owner.
+Neither deadline substitutes for readiness evidence or imposes a fixed success
+delay. Invalid maps, cancellation and failed readiness release presentation and
+the owned movement hold with a diagnostic. Recovery does not invent a checkpoint
+or relocate the player; a save depending on missing custom collision may remain
+unsupported after that release.
+
+`startuptiming` records plan/asset preparation, map loading/spawning, collision
+readiness, visual readiness, player release/cover removal and total restoration
+work. Ordinary startup stays quiet. Recent rendering is an observable submission
+signal, not a render-thread/GPU fence or a texture-streaming completion guarantee.
+A floor outside the camera frustum can produce a conservative readiness timeout.
+
+The final SDK suite passes 2,146 tests with 8 skips. Native runtime213 and
+its ownership, readiness and bounded FString fixtures compile with MSVC /W4 /WX.
+The integrated World Builder suite passes 140 tests; the separate project passes 78.
+
+A clean native213 launch prepared 129 assets during loading in 4.94 seconds.
+Restoring 1,798 props took 1.360 seconds; collision/visual checks took 17 ms,
+and release/cover removal took 32 ms, for 1.416 seconds total beneath the cover.
+The final return trip restored the same props in 1.485 seconds total, with
+18 ms readiness checks and no recovery timeout. Asset preflight after loading
+was below 0.5 ms. Placement remains destination work; the cover hides that work.
+
+Cold custom-save loading, movement on its floor, same-session title/reload,
+normal-save loading, travel away/back, Mods/Map Travel availability, cancellation,
+and missing/invalid/incomplete map recovery were exercised live. The final
+native213 build additionally verified the original loading artwork during travel
+and reopening Mods with all seven gameplay mods ready. Earlier native212 checks
+covered the unchanged title/reload and invalid-map recovery paths.
+
+The original charcoal, petal and gold loading PNG is imported during preparation
+using one exact audited engine signature. Its owned Image widget is covered by
+an opaque fallback. No game artwork is redistributed. Vanilla support may use
+an invisible collision proxy, so recent-render evidence applies only to SDK-owned
+support hits; all five floor traces and settled engine streaming remain required.
+
+A cancellation returning to the same non-title world and same pawn has no positive
+cancel identity signal and may retain the cover until the native 60-second recovery
+deadline. Title cancellation has explicit cleanup. No success path uses that deadline.

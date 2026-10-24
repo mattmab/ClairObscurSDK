@@ -1,12 +1,13 @@
 import struct
 import unittest
 from types import SimpleNamespace as N
+from unittest.mock import Mock
 from expedition33.map_load_gate import MapLoadGate,validate_request,SIZE
 
 
 class GateWireTests(unittest.TestCase):
     def owner(self,change=None):
-        gate=MapLoadGate.__new__(MapLoadGate);gate.owner=123;gate.closed=False
+        gate=MapLoadGate.__new__(MapLoadGate);gate.owner=123;gate.closed=False;gate.overlay=None
         self.sent=[]
         def command(name,packet):
             self.assertEqual(name,'mesh');validate_request(packet);self.sent.append(packet)
@@ -46,6 +47,29 @@ class GateWireTests(unittest.TestCase):
         gate.update_worlds(('/Game/A.A','/Game/B.B'))
         self.assertEqual(struct.unpack_from('<Q',self.sent[0],16)[0],123)
         self.assertEqual(struct.unpack_from('<I',self.sent[0],2000)[0],2)
+
+    def test_cover_lifetime_is_retained_through_uncertain_native_attachment(self):
+        ids=tuple((i,1000+i,16*i) for i in range(1,6))
+        overlay=Mock();overlay.native_bindings.return_value=ids
+        gate=self.owner();gate.session._transport.map_loading_presentation_protocol=1
+        gate.attach_cover(overlay)
+        self.assertEqual(struct.unpack_from('<I',self.sent[0],4)[0],103)
+        self.assertEqual(struct.unpack_from('<iiQ',self.sent[0],152),ids[4])
+        overlay.adopt_native.assert_called_once()
+        overlay.reset_mock();gate=self.owner(lambda packet:packet.__setitem__(1999,1))
+        gate.session._transport.map_loading_presentation_protocol=1
+        with self.assertRaisesRegex(RuntimeError,'acknowledgement mismatch'):gate.attach_cover(overlay)
+        overlay.adopt_native.assert_called_once()
+        self.assertIs(gate.overlay,overlay)
+
+    def test_cover_requires_capability_and_valid_binding_padding(self):
+        gate=self.owner();gate.session._transport.map_loading_presentation_protocol=0
+        overlay=Mock()
+        with self.assertRaisesRegex(RuntimeError,'unavailable'):gate.attach_cover(overlay)
+        self.assertFalse(self.sent);overlay.adopt_native.assert_not_called()
+        ids=tuple((i,1000+i,16*i) for i in range(1,6))
+        gate._send(103,ids=ids);packet=bytearray(self.sent[0]);packet[168]=1
+        with self.assertRaises(ValueError):validate_request(bytes(packet))
 
     def test_padding_and_invalid_header_are_rejected_before_dispatch(self):
         gate=self.owner();gate.status();packet=self.sent[0]

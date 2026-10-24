@@ -11,7 +11,7 @@ import sys
 import zipfile
 
 sys.path.insert(0, str(Path(__file__).resolve().parent))
-from package_release_candidate import build as build_sdk
+from package_release_candidate import build as build_sdk, PUBLIC_ASSETS
 from package_world_builder import build as build_builder
 from package_mods import build_all
 
@@ -76,7 +76,7 @@ REQUIRED_SOURCES={
     'src/expedition33/_lease_release_batch.py','src/expedition33/_menu_latency.py',
     'src/expedition33/core_startup.py','src/expedition33/console_startup.py',
     'src/expedition33/frontend_rejection.py','src/expedition33/mod_lifecycle.py',
-    'src/expedition33/startup_metrics.py'}
+    'src/expedition33/startup_metrics.py'} | set(PUBLIC_ASSETS)
 FORBIDDEN_PARTS={'settings','logs','backups','local-backups','custom-source','__pycache__','.git',
     'sdk-capability-review','qabattleexplorer','qabattleexplorer.sdkmod'}
 

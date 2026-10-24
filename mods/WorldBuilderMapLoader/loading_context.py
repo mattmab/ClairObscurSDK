@@ -12,6 +12,23 @@ class LoadingContext:
         self.monitor=ReadOnlyAdmissionMonitor(lambda:ContextObserver(pid),interval=.1,max_age=1.)
         self.mod._loading_context=self
         self._prepare_gate(context)
+        self._prepare_assets()
+
+    def _prepare_assets(self):
+        from expedition33.map_runtime import prepare_metadata
+        from expedition33.map_readiness import prepare_readiness_metadata
+        from expedition33.map_asset_preparation import AssetPreparation
+        if getattr(getattr(self.session,'_transport',None),'map_asset_preparation_protocol',0)!=1:return
+        prepare_metadata(self.session)
+        prepare_readiness_metadata(self.session)
+        assets=getattr(self.mod,'_asset_preparation',None)
+        if assets is None or assets.closed:
+            assets=AssetPreparation(self.session);self.mod._asset_preparation=assets
+        store=getattr(self.mod,'_startup_store',None)
+        for world,key in getattr(self.mod,'_startup_assignments',{}).items():
+            try:plan=store.read_plan(key,world)
+            except (OSError,ValueError,KeyError,TypeError):continue
+            assets.prepare(plan.assets)
 
     def _prepare_gate(self,context):
         transport=getattr(self.session,'_transport',None)
@@ -22,9 +39,24 @@ class LoadingContext:
         from expedition33.paths import settings_dir
         assignments=Assignments(settings_dir()/'WorldBuilderMapLoader'/'assignments.json')
         worlds=tuple(assignments.values)
+        if gate is not None and not gate.closed and gate.status()['state']==4:
+            gate.close()
         if gate is not None and not gate.closed:
-            gate.update_worlds(worlds);return
-        if worlds:self.mod._native_gate=MapLoadGate(self.session,context,worlds)
+            gate.update_worlds(worlds)
+        elif worlds:
+            gate=MapLoadGate(self.session,context,worlds)
+            self.mod._native_gate=gate
+        if worlds and gate is not None and not gate.closed:
+            if getattr(transport,'map_loading_presentation_protocol',0)==1 and gate.overlay is None:
+                from expedition33.map_loading_overlay import MapLoadingOverlay
+                overlay=getattr(self.mod,'_loading_overlay',None)
+                if overlay is not None and overlay.state not in ('built','closed'):
+                    overlay.close();overlay=None
+                if overlay is None or overlay.state=='closed':
+                    overlay=MapLoadingOverlay(self.session,context)
+                    self.mod._loading_overlay=overlay
+                    overlay.build()
+                gate.attach_cover(overlay)
 
     def observe_title(self,context):
         registry=self.session._process_ui.registry
@@ -32,7 +64,10 @@ class LoadingContext:
         if enabled:self._prepare_gate(context)
         else:
             gate=getattr(self.mod,'_native_gate',None)
-            if gate is not None and not gate.closed:gate.close()
+            if gate is not None and not gate.closed:
+                gate.close()
+                overlay=getattr(self.mod,'_loading_overlay',None)
+                if overlay is not None:overlay.release_native()
 
     def bind(self,context,*,preparing=False):
         # Only the owner thread may hold the current possessed pawn. Begin

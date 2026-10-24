@@ -8,9 +8,9 @@ from .map_runtime import SIZE
 def validate_request(data):
     if type(data) is not bytes or len(data)!=SIZE:raise ValueError('Map load guard packet size')
     version,op,error,state,owner=struct.unpack_from('<4IQ',data)
-    if version!=3 or op not in (99,100,101,102) or error or state or not owner or any(data[24:88]):
+    if version!=3 or op not in (99,100,101,102,103) or error or state or not owner or any(data[24:88]):
         raise ValueError('Map load guard header')
-    count=3 if op==99 else 2 if op==100 else 0
+    count=3 if op==99 else 2 if op==100 else 5 if op==103 else 0
     for at in range(88,88+16*count,16):
         index,serial,address=struct.unpack_from('<iiQ',data,at)
         if index<0 or serial<0 or not address:raise ValueError('Map load guard identity')
@@ -30,7 +30,7 @@ class MapLoadGate:
     def __init__(self,session,context,worlds):
         from .catalog import capture_matching,capture_selected
         from ._reader import ReadBatch
-        self.session=session;self.owner=secrets.randbits(64) or 1;self.closed=False
+        self.session=session;self.owner=secrets.randbits(64) or 1;self.closed=False;self.overlay=None
         with ReadBatch(session.pid):
             c=capture_matching(session.pid,names=('SetMovementMode',))
             fn=c.find_path('/Script/Engine.CharacterMovementComponent:SetMovementMode')
@@ -39,6 +39,7 @@ class MapLoadGate:
             selected=capture_selected(session.pid,(context.local_player[1:],context.gi[1:]))
             player=selected.by_index[context.local_player[1]];gi=selected.by_index[context.gi[1]]
             self.ids=(player,gi,fn);self.worlds=tuple(sorted(set(worlds)))
+            process_preparation(session).scope._reference_owners.append(self)
             self._send(99,ids=self.ids,worlds=self.worlds)
 
     def _send(self,op,*,ids=(),worlds=()):
@@ -67,6 +68,13 @@ class MapLoadGate:
         return dict(state=state,world=list(struct.unpack_from('<iiQ',raw,4096)),pawn=list(struct.unpack_from('<iiQ',raw,4112)))
 
     def status(self):return self._send(101)
+    def attach_cover(self,overlay):
+        if getattr(self.session._transport,'map_loading_presentation_protocol',0)!=1:
+            raise RuntimeError('Native loading presentation unavailable')
+        bindings=overlay.native_bindings()
+        overlay.adopt_native()
+        self.overlay=overlay
+        self._send(103,ids=bindings)
     def update_worlds(self,worlds):
         worlds=tuple(sorted(set(worlds)))
         if not worlds:self.close();return
@@ -74,7 +82,10 @@ class MapLoadGate:
             self._send(99,ids=self.ids,worlds=worlds);self.worlds=worlds
     def release(self,ctx):return self._send(100,ids=(ctx['visit'],ctx['pawn']))
     def close(self):
-        if not self.closed:self._send(102);self.closed=True
+        if not self.closed:
+            self._send(102);self.closed=True
+            if self.overlay is not None:self.overlay.release_native()
+        return True
 
 
 class NativePlayerHold:

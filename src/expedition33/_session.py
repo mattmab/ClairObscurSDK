@@ -103,6 +103,9 @@ class SessionTransport:
             self.enemy_extra_spots_protocol = ready.get('enemy_extra_spots_protocol', 0)
             self.map_runtime_protocol = ready.get('map_runtime_protocol', 0)
             self.map_load_gate_protocol = ready.get('map_load_gate_protocol', 0)
+            self.map_loading_presentation_protocol = ready.get('map_loading_presentation_protocol', 0)
+            self.map_asset_preparation_protocol = ready.get('map_asset_preparation_protocol', 0)
+            self.map_readiness_protocol = ready.get('map_readiness_protocol', 0)
             self.retired_world_cleanup_protocol = ready.get('retired_world_cleanup_protocol', 0)
             self.builder_world_retirement_protocol = ready.get('builder_world_retirement_protocol', 0)
             self.runtime_cinematic_protocol = ready.get('runtime_cinematic_protocol', 0)
@@ -495,7 +498,13 @@ class SessionTransport:
                 if type(capability) is not int or capability not in (1,2,3) or operation==114 and capability<2 or operation==115 and capability<3 or operation==116 and (type(pose_capability) is not int or pose_capability!=1) or operation==117 and (type(getattr(self,'enemy_arena_protocol',0)) is not int or getattr(self,'enemy_arena_protocol',0)!=1) or operation==118 and (type(getattr(self,'enemy_arena_binding_protocol',0)) is not int or getattr(self,'enemy_arena_binding_protocol',0)!=1) or operation==119 and (type(getattr(self,'enemy_clearance_protocol',0)) is not int or getattr(self,'enemy_clearance_protocol',0)!=1) or operation in (120,121) and (type(getattr(self,'enemy_grounded_spawn_protocol',0)) is not int or getattr(self,'enemy_grounded_spawn_protocol',0)!=2) or operation==122 and (type(getattr(self,'enemy_extra_spots_protocol',0)) is not int or getattr(self,'enemy_extra_spots_protocol',0)!=1):
                     raise ValueError('Native session does not support this owned enemy operation')
                 from ._enemy_spawn_wire import validate_request
-            elif type(payload) is bytes and len(payload)>=8 and 99<=int.from_bytes(payload[4:8],'little')<=102:
+            elif type(payload) is bytes and len(payload)>=8 and 104<=int.from_bytes(payload[4:8],'little')<=106:
+                if getattr(self,'map_asset_preparation_protocol',0)!=1:raise ValueError('Map asset preparation unavailable')
+                from .map_asset_preparation import validate_request
+            elif type(payload) is bytes and len(payload)>=8 and int.from_bytes(payload[4:8],'little')==107:
+                if getattr(self,'map_readiness_protocol',0)!=1:raise ValueError('Map readiness unavailable')
+                from .map_readiness import validate_request
+            elif type(payload) is bytes and len(payload)>=8 and 99<=int.from_bytes(payload[4:8],'little')<=103:
                 if type(getattr(self,'map_load_gate_protocol',0)) is not int or self.map_load_gate_protocol!=1:
                     raise ValueError('Native session does not support map-load movement protection')
                 from .map_load_gate import validate_request

@@ -31,7 +31,7 @@ class Mod:
         self._player_hold=None
         self._native_gate=None
     def management(self):
-        return ModDefinition('e33.worldbuilder-map-loader','WorldBuilder Map Loader',version='0.2.3',
+        return ModDefinition('e33.worldbuilder-map-loader','WorldBuilder Map Loader',version='0.2.4',
             description='Load finished WorldBuilder maps during exploration. F2: choose one map per vanilla world. No editor required.',
             actions=(Action('open','Choose map for current world',self.open_menu),Action('status','Map loader status',self.status),Action('unload','Unload placed map',self.unload)),
             keybinds=(Keybind('open','Choose WorldBuilder map','F2',self.open_menu),))
@@ -95,7 +95,7 @@ class Mod:
         return elapsed
     def timing_status(self):
         # Explicitly contains no selected map, assignment, world, path or content.
-        return dict(preparation=dict(getattr(getattr(self,'_startup_store',None),'stats',{})),stages={k:dict(v) for k,v in self.timings.items()},runtime={k:dict(v) for k,v in getattr(self.runtime,'profile',{}).items()})
+        return dict(preparation=dict(getattr(getattr(self,'_startup_store',None),'stats',{})),asset_preparation=dict(getattr(getattr(self,'_asset_preparation',None),'profile',{})),stages={k:dict(v) for k,v in self.timings.items()},runtime={k:dict(v) for k,v in getattr(self.runtime,'profile',{}).items()})
     def check_legacy(self):
         # Refuse to overlap even with an unmodified old package. Repeat before
         # every load in case an archive was installed during this session.
@@ -147,28 +147,72 @@ class Mod:
         self.visits.attempted=True
         total_started=time.perf_counter()
         try:
+            lifecycle=getattr(getattr(getattr(self.session,'mods',None),'_loader',None),'world_lifecycle',None)
+            self._load_generation=getattr(lifecycle,'current_token',None)
             self.check_legacy()
             started=time.perf_counter()
-            data=self.store.read(key)
+            data=self.store.read_plan(key,self.current['world'])
             self._mark('map_read_validate',started)
-            if data['world']!=self.current['world']:raise ValueError('Saved map belongs to a different vanilla world')
+            if data.world!=self.current['world']:raise ValueError('Saved map belongs to a different vanilla world')
             self.hold_player(self.session,self.current)
             started=time.perf_counter()
             self.runtime.close()
             self._mark('previous_map_cleanup',started)
             started=time.perf_counter()
-            result=self.runtime.load(data,self.current)
-            self._startup_map_loaded=True
+            result=self.runtime.load(data,self.current,asset_preparation=getattr(self,'_asset_preparation',None))
             self._mark('placement',started)
+            self.wait_until_ready()
+            self._startup_map_loaded=True
             self.message=f"Loaded {result['objects']} props. It will load again on the next visit."
             if isinstance(result,dict) and result.get('skipped_world_edits'):
                 self.message=f"Loaded {result['objects']} props; skipped {result['skipped_world_edits']} existing-world edits. Original save unchanged."
         except Exception as exc:self.message='Map not loaded: '+str(exc)
         finally:
+            released=time.perf_counter()
             self.release_player()
+            self._mark('player_release_and_cover_removal',released)
             self._mark('apply_total',total_started)
             LOG.info('Map loader timing: %s',self.timing_status())
         return self.status()
+    def wait_until_ready(self):
+        """Reveal only this exact save/world generation with real support."""
+        from expedition33.world_admission import observe_admission
+        from expedition33.map_readiness import NativeMapReadiness,ReadinessPending
+        if getattr(self.session._session._transport,'map_readiness_protocol',0)!=1:return
+        started=time.perf_counter()
+        token=getattr(self,'_load_generation',None)
+        if token is None:
+            admitted=observe_admission(self.session.pid)
+            if not admitted.activation_ready or admitted.token is None:raise RuntimeError('Save identity unavailable at map completion')
+            token=admitted.token
+        if token[0][0]!=self.session.pid or tuple(token[0][1:])!=tuple(self.current['visit']):raise RuntimeError('Map load generation changed')
+        query=NativeMapReadiness(self.runtime,self.current,expected_token=token)
+        deadline=time.monotonic()+15.
+        collision_marked=False
+        deferred_reads=0
+        while True:
+            try:
+                receipt=query.query()
+            except ReadinessPending:
+                deferred_reads+=1
+                self._readiness_counts=dict(getattr(self,'_readiness_counts',{}),deferred_reads=deferred_reads)
+                if time.monotonic()>=deadline:raise RuntimeError('Map readiness observation timed out; deferred reads='+str(deferred_reads))
+                time.sleep(.05)
+                continue
+            self._readiness_counts=dict(objects=receipt.rows,live_rows=receipt.live_rows,visible_rows=receipt.visible_rows,
+                support_hits=receipt.support_hits,owned_support_hits=receipt.owned_support_hits,
+                rendered_rows=receipt.rendered_rows,rendered_support_hits=receipt.rendered_support_hits,
+                owned_rendered_support_hits=receipt.owned_rendered_support_hits,streaming_pending=receipt.streaming_pending,
+                flags=receipt.flags,deferred_reads=deferred_reads)
+            if receipt.collision_ready and not collision_marked:
+                self._mark('collision_ready',started)
+                collision_marked=True
+            if receipt.spawn_complete and receipt.collision_ready and receipt.visual_ready:
+                self._mark('visual_ready',started)
+                self._mark('collision_and_scene_ready',started)
+                return
+            if time.monotonic()>=deadline:raise RuntimeError('Map collision or scene readiness timed out: '+str(self._readiness_counts))
+            time.sleep(.05)
     def hold_player(self,session,ctx):
         hold=self._player_hold
         if hold is not None and hold.held and not hold.closed:
@@ -333,5 +377,7 @@ class Mod:
         self.release_player()
         if not self._world_retiring and self._native_gate is not None:
             self._native_gate.close();self._native_gate=None
+            overlay=getattr(self,'_loading_overlay',None)
+            if overlay is not None:overlay.release_native()
         if self.runtime:self.runtime.close()
         self.session=None

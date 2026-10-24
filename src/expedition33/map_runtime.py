@@ -18,6 +18,23 @@ FUNCTIONS = ('GameplayStatics.BeginDeferredActorSpawnFromClass',
              'SceneComponent.K2_GetComponentToWorld', 'SceneComponent.K2_SetWorldTransform',
              'Controller.K2_GetPawn', 'StaticMeshComponent.SetStaticMesh')
 
+def prepare_metadata(session):
+    """Retain only Script metadata during process loading, without a World."""
+    cached=getattr(session,'_map_runtime_metadata',None)
+    if cached is not None:return cached
+    from ._metadata_stabilization import process_preparation
+    with ReadBatch(session.pid):
+        names=tuple(f.split('.')[1] for f in FUNCTIONS)+('Default__GameplayStatics','StaticMeshActor','StaticMesh','Default__KismetSystemLibrary','LoadAsset_Blocking')
+        c=capture_matching(session.pid,names=names)
+        paths=('/Script/Engine.Default__GameplayStatics','/Script/Engine.StaticMeshActor','/Script/Engine.StaticMesh')
+        ids=[c.find_path(p) for p in paths]
+        ids.extend(c.find_path('/Script/Engine.'+f.replace('.',':')) for f in FUNCTIONS)
+        ids.extend((c.find_path('/Script/Engine.Default__KismetSystemLibrary'),c.find_path('/Script/Engine.KismetSystemLibrary:LoadAsset_Blocking')))
+        stable=process_preparation(session).prepare(c,ids)
+        cached=tuple(stable.by_index[o.index] for o in ids)
+    session._map_runtime_metadata=cached
+    return cached
+
 
 def validate_request(data):
     if type(data) is not bytes or len(data) != SIZE:
@@ -170,9 +187,40 @@ class MapRuntime:
         return raw
 
     def _prepare(self, expected):
-        if context(self.scope) != expected or not expected['ready']:
+        ui=getattr(getattr(self.scope._session,'_process_ui',None),'context',None)
+        copied_controller=(ui.controller if ui is not None and ui.kind=='world'
+            and tuple(ui.world[1:])==tuple(expected['visit']) and ui.controller[0]==self.scope.pid else None)
+        if not expected['ready'] or copied_controller is None and context(self.scope) != expected:
             raise RuntimeError('Exploration pawn or vanilla world changed')
         with ReadBatch(self.scope.pid):
+            prepared=getattr(self.scope._session,'_map_runtime_metadata',None)
+            if prepared is not None:
+                from .catalog import capture_selected
+                selected=(tuple(expected['visit']),tuple(expected['pawn']))
+                if copied_controller is not None:selected+=(copied_controller[1:],)
+                c=capture_selected(self.scope.pid,selected)
+                pawn=c.by_index[expected['pawn'][0]];world=c.by_index[expected['visit'][0]]
+                if copied_controller is not None:
+                    # Admission supplied only a copied selector. Native init
+                    # still proves local possession and the active viewport
+                    # epoch before granting this owner any spawn authority.
+                    ids=[c.by_index[copied_controller[1]],pawn,world,*prepared]
+                    self._closed=False;self.started=True
+                    self._send(93,ids=ids);self.visit=expected['visit'];return
+                # Exact local controller selection is still fresh; native current
+                # rechecks possession and destination before every actor.
+                pcs=capture_matching(self.scope.pid,classes=('PlayerController',))
+                local=[]
+                for candidate in pcs.select('PlayerController'):
+                    if candidate.object_flags&0x30:continue
+                    values,pcs=read_values_with_references(pcs,candidate,fields=('Pawn','bIsLocalPlayerController'))
+                    values={k[1]:v for k,v in values.values.items()}
+                    current=values.get('Pawn')
+                    if values.get('bIsLocalPlayerController') and current is not None and (current.index,current.serial,current.address)==tuple(expected['pawn']):local.append(candidate)
+                if len(local)!=1:raise RuntimeError('Destination local controller changed')
+                ids=[local[0],pawn,world,*prepared]
+                self._closed=False;self.started=True
+                self._send(93,ids=ids);self.visit=expected['visit'];return
             names = tuple(f.split('.')[1] for f in FUNCTIONS) + ('Default__GameplayStatics', 'StaticMeshActor','Default__StaticMesh','Default__KismetSystemLibrary','LoadAsset_Blocking')
             c = capture_matching(self.scope.pid, names=names, classes=('PlayerController',))
             def one(name):
@@ -195,19 +243,19 @@ class MapRuntime:
         self._send(93, ids=ids)
         self.visit = expected['visit']
 
-    def load(self, data, expected):
-        from .worldbuilder_maps import validate
+    def load(self, data, expected, *, asset_preparation=None):
         total_started = time.perf_counter()
         started = time.perf_counter()
-        data = validate(data, expected['world'])
-        self._mark('validate', started, count=len(data['objects']))
-        rows = [r for r in data['objects'] if r['kind'] != 'world_edit']
-        if any(r['kind'] != 'mesh' or r.get('component_edits') for r in rows):
-            raise ValueError('Version 1 supports static-mesh props without component edits; unsupported actor types were not spawned')
+        from .map_spawn_plan import SpawnPlan
+        plan=data if type(data) is SpawnPlan else SpawnPlan(data)
+        plan.for_world(expected['world'])
+        rows=[dict(id=r.id,asset=r.asset,transform=r.transform) for r in plan.rows]
+        object_count=plan.object_count
+        self._mark('validate', started, count=object_count)
         if self.started or self.uncertain:
             raise RuntimeError('Unload the current map before loading again')
         if not rows:
-            return dict(objects=0,skipped_world_edits=len(data['objects']))
+            return dict(objects=0,skipped_world_edits=object_count)
         assets = {}
         load_scope = SessionScope(self.scope)
         try:
@@ -218,7 +266,10 @@ class MapRuntime:
             # Resolve registered FNames natively, including numbered names.
             # Every asset is retained and validated before any actor is created.
             for path in dict.fromkeys(r['asset'] for r in rows):
-                if path.startswith('/Engine/'):
+                prepared=asset_preparation.get(path) if asset_preparation is not None else None
+                if prepared is not None:
+                    mesh=prepared
+                elif path.startswith('/Engine/'):
                     with ReadBatch(self.scope.pid):
                         c = capture_matching(self.scope.pid,names=(path.rsplit('.',1)[-1],'Default__GameplayStatics'))
                         mesh = c.find_path(path)
@@ -254,7 +305,7 @@ class MapRuntime:
                     self.objects[r['id']] = dict(asset=r['asset'], actor=actor, transform=r['transform'])
                 at += done
             self._mark('spawn', started, count=len(rows))
-            return dict(objects=len(rows), skipped_world_edits=len(data['objects'])-len(rows))
+            return dict(objects=len(rows), skipped_world_edits=object_count-len(rows))
         except Exception:
             if self.started and not self.uncertain:
                 self.close()

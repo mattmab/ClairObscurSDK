@@ -1,6 +1,6 @@
 # SDK 0.1.0-rc18 — startup preparation and Mods menus
 
-RC18 pairs the SDK with native runtime210. Install the matching SDK ZIP before
+RC18 pairs the SDK with native runtime213 and WorldBuilder Map Loader 0.2.4. Install the matching SDK ZIP before
 updating optional mods. Downloads contain SDK runtime files and public mod sources/assets; existing
 user settings, saved maps and local custom packages are not included.
 
@@ -26,7 +26,7 @@ user settings, saved maps and local custom packages are not included.
   caching calls. Owned cleanup and acknowledged native outcomes remain required.
 - Keybind lists use fixed row widgets and bounded active callback windows.
   Native focus ownership accommodates the larger reusable list.
-- Native lease release batching and colored startup status are included in210.
+- Native lease release batching and colored startup status remain included.
 - World retirement revokes queued world actions and uses explicit native cleanup
   for borrowed UI and SDK-owned props. Cleanup owners remain retained until
   acknowledgments arrive; unsupported or unknown outcomes stay held without
@@ -58,9 +58,59 @@ menu timings depend on the installation and current game state.
 - Defer read-only loading/GC proof races without failing untouched mods or
   rebuilding already-owned trees. Keep uncertain native cleanup owners held.
 - Includes Continent Flight 0.4.3, Map Travel 0.2.4 and World Builder
-  0.32.5-experimental. Native runtime remains 210.
+  0.32.5-experimental. The custom-map loading update uses native runtime213
+  and WorldBuilder Map Loader 0.2.4.
+
+## Custom-map loading readiness
+
+- Assigned maps are decoded and validated into immutable spawn plans during
+  loading preparation. Referenced `/Game/` and `/Engine/` static-mesh assets
+  are prepared under process-owned leases before destination spawning; these
+  preparations do not retain a gameplay world or spawn into a departing world.
+- An original petal/gold loading texture and opaque fallback are prepared before save loading. The native gate
+  observes the game's load and map-change flags and displays that prepared
+  cover before destination possession. It does not activate a menu, change
+  focus or borrow the destination pause menu. Travel detachments are checked
+  against actual viewport membership.
+- The movement guard now remains held beyond spawn acknowledgments. Reveal
+  requires all owned actors to be live and visible, five nearby floor-support
+  traces to succeed, SDK-owned supporting geometry to have a recent render observation,
+  settled level streaming, and matching current world, pawn and save generation.
+  Mandatory map restoration finishes before player control is released.
+- A 15-second readiness deadline and independent 60-second native recovery
+  deadline bound failed preparation or a lost controller. These are recovery
+  limits, not fixed waits used to declare success. Cleanup revokes only the
+  current owner's presentation and movement state; stale callbacks cannot
+  acknowledge a newer world visit.
+- `startuptiming` retains preparation, asset, spawn, collision, visual-readiness
+  and player-release measurements. Detailed timings remain hidden during
+  ordinary startup.
+
+Recent-render observations are not GPU fences or a guarantee that every texture
+mip is resident. A supporting floor outside the camera frustum can fail the
+recent-render check even when spawning has completed. Missing or invalid maps
+and readiness failures recover presentation/control with a diagnostic; a save
+whose floor is absent may still leave the player unsupported. A cancellation back to the same non-title world and pawn may wait for the native
+60-second recovery deadline when no positive cancel signal exists.
 
 ## Validation and measured limits
+
+- Native runtime213 and its fixtures compile with MSVC /W4 /WX. The SDK suite
+  passes 2,146 tests with 8 skips; 140 integrated World Builder tests pass, as do 78 tests in the separate project.
+- Final cold loading prepared 129 assets during game loading in 4.94 seconds.
+  Restoring 1,798 custom props, validating support and revealing the world took
+  1.416 seconds beneath the cover; the final travel return took 1.485 seconds.
+  Post-load asset preflight was below 0.5 ms. Placement still needs the admitted
+  destination world; these measurements do not claim zero destination work.
+- Live checks covered custom and normal saves, floor movement, same-session
+  title/reload, travel away/back, menu availability and invalid-map recovery.
+  The final native213 run verified the texture during travel and all seven mods
+  ready afterward. Readiness uses five local support traces and settled streaming;
+  recent-render evidence is required for SDK-owned support, not invisible vanilla
+  collision proxies.
+
+The following measurements describe the earlier runtime210 release baseline,
+not the final custom-map loading update:
 
 - 2,060 SDK tests passed (8 skips); 140 World Builder tests passed.
 - Native runtime210 and its fixtures were previously compiled with MSVC /W4 /WX.
@@ -95,11 +145,11 @@ context observer.
 
 ## Release inventory
 
-The SDK archive contains runtime210, its matching native controller, the bundled
+The SDK archive contains runtime213, its matching native controller, the bundled
 Python runtime, public SDK Python sources, licensing notices and core mods.
 Optional mods, World Builder, Scene Editor, Enemy Spawner and Asset Converter
 are separate downloads. The source archive includes `gpu/` dependencies and the
-public build scripts. Build runtime210 with
+public build scripts. Build runtime213 with
 `scripts/build-rc18-native.cmd` (including the thumbnail worker), prepare the
 pinned runtime and bootstrap with their existing scripts, then package a new destination with
 `scripts/package_rc18.py` after committing the reviewed public source inputs.

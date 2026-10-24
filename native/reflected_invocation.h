@@ -236,13 +236,16 @@ inline uint32_t reflected_call(uint64_t base,CallPacket& packet,const CallRetent
         }
         if(field.kind==kStringCallKind) {
             width=16;
+            const bool file=exact_name(base,function+0x18,"SetFilePath")&&exact_name(base,owner+0x18,"FileMediaSource")&&
+                exact_name(base,local_read<uint64_t>(owner+0x20)+0x18,"/Script/MediaAssets");
+            const bool texture=exact_name(base,function+0x18,"ImportFileAsTexture2D")&&exact_name(base,owner+0x18,"KismetRenderingLibrary")&&
+                exact_name(base,local_read<uint64_t>(owner+0x20)+0x18,"/Script/Engine")&&
+                exact_name(base,object+0x18,"Default__KismetRenderingLibrary")&&(local_read<uint32_t>(object+8)&0x10);
             if(!text_enabled || !text->strings || local_read<uint64_t>(property)!=base+0x6e131d8 ||
                local_read<uint64_t>(base+0x6e132e8)!=base+0x133a600 ||
                local_read<uint64_t>(base+0x6e132c8)!=base+0x1368400 ||
                local_read<uint64_t>(base+0x6e13258)!=base+0x10044f0 ||
-               !exact_name(base,function+0x18,"SetFilePath") ||
-               !exact_name(base,owner+0x18,"FileMediaSource") ||
-               !exact_name(base,local_read<uint64_t>(owner+0x20)+0x18,"/Script/MediaAssets")) return 764;
+               (!file&&!texture)) return 764;
         }
         if(field.kind==kTextCallKind) {
             width=16;

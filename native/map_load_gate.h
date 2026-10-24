@@ -1,5 +1,6 @@
 #pragma once
 #include "engine_profiles.h"
+#include "map_loading_overlay.h"
 
 // Armed at title, evaluated on the existing game-thread message pump. No
 // Python discovery or menu construction is on the first-pawn protection path.
@@ -10,6 +11,15 @@ class Owner {
     CallIdentity world_{},pawn_{},movement_{},completed_pawn_{},completed_world_{};
     uint8_t mode_=0,custom_=0;bool held_=false,failed_=false;
     std::vector<std::pair<std::string,std::string>> worlds_;
+    e33_map_loading_overlay::Cover cover_;
+    ULONGLONG cover_started_=0;
+    bool transition_=false;
+    CallIdentity departing_world_{},departing_pawn_{};
+    bool cover(uint64_t b,bool show){
+        if(!cover_.configured())return true;
+        if(show){if(!cover_started_)cover_started_=GetTickCount64();return cover_.show(b);}
+        cover_started_=0;return cover_.hide(b);
+    }
     bool same(CallIdentity a,CallIdentity c)const{return a.index==c.index&&a.serial==c.serial&&a.address==c.address;}
     bool set(uint64_t b,uint8_t mode,uint8_t custom){
         if(!TargetPodSchemaOps{b}.context())return false;
@@ -34,6 +44,8 @@ class Owner {
         while(outer&&n++<32&&!named(b,local_read<uint64_t>(outer+16),"World","/Script/Engine"))outer=local_read<uint64_t>(outer+32);
         if(!outer||n>=32||zone_ref(b,outer,"OwningGameInstance")!=gi_.address)return false;
         world=call_capture(b,outer);pawn=call_capture(b,zone_ref(b,pc,"Pawn"));
+        const auto viewport=zone_ref(b,player_.address,"ViewportClient");
+        if(!viewport||zone_ref(b,viewport,"World")!=outer)return false;
         if(!world.address||!pawn.address||(local_read<uint32_t>(pawn.address+8)&0x40018030U))return false;
         const auto cls=local_read<uint64_t>(pawn.address+16);
         if(!exact_name(b,cls+24,"BP_jRPG_Character_World_C")&&
@@ -73,11 +85,40 @@ public:
     }
     uint32_t close(uint64_t b){
         const auto error=release(b);if(error)return error;
+        if(!cover_.detach(b))return 2144;
+        cover_started_=0;transition_=false;
         owner_=0;worlds_.clear();player_=gi_=function_=world_=pawn_=movement_=completed_pawn_=completed_world_={};failed_=false;return 0;
     }
     template<class Pool> void poll(uint64_t b,uint64_t session,Pool&pool){
-        if(!owner_||failed_||!TargetPodSchemaOps{b}.context())return;
-        CallIdentity world{},pawn{};if(!binding(b,world,pawn))return;
+        if(!owner_||!TargetPodSchemaOps{b}.context())return;
+        if(failed_){release(b);cover(b,false);return;}
+        // SaveManager's load flag is observed before destination possession.
+        // Both flags have exact reflected field contracts on this game build.
+        const auto manager=zone_ref(b,gi_.address,"SaveManager");
+        const auto loading=manager?picto_field(b,manager,"LoadIsInProgress","BoolProperty",169,1):0;
+        const auto changing=picto_field(b,gi_.address,"IsChangingMap","BoolProperty",464,1);
+        const auto loaded=picto_field(b,gi_.address,"SaveLoaded","BoolProperty",2680,1);
+        const bool busy=loading&&changing&&(local_read<uint8_t>(loading)||local_read<uint8_t>(changing));
+        if(busy){
+            if(!transition_){binding(b,departing_world_,departing_pawn_);transition_=true;}
+            if(!cover(b,true)){failed_=true;return;}
+        }
+        // Recovery deadline, never a readiness timer. A lost controller or
+        // failed Python host must not leave an opaque screen indefinitely.
+        if(cover_started_&&GetTickCount64()-cover_started_>60000){
+            release(b);cover(b,false);failed_=true;return;
+        }
+        CallIdentity world{},pawn{};const bool bound=binding(b,world,pawn);
+        const bool title=world.address&&exact_name(b,world.address+24,"Level_MainMenu");
+        if(!busy&&title&&loaded&&!local_read<uint8_t>(loaded)){
+            transition_=false;if(!cover(b,false))failed_=true;return;
+        }
+        if(!bound)return;
+        if(transition_&&same(world,departing_world_)&&same(pawn,departing_pawn_))return;
+        if(transition_&&same(world,completed_world_))completed_world_=completed_pawn_={};
+        if(!busy&&(!selected(b,world)||same(world,completed_world_))){
+            transition_=false;if(!cover(b,false))failed_=true;
+        }
         if(held_){
             if(!same(world,world_)||!same(pawn,pawn_)){
                 // Different exact possession: revoke the old journal without
@@ -94,6 +135,7 @@ public:
         // Collision belongs to the world visit, so ordinary character changes
         // after placement must not acquire another loading hold.
         if(same(world,completed_world_)||same(pawn,completed_pawn_)||!selected(b,world))return;
+        if(!cover(b,true)){failed_=true;return;}
         const auto move=zone_ref(b,pawn.address,"CharacterMovement");
         auto identity=call_capture(b,move);if(!identity.address)return;
         const auto mode=picto_field(b,move,"MovementMode","ByteProperty",513,1);
@@ -117,7 +159,7 @@ public:
     }
     void command(uint64_t b,MeshPacket&p){
         auto*raw=reinterpret_cast<uint8_t*>(&p);const auto op=p.operation;
-        if(p.version!=3||p.error||p.state||!p.owner||op<99||op>102){p.error=2140;return;}
+        if(p.version!=3||p.error||p.state||!p.owner||op<99||op>103){p.error=2140;return;}
         if(owner_&&p.owner!=owner_){p.error=2141;return;}
         if(op==99){
             CallIdentity ids[3]{};std::memcpy(ids,raw+88,sizeof(ids));
@@ -141,9 +183,16 @@ public:
         }else if(!owner_){p.error=2141;return;}
         else if(op==100){
             CallIdentity expected[2]{};std::memcpy(expected,raw+88,sizeof(expected));
+            if(!held_&&transition_){p.error=2143;return;}
             if(held_&&(!same(expected[0],world_)||!same(expected[1],pawn_))){p.error=2143;return;}
             p.error=release(b);
+            if(!p.error&&!cover(b,false))p.error=2144;
+            if(!p.error)transition_=false;
         }else if(op==102)p.error=close(b);
+        else if(op==103){
+            CallIdentity ids[5]{};std::memcpy(ids,raw+88,sizeof(ids));
+            if(!cover_.configure(b,ids))p.error=2144;
+        }
         if(op==101){
             std::memcpy(raw+4096,&world_,16);std::memcpy(raw+4112,&pawn_,16);
             std::memcpy(raw+4128,&movement_,16);raw[4144]=mode_;raw[4145]=custom_;
