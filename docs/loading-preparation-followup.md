@@ -85,3 +85,37 @@ The following return trip exposed the released-preparation gate; applying its
 scheduling correction recovered that session without restarting. A subsequent
 Ancient Sanctuary to Blades Graveyard transition then restored all seven mods
 automatically, with no controller abort or retained-preparation stall.
+
+## Assigned-map collision protection
+
+WorldBuilder Map Loader 0.2.3 and native runtime 211 protect a saved player
+whose supporting floor is supplied by an assigned WorldBuilder map. A native
+guard is armed during title preparation with the explicit assigned-world
+inventory (up to 32 worlds). The existing game-thread message pump observes
+the exact local possession and disables movement before Python UI setup and
+asset preflight. Placement acknowledgement restores the captured movement
+mode. The previous two-second exploration stability delay is removed from
+automatic assigned-map loading.
+
+The guard checks the engine function schema and exact world/pawn/component
+identities on dispatch. Temporary serial-stabilization leases end in the same
+callback; the guard does not retain a departing world. Completed world visits
+are remembered so normal character changes cannot acquire another loading
+hold. Assignment updates preserve that journal. Validation/activation failures
+release an unadopted native hold, and controller shutdown performs native
+cleanup. Old-world retirement leaves a destination world's hold for its own
+loader to acknowledge. Manual reloads also hold movement before removing the
+existing props.
+
+Two consecutive live save loads, separated by a return to title in the same
+SDK session, restored 1,798 props and left the player standing on the custom
+floor. Normal movement resumed after placement. The measured placement work
+was about 4.9 seconds; the player remains protected throughout that work.
+The regression suite passes 2,088 tests with 8 skips, and the native build and
+its ownership/UI fixtures pass. Local diagnostic logs, saves, assignments and
+screenshots are excluded from publishing.
+
+A final clean launch verified the loaded DLL against the reviewed runtime211
+file hash, loaded the saved world without a live Python patch, restored the
+same 1,798 props in 4.94 seconds, and confirmed movement on the custom floor.
+The installed release manifest verification passed after this check.

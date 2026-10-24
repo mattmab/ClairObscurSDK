@@ -83,6 +83,10 @@ static e33_builder::Owner session_builder;
 static e33_mesh::Owner session_mesh;
 #include "map_runtime_owner.h"
 static e33_map_runtime::Owner session_map_runtime;
+#ifdef E33_MAP_LOAD_GATE_SESSION
+#include "map_load_gate.h"
+static e33_map_load_gate::Owner session_map_load_gate;
+#endif
 #ifdef E33_ENEMY_SPAWN_SESSION
 #include "enemy_spawn_owner.h"
 #include "npc_original_admission.h"
@@ -925,6 +929,13 @@ uint32_t backend_command(SessionPacket* packet) {
             return 0;
         }
 #endif
+#ifdef E33_MAP_LOAD_GATE_SESSION
+        if(p.operation>=99&&p.operation<=102){
+            __try{session_map_load_gate.command(runtime_base,p);}
+            __except(EXCEPTION_EXECUTE_HANDLER){session_map_load_gate.quarantine();p.error=2142;}
+            return 0;
+        }
+#endif
         if(p.operation>=93 && (p.operation<=97
 #ifdef E33_RETIRED_WORLD_SESSION
             ||(p.version==3 && p.operation==98)
@@ -1377,6 +1388,10 @@ static uint32_t guarded_mesh_close() {
 #endif
 #endif
 #endif
+#ifdef E33_MAP_LOAD_GATE_SESSION
+    __try {const auto e=session_map_load_gate.close(runtime_base);if(e)return e;}
+    __except(EXCEPTION_EXECUTE_HANDLER) {return 2142;}
+#endif
     __try {const auto e=session_map_runtime.close(runtime_base,lease_session,session_leases);if(e)return e;}
     __except(EXCEPTION_EXECUTE_HANDLER) {return 2109;}
 #ifdef E33_RUNTIME_CINEMATIC_SESSION
@@ -1477,12 +1492,19 @@ uint32_t backend_close() {
 }
 #ifdef E33_MESH_SESSION
 bool backend_mesh_wake_needed(){return session_mesh.animating() || session_builder.active()
+#ifdef E33_MAP_LOAD_GATE_SESSION
+    || session_map_load_gate.active()
+#endif
 #ifdef E33_RUNTIME_CINEMATIC_SESSION
     || session_runtime_cinematic.active()
 #endif
     ;}
 #endif
 void backend_message(MSG* message) {
+#ifdef E33_MAP_LOAD_GATE_SESSION
+    __try{session_map_load_gate.poll(runtime_base,lease_session,session_leases);}
+    __except(EXCEPTION_EXECUTE_HANDLER){session_map_load_gate.quarantine();}
+#endif
 #if E33_RUNTIME_CINEMATIC_VERSION>=186
     __try {session_encounter_tuning.poll(runtime_base,lease_session,session_leases);}
     __except(EXCEPTION_EXECUTE_HANDLER) {} // owner remains available for cleanup

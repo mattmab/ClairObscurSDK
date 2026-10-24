@@ -28,8 +28,10 @@ class Mod:
         self._context_monitor=None
         self._world_retiring=False;self._retirement_result=None
         self._disable_preparing=False
+        self._player_hold=None
+        self._native_gate=None
     def management(self):
-        return ModDefinition('e33.worldbuilder-map-loader','WorldBuilder Map Loader',version='0.2.2',
+        return ModDefinition('e33.worldbuilder-map-loader','WorldBuilder Map Loader',version='0.2.3',
             description='Load finished WorldBuilder maps during exploration. F2: choose one map per vanilla world. No editor required.',
             actions=(Action('open','Choose map for current world',self.open_menu),Action('status','Map loader status',self.status),Action('unload','Unload placed map',self.unload)),
             keybinds=(Keybind('open','Choose WorldBuilder map','F2',self.open_menu),))
@@ -42,10 +44,18 @@ class Mod:
         # Read legacy choices without migration writes; normal enable preserves
         # the existing migration and re-reads settings changed after preparation.
         assignments=Assignments(current if current.exists() else legacy)
+        self._startup_assignments=dict(assignments.values)
         self._startup_store=PreparedMapStore(root/'E33WorldBuilder'/'maps')
         self._startup_store.prepare(assignments.values.values())
         self._mark('startup_prepare',started)
     def enable(self,session):
+        try:self._enable(session)
+        except BaseException:
+            # A loading-time hold is process-owned until enable completes.
+            # Failed registration must not leave the character immobilized.
+            self.release_player()
+            raise
+    def _enable(self,session):
         self._world_retiring=False;self._retirement_result=None
         self._disable_preparing=False
         started=time.perf_counter()
@@ -112,6 +122,7 @@ class Mod:
         if expected and expected['visit']!=self.current['visit']:raise RuntimeError('Map changed; choose again')
         if map_id not in {r['id'] for r in self.rows}:raise ValueError('Choose a save belonging to this vanilla map')
         self.assignments.select(self.current['world'],map_id)
+        if self._native_gate is not None and not self._native_gate.closed:self._native_gate.update_worlds(self.assignments.values)
         self.message=('Assigned for the next map visit.' if self.visits.attempted else 'Assigned. Close this menu to load, or use Load now.')
         self.paint();return self.status()
     def clear(self):
@@ -119,6 +130,7 @@ class Mod:
         self.refresh()
         if expected and expected['visit']!=self.current['visit']:raise RuntimeError('Map changed; choose again')
         self.assignments.select(self.current['world'],None)
+        if self._native_gate is not None and not self._native_gate.closed:self._native_gate.update_worlds(self.assignments.values)
         self.message='Automatic loading disabled for this world. Use Unload to remove this loader\'s props.'
         self.paint();return self.status()
     def load_now(self,_=None):
@@ -140,6 +152,7 @@ class Mod:
             data=self.store.read(key)
             self._mark('map_read_validate',started)
             if data['world']!=self.current['world']:raise ValueError('Saved map belongs to a different vanilla world')
+            self.hold_player(self.session,self.current)
             started=time.perf_counter()
             self.runtime.close()
             self._mark('previous_map_cleanup',started)
@@ -152,9 +165,39 @@ class Mod:
                 self.message=f"Loaded {result['objects']} props; skipped {result['skipped_world_edits']} existing-world edits. Original save unchanged."
         except Exception as exc:self.message='Map not loaded: '+str(exc)
         finally:
+            self.release_player()
             self._mark('apply_total',total_started)
             LOG.info('Map loader timing: %s',self.timing_status())
         return self.status()
+    def hold_player(self,session,ctx):
+        hold=self._player_hold
+        if hold is not None and hold.held and not hold.closed:
+            if hold.expected==ctx:return
+            # A newly observed possession revokes the old pawn's plans.
+            hold.discard()
+        if hold is not None:hold.discard()
+        gate=self._native_gate
+        if gate is not None and not gate.closed:
+            state=gate.status()
+            if state['state'] in (2,4) and state['world']==ctx['visit'] and state['pawn']==ctx['pawn']:
+                from expedition33.map_load_gate import NativePlayerHold
+                self._player_hold=NativePlayerHold(gate,ctx)
+                return
+        from .player_hold import PlayerHold
+        hold=PlayerHold(session,ctx)
+        self._player_hold=hold
+        hold.acquire()
+    def release_player(self):
+        if self._player_hold is not None:
+            self._player_hold.close()
+            self._player_hold=None
+        elif not self._world_retiring and self._native_gate is not None and not self._native_gate.closed:
+            # Validation/enable can fail before Python adopts the native hold.
+            # Release that exact journal too; retirement must leave a newly
+            # held destination pawn for its arriving loader to acknowledge.
+            state=self._native_gate.status()
+            if state['state'] in (2,4) and state['world'][2] and state['pawn'][2]:
+                self._native_gate.release({'visit':state['world'],'pawn':state['pawn']})
     def open_menu(self,_=None):
         with reads(self.session.pid):return self._open_menu()
     def _open_menu(self):
@@ -202,13 +245,14 @@ class Mod:
         if self._world_retiring or self._disable_preparing:return
         now=time.monotonic()
         if now<self.next_poll:return
-        self.next_poll=now+1.
+        self.next_poll=now+.1
         try:
             started=time.perf_counter()
+            if self.visits.attempted and self._player_hold is not None:self.release_player()
             if self._context_monitor is None:
                 pid=self.session.pid
                 self._context_monitor=ReadOnlyAdmissionMonitor(
-                    lambda:ContextObserver(pid),interval=1.,max_age=2.)
+                    lambda:ContextObserver(pid),interval=.1,max_age=1.)
             observation=self._context_monitor.snapshot()
             self._mark('context_observation',started)
             # Pending/stale reads are uncertainty, not a missing-world result.
@@ -221,9 +265,14 @@ class Mod:
             if self.runtime.started and ctx and self.runtime.visit!=ctx['visit']:self.runtime.close()
             self.current=ctx
             due=self.visits.observe(ctx,now)
+            # An assigned map provides the floor beneath a saved player. Do not
+            # spend two seconds simulating gravity before restoring that floor.
+            if ctx and ctx['ready'] and not self.visits.attempted and self.assignments.values.get(ctx['world']):
+                due=True
             if due and ctx and not self.panel:
                 key=self.assignments.values.get(ctx['world'])
                 if key:
+                    self.hold_player(self.session,ctx)
                     if self._visit_observed_at is not None:
                         self.timings['visit_to_apply']=dict(calls=1,total_ms=(now-self._visit_observed_at)*1000,max_ms=(now-self._visit_observed_at)*1000)
                     self.apply(key)
@@ -259,6 +308,8 @@ class Mod:
             except BaseException:outcome='unknown'
             outcomes.append(outcome)
             if owner is self.panel and outcome=='ack':self.panel=None
+        if self._player_hold is not None:
+            self._player_hold.discard();self._player_hold=None
         if 'unknown' in outcomes:self._retirement_result='unknown'
         elif not settled or 'pending' in outcomes:self._retirement_result='pending'
         else:self._retirement_result='ack'
@@ -279,5 +330,8 @@ class Mod:
             from expedition33.mods import ModDisablePending
             raise ModDisablePending('Map context observer cleanup pending; disable has not started')
         self.close_menu()
+        self.release_player()
+        if not self._world_retiring and self._native_gate is not None:
+            self._native_gate.close();self._native_gate=None
         if self.runtime:self.runtime.close()
         self.session=None
