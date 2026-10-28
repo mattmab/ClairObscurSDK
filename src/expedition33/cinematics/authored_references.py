@@ -19,7 +19,7 @@ def _complete(value,depth=0):
     for child in children:_complete(child,depth+1)
 
 
-def _reachable_sections(catalog,root,candidates,read,*,read_many=None,on_reference=None):
+def _reachable_sections(catalog,root,candidates,read,*,read_many=None,on_reference=None,on_section_reference=None,follow_subsequences=True):
     """Return actual referenced candidate identities; all reads are projections."""
     wanted={obj.index for obj in candidates};candidate_tracks=set()
     def is_a(obj,name):
@@ -90,7 +90,8 @@ def _reachable_sections(catalog,root,candidates,read,*,read_many=None,on_referen
         for index,row in fields_many((pair[0] for pair in subsections.values()),('SubSequence',)).items():
             if row['SubSequence'] is not None:
                 if on_reference is not None:on_reference(subsections[index][1],row['SubSequence'])
-                queue.append(row['SubSequence'])
+                if on_section_reference is not None:on_section_reference(subsections[index][1],subsections[index][0],row['SubSequence'])
+                if follow_subsequences:queue.append(row['SubSequence'])
     return frozenset(found)
 
 
@@ -147,3 +148,24 @@ def reachable_sections(scope,root,catalog,candidates):
             fields=fields,references=True)
         return values,catalog.with_observations(fresh)
     return _reachable_sections(catalog,root,candidates,read_values_with_references,read_many=read_many)
+
+
+def sequence_links(scope,root,*,recursive=True):
+    """Observe actual parent/section/child edges for a retained sequence root.
+
+    Results are current observations, not leases or authority to edit children.
+    Callers must separately validate private ownership before every mutation.
+    """
+    if type(recursive) is not bool:raise ValueError('Boolean sequence traversal mode required')
+    scope._check();key=lambda o:(o.index,o.serial,o.address)
+    catalog=capture_selected(scope.pid,(key(root),));root=catalog.by_index[root.index]
+    links=[];edges={}
+    def edge(parent,section,child):
+        links.append((parent,section,child));edges.setdefault(key(parent),[]).append(key(child))
+    def read_many(catalog,objects,*,fields):
+        fresh,values=capture_selected_values(scope.pid,tuple(key(o) for o in objects),fields=fields,references=True)
+        return values,catalog.with_observations(fresh)
+    _reachable_sections(catalog,root,(),read_values_with_references,read_many=read_many,
+                        on_section_reference=edge,follow_subsequences=recursive)
+    _path_count(edges,key(root),key(root))
+    return tuple(links)

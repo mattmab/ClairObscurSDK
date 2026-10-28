@@ -59,3 +59,27 @@ class NestedReferenceArrayTests(unittest.TestCase):
             value=self.fixture.struct([dict(name='Times',type='ArrayProperty',inner_type='StructProperty',
                 inner_struct={'$reference':self.fixture.reference},value={'$array':dict(length=1,items=[value])})])
         self.assertEqual(_missing_references(self.catalog,[dict(event='stored_value',value=value)]),set())
+
+    def test_large_shallow_batch_keeps_reference_identity_checks(self):
+        from expedition33.values import _missing_references
+        from types import SimpleNamespace
+        rows=[dict(event='stored_value',value=[None]*1000) for _ in range(300)]
+        rows.append(dict(event='stored_value',value=self.reference))
+        identity=(self.obj.index,self.obj.serial,self.obj.address)
+        self.assertEqual(_missing_references(SimpleNamespace(by_index={}),rows),{identity})
+        self.assertEqual(_missing_references(self.catalog,rows),set())
+        malformed=copy.deepcopy(self.reference);malformed['$reference']['extra']=1
+        rows.append(dict(event='stored_value',value=malformed))
+        with self.assertRaisesRegex(Exception,'Invalid nested stored reference'):
+            _missing_references(self.catalog,rows)
+
+    def test_reference_work_and_depth_limits_are_distinct(self):
+        from expedition33.values import _missing_references
+        rows=[dict(event='stored_value',value=[None]*1023)]*1024
+        self.assertEqual(_missing_references(self.catalog,rows),set())
+        with self.assertRaisesRegex(Exception,'traversal limit'):
+            _missing_references(self.catalog,rows+[dict(event='stored_value',value=None)])
+        value=None
+        for _ in range(33):value=[value]
+        with self.assertRaisesRegex(Exception,'reference depth'):
+            _missing_references(self.catalog,[dict(event='stored_value',value=value)])

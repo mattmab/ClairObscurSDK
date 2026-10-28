@@ -60,6 +60,17 @@ class AuthoredReferenceTests(unittest.TestCase):
         child=replace(self.objects[14],class_index=8,class_name='CameraAnimationSequence')
         self.objects[14]=child;self.values[13]['SubSequence']=child
         self.assertEqual(_reachable_sections(self.catalog,self.root,(self.target,),self.read),{17})
+    def test_direct_links_validate_parent_without_reading_child_contents(self):
+        edges=[]
+        self.values[14]={} # An unrelated child's contents must not be read.
+        found=_reachable_sections(self.catalog,self.root,(),self.read,follow_subsequences=False,
+            on_section_reference=lambda parent,section,child:edges.append((parent.index,section.index,child.index)))
+        self.assertEqual(found,set());self.assertEqual(edges,[(10,13,14)])
+        self.assertEqual(len(self.reads),4)
+        self.assertNotIn(14,[i for i,fields in self.reads])
+        self.values[12]['Sections']=StoredArray((self.objects[13],),2)
+        with self.assertRaisesRegex(RuntimeError,'Incomplete'):
+            _reachable_sections(self.catalog,self.root,(),self.read,follow_subsequences=False)
     def test_sibling_sequences_share_fresh_projection_batches_without_losing_parent_edges(self):
         shot=replace(self.objects[13],index=23,address=0x23000)
         self.objects[23]=shot

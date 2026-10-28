@@ -24,7 +24,7 @@ def require_key_edit_support(document,transport):
         raise ValueError('Native curve-key playback capability required')
 
 
-def duplicate(scope,path,outer):
+def duplicate(scope,path,outer,*,document=None,additional_sections=()):
     """Duplicate a retained LevelSequence hierarchy into an owned outer.
 
     The caller must keep the outer alive through use and release. A returned
@@ -64,6 +64,9 @@ def duplicate(scope,path,outer):
         if type(states) is not dict:states=scope._authored_copy_states={}
         states[(copied.index,copied.serial,copied.address)]=dict(state='fresh',source=path,
             outer=(outer.index,outer.serial,outer.address))
+        if document is not None:
+            from .authored_private_hierarchy import prepare
+            prepare(scope,copied,outer,document,additional_sections=additional_sections)
         return copied
 
 
@@ -74,8 +77,15 @@ def seal_copy(scope,asset):
         states=vars(current).get('_authored_copy_states',{})
         record=states.get((asset.index,asset.serial,asset.address)) if type(states) is dict else None
         if record is not None:
-            if record['state'] not in ('fresh','ready'):raise RuntimeError('Private sequence editing is no longer available')
-            record['state']='sealed';return
+            records=[record]
+            for identity in record.get('members',()):
+                member=states.get(identity)
+                if member is None:raise RuntimeError('Private child sequence journal is missing')
+                records.append(member)
+            if any(row['state'] not in ('fresh','ready') for row in records):
+                raise RuntimeError('Private sequence editing is no longer available')
+            for row in records:row['state']='sealed'
+            return
         parent=vars(current).get('_parent');current=parent() if parent is not None else None
         if current is None:return
     raise RuntimeError('Private sequence ownership nesting exceeds the edit bound')

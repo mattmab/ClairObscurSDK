@@ -152,14 +152,20 @@ class AuthoredPreview:
             from expedition33.cinematics.scene_transform import origin_translation
             delta=origin_translation(self.profile.anchor,destination,scene_yaw)
             playback_document=authored_media.playback_document(self.document) if movie else self.document
+            suppressed_sections=authored_media.suppression_sections(self.document) if movie else ()
             if movie or (self.edited and (playback_document.get('section_edits') or playback_document.get('key_edits'))):
                 from expedition33.cinematics.authored_copy import duplicate,apply_key_edits,apply_section_edits
                 with self.latency.measure('timeline.private_copy'):
-                    self.copied_asset=duplicate(self.play_scope,self.profile.sequence,self.menu.panel.tree)
+                    self.copied_asset=duplicate(self.play_scope,self.profile.sequence,self.menu.panel.tree,
+                                                document=playback_document,additional_sections=suppressed_sections)
                 with self.latency.measure('timeline.key_edits'):
                     apply_key_edits(self.play_scope,self.copied_asset,self.menu.panel.tree,playback_document)
                 with self.latency.measure('timeline.section_edits'):
                     apply_section_edits(self.play_scope,self.copied_asset,self.menu.panel.tree,playback_document)
+                if suppressed_sections:
+                    from expedition33.cinematics.authored_activity import disable_sections
+                    with self.latency.measure('timeline.media_suppression'):
+                        disable_sections(self.play_scope,self.copied_asset,self.menu.panel.tree,playback_document,suppressed_sections)
             options={} if dependencies is None else dict(routing_class=dependencies.routing_class,
                 widget_dependencies=dependencies.widget_dependencies,music_dependencies=dependencies.music_dependencies)
             self.services=OwnedSequenceContext(self.play_scope,self.menu.panel,**options)

@@ -601,7 +601,9 @@ def _extend_reference_catalog(catalog,targets,missing):
 
 def _missing_references(catalog,rows,*,affected=None):
     missing = set()
-    walk_budget=[262144]
+    # Large cooked cinematic batches can contain over 268,000 values even
+    # at modest depth. Bound total work independently from wrapper depth.
+    walk_budget=[1048576]
     def reference(raw):
         if type(raw) is not dict or set(raw) != {'index', 'serial', 'address', 'name'}:
             raise RuntimeQueryError('Invalid nested stored reference')
@@ -616,8 +618,10 @@ def _missing_references(catalog,rows,*,affected=None):
         walk_budget[0]-=1
         # Four typed struct levels can contain array/map/tag wrappers. Count
         # JSON wrapper depth separately from the decoder's typed depth bound.
-        if depth > 32 or walk_budget[0]<0:
+        if depth > 32:
             raise RuntimeQueryError('Nested stored reference depth')
+        if walk_budget[0]<0:
+            raise RuntimeQueryError('Nested stored reference traversal limit')
         if isinstance(value, dict):
             if '$reference' in value:
                 reference(value['$reference'])

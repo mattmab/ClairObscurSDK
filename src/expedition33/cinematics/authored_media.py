@@ -46,14 +46,16 @@ def _constant_source(channel):
 def _media_actor(graph):
     """Find the single root movie actor without confusing it with scene cast.
 
-    Other root cast and camera actors may coexist. Multiple or nested movie
-    actors require occurrence-specific clocks and are deliberately rejected.
+    Other cast and camera actors may coexist. A nested movie requires one
+    proven unit-speed occurrence; repeated movies need a separate adapter.
     """
     actors=[row for row in bindings(graph) if row['kind']=='spawnable' and row['template'] and
             row['template']['class']=='BP_MediaPlayer_C']
     if not actors:return None
     if len(actors)!=1:raise ValueError('Multiple authored movies require a media timeline adapter')
-    if actors[0]['sequence']!=graph['sequence']:raise ValueError('Root media timeline required')
+    if actors[0]['sequence']!=graph['sequence']:
+        from .authored_media_occurrence import occurrence
+        occurrence(graph,actors[0]['sequence'])
     return actors[0]
 
 
@@ -62,7 +64,7 @@ def source(document):
 
     A root movie can coexist with regular scene actors and camera cuts.
     Switching or multiple movies need a timeline adapter. Do not silently select
-    a clip from an ambiguous channel or from an unrelated child shot.
+    a clip from an ambiguous channel or an unreachable child shot.
     """
     graph=document['source'];nodes=graph['nodes']
     # Most sources are in-engine. Do not make their existing playback depend
@@ -119,6 +121,54 @@ def resolve(scope,path):
     return movie_path(values[0])
 
 
+def suppression_sections(document):
+    """Find keyless, default-visible movie sections needing private activity edits."""
+    actor=_media_actor(document['source'])
+    if actor is None:return ()
+    nodes=document['source']['nodes'];result=[]
+    for track in actor['tracks']:
+        node=nodes.get(track,{})
+        if node.get('class_name')!='MovieSceneSpawnTrack':continue
+        refs=node.get('fields',{}).get('Sections',{})
+        from .authored_media_occurrence import _array
+        for ref in _array(refs):
+            path=ref.get('object_path');section=nodes.get(path,{})
+            if section.get('class_name')!='MovieSceneSpawnSection':raise ValueError('Movie spawn section required')
+            curve=section.get('fields',{}).get('BoolCurve',{})
+            if curve.get('complete') is not True or curve.get('errors'):raise ValueError('Complete movie spawn curve required')
+            fields=curve.get('fields',{})
+            if fields.get('DefaultValue') is not True:continue
+            if fields.get('bHasDefaultValue') is not True or _array(fields.get('Times',{})) or _array(fields.get('Values',{})):
+                raise ValueError('Default-visible keyed movies require another spawn adapter')
+            if section['fields'].get('bIsActive') is not True:raise ValueError('Active movie spawn section required')
+            result.append(path)
+    if len(result)>1:raise ValueError('One default-visible movie spawn interval required')
+    return tuple(result)
+
+
+def _default_spawn_interval(document,actor,section):
+    from .authored_media_occurrence import _range
+    nodes=document['source']['nodes']
+    start,end=_range(nodes[actor['scene']]['fields'].get('PlaybackRange',{}))
+    scene_start,scene_end=start,end
+    bounds=nodes[section]['fields'].get('SectionRange',{})
+    if bounds.get('complete') is not True or bounds.get('errors'):raise ValueError('Complete movie spawn range required')
+    rows=bounds.get('frame_range',{})
+    for name,kind in (('lower','inclusive'),('upper','exclusive')):
+        row=rows.get(name,{})
+        if row.get('kind')=='open':continue
+        if row.get('kind')!=kind or type(row.get('value')) is not int:raise ValueError('Half-open movie spawn range required')
+        if name=='lower':start=max(start,row['value'])
+        else:end=min(end,row['value'])
+    edit=document.get('section_edits',{}).get(section)
+    if edit is not None:
+        if type(edit.get('start')) is not int or type(edit.get('end')) is not int or edit['end']<=edit['start']:
+            raise ValueError('Finite edited movie range required')
+        start,end=max(scene_start,edit['start']),min(scene_end,edit['end'])
+    if end<=start:raise ValueError('Movie spawn interval is empty')
+    return start,end
+
+
 def playback_document(document):
     """Suppress the original media actor only in the private playback copy.
 
@@ -139,7 +189,9 @@ def playback_document(document):
             raise ValueError('Complete media spawn sections required')
         sections.extend(row['object_path'] for row in refs['array'])
     if not sections:raise ValueError('An authored media spawn track is required')
+    activity_sections=suppression_sections(result)
     for section in sections:
+        if section in activity_sections:continue
         node=nodes.get(section,{})
         if node.get('class_name')!='MovieSceneSpawnSection':raise ValueError('An authored media spawn section is required')
         curve=node['fields'].get('BoolCurve',{});fields=curve.get('fields',{})
@@ -147,8 +199,9 @@ def playback_document(document):
             raise ValueError('A complete default-hidden media spawn channel is required')
         kind,keys=authored_timeline.channel(result,section,['BoolCurve'])
         if kind!='MovieSceneBoolChannel':raise ValueError('A Boolean media spawn channel is required')
+        edits={e['index']:e for e in document.get('key_edits',()) if e['section']==section and e['path']==['BoolCurve']}
         for index,key in enumerate(keys):
-            result=authored_timeline.edit_key(result,section,['BoolCurve'],index,at=key['at'],value=False)
+            result=authored_timeline.edit_key(result,section,['BoolCurve'],index,at=edits.get(index,key)['at'],value=False)
     return result
 
 
@@ -169,6 +222,7 @@ def playback_window(document,rate):
     if resolution.get('complete') is not True or resolution.get('errors') or any(type(v) is not int or v<=0 for v in (n,d)):
         raise ValueError('Complete positive movie tick resolution required')
     starts=[];stops=[]
+    activity_sections=suppression_sections(document)
     for track in actor['tracks']:
         node=nodes.get(track,{})
         if node.get('class_name')!='MovieSceneSpawnTrack':continue
@@ -176,9 +230,14 @@ def playback_window(document,rate):
         if refs.get('complete') is not True or refs.get('length')!=len(refs.get('array',())):raise ValueError('Complete media spawn track required')
         for ref in refs['array']:
             section=ref['object_path'];curve=nodes[section]['fields']['BoolCurve']
+            if section in activity_sections:
+                start,end=_default_spawn_interval(document,actor,section)
+                starts.append(start);stops.append(end);continue
             if curve.get('complete') is not True or curve.get('errors') or curve['fields'].get('DefaultValue') is not False or curve['fields'].get('bHasDefaultValue') is not True:
                 raise ValueError('Default-hidden media spawn channel required')
             kind,keys=channel(document,section,['BoolCurve'])
+            edits={e['index']:e for e in document.get('key_edits',()) if e['section']==section and e['path']==['BoolCurve']}
+            keys=[dict(at=edits.get(i,key)['at'],value=edits.get(i,key)['value']) for i,key in enumerate(keys)]
             if kind!='MovieSceneBoolChannel':raise ValueError('Boolean movie spawn channel required')
             previous=False
             for key in keys:
@@ -188,7 +247,15 @@ def playback_window(document,rate):
     if len(starts)!=1:raise ValueError('One authored movie start is required')
     if len(stops)>1 or (stops and stops[0]<=starts[0]):raise ValueError('One authored movie interval is required')
     convert=lambda tick:float(Fraction(tick*d*rate[0],n*rate[1]))
-    return convert(starts[0]),convert(stops[0]) if stops else None
+    start=convert(starts[0]);end=convert(stops[0]) if stops else None
+    if actor['sequence']!=document['source']['sequence']:
+        from .authored_media_occurrence import occurrence
+        offset,lower,upper=occurrence(document['source'],actor['sequence'],section_edits=document.get('section_edits',{}))
+        factor=Fraction(rate[0],rate[1]);start+=float(offset*factor)
+        end=min(float(upper*factor),float(offset*factor)+end) if end is not None else float(upper*factor)
+        if start<float(lower*factor):raise ValueError('Clipped movie start requires a media offset adapter')
+        if end<=start:raise ValueError('Authored movie is outside its nested occurrence')
+    return start,end
 
 
 def start_frame(document,rate):

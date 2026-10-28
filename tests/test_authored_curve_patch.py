@@ -55,6 +55,15 @@ class CurvePatchTests(unittest.TestCase):
         seal_copy(child,asset);self.assertEqual(parent._authored_copy_states[(1,2,0x10000)]['state'],'sealed')
         with self.assertRaisesRegex(RuntimeError,'no longer'):seal_copy(child,asset)
         seal_copy(child,N(index=9,serial=9,address=0x90000))
+    def test_all_nested_copies_are_preflighted_before_group_sealing(self):
+        root=N(index=1,serial=1,address=65536)
+        child=(2,1,131072);root_key=(1,1,65536)
+        scope=N(_authored_copy_states={root_key:dict(state='ready',members=[child]),child:dict(state='rejected')})
+        with self.assertRaises(RuntimeError):seal_copy(scope,root)
+        self.assertEqual(scope._authored_copy_states[root_key]['state'],'ready')
+        scope._authored_copy_states[child]['state']='fresh'
+        seal_copy(scope,root)
+        self.assertTrue(all(row['state']=='sealed' for row in scope._authored_copy_states.values()))
     def test_missing_or_boolean_capability_rejects_before_retaining_inputs(self):
         for cap in (0,True,2):
             scope=N(_check=Mock(),_session=N(_transport=N(authored_curve_patch_protocol=cap)))

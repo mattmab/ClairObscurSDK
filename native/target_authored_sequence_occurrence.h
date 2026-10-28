@@ -3,6 +3,7 @@
 #include "target_authored_binding_query.h"
 #include "authored_occurrence_class_policy.h"
 #include <array>
+#include <vector>
 
 // Research-only exact-build reader for the sequence references used by the
 // Scene Editor. The enclosing native owner must retain/revalidate its root and
@@ -97,14 +98,17 @@ template<class QueryOps, class Native=TargetAuthoredOccurrenceNative> struct Tar
            !object_array_schema(binding_type,"Tracks",32,91198442210066952ULL,"MovieSceneTrack","/Script/MovieScene"))return reject(8);
         const auto cut=ops.field(scene_class,"CameraCutTrack",240,8,0x6e11d38,94012710941360648ULL);
         if(!cut || !ops.named(local_read<uint64_t>(cut+0x70),"MovieSceneTrack","/Script/MovieScene"))return reject(9);
-        std::array<Identity,512> tracks{};unsigned track_count=0;
+        // Large cooked shots can have over 700 distinct binding tracks. Keep
+        // this bounded aggregate off the game-thread stack; individual arrays
+        // retain their separate 512-entry observation bound.
+        std::vector<Identity> tracks;tracks.reserve(4096);
         const auto add_track=[&](uint64_t object,bool allow_camera_alias) {
             auto id=Native::capture(ops.base,object);
             if(!valid(id) || local_read<uint64_t>(object+32)!=scene.address || !valid_hierarchy(local_read<uint64_t>(object+16)) ||
                !ancestor(local_read<uint64_t>(object+16),"MovieSceneTrack","/Script/MovieScene"))return false;
-            for(unsigned i=0;i<track_count;++i)if(same(tracks[i],id))return allow_camera_alias;
-            if(track_count==tracks.size())return false;
-            tracks[track_count++]=id;return true;
+            for(const auto& previous:tracks)if(same(previous,id))return allow_camera_alias;
+            if(tracks.size()==4096)return false;
+            tracks.push_back(id);return true;
         };
         const auto add_array_track=[&](uint64_t object) {return add_track(object,false);};
         if(!pointer_array(scene.address+224,add_array_track))return reject(10);
@@ -115,8 +119,8 @@ template<class QueryOps, class Native=TargetAuthoredOccurrenceNative> struct Tar
         if(std::memcmp(&bh,&bh_after,sizeof(bh)))return reject(13);
         const auto camera=local_read<uint64_t>(scene.address+240);
         if(camera && !add_track(camera,true))return reject(14);
-        for(unsigned i=0;i<track_count;++i) {
-            const auto track=tracks[i];if(!valid(track))return reject(15);
+        for(const auto& track:tracks) {
+            if(!valid(track))return reject(15);
             const auto subtrack=ancestor(local_read<uint64_t>(track.address+16),"MovieSceneSubTrack","/Script/MovieScene");
             if(!subtrack)continue;
             if(!object_array_schema(subtrack,"Sections",152,82200039048348168ULL,"MovieSceneSection","/Script/MovieScene"))return reject(16);

@@ -99,6 +99,33 @@ struct Fixture {
         inner.put(0x10,prop.at());inner.put<uint32_t>(0x30,1);inner.put<uint32_t>(0x34,8);inner.put(0x70,type.at());
     }
 };
+static bool large_track_graph(unsigned total,bool repeat=false) {
+    assert(total>1);
+    Fixture f;
+    const unsigned count=total-1;
+    std::vector<Block> tracks(count);
+    std::vector<uint64_t> pointers(count);
+    for(unsigned i=0;i<count;++i) {
+        FakeNative::add(tracks[i]);tracks[i].put(16,f.track_type.at());tracks[i].put(32,f.root_scene.at());
+        pointers[i]=tracks[i].at();
+    }
+    if(repeat)pointers.back()=pointers.front();
+    struct Row {uint64_t unused[4]{};ObjectArray tracks{};};
+    static_assert(sizeof(Row)==48);
+    std::vector<Row> rows((count+511)/512);
+    for(unsigned i=0;i<rows.size();++i) {
+        const unsigned start=i*512,remaining=count-start;
+        const int32_t length=static_cast<int32_t>(remaining>512?512:remaining);
+        rows[i].tracks={reinterpret_cast<uint64_t>(pointers.data()+start),length,length};
+    }
+    f.root_scene.put(128,ObjectArray{reinterpret_cast<uint64_t>(rows.data()),
+        static_cast<int32_t>(rows.size()),static_cast<int32_t>(rows.size())});
+    Reader reader{f.ops};e33_authored_occurrence::Proof<CallIdentity> proof;
+    const auto result=proof.unique(reader,f.root_id,f.child_id);
+    if(!result)assert(reader.failure==12);
+    return result;
+}
+
 int main() {
     Fixture f;Reader r{f.ops};e33_authored_occurrence::Proof<CallIdentity> proof;
     assert(proof.unique(r,f.root_id,f.child_id));
@@ -144,4 +171,10 @@ int main() {
     assert(!proof.unique(r,f.root_id,f.child_id));f.track.put(152,ObjectArray{reinterpret_cast<uint64_t>(f.sections),1,1});
     f.section.put<uint64_t>(304,f.root.at());assert(!proof.unique(r,f.root_id,f.root_id));f.section.put<uint64_t>(304,f.child.at());
     f.ops.live=false;assert(!proof.unique(r,f.root_id,f.child_id));
+    // Exercise the actual aggregate traversal, not just a count helper. No
+    // individual reflected array is larger than the existing 512-entry bound.
+    assert(large_track_graph(717));
+    assert(large_track_graph(4096));
+    assert(!large_track_graph(4097));
+    assert(!large_track_graph(717,true));
 }

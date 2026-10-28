@@ -41,7 +41,7 @@ class AuthoredMediaTests(unittest.TestCase):
             with self.assertRaisesRegex(ValueError,'Multiple authored movies'):source(d)
         actors[-1]['sequence']='/Game/Child.Child'
         with patch('expedition33.cinematics.authored_media.bindings',return_value=actors):
-            with self.assertRaisesRegex(ValueError,'Root media timeline'):source(d)
+            with self.assertRaisesRegex(ValueError,'Nested movie LevelSequence'):source(d)
     def test_redundant_movie_keys_preserve_the_constant_source(self):
         import copy
         from expedition33.cinematics.authored_media import _constant_source
@@ -102,7 +102,7 @@ class AuthoredMediaTests(unittest.TestCase):
         with self.assertRaisesRegex(ValueError,'One authored movie start'):
             playback_window(create(graph,'Multiple intervals'),(30,1))
         graph['nodes'][spawn_section]['fields']['BoolCurve']['fields']['DefaultValue']=True
-        with self.assertRaisesRegex(ValueError,'default-hidden'):playback_document(create(graph,'Unsupported default'))
+        with self.assertRaisesRegex(ValueError,'Default-visible keyed'):playback_document(create(graph,'Unsupported default'))
 
     def test_mixed_scene_private_edit_targets_only_the_movie_actor(self):
         import copy
@@ -139,3 +139,31 @@ class AuthoredMediaTests(unittest.TestCase):
         self.assertEqual(movie_path('./Movies/CS_Ending_P2.mp4'),'./Movies/CS_Ending_P2.mp4')
         for value in ('C:/Users/Developer/Videos/test.mp4','./Movies/../secret.mp4','./Movies/sub/test.mp4','https://example.org/x.mp4',None):
             with self.assertRaises(ValueError):movie_path(value)
+
+    def test_nested_movie_window_and_edited_clock(self):
+        from test_authored_media_occurrence import AuthoredMediaOccurrenceTests
+        from expedition33.cinematics.authored_media import playback_window
+        graph=AuthoredMediaOccurrenceTests().fixture();nodes=graph['nodes']
+        array=lambda rows:dict(complete=True,length=len(rows),array=rows)
+        frame=lambda n:dict(complete=True,errors={},fields=dict(Value=n))
+        original,key=self.fixture()
+        nodes['media']=original['source']['nodes']['track']
+        nodes['media']['fields']['Sections']=array([dict(object_path='movie_section')])
+        nodes['movie_section']=original['source']['nodes'][key]
+        nodes['spawn']=dict(class_name='MovieSceneSpawnTrack',fields=dict(Sections=array([dict(object_path='spawn_section')])))
+        nodes['spawn_section']=dict(class_name='MovieSceneSpawnSection',fields=dict(BoolCurve=dict(
+            struct='/Script/MovieScene.MovieSceneBoolChannel',complete=True,errors={},fields=dict(
+                Times=array([frame(0)]),Values=array([True]),DefaultValue=False,bHasDefaultValue=True))))
+        nodes['childscene']['fields']['Spawnables']=array([dict(fields=dict(ObjectTemplate={'class':'BP_MediaPlayer_C'}))])
+        actor=dict(sequence='child',scene='childscene',kind='spawnable',template={'class':'BP_MediaPlayer_C'},tracks=['media','spawn'])
+        document=dict(source=graph,key_edits=[],section_edits={})
+        with patch('expedition33.cinematics.authored_media.bindings',return_value=[actor]):
+            self.assertEqual(source(document),'/Game/Movie.Movie')
+            self.assertEqual(playback_window(document,(30,1)),(300.,600.))
+            document['key_edits']=[dict(section='spawn_section',path=['BoolCurve'],index=0,at=48000,value=True)]
+            self.assertEqual(playback_window(document,(30,1)),(330.,600.))
+            document['section_edits']={'section':dict(start=480000,end=720000)}
+            self.assertEqual(playback_window(document,(30,1)),(630.,900.))
+            document['key_edits'][0]['at']=-48000
+            with self.assertRaisesRegex(ValueError,'Clipped movie start'):
+                playback_window(document,(30,1))
