@@ -409,8 +409,20 @@ class AuthoredPreviewTests(unittest.TestCase):
             with self.assertRaisesRegex(ValueError,'curve-key playback capability'):AuthoredPreview(Mock(),model.authored.document,edited=True)
         scope.assert_not_called()
     def test_private_keys_and_sections_finish_before_player_creation(self):
+        self.check_private_edit_preparation(with_keys=True)
+
+    def test_section_only_preview_skips_empty_curve_application(self):
+        self.check_private_edit_preparation(with_keys=False)
+
+    def test_movie_activity_suppression_skips_empty_key_and_range_passes(self):
+        self.check_private_edit_preparation(with_keys=False,movie_only=True)
+
+    def check_private_edit_preparation(self,*,with_keys,movie_only=False):
         preview=object.__new__(AuthoredPreview);preview.scope=N(pid=99,_session=N(_transport=N(_executable='reader')))
-        preview.play_scope=None;preview.edited=True;preview.document={'source':{'nodes':{}},'section_edits':{'fixture':{}},'key_edits':[]}
+        preview.play_scope=None;preview.edited=True;preview.document={'source':{'nodes':{}},'section_edits':{'fixture':{}},'key_edits':[{'fixture':True}] if with_keys else []}
+        if movie_only:
+            preview.document['section_edits']={}
+            preview.scope._session._transport.media_seek_protocol=1
         preview.profile=N(anchor=(0.,0.,0.),sequence='/Game/Reviewed.Reviewed')
         preview.menu=N(panel=N(tree='owned-tree'));events=[]
         player=Mock();player.build.side_effect=lambda *args,**kwargs:(_ for _ in ()).throw(RuntimeError('player boundary'))
@@ -422,11 +434,17 @@ class AuthoredPreviewTests(unittest.TestCase):
              patch('expedition33.cinematics.authored_copy.duplicate',return_value='private-copy'),\
              patch('expedition33.cinematics.authored_copy.apply_key_edits',side_effect=keys) as apply_keys,\
              patch('expedition33.cinematics.authored_copy.apply_section_edits',side_effect=sections),\
+             patch('expedition33.cinematics.authored_media.source',return_value='/Game/Movie.Movie' if movie_only else None),\
+             patch('expedition33.cinematics.authored_media.playback_document',return_value=preview.document),\
+             patch('expedition33.cinematics.authored_media.suppression_sections',return_value=('movie-spawn',)),\
+             patch('expedition33.cinematics.authored_activity.disable_sections') as suppress,\
              patch('scene_editor_tests.authored_preview.OwnedSequenceContext'),\
              patch('scene_editor_tests.authored_preview.OwnedLevelSequence',return_value=player):
             with self.assertRaisesRegex(RuntimeError,'player boundary'):preview._prepare_playback()
-        self.assertEqual(events,['keys','sections'])
-        apply_keys.assert_called_once_with('play-scope','private-copy','owned-tree',preview.document)
+        self.assertEqual(events,[] if movie_only else ['keys','sections'] if with_keys else ['sections'])
+        if with_keys:apply_keys.assert_called_once_with('play-scope','private-copy','owned-tree',preview.document)
+        else:apply_keys.assert_not_called()
+        if movie_only:suppress.assert_called_once_with('play-scope','private-copy','owned-tree',preview.document,('movie-spawn',))
         self.assertEqual(player.build.call_args.kwargs['asset'],'private-copy')
     def test_unsupported_movie_runtime_rejects_before_allocating_playback_scope(self):
         preview=object.__new__(AuthoredPreview)

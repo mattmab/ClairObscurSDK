@@ -117,6 +117,15 @@ class TitleAttachmentTests(unittest.TestCase):
   self.entry.planner=N(_catalog=self.catalog,refresh_from=lambda catalog:None)
   with patch('expedition33._stable_lease.available',return_value=True),patch('expedition33._stable_lease.acquire_stable',side_effect=AssertionError('duplicate acquire')),patch('expedition33._stable_lease.fresh_catalog_replacing',return_value=self.catalog):
    self.assertEqual(self.entry.stabilize_borrowed_targets((obj,)),{obj.index:lease})
+ def test_retry_after_preconstruction_rejection_accepts_empty_retained_scope(self):
+  self.planner.close=lambda:self.events.append('planner-close')
+  with patch.object(self.entry,'_try_prepare_borrowed_title_targets',return_value=None):
+   self.assertFalse(self.install())
+  self.assertEqual(self.scope._leases,[])
+  with patch('expedition33.title_menu.capture_selected',side_effect=AssertionError('empty identity refresh')):
+   self.assertTrue(self.install())
+  self.assertEqual(self.entry.state,'attached')
+  self.assertEqual(self.events.count('planner-close'),1)
  def test_prepared_title_enters_install_without_polling_clicks(self):
   self.entry.state='prepared'
   with patch.object(self.entry,'install',return_value=True) as install:

@@ -176,7 +176,11 @@ class TitleMenuEntry(PauseMenuEntry):
             self.player=found['player'];self.pause=found['title'];self.grid=found['box'];self._title_binding=(found['context'],_identity(found['local_player']),_identity(found['main']),_identity(found['title']),_identity(found['box']))
             if self.scope is not None:
                 owned=tuple(_identity(lease.object) for lease in self.scope._leases if lease.active and lease._object is not None)
-                catalog=catalog.with_observations(capture_selected(self.parent_scope.pid,tuple(dict.fromkeys(owned))))
+                # A pre-construction authority rejection can leave an empty
+                # scope for the next proof. There is nothing to refresh then;
+                # capture_selected deliberately rejects empty identity batches.
+                if owned:
+                    catalog=catalog.with_observations(capture_selected(self.parent_scope.pid,tuple(dict.fromkeys(owned))))
                 self.planner.close();self._functions.clear()
             else:self.scope=SessionScope(self.parent_scope)
             self.planner=self.scope.invocation_planner(selected_results=True,catalog=catalog)

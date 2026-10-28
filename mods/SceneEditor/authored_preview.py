@@ -158,10 +158,15 @@ class AuthoredPreview:
                 with self.latency.measure('timeline.private_copy'):
                     self.copied_asset=duplicate(self.play_scope,self.profile.sequence,self.menu.panel.tree,
                                                 document=playback_document,additional_sections=suppressed_sections)
-                with self.latency.measure('timeline.key_edits'):
-                    apply_key_edits(self.play_scope,self.copied_asset,self.menu.panel.tree,playback_document)
-                with self.latency.measure('timeline.section_edits'):
-                    apply_section_edits(self.play_scope,self.copied_asset,self.menu.panel.tree,playback_document)
+                # This is already a validated playback snapshot. Movie-only
+                # copies need suppression, but no curve/range application;
+                # avoid another full graph validation for each empty edit set.
+                if playback_document.get('key_edits'):
+                    with self.latency.measure('timeline.key_edits'):
+                        apply_key_edits(self.play_scope,self.copied_asset,self.menu.panel.tree,playback_document)
+                if playback_document.get('section_edits'):
+                    with self.latency.measure('timeline.section_edits'):
+                        apply_section_edits(self.play_scope,self.copied_asset,self.menu.panel.tree,playback_document)
                 if suppressed_sections:
                     from expedition33.cinematics.authored_activity import disable_sections
                     with self.latency.measure('timeline.media_suppression'):
