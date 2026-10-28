@@ -36,6 +36,7 @@ def occurrence(graph,target,*,section_edits=None):
     This adapter supports unit speed only, with no looping or trim offsets.
     """
     nodes=graph['nodes'];root=graph['sequence'];found=[];visits=0
+    reachable={};reach_visits=0
     section_edits={} if section_edits is None else section_edits
     def scene(path):
         node=nodes.get(path,{})
@@ -44,6 +45,32 @@ def occurrence(graph,target,*,section_edits=None):
         value=nodes.get(ref.get('object_path'),{})
         if ref.get('class')!='MovieScene' or value.get('class_name')!='MovieScene':raise ValueError('Nested movie scene unavailable')
         return value['fields']
+    def reaches_target(path,active=()):
+        # Clock restrictions belong to the movie's ancestry, not sibling 3D
+        # shots whose clocks are evaluated by the native sequence player.
+        nonlocal reach_visits
+        if path in active:raise ValueError('Cyclic nested movie hierarchy')
+        if path in reachable:return reachable[path]
+        reach_visits+=1
+        if reach_visits>256 or len(active)>=32:raise ValueError('Nested movie occurrence traversal limit')
+        fields=scene(path);result=path==target
+        for ref in _array(fields.get('Tracks',{})):
+            track=nodes.get(ref.get('object_path'),{})
+            if track.get('class_name') not in ('MovieSceneCinematicShotTrack','MovieSceneSubTrack'):continue
+            for ref in _array(track.get('fields',{}).get('Sections',{})):
+                section=nodes.get(ref.get('object_path'),{})
+                if section.get('class_name') not in ('MovieSceneCinematicShotSection','MovieSceneSubSection'):
+                    raise ValueError('Unsupported nested movie section')
+                sf=section.get('fields',{});child=sf.get('SubSequence')
+                if child is None:continue
+                if child.get('class')!='LevelSequence':raise ValueError('Unsupported nested movie sequence class')
+                if type(sf.get('bIsActive')) is not bool:raise ValueError('Known nested movie section activity required')
+                if sf['bIsActive']:
+                    child_result=reaches_target(child.get('object_path'),active+(path,))
+                    result=result or child_result
+        reachable[path]=result
+        return result
+    reaches_target(root)
     def visit(path,offset,window,active):
         nonlocal visits
         visits+=1
@@ -62,7 +89,7 @@ def occurrence(graph,target,*,section_edits=None):
                 if child is None:continue
                 if child.get('class')!='LevelSequence':raise ValueError('Unsupported nested movie sequence class')
                 if type(sf.get('bIsActive')) is not bool:raise ValueError('Known nested movie section activity required')
-                if not sf['bIsActive']:continue
+                if not sf['bIsActive'] or not reachable.get(child.get('object_path'),False):continue
                 start,end=_range(sf.get('SectionRange',{}))
                 edit=section_edits.get(ref.get('object_path'))
                 if edit is not None:

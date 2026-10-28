@@ -39,3 +39,23 @@ class AuthoredMediaOccurrenceTests(unittest.TestCase):
         with self.assertRaisesRegex(ValueError,'reference array'):occurrence(graph,'child')
         graph=self.fixture();graph['nodes']['section']['fields']['SectionRange']['frame_range']['lower']['kind']='open'
         with self.assertRaisesRegex(ValueError,'half-open'):occurrence(graph,'child')
+
+    def test_unrelated_trimmed_3d_shot_does_not_block_movie(self):
+        graph=self.fixture();nodes=graph['nodes']
+        nodes['other']=copy.deepcopy(nodes['child'])
+        nodes['other']['fields']['MovieScene']['object_path']='otherscene'
+        nodes['otherscene']=copy.deepcopy(nodes['childscene'])
+        nodes['othersection']=copy.deepcopy(nodes['section'])
+        nodes['othersection']['fields']['SubSequence']['object_path']='other'
+        nodes['othersection']['fields']['Parameters']['fields']['StartFrameOffset']['fields']['Value']=488000
+        refs=nodes['track']['fields']['Sections'];refs['array'].append(dict(object_path='othersection',**{'class':'MovieSceneCinematicShotSection'}));refs['length']=2
+        self.assertEqual(occurrence(graph,'child'),(Fraction(10),Fraction(10),Fraction(20)))
+        # Timing on the movie's own path is still rejected.
+        with self.assertRaisesRegex(ValueError,'trim offsets'):occurrence(graph,'other')
+
+    def test_unrelated_cycle_is_still_rejected(self):
+        graph=self.fixture();nodes=graph['nodes']
+        nodes['cycle']=copy.deepcopy(nodes['section'])
+        nodes['cycle']['fields']['SubSequence']['object_path']='root'
+        refs=nodes['track']['fields']['Sections'];refs['array'].append(dict(object_path='cycle',**{'class':'MovieSceneCinematicShotSection'}));refs['length']=2
+        with self.assertRaisesRegex(ValueError,'Cyclic'):occurrence(graph,'child')
