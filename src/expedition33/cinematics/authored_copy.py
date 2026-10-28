@@ -6,7 +6,7 @@ Python reconstruction of MovieScene fields. No source mutation is performed.
 from ..assets import load_asset
 from ..catalog import capture_matching, capture_selected
 from .._reader import shared_operation
-from ..values import read_values_with_references
+from ..values import read_values_with_references,capture_selected_values
 from .authored_source import copied
 from . import authored_timeline
 from fractions import Fraction
@@ -114,17 +114,29 @@ def apply_key_edits(scope,root,outer,document):
         catalog=catalog.with_observations(capture_selected(scope.pid,
             tuple((o.index,o.serial,o.address) for o in (root,outer))))
         def owned(obj):return any((p.index,p.serial)==(outer.index,outer.serial) for p in catalog.outer_chain(obj))
-        def read(obj,fields):
+        def read_many(objects,fields):
             nonlocal catalog
-            values,catalog=read_values_with_references(catalog,obj,fields=fields)
-            if values.errors or values.truncated:raise RuntimeError('Complete copied curve fields required')
-            return {key[1]:copied(value,catalog) for key,value in values.values.items()}
+            fresh,values=capture_selected_values(scope.pid,
+                tuple((obj.index,obj.serial,obj.address) for obj in objects),fields=fields,references=True)
+            catalog=catalog.with_observations(fresh)
+            if set(values)!={obj.index for obj in objects}:raise RuntimeError('Incomplete copied curve target batch')
+            result={}
+            for obj in objects:
+                row=values[obj.index]
+                if (row.errors or row.truncated or len(row.values)!=len(fields) or
+                        {key[1] for key in row.values}!=set(fields)):
+                    raise RuntimeError('Complete copied curve fields required')
+                result[obj.index]={key[1]:copied(value,catalog) for key,value in row.values.items()}
+            return result
         wanted={signature(document['source']['nodes'][path]):path for path in paths}
         if len(wanted)!=len(paths):raise ValueError('Ambiguous source section signatures')
         candidates={}
-        for obj in tuple(catalog.objects):
-            if obj.name not in names or not owned(obj):continue
-            key=signature(dict(fields=read(obj,('Signature',))))
+        objects=tuple(obj for obj in catalog.objects if obj.name in names and owned(obj))
+        signatures={}
+        for offset in range(0,len(objects),128):
+            signatures.update(read_many(objects[offset:offset+128],('Signature',)))
+        for obj in objects:
+            key=signature(dict(fields=signatures[obj.index]))
             if key in wanted:
                 path=wanted[key]
                 if obj.class_name!=document['source']['nodes'][path]['class_name']:raise RuntimeError('Private copied section class changed')
@@ -139,9 +151,15 @@ def apply_key_edits(scope,root,outer,document):
             original=catalog.find_path(section);target=targets[section]
             if owned(original):raise RuntimeError('Original section aliases the private copy')
             source_signature=signature(document['source']['nodes'][section])
-            if signature(dict(fields=read(original,('Signature',))))!=source_signature:raise RuntimeError('Source section changed since import')
+            # Observe source signature and both full channels together before
+            # any write. The native patch still independently proves identity,
+            # ownership, neighbors and its write/readback receipt.
+            fields=tuple(dict.fromkeys(('Signature',path[0])))
+            observed=read_many((original,target),fields)
+            if signature(dict(fields=observed[original.index]))!=source_signature:raise RuntimeError('Source section changed since import')
+            if signature(dict(fields=observed[target.index]))!=source_signature:raise RuntimeError('Copied section changed before channel validation')
             expected={'fields':document['source']['nodes'][section]['fields']}
-            source_now={'fields':read(original,(path[0],))};target_now={'fields':read(target,(path[0],))}
+            source_now={'fields':observed[original.index]};target_now={'fields':observed[target.index]}
             for part in path:
                 expected=expected['fields'][part] if type(part) is str else expected['static_array'][part]
                 source_now=source_now['fields'][part] if type(part) is str else source_now['static_array'][part]
