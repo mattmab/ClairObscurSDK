@@ -14,13 +14,25 @@ int main() {
     c.data[8]=1; c.data[16]=2;
     assert(!validate_asset_call(p));
     for(unsigned i=0;i<48;++i) {
+#if defined(E33_RUNTIME_CINEMATIC_VERSION) && E33_RUNTIME_CINEMATIC_VERSION>=244
+        if(i>=8&&i<24) continue;
+#else
         if((i>=8&&i<12)||(i>=16&&i<20)) continue;
+#endif
         auto bad=p; bad.call.data[i]=1; assert(validate_asset_call(bad));
     }
     auto bad=p; bad.call.fields[0].flags|=0x100; assert(validate_asset_call(bad));
     bad=p; bad.call.fields[0].constraint.address++; assert(validate_asset_call(bad));
     bad=p; bad.call.entry_rva++; assert(validate_asset_call(bad));
     bad=p; bad.count=1; assert(validate_asset_call(bad));
+#if defined(E33_RUNTIME_CINEMATIC_VERSION) && E33_RUNTIME_CINEMATIC_VERSION>=244
+    auto numbered=p;numbered.call.data[12]=3;numbered.call.data[20]=3;
+    assert(!validate_asset_call(numbered));
+    numbered.call.data[15]=0x80;assert(validate_asset_call(numbered));
+    numbered=p;numbered.call.entry_rva=0x3860250;numbered.call.data[12]=3;
+    std::memcpy(numbered.call.fields[0].name,"AssetClass",11);
+    numbered.call.fields[1].kind=CallClass;assert(validate_asset_call(numbered));
+#endif
     assert(validate_call_packet(p.call,true)); // Old dispatcher never accepts this extension.
     std::cout<<"asset contract guards passed\n";
 }

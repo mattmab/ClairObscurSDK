@@ -47,10 +47,14 @@ class CoverageTests(unittest.TestCase):
         with self.assertRaises(RuntimeError):obj.start()
         factory.assert_not_called()
     def test_pending_other_profile_never_replaces_owner(self):
-        model=mod.Mod();p=profiles.PROLOGUE;model.session=N(_session=N(_transport=self.transport(p)));model.video=None
-        old=Mock();old.profile=object();old.status.return_value={'active':True};model.title_replay=old
-        with self.assertRaises(mod.ManagementError):model.prepare_title(p.definition)
-        self.assertIs(model.title_replay,old)
+        from cinematics_v2_fixtures import Backend,ready_model
+        p=profiles.PROLOGUE;row=self.row(p);row.update(replay_kind='title',supported=True)
+        model=ready_model(mod,row);old=Backend()
+        model.controller.queue('existing-profile',lambda:old,model._last_epoch);model.controller.poll(model._last_epoch)
+        generation=model.controller.status().generation
+        with self.assertRaises(mod.ManagementError):model.control(p.definition,1)
+        self.assertEqual(model.controller.status().generation,generation)
+        old.close.assert_not_called()
 
 class MediaCoverageTests(unittest.TestCase):
     def test_exact_segments_are_partial_and_wrong_hash_is_blocked(self):
@@ -63,7 +67,7 @@ class MediaCoverageTests(unittest.TestCase):
             self.assertFalse(mod.catalog_scenes({p.saved_id:True},True,c,b'x')[0]['supported'])
     def test_media_menu_exposes_only_play_stop(self):
         p=next(iter(media.MEDIA_PROFILES.values()));model=mod.Mod();model.show_all=False
-        model.discovery={'confirmed':[dict(id=p.definition,title='Partial',reason=p.limitation,supported=True,unlocked=True,replay_kind='movie')]}
+        model.library=(dict(id=p.definition,title='Partial',reason=p.limitation,supported=True,unlocked=True,replay_kind='movie'),)
         view=mod.BrowserView(N(_check=Mock()),model);view.selected=p.definition;frame=view.render()
         self.assertEqual({c.token for c in frame.controls if c.token in (1,2,3,4,5)},{1,4})
         with self.assertRaises(mod.ManagementError):view.activate(frame.revision,2)

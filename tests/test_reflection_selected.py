@@ -49,6 +49,16 @@ class SelectedReflectionTests(unittest.TestCase):
             result = describe_selected(123, (self.identity,))
         self.assertEqual(selected.call_count, 1)
         self.assertIn(self.root.index, result.descriptors)
+    def test_inherited_declaring_owner_is_selected_without_repeating_descriptor_query(self):
+        ref=self.reference
+        rows=self.rows()[:2]+[dict(event='struct_metadata',index=ref.index,serial=ref.serial,
+                                  address=hex(ref.address),name=ref.name)]
+        with patch('expedition33.catalog.capture_selected',side_effect=[self.selected,self.complete]) as selected,\
+             patch('expedition33.reflection._query',return_value=({'pid':123},rows)) as query:
+            result=describe_selected(123,(self.identity,))
+        self.assertEqual(selected.call_args_list[1].args,(123,((ref.index,ref.serial,ref.address),)))
+        self.assertEqual(len(result.descriptors[self.root.index].owners),2)
+        query.assert_called_once()
 
     def test_legacy_missing_type_address_is_explicitly_rejected(self):
         with patch('expedition33.catalog.capture_selected', return_value=self.selected) as selected, \

@@ -11,6 +11,7 @@ def load(name):
  import sys
  sys.modules[spec.name]=module;spec.loader.exec_module(module);return module
 intro=load('IntrospectionHarness');loader=load('WorldBuilderMapLoader');travel=load('MapTravel')
+viewer=load('LiveObjectViewer')
 class Lease:
  def __init__(self):self._state='active';self.calls=0;self.fail=False
  def release(self):
@@ -19,6 +20,36 @@ class Lease:
   self._state='pending_release' if self.calls==1 else 'released'
   return self._state=='released'
 class RetirementTests(unittest.TestCase):
+ def test_viewer_retirement_revokes_draft_and_route_without_native_input_restore(self):
+  model=viewer.Mod();model.harness=Harness();model.native=Mock()
+  model.browser=SimpleNamespace(live=True,draft={'value':2},generation=3)
+  command=Mock();model.commands=[command];native=model.native
+  model.revoke_world(object())
+  self.assertFalse(model.browser.live);self.assertIsNone(model.browser.draft)
+  self.assertEqual(model.browser.generation,4);native.revoke.assert_called_once()
+  with self.assertRaisesRegex(viewer.ManagementError,'new world'):model.open()
+  self.assertEqual(model.begin_world_retirement(object()),'ack')
+  native.close.assert_not_called();command.remove.assert_called_once()
+  self.assertIsNone(model.harness);self.assertIsNone(model.native)
+ def test_viewer_retained_result_requires_pending_release_ack(self):
+  model=viewer.Mod();model.harness=Harness();lease=Lease();value=object()
+  owner=SimpleNamespace(_leases=[lease],release=Mock(side_effect=lease.release))
+  model.harness._explorer.values['owned']=value
+  model.harness._explorer._owners['owned']=(value,owner)
+  model.revoke_world(object())
+  self.assertEqual(model.begin_world_retirement(object()),'pending')
+  self.assertEqual(lease.calls,1)
+  self.assertEqual(model.poll_world_retirement(object()),'ack')
+  self.assertEqual(lease.calls,2);owner.release.assert_called_once()
+ def test_viewer_unknown_release_is_not_replayed(self):
+  model=viewer.Mod();model.harness=Harness();lease=Lease();lease.fail=True;value=object()
+  owner=SimpleNamespace(_leases=[lease],release=lease.release)
+  model.harness._explorer.values['owned']=value
+  model.harness._explorer._owners['owned']=(value,owner)
+  model.revoke_world(object())
+  self.assertEqual(model.begin_world_retirement(object()),'unknown')
+  self.assertEqual(model.poll_world_retirement(object()),'unknown')
+  self.assertEqual(lease.calls,1);self.assertIsNotNone(model.harness)
  def test_introspection_retained_result_waits_for_exact_pending_lease_ack(self):
   model=intro.Mod();model.harness=Harness();lease=Lease();value=object()
   owner=SimpleNamespace(_leases=[lease],release=Mock(side_effect=lease.release))

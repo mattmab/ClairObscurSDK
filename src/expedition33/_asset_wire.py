@@ -16,9 +16,10 @@ def encode_plan(plan):
             r.kind!=('ClassProperty' if class_load else 'ObjectProperty') or r.name!='ReturnValue' or r.offset!=40 or r.width!=8 or
             r.dimension!=1 or r.flags!=6755468160534400 or r.constraint!=a.constraint):
         raise ValueError('Unverified soft reference signature')
-    if (len(plan.data)!=48 or any(plan.data[:8]+plan.data[12:16]+plan.data[20:]) or
+    if (len(plan.data)!=48 or any(plan.data[:8]+plan.data[24:]) or
+            any(n>0x7fffffff or (class_load and n) for n in struct.unpack_from('<I',plan.data,12)+struct.unpack_from('<I',plan.data,20)) or
             not struct.unpack_from('<I',plan.data,8)[0] or not struct.unpack_from('<I',plan.data,16)[0]):
-        raise ValueError('Soft reference must contain only two name IDs')
+        raise ValueError('Soft reference must contain only two bounded name values')
     normalized=replace(a,kind='UInt16Property',width=2,dimension=20)
     wire=bytearray(retained.encode_plan(replace(plan,wire_version=2,parameters=(normalized,r))))
     struct.pack_into('<I',wire,0,6)

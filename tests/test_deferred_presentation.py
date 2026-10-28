@@ -34,7 +34,7 @@ class DeferredPresentationTests(unittest.TestCase):
         self.menu.view.selected=browser.DEFINITION
         self.menu.frame=self.menu.view.render()
         self.menu._bind()
-        self.play_callback=self.callbacks[2][1]
+        self.play_callback=self.callbacks[next(i for i,control in enumerate(self.menu.frame.controls) if control.token==1)][1]
         self.events.clear()
 
     def bind(self, bindings):

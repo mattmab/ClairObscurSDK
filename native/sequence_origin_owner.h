@@ -9,6 +9,8 @@
 // writable; no asset, archetype, CDO, caller-selected object or pointer is used.
 class SequenceOriginOwner {
     e33_sequence_origin::Journal journal_;
+    e33_sequence_origin::TransformJournal transform_journal_;
+    uint8_t mode_=0;
     uint64_t base_=0;
     CallIdentity actor_{},instance_{},controller_{};
     e33_retired_world::Snapshot context_{};
@@ -78,20 +80,63 @@ class SequenceOriginOwner {
                 local_read<uint8_t>(self.actor_.address+760)==uint8_t(self.override_|2) &&
                 !std::memcmp(value,reinterpret_cast<const void*>(self.instance_.address+64),96);
         }
+        bool prove_private_current(const SequenceOriginPacket& p) {return verify_translation(p);}
+        bool write_transform(const SequenceOriginTransformPacket& p) {
+            double quaternion[4]{};sequence_origin_transform_quaternion(p,quaternion);
+            std::memcpy(reinterpret_cast<void*>(self.instance_.address+64),quaternion,32);
+            std::memcpy(reinterpret_cast<void*>(self.instance_.address+96),&p.x,24);
+            *reinterpret_cast<uint8_t*>(self.actor_.address+760)=uint8_t(self.override_|2);
+            return true;
+        }
+        bool verify_transform(const SequenceOriginTransformPacket& p) {
+            TargetPodSchemaOps context{self.base_};
+            double value[12];std::memcpy(value,self.original_,96);
+            sequence_origin_transform_quaternion(p,value);
+            value[4]=p.x;value[5]=p.y;value[6]=p.z;
+            return context.context() && self.current() && self.schema() &&
+                local_read<uint8_t>(self.actor_.address+760)==uint8_t(self.override_|2) &&
+                !std::memcmp(value,reinterpret_cast<const void*>(self.instance_.address+64),96);
+        }
+        bool prove_transform_current(const SequenceOriginTransformPacket& p) {return verify_transform(p);}
     };
 public:
     bool before_evaluation() {
         // Unconfigured owners preserve the existing sequence contract. Once
         // private origin context is captured, public evaluation cannot outlive
         // that controller/world. Internal cleanup uses separate exact admission.
-        return (!actor_.address || current()) && journal_.before_evaluation();
+        return (!actor_.address || current()) && journal_.before_evaluation() && transform_journal_.before_evaluation();
     }
     uint32_t configure(uint64_t base,const CallIdentity& actor,const CallIdentity& controller,const SequenceOriginPacket& p) {
+        if(mode_!=0)return 1591;
         base_=base;actor_=actor;controller_=controller;
         e33_retired_world::TargetOps context{base};
         if(!valid(actor_) || !valid(controller_) || !context.observe(context_) || !current()) return 1591;
         instance_=call_capture(base,local_read<uint64_t>(actor.address+768));
         Ops ops{*this};const auto result=journal_.configure(ops,p);
+        if(result!=e33_sequence_origin::Result::rejected)mode_=1;
+        return result==e33_sequence_origin::Result::ok ? 0 :
+            result==e33_sequence_origin::Result::unknown ? 1593 : 1591;
+    }
+    uint32_t update(const SequenceOriginPacket& p) {
+        if(mode_!=1)return 1591;
+        Ops ops{*this};const auto result=journal_.update(ops,p);
+        return result==e33_sequence_origin::Result::ok ? 0 :
+            result==e33_sequence_origin::Result::unknown ? 1593 : 1591;
+    }
+    uint32_t configure_transform(uint64_t base,const CallIdentity& actor,const CallIdentity& controller,const SequenceOriginTransformPacket& p) {
+        if(mode_!=0)return 1591;
+        base_=base;actor_=actor;controller_=controller;
+        e33_retired_world::TargetOps context{base};
+        if(!valid(actor_) || !valid(controller_) || !context.observe(context_) || !current())return 1591;
+        instance_=call_capture(base,local_read<uint64_t>(actor.address+768));
+        Ops ops{*this};const auto result=transform_journal_.configure(ops,p);
+        if(result!=e33_sequence_origin::Result::rejected)mode_=2;
+        return result==e33_sequence_origin::Result::ok ? 0 :
+            result==e33_sequence_origin::Result::unknown ? 1593 : 1591;
+    }
+    uint32_t update_transform(const SequenceOriginTransformPacket& p) {
+        if(mode_!=2)return 1591;
+        Ops ops{*this};const auto result=transform_journal_.update(ops,p);
         return result==e33_sequence_origin::Result::ok ? 0 :
             result==e33_sequence_origin::Result::unknown ? 1593 : 1591;
     }

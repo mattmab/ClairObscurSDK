@@ -6,7 +6,7 @@ The native source profile, owned-copy policy, arena and entry lifetime remain
 authoritative. No late combat additions or encounter-table writes are used.
 """
 from copy import deepcopy
-from ._reader import ReadBatch
+from ._reader import ReadBatch, active_reader
 from .catalog import capture_selected
 from .values import read_values_with_references,StoredStruct
 from .original_trigger_sources import exercise_trigger_parameter_copy
@@ -153,7 +153,7 @@ def resolve_source(catalog,recipe_id):
     return deepcopy(dict(route,recipe_id=recipe_id,asset_path=route['source'].split(':',1)[0]))
 
 def _verify_source(scope,source,expected):
-    with ReadBatch(scope.pid,share=True,_executable=scope._session._transport._executable):
+    with ReadBatch(scope.pid,share=active_reader() is None,_executable=scope._session._transport._executable):
         c=capture_selected(scope.pid,((source.index,source.serial,source.address),))
         values,c=read_values_with_references(c,c.by_index[source.index],fields=('Battle Start Params',))
         params=[v for k,v in values.values.items() if k[1]=='Battle Start Params']

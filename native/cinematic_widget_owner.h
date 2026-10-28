@@ -52,6 +52,30 @@ class CinematicWidgetOwner {
         }
     };
 public:
+    bool retirement_ready() const {
+        if(!journal_.retirement_ready()) return false;
+#ifdef E33_WIDGET_ANIMATION_SESSION
+        if(!animations_.retirement_ready()) return false;
+#endif
+        return true;
+    }
+    e33_cinematic::WidgetStep retire() {
+        if(!retirement_ready()) return e33_cinematic::WidgetStep::uncertain;
+        struct ReleaseOnly {
+            CinematicWidgetOwner& self;
+            e33_cinematic::WidgetStep release_all() {
+                TargetStrongReferenceOps ops{self.base_,{}};
+                const auto result=self.leases_.close(ops,self.session_);
+                if(result==StrongLeaseResult::Deferred) return e33_cinematic::WidgetStep::deferred;
+                return result==StrongLeaseResult::Ok ? e33_cinematic::WidgetStep::ok : e33_cinematic::WidgetStep::uncertain;
+            }
+        } ops{*this};
+        const auto result=journal_.retire(ops);
+#ifdef E33_WIDGET_ANIMATION_SESSION
+        if(result==e33_cinematic::WidgetStep::ok) animations_.retired();
+#endif
+        return result;
+    }
     bool active() const { return journal_.active_owner(); }
     size_t private_active() const { return leases_.active(); }
     size_t private_peak() const { return leases_.peak(); }

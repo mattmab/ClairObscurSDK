@@ -20,6 +20,14 @@
 #include <cmath>
 #include <limits>
 #include "stored_value_format.h"
+#include "reader_process_selection.h"
+#include "stored_soft_path.h"
+#include "name_observation_cache.h"
+#include "asset_name_number.h"
+#include "cinematic_cast_array.h"
+#include "stored_reference_array.h"
+#include "stored_frame_range.h"
+#include "read_failure_diagnostics.h"
 
 struct Handle {
     HANDLE value;
@@ -80,32 +88,27 @@ std::vector<uint8_t> supported_image(const std::filesystem::path& path) {
 
 struct Reader {
     HANDLE process;
+    mutable NameObservationCache name_cache{};
+    bool cache_names = false;
     void read(uint64_t address, void* target, size_t size) const {
-        require(address >= 0x10000 && address <= 0x7fffffffffffULL &&
-                size <= 2 * 1024 * 1024 && address + size >= address, "INVALID_READ_RANGE");
-        SIZE_T received = 0;
-        if (!ReadProcessMemory(process, reinterpret_cast<LPCVOID>(address), target, size, &received)
-            || received != size)
-            throw std::runtime_error("READ_FAILED address=" + hex(address) +
-                                     " win32=" + std::to_string(GetLastError()));
+        read_checked_process(process, address, target, size);
     }
     template<class T> T get(uint64_t address) const {
         T value{}; read(address, &value, sizeof(value)); return value;
     }
 };
 
-DWORD discover_process() {
+DWORD discover_process(DWORD requested_pid = 0) {
     Handle snapshot(CreateToolhelp32Snapshot(TH32CS_SNAPPROCESS, 0));
     require(snapshot.value != INVALID_HANDLE_VALUE, "PROCESS_SNAPSHOT_FAILED");
     PROCESSENTRY32W entry{}; entry.dwSize = sizeof(entry);
-    DWORD pid = 0;
+    std::vector<ReaderProcessCandidate> candidates;
     for (BOOL more = Process32FirstW(snapshot.value, &entry); more;
          more = Process32NextW(snapshot.value, &entry)) {
-        if (_wcsicmp(entry.szExeFile, L"SandFall-Win64-Shipping.exe") == 0) {
-            require(pid == 0, "MULTIPLE_GAME_PROCESSES"); pid = entry.th32ProcessID;
-        }
+        if (_wcsicmp(entry.szExeFile, L"SandFall-Win64-Shipping.exe") == 0)
+            candidates.push_back({entry.th32ProcessID, true});
     }
-    require(pid != 0, "GAME_NOT_RUNNING"); return pid;
+    return select_reader_process(candidates, requested_pid);
 }
 
 struct Anchor { uint32_t instruction_rva; uint32_t global_rva; std::vector<uint8_t> original; };
@@ -147,7 +150,7 @@ struct ObjectItem { uint64_t object; uint32_t flags; int32_t cluster; int32_t se
 struct ArrayHeader { uint64_t chunks, preallocated; int32_t max_elements, num_elements, max_chunks, num_chunks; };
 static_assert(sizeof(ObjectHeader) == 40 && sizeof(ObjectItem) == 24 && sizeof(ArrayHeader) == 32);
 
-std::string read_name(const Reader& reader, uint64_t pool, uint32_t id, uint32_t number = 0) {
+std::string read_name_uncached(const Reader& reader, uint64_t pool, uint32_t id, uint32_t number = 0) {
     uint32_t block = id >> 16, offset = (id & 0xffff) * 2;
     require(block < 8192, "NAME_BLOCK_OUT_OF_RANGE");
     uint64_t pointer = reader.get<uint64_t>(pool + 0x10 + uint64_t(block) * 8);
@@ -169,6 +172,13 @@ std::string read_name(const Reader& reader, uint64_t pool, uint32_t id, uint32_t
     }
     if (number) value += "_" + std::to_string(number - 1);
     return value;
+}
+
+std::string read_name(const Reader& reader, uint64_t pool, uint32_t id, uint32_t number = 0) {
+    if (!reader.cache_names) return read_name_uncached(reader, pool, id, number);
+    return reader.name_cache.read(pool, id, number, [&](uint64_t p, uint32_t n, uint32_t s) {
+        return read_name_uncached(reader, p, n, s);
+    });
 }
 
 #include "thread_ping.h"
@@ -227,7 +237,7 @@ int run_query(int argc, char** argv) {
             function_owner = qualified.substr(0, dot); function_name = qualified.substr(dot + 1); limit = 0;
         }
         else if (resolve_asset_names) {
-            descriptor_pid=std::stoul(argv[2]);
+            descriptor_pid=parse_reader_process_id(argv[2]);
             const std::string path=argv[3]; const auto dot=path.find('.');
             require(dot!=std::string::npos && path.find('.',dot+1)==std::string::npos && path.size()<1024,
                     "ASSET_PATH_INVALID");
@@ -242,7 +252,7 @@ int run_query(int argc, char** argv) {
                 (ch>='0'&&ch<='9') || ch=='_' || ch=='/',"ASSET_PATH_INVALID");
         }
         else if (matching_catalog) {
-            descriptor_pid = std::stoul(argv[2]);
+            descriptor_pid = parse_reader_process_id(argv[2]);
             std::istringstream tokens(argv[3]); std::string token;
             while (std::getline(tokens, token, ',')) {
                 require(token.size() > 2 && token.size() <= 1026 && token[1] == '=' &&
@@ -258,7 +268,7 @@ int run_query(int argc, char** argv) {
             read_table = std::string(argv[1]) == "--read-table";
             read_values = catalog_values || read_table || std::string(argv[1]) == "--read-values";
             read_enums = std::string(argv[1]) == "--describe-enums";
-            descriptor_pid = std::stoul(argv[2]);
+            descriptor_pid = parse_reader_process_id(argv[2]);
             std::string selectors=argv[3];
             const auto projection=selectors.find(';');
             if(projection!=std::string::npos) {
@@ -287,7 +297,14 @@ int run_query(int argc, char** argv) {
         std::unordered_set<int32_t> value_targets;
         if(catalog_values) for(const auto& selected:descriptors)value_targets.insert(selected.first);
         const bool reflection = catalog_values || !reflect_class.empty() || !bool_object.empty() || !function_name.empty() || (!descriptors.empty() && !selected_catalog);
-        DWORD pid = discover_process();
+        // Only explicit-PID read modes can select one of several shipping
+        // processes. Automatic discovery and --session retain ambiguity checks.
+        DWORD requested_pid = descriptor_pid;
+        if(active_reader_gate) {
+            require(!requested_pid || requested_pid == active_reader_gate->pid, "READER_PROCESS_CHANGED");
+            requested_pid = active_reader_gate->pid;
+        }
+        DWORD pid = discover_process(requested_pid);
         if (runtime_session) {
             wchar_t expected_pid[16]{};
             DWORD length = GetEnvironmentVariableW(L"E33_EXPECTED_GAME_PID", expected_pid, 16);
@@ -313,6 +330,7 @@ int run_query(int argc, char** argv) {
         const uint64_t base = reinterpret_cast<uint64_t>(module.modBaseAddr);
         require(module.modBaseSize == 166776832, "UNSUPPORTED_RUNTIME_IMAGE_SIZE");
         Reader reader{process.value};
+        reader.cache_names = read_values;
         // Target thread-name and stack-report routines 141082dd0 / 14107b770
         // identify this build-scoped DWORD as GameThread's OS thread ID.
         DWORD game_thread = reader.get<DWORD>(base + 0x9272d30);
@@ -358,6 +376,12 @@ int run_query(int argc, char** argv) {
             const auto current=reader.get<uint32_t>(pool+8), cursor=reader.get<uint32_t>(pool+12);
             require(current<8192 && cursor<=0x20000,"ASSET_NAME_POOL_BOUNDS");
             uint32_t package_id=0,asset_id=0;
+#if defined(E33_RUNTIME_CINEMATIC_VERSION) && E33_RUNTIME_CINEMATIC_VERSION>=244
+            char package_base[1024]{},asset_base[1024]{};
+            uint32_t package_number=0,asset_number=0,package_fallback=0,asset_fallback=0;
+            require(asset_split_number(asset_package.c_str(),package_base,sizeof(package_base),package_number)&&
+                    asset_split_number(asset_name.c_str(),asset_base,sizeof(asset_base),asset_number),"ASSET_NAME_LENGTH");
+#endif
             for(uint32_t b=0;b<=current && (!package_id || !asset_id);++b) {
                 const auto pointer=reader.get<uint64_t>(pool+16+uint64_t(b)*8);
                 const auto extent=b==current ? cursor : 0x20000U;
@@ -371,16 +395,32 @@ int run_query(int argc, char** argv) {
                         const std::string value(reinterpret_cast<char*>(bytes.data()+at+2),length);
                         if(value==asset_package) package_id=(b<<16)|(at/2);
                         if(value==asset_name) asset_id=(b<<16)|(at/2);
+#if defined(E33_RUNTIME_CINEMATIC_VERSION) && E33_RUNTIME_CINEMATIC_VERSION>=244
+                        if(package_number&&value==package_base)package_fallback=(b<<16)|(at/2);
+                        if(asset_number&&value==asset_base)asset_fallback=(b<<16)|(at/2);
+#endif
                     }
                     at+=(length*width+3)&~1U;
                 }
             }
+#if defined(E33_RUNTIME_CINEMATIC_VERSION) && E33_RUNTIME_CINEMATIC_VERSION>=244
+            if(package_id)package_number=0;else package_id=package_fallback;
+            if(asset_id)asset_number=0;else asset_id=asset_fallback;
+            require(package_id && asset_id,"ASSET_NAMES_NOT_LOADED");
+            require(read_name(reader,pool,package_id,package_number)==asset_package &&
+                    read_name(reader,pool,asset_id,asset_number)==asset_name,"ASSET_NAMES_CHANGED");
+#else
             require(package_id && asset_id,"ASSET_NAMES_NOT_LOADED");
             require(read_name(reader,pool,package_id)==asset_package && read_name(reader,pool,asset_id)==asset_name,
                     "ASSET_NAMES_CHANGED");
+#endif
             std::cout << "{\"event\":\"asset_names\",\"package\":" << quote(asset_package)
                       << ",\"asset\":" << quote(asset_name) << ",\"package_id\":" << package_id
-                      << ",\"asset_id\":" << asset_id << "}\n{\"event\":\"snapshot_end\",\"emitted\":1}\n";
+                      << ",\"asset_id\":" << asset_id
+#if defined(E33_RUNTIME_CINEMATIC_VERSION) && E33_RUNTIME_CINEMATIC_VERSION>=244
+                      << ",\"package_number\":" << package_number << ",\"asset_number\":" << asset_number
+#endif
+                      << "}\n{\"event\":\"snapshot_end\",\"emitted\":1}\n";
             return 0;
         }
         uint32_t emitted = 0, null_slots = 0, changing_slots = 0;
@@ -1074,7 +1114,10 @@ int run_query(int argc, char** argv) {
                         };
                         // Copied reflected fields only: never reconstruct or own
                         // non-reflected state (for example FKey's shared pointer).
-                        size_t struct_budget = 4096;
+                        // A large MovieScene spawnable array can contain hundreds
+                        // of reflected cast declarations. Bound the full value
+                        // without exhausting it partway through a valid cast.
+                        size_t struct_budget = 32768;
                         size_t struct_string_budget = 262144;
                         std::function<std::string(uint64_t, const PropertyPrefix&, uint64_t,
                             const uint8_t*, unsigned)> struct_json;
@@ -1082,7 +1125,8 @@ int run_query(int argc, char** argv) {
                             unsigned)> map_json;
                         struct_json = [&](uint64_t property, const PropertyPrefix& layout, uint64_t at,
                                           const uint8_t* bytes, unsigned depth) -> std::string {
-                            require(depth < 4 && struct_budget > 0, "STRUCT_DEPTH_OR_NODE_LIMIT");
+                            require(depth < 4, "STRUCT_DEPTH_LIMIT");
+                            require(struct_budget > 0, "STRUCT_NODE_LIMIT");
                             --struct_budget;
                             require(layout.element_size > 0 && layout.element_size <= 65536, "STRUCT_VALUE_SIZE_LIMIT");
                             const auto ref = reader.get<uint64_t>(property + 0x70);
@@ -1099,6 +1143,21 @@ int run_query(int argc, char** argv) {
                             const auto reflected_extent=reader.get<int32_t>(ref + 0x58);
                             require(reflected_extent>=0 && reflected_extent<=layout.element_size,
                                     "STRUCT_VALUE_EXTENT_MISMATCH");
+                            std::string native_fields;
+                            if(struct_name=="MovieSceneFrameRange") {
+                                const auto package=reader.get<ObjectHeader>(structure.outer);
+                                require(read_name(reader,pool,package.name_id,package.name_number)=="/Script/MovieScene" &&
+                                    derives_from_core_type(package.cls,"Package") && reflected_extent==16 &&
+                                    !reader.get<uint64_t>(ref+0x40) && !reader.get<uint64_t>(ref+0x50),"FRAME_RANGE_SCHEMA_INVALID");
+                                const auto range=copy_stored_frame_range(bytes,size_t(layout.element_size));
+                                constexpr const char* kinds[]={"exclusive","inclusive","open"};
+                                std::ostringstream decoded;
+                                decoded<<",\"native\":{\"frame_range\":{\"lower\":{\"kind\":"<<quote(kinds[range.lower_kind])
+                                    <<",\"value\":"<<(range.lower_kind==2 ? std::string("null") : std::to_string(range.lower))
+                                    <<"},\"upper\":{\"kind\":"<<quote(kinds[range.upper_kind])<<",\"value\":"
+                                    <<(range.upper_kind==2 ? std::string("null") : std::to_string(range.upper))<<"}}}";
+                                native_fields=decoded.str();
+                            }
                             std::ostringstream members;
                             std::unordered_set<uint64_t> struct_owners, struct_fields;
                             std::unordered_set<std::string> names;
@@ -1134,6 +1193,68 @@ int run_query(int argc, char** argv) {
                                             std::string encoded;
                                             if (kind == "StructProperty") {
                                                 encoded = struct_json(member, child, at + child.offset, source, depth + 1);
+                                            } else if (kind == "ArrayProperty") {
+                                                const auto flags=reader.get<uint8_t>(member+0x70);
+                                                require(!(flags&1) && child.element_size==16,"STRUCT_ARRAY_LAYOUT_INVALID");
+                                                const auto inner=reader.get<uint64_t>(member+0x78);
+                                                require(inner && inner!=member,"STRUCT_ARRAY_INNER_INVALID");
+                                                const auto element=reader.get<PropertyPrefix>(inner);
+                                                const auto element_id=reader.get<uint64_t>(element.type);
+                                                const auto element_kind=read_name(reader,pool,uint32_t(element_id),uint32_t(element_id>>32));
+                                                const auto width=element_kind=="StructProperty" ? element.element_size : element_kind=="BoolProperty" ? 1 : scalar_width(element_kind);
+                                                require(width && width<=512 && element.owner==member && element.dimension==1 && element.offset==0 &&
+                                                    element.element_size==width && (reader.get<uint64_t>(element.type+0x10)&0x8000),
+                                                    "STRUCT_ARRAY_ELEMENT_UNSUPPORTED");
+                                                uint64_t element_struct=0;ObjectHeader element_structure{};ObjectItem element_slot{};
+                                                uint32_t element_bool=0;
+                                                if(element_kind=="BoolProperty") {
+                                                    element_bool=reader.get<uint32_t>(inner+0x70);
+                                                    require(uint8_t(element_bool)==1 && uint8_t(element_bool>>8)==0 &&
+                                                        uint8_t(element_bool>>24)==255,"STRUCT_ARRAY_BOOL_LAYOUT_INVALID");
+                                                }
+                                                if(element_kind=="StructProperty") {
+                                                    element_struct=reader.get<uint64_t>(inner+0x70);
+                                                    element_structure=reader.get<ObjectHeader>(element_struct);
+                                                    element_slot=item_at(element_structure.index);
+                                                    require(element_slot.object==element_struct && derives_from_core_type(element_structure.cls,"ScriptStruct"),
+                                                        "STRUCT_ARRAY_TYPE_INVALID");
+                                                }
+                                                const auto copied=copy_stored_array_bytes(source,at+child.offset,size_t(width),
+                                                    [&](uint64_t address,void* target,size_t size){reader.read(address,target,size);},struct_budget);
+                                                std::ostringstream array;
+                                                array<<"{\"$array\":{\"length\":"<<copied.total<<",\"items\":[";
+                                                const auto array_count=copied.bytes.size()/size_t(width);
+                                                StoredReferenceArrayHeader header{};std::memcpy(&header,source,sizeof(header));
+                                                for(size_t i=0;i<array_count;++i) {
+                                                    if(i)array<<',';
+                                                    const auto item=copied.bytes.data()+i*size_t(width);
+                                                    if(element_kind=="StructProperty")array<<struct_json(inner,element,header.data+i*size_t(width),item,depth+1);
+                                                    else if(element_kind=="BoolProperty")array<<(item[0] ? "true" : "false");
+                                                    else {uint64_t raw=0;std::memcpy(&raw,item,size_t(width));array<<scalar_json(element_kind,raw);}
+                                                }
+                                                array<<"]}}";encoded=array.str();
+                                                const auto element_again=reader.get<PropertyPrefix>(inner);
+                                                require(!std::memcmp(&element,&element_again,sizeof(element)) &&
+                                                    reader.get<uint64_t>(element.type)==element_id &&
+                                                    reader.get<uint8_t>(member+0x70)==flags &&
+                                                    reader.get<uint64_t>(member+0x78)==inner,"STRUCT_ARRAY_DESCRIPTOR_CHANGED");
+                                                if(element_kind=="BoolProperty")require(reader.get<uint32_t>(inner+0x70)==element_bool,
+                                                    "STRUCT_ARRAY_BOOL_LAYOUT_CHANGED");
+                                                std::ostringstream element_metadata;
+                                                element_metadata<<",\"inner_type\":"<<quote(element_kind);
+                                                if(element_struct) {
+                                                    const auto slot_again=item_at(element_structure.index);
+                                                    require(slot_again.object==element_struct && slot_again.serial==element_slot.serial &&
+                                                        reader.get<uint64_t>(inner+0x70)==element_struct,"STRUCT_ARRAY_TYPE_CHANGED");
+                                                    element_metadata<<",\"inner_struct\":{\"$reference\":{\"index\":"<<element_structure.index
+                                                        <<",\"serial\":"<<element_slot.serial<<",\"address\":"<<quote(hex(element_struct))
+                                                        <<",\"name\":"<<quote(read_name(reader,pool,element_structure.name_id,element_structure.name_number))<<"}}";
+                                                }
+                                                size_t final_budget=64;
+                                                const auto repeated=copy_stored_array_bytes(source,at+child.offset,size_t(width),
+                                                    [&](uint64_t address,void* target,size_t size){reader.read(address,target,size);},final_budget);
+                                                require(repeated.total==copied.total && repeated.bytes==copied.bytes,"STRUCT_ARRAY_CONTENT_CHANGED");
+                                                members<<element_metadata.str();
                                             } else if (kind == "MapProperty") {
                                                 // Nested maps currently admit only the objective-status schema.
                                                 // Publish its independently observed element types for Python validation.
@@ -1159,6 +1280,16 @@ int run_query(int argc, char** argv) {
                                                         "STRUCT_MAP_DESCRIPTOR_CHANGED");
                                                 members << ",\"map_key_type\":" << quote(key_kind)
                                                         << ",\"map_value_type\":" << quote(val_kind);
+                                            } else if (kind == "SoftObjectProperty") {
+                                                const auto copied=copy_stored_soft_path(source,at+child.offset,
+                                                    uint32_t(child.element_size),reader.get<uint64_t>(member)-base,
+                                                    [&](uint64_t address,void* target,size_t size){reader.read(address,target,size);},
+                                                    [&](uint32_t name_id,uint32_t number){return read_name(reader,pool,name_id,number);},
+                                                    struct_string_budget);
+                                                encoded="{\"$soft_object_path\":{\"package\":"+
+                                                    (copied.null_path ? std::string("null") : quote(copied.package))+
+                                                    ",\"asset\":"+(copied.null_path ? std::string("null") : quote(copied.asset))+
+                                                    ",\"subpath\":"+quote(copied.subpath)+"}}";
                                             } else if (kind == "StrProperty") {
                                                 // Copy FString contents, never expose or own its pointer.
                                                 struct StringHeader { uint64_t data; int32_t count, capacity; };
@@ -1234,7 +1365,7 @@ int run_query(int argc, char** argv) {
                             std::ostringstream out;
                             out << "{\"$struct\":{\"type\":{\"index\":" << structure.index << ",\"serial\":" << slot.serial
                                 << ",\"address\":" << quote(hex(ref)) << ",\"name\":" << quote(struct_name)
-                                << "},\"fields\":[" << members.str() << "],\"truncated\":" << (truncated ? "true" : "false") << "}}";
+                                << "},\"fields\":[" << members.str() << "],\"truncated\":" << (truncated ? "true" : "false") << native_fields << "}}";
                             return out.str();
                         };
                         map_json = [&](uint64_t property, const PropertyPrefix& layout, uint64_t at,
@@ -1408,12 +1539,29 @@ int run_query(int argc, char** argv) {
                                 require(child.owner == field && child.dimension == 1 && child.offset == 0 &&
                                         child.element_size == width && (reader.get<uint64_t>(child.type + 0x10) & 0x8000),
                                         "ARRAY_INNER_LAYOUT_INVALID");
+                                int32_t array_limit=256;
+#if defined(E33_RUNTIME_CINEMATIC_VERSION) && E33_RUNTIME_CINEMATIC_VERSION>=245
+                                if(child_type=="StructProperty"&&owner_name=="MovieScene") {
+                                    const auto inner_struct=reader.get<uint64_t>(inner+0x70);
+                                    const auto inner_header=reader.get<ObjectHeader>(inner_struct);
+                                    require(item_at(inner_header.index).object==inner_struct,"ARRAY_STRUCT_NOT_REGISTERED");
+                                    if(header.outer&&inner_header.outer) {
+                                        const auto owner_package=reader.get<ObjectHeader>(header.outer);
+                                        const auto inner_package=reader.get<ObjectHeader>(inner_header.outer);
+                                        array_limit=cinematic_cast_array_limit(
+                                            read_name(reader,pool,owner_package.name_id,owner_package.name_number).c_str(),owner_name.c_str(),field_name.c_str(),
+                                            read_name(reader,pool,inner_package.name_id,inner_package.name_number).c_str(),
+                                            read_name(reader,pool,inner_header.name_id,inner_header.name_number).c_str());
+                                    }
+                                }
+#endif
                                 for (int32_t element = 0; element < p.dimension; ++element) {
                                     const auto at = value_base + p.offset + uint64_t(element) * 16;
                                     const auto observed_array = reader.get<ArrayHeader>(at);
                                     require(observed_array.count >= 0 && observed_array.count <= observed_array.capacity && observed_array.capacity <= 1048576,
                                             "ARRAY_COUNTS_INVALID");
-                                    const auto copied = std::min(observed_array.count, 256);
+                                    const auto copied = std::min(observed_array.count, array_limit);
+                                    require(array_limit==256 || uint64_t(copied)*width<=8*1024*1024,"CINEMATIC_CAST_ARRAY_BYTE_LIMIT");
                                     std::vector<uint8_t> bytes(size_t(copied) * width), repeated(bytes.size());
                                     if (copied) {
                                         require(observed_array.data && (observed_array.data & 1) == 0, "ARRAY_DATA_INVALID");
@@ -1444,6 +1592,84 @@ int run_query(int argc, char** argv) {
                                               << ",\"value\":{\"$array\":{\"length\":" << observed_array.count
                                               << ",\"items\":[" << values.str() << "]}},\"truncated\":"
                                               << (observed_array.count > copied ? "true" : "false") << "}\n";
+                                }
+                            } catch (const std::exception& error) {
+                                std::cout << "{\"event\":\"stored_value_error\",\"owner_index\":" << header.index
+                                          << ",\"name\":" << quote(field_name) << ",\"error\":" << quote(error.what()) << "}\n";
+                            }
+                        }
+                        if (read_values && (type == "SoftObjectProperty" || type == "SoftClassProperty")) {
+                            try {
+                                require(p.element_size == 40 && p.dimension <= 1024 && p.vtable >= base,
+                                        "SOFT_PROPERTY_LAYOUT_INVALID");
+                                const bool soft_class = type == "SoftClassProperty";
+                                const auto class_ref = soft_class ? reader.get<uint64_t>(field + 0x78) : 0;
+                                size_t string_budget = 262144;
+                                for (int32_t element = 0; element < p.dimension; ++element) {
+                                    const auto at = value_base + p.offset + uint64_t(element) * 40;
+                                    const auto storage = reader.get<StoredSoftPathStorage>(at);
+                                    const auto copied = copy_stored_soft_path(reinterpret_cast<const uint8_t*>(&storage), at,
+                                        uint32_t(p.element_size), p.vtable - base,
+                                        [&](uint64_t address,void* target,size_t bytes){reader.read(address,target,bytes);},
+                                        [&](uint32_t name_id,uint32_t number){return read_name(reader,pool,name_id,number);},
+                                        string_budget,soft_class);
+                                    const auto property_again = reader.get<PropertyPrefix>(field);
+                                    require(!std::memcmp(&p,&property_again,sizeof(p)) &&
+                                            (!soft_class || reader.get<uint64_t>(field + 0x78) == class_ref),
+                                            "SOFT_PROPERTY_CHANGED");
+                                    std::cout << "{\"event\":\"stored_value\",\"owner_index\":" << header.index
+                                              << ",\"name\":" << quote(field_name) << ",\"element\":" << element
+                                              << ",\"value\":{\"$soft_object_path\":{\"package\":"
+                                              << (copied.null_path ? std::string("null") : quote(copied.package))
+                                              << ",\"asset\":" << (copied.null_path ? std::string("null") : quote(copied.asset))
+                                              << ",\"subpath\":" << quote(copied.subpath) << "}}}\n";
+                                }
+                            } catch (const std::exception& error) {
+                                std::cout << "{\"event\":\"stored_value_error\",\"owner_index\":" << header.index
+                                          << ",\"name\":" << quote(field_name) << ",\"error\":" << quote(error.what()) << "}\n";
+                            }
+                        }
+                        if (read_values && type == "EnumProperty") {
+                            try {
+                                // Observe only qualified byte- or signed-int-backed enum layouts.
+                                // The UEnum identity was checked with the metadata above;
+                                // the value is the stored integer, not a semantic member lookup.
+                                const auto inner = reader.get<uint64_t>(field + 0x70);
+                                const auto child = reader.get<PropertyPrefix>(inner);
+                                const auto child_id = reader.get<uint64_t>(child.type);
+                                const auto child_kind = read_name(reader, pool, uint32_t(child_id), uint32_t(child_id >> 32));
+                                const int width = child_kind == "ByteProperty" ? 1 : child_kind == "IntProperty" ? 4 : 0;
+                                require(width &&
+                                        child.owner == field && child.dimension == 1 && child.offset == 0 &&
+                                        child.element_size == width && p.element_size == width && p.dimension <= 1024 &&
+                                        (width != 1 || !reader.get<uint64_t>(inner + 0x70)), "ENUM_STORAGE_UNSUPPORTED");
+                                const auto enum_address = reader.get<uint64_t>(field + 0x78);
+                                const auto enum_header = reader.get<ObjectHeader>(enum_address);
+                                const auto enum_item = item_at(enum_header.index);
+                                require(enum_item.object == enum_address && derives_from_core_type(enum_header.cls, "Enum"),
+                                        "ENUM_STORAGE_TYPE_INVALID");
+                                for (int32_t element = 0; element < p.dimension; ++element) {
+                                    const auto at = value_base + p.offset + uint64_t(element) * width;
+                                    uint32_t raw = 0, repeated = 0;
+                                    reader.read(at, &raw, width);
+                                    const auto child_again = reader.get<PropertyPrefix>(inner);
+                                    const auto property_again = reader.get<PropertyPrefix>(field);
+                                    const auto enum_again = reader.get<ObjectHeader>(enum_address);
+                                    const auto item_again = item_at(enum_header.index);
+                                    reader.read(at, &repeated, width);
+                                    require(repeated == raw &&
+                                            !std::memcmp(&p, &property_again, sizeof(p)) &&
+                                            !std::memcmp(&child, &child_again, sizeof(child)) &&
+                                            reader.get<uint64_t>(child.type) == child_id &&
+                                            reader.get<uint64_t>(field + 0x70) == inner &&
+                                            reader.get<uint64_t>(field + 0x78) == enum_address &&
+                                            (width != 1 || !reader.get<uint64_t>(inner + 0x70)) &&
+                                            !std::memcmp(&enum_header, &enum_again, sizeof(enum_header)) &&
+                                            item_again.object == enum_address && item_again.serial == enum_item.serial,
+                                            "ENUM_OBSERVATION_CHANGED");
+                                    std::cout << "{\"event\":\"stored_value\",\"owner_index\":" << header.index
+                                              << ",\"name\":" << quote(field_name) << ",\"element\":" << element
+                                              << ",\"value\":" << (width == 1 ? std::to_string(raw) : std::to_string(static_cast<int32_t>(raw))) << "}\n";
                                 }
                             } catch (const std::exception& error) {
                                 std::cout << "{\"event\":\"stored_value_error\",\"owner_index\":" << header.index
@@ -1577,6 +1803,9 @@ int run_query(int argc, char** argv) {
             else if (observe_proof) run_fixed_observer(pid, game_thread, proof_object, proof_object_serial, proof_function, proof_function_serial);
             else run_thread_ping(pid, game_thread, console_construction ? 2 : 1, proof_object, proof_object_serial, proof_function, proof_function_serial);
         }
+        if (reader.cache_names) require(reader.name_cache.validate([&](uint64_t p, uint32_t n, uint32_t s) {
+            return read_name_uncached(reader, p, n, s);
+        }), "NAME_OBSERVATION_CHANGED");
         std::cout << "{\"event\":\"snapshot_end\",\"emitted\":" << emitted
                   << ",\"null_slots\":" << null_slots << ",\"changing_slots\":" << changing_slots << "}\n";
         return 0;

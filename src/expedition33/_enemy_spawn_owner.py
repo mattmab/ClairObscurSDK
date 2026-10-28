@@ -24,6 +24,8 @@ class EnemySpawnOwner:
         self._owner=secrets.randbits(64) or 1
         self._attempted=False;self._closed=False;self._prepared=False;self._grounded=False
         self._trigger_anchor=False
+        self._timeline=False
+        self._timeline_binding_owners=[]
         self._extra_spots_attempted=False
         self._combat_placement_attempts=set()
         self._component_pose_attempts=set()
@@ -40,6 +42,12 @@ class EnemySpawnOwner:
         if threading.get_ident()!=self._thread:raise RuntimeError('Enemy owner requires its owning Python thread')
         if self._closed:raise RuntimeError('Enemy owner is closed')
         if self.phase=='cleanup_unknown':raise RuntimeError('Native controller cleanup required; cleanup is not replayed')
+        if self._timeline and operation not in (120,221,111):
+            raise RuntimeError('Timeline actor permits construction, reveal and retirement only')
+        if operation==221:
+            capability=getattr(self._transport,'timeline_blueprint_protocol',0)
+            if type(capability) is not int or capability!=1 or not self._timeline:
+                raise RuntimeError('Timeline Blueprint actor capability required')
         if self._trigger_anchor:
             if operation not in (120,111,118):
                 raise RuntimeError('Original trigger anchor permits only hidden staging, arena binding and retirement')
@@ -77,7 +85,7 @@ class EnemySpawnOwner:
             identity=identities[1]
             placement_key=(identity.index,identity.serial,identity.address)
             if placement_key in self._combat_placement_attempts:raise RuntimeError('Combat position was already attempted; no replay')
-        allowed={110:('ready',),112:('spawned',),113:('initialized',),114:('spawned',),115:('spawned',),116:('ready',),117:('ready',),118:('spawned',),119:('ready',),120:('ready',),121:('spawned',),122:('initialized','active'),123:('active',),131:('spawned',),132:('spawned',),133:('ready',)}
+        allowed={110:('ready',),112:('spawned',),113:('initialized',),114:('spawned',),115:('spawned',),116:('ready',),117:('ready',),118:('spawned',),119:('ready',),120:('ready',),121:('spawned',),122:('initialized','active'),123:('active',),131:('spawned',),132:('spawned',),133:('ready',),221:('spawned',)}
         if operation!=111 and self.phase not in allowed[operation]:
             raise RuntimeError('Enemy lifecycle does not allow this operation; no replay')
         if operation==111 and not self._attempted:return None
@@ -110,14 +118,22 @@ class EnemySpawnOwner:
             self._combat_placement_attempts.clear()
             self._component_pose_attempts.clear()
             self._trigger_anchor=False
+            self._timeline=False
             self._attempted=False;self.actor_identity=None;self.arena_identity=None;self._prepared=False;self._grounded=False;self._extra_spots_attempted=False;self.phase='ready'
-        else:self.phase=previous_phase if operation in (122,123,131) else {110:'spawned',112:'initialized',113:'active',114:'spawned',115:'spawned',116:'ready',117:'ready',118:'spawned',119:'ready',120:'spawned',121:'spawned',132:'spawned',133:'spawned'}[operation]
+        else:self.phase=previous_phase if operation in (122,123,131) else {110:'spawned',112:'initialized',113:'active',114:'spawned',115:'spawned',116:'ready',117:'ready',118:'spawned',119:'ready',120:'spawned',121:'spawned',132:'spawned',133:'spawned',221:'visible'}[operation]
         return response
 
     def prepare_extra_spots(self,prerequisites,total_count):return self._command(122,prerequisites,total_count=total_count)
     def place_combatant(self,prerequisites,destination):return self._command(123,prerequisites,destination)
 
     def spawn_prepared(self,prerequisites,pose):return self._command(120,prerequisites,pose)
+    def spawn_timeline_prepared(self,prerequisites,pose):
+        capability=getattr(self._transport,'timeline_blueprint_protocol',0)
+        if type(capability) is not int or capability!=1:raise RuntimeError('Timeline Blueprint actor capability required')
+        if self.phase!='ready' or self._attempted:raise RuntimeError('Timeline construction is never replayed')
+        self._timeline=True
+        return self._command(120,prerequisites,pose)
+    def reveal_timeline(self):return self._command(221)
     def spawn_trigger_prepared(self,prerequisites,pose):
         """Stage one original trigger anchor; no entry, pose correction or reveal."""
         capability=getattr(self._transport,'enemy_trigger_anchor_research_protocol',0)
@@ -177,9 +193,11 @@ class EnemySpawnOwner:
     def close(self):
         if threading.get_ident()!=self._thread:raise RuntimeError('Enemy cleanup requires its owning Python thread')
         if self._closed:return True
+        if any(owner.state not in ('new','closed') for owner in self._timeline_binding_owners):return False
         try:self.remove() # Allowed after scope revocation, like other native owners.
         except EnemyCleanupDeferred:return False
         self._closed=True;self.phase='closed'
+        self._timeline_binding_owners.clear()
         if getattr(self._transport,'_enemy_spawn_owner',None) is self:self._transport._enemy_spawn_owner=None
         if self in self._scope._enemy_spawn_owners:self._scope._enemy_spawn_owners.remove(self)
         return True

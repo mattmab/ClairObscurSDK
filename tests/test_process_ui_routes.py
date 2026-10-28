@@ -43,6 +43,20 @@ class RouteTests(unittest.TestCase):
     def test_route_resolves_replacement_service_without_old_pointer(self):
         self.owner.context.kind='world';self.route.open()
         self.service.open.assert_called_once_with(view_factory=None)
+    def test_refresh_requires_current_context_and_uses_current_service(self):
+        from contextlib import contextmanager
+        from unittest.mock import patch
+        with self.assertRaisesRegex(Exception,'context is not ready'):self.route.refresh()
+        self.service.refresh.assert_not_called()
+        self.owner.context.kind='world';events=[]
+        @contextmanager
+        def operation():
+            events.append('enter');yield;events.append('leave')
+        self.owner._read_operation=operation
+        self.service.refresh.side_effect=lambda:events.append('refresh') or 'updated'
+        with patch('expedition33._reader.active_reader',return_value=None):
+            self.assertEqual(self.route.refresh(),'updated')
+        self.assertEqual(events,['enter','refresh','leave'])
         replacement=Mock(menu=object());self.owner.service=replacement
         self.route.open();replacement.open.assert_called_once_with(view_factory=None)
         self.assertIs(self.route.menu,replacement.menu)

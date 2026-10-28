@@ -68,6 +68,34 @@ class TimingTests(unittest.TestCase):
     def test_source_parses(self):
         for file in (STAGE/'src').rglob('*.py'): ast.parse(file.read_text(encoding='utf-8'))
 
+    def test_sequencer_frame_wire_and_separate_capability(self):
+        from expedition33 import _invocation_wire as wire
+        from expedition33.sdk import Session
+        from expedition33.invocation import UnsupportedInvocation
+        identity=SimpleNamespace(index=1,serial=2,address=0x1234)
+        class Gate:
+            supports_frame_time_values=True
+            supports_sequencer_frame_values=False
+        for profile,kind,value in ((p.FRAME_NUMBER,23,{'Value':-123}),
+                (p.FRAME_TIME,24,{'FrameNumber':{'Value':123},'SubFrame':.25}),
+                (p.FRAME_RATE,25,{'Numerator':24000,'Denominator':1001})):
+            data=p.encode(profile,value)
+            parameter=SimpleNamespace(kind='StructProperty',pod_profile=profile,name='Frame',offset=0,
+                width=len(data),dimension=1,flags=0x80,boolean_encoding=0,constraint=identity)
+            plan=SimpleNamespace(parameter_size=len(data),allocation_extent=len(data),parameters=(parameter,),
+                objects=(),data=data,wire_version=2,return_offset=65535,function_flags=0x400,entry_rva=1,target=identity,function=identity)
+            request=wire.encode_plan(plan)
+            self.assertEqual(struct.unpack_from('<I',request,wire.FIELDS_AT)[0],kind)
+            self.assertEqual(request[wire.DATA_AT:wire.DATA_AT+len(data)],data)
+            Gate.supports_sequencer_frame_values=False
+            with self.assertRaises(UnsupportedInvocation):Session._check_frame_time_plan(Gate(),plan)
+            Gate.supports_sequencer_frame_values=True
+            Session._check_frame_time_plan(Gate(),plan)
+        for value in (-.1,1.,.999999999):
+            with self.assertRaises(ValueError):p.encode_argument(p.FRAME_TIME,{'FrameNumber':{'Value':0},'SubFrame':value})
+        for rate in ((0,1),(24,0),(-1,1),(24,-1)):
+            with self.assertRaises(ValueError):p.encode_argument(p.FRAME_RATE,dict(zip(('Numerator','Denominator'),rate)))
+
 if __name__=='__main__':
     suite=unittest.defaultTestLoader.loadTestsFromTestCase(TimingTests)
     for name in ('test_pod_values','test_pod_invocation'):

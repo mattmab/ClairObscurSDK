@@ -9,6 +9,24 @@ from test_catalog import fixture
 
 
 class ValueTests(unittest.TestCase):
+    def test_empty_struct_array_captures_declared_type_without_rereading_values(self):
+        from expedition33.values import read_values_with_references
+        objects,classes=fixture();initial=Catalog(123,objects[:-1],classes);kind=objects[-1]
+        self.property('Bindings','ArrayProperty')
+        self.rows[-1].update(inner_type='StructProperty',inner_struct_index=kind.index,
+            inner_struct_serial=kind.serial,inner_struct_name=kind.name,inner_struct_address=hex(kind.address))
+        self.value('Bindings',{'$array':dict(length=0,items=[])})
+        self.rows[-1]['truncated']=False
+        with patch('expedition33.values._query',return_value=({'pid':123},self.rows)) as query,\
+             patch('expedition33.catalog.capture_selected',return_value=self.catalog) as selected:
+            values,combined=read_values_with_references(initial,self.obj,fields=('Bindings',))
+        self.assertFalse(values.errors)
+        self.assertEqual(values.values[2,'Bindings'],StoredArray((),0))
+        self.assertEqual(combined.by_index[kind.index],kind)
+        query.assert_called_once()
+        selected.assert_called_once_with(123,((self.obj.index,self.obj.serial,self.obj.address),
+            (kind.index,kind.serial,kind.address)))
+
     def test_projected_reference_keeps_identity_checks(self):
         self.property('Child', 'ObjectProperty'); self.value('Child', None)
         with patch('expedition33.values._query', return_value=({'pid':123}, self.rows)) as query:
@@ -88,6 +106,44 @@ class ValueTests(unittest.TestCase):
         self.assertIs(type(result.values[2, 'Speed']), float)
         self.assertEqual(result.values[2, 'Fixed'], (-1, 9))
         self.assertIn((2, 'Container'), result.errors)
+
+    def test_byte_enum_observation_requires_qualified_metadata_and_byte(self):
+        self.property('Rule', 'EnumProperty', 2)
+        self.rows[-1].update(element_size=1, inner_type='ByteProperty', inner_element_size=1,
+                             enum_name='EAttachmentRule', enum_index=42, enum_serial=0)
+        self.value('Rule', 0); self.value('Rule', 255, 1)
+        self.assertEqual(self.read().values[2, 'Rule'], (0, 255))
+        for invalid in (True, -1, 256, '1'):
+            self.rows[-1]['value'] = invalid
+            with self.assertRaises(RuntimeQueryError): self.read()
+        self.rows[-1]['value'] = 1
+        self.rows[1]['inner_type'] = 'IntProperty'
+        with self.assertRaises(RuntimeQueryError): self.read()
+
+    def test_int_backed_enum_preserves_signed_values_and_checks_width(self):
+        self.property('StartBehavior', 'EnumProperty', 2)
+        self.rows[-1].update(element_size=4, inner_type='IntProperty', inner_element_size=4,
+                             enum_name='ENiagaraSystemSpawnSectionStartBehavior', enum_index=42, enum_serial=0)
+        self.value('StartBehavior', -(1 << 31)); self.value('StartBehavior', (1 << 31) - 1, 1)
+        self.assertEqual(self.read().values[2, 'StartBehavior'], (-(1 << 31), (1 << 31) - 1))
+        self.rows[-1]['value'] = 1 << 31
+        with self.assertRaises(RuntimeQueryError): self.read()
+        self.rows[-1]['value'] = 1
+        self.rows[1]['inner_element_size'] = 1
+        with self.assertRaises(RuntimeQueryError): self.read()
+
+    def test_soft_class_path_decodes_only_qualified_layout(self):
+        from expedition33.values import StoredSoftObjectPath
+        self.property('BoundActorClass', 'SoftClassProperty')
+        self.rows[-1].update(element_size=40, vtable_rva='0x6e12cb8', meta_class_name='Actor',
+                             meta_class_index=3, meta_class_serial=0)
+        self.value('BoundActorClass', {'$soft_object_path': dict(package='/Game/Cine/Actor', asset='Actor_C', subpath='')})
+        self.assertEqual(self.read().values[2, 'BoundActorClass'], StoredSoftObjectPath('/Game/Cine/Actor', 'Actor_C', ''))
+        self.rows[-1]['value']['$soft_object_path']['asset'] = None
+        with self.assertRaises(RuntimeQueryError): self.read()
+        self.rows[-1]['value']['$soft_object_path']['asset'] = 'Actor_C'
+        self.rows[1]['vtable_rva'] = '0x6e128d8'
+        with self.assertRaises(RuntimeQueryError): self.read()
 
     def test_stale_reference_is_field_error(self):
         self.property('Player', 'ObjectProperty')

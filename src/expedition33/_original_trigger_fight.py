@@ -11,6 +11,7 @@ import math
 from pathlib import Path
 import threading
 import time
+from ._menu_latency import MenuLatency, measure_method
 
 _PROFILE = Path(__file__).with_name('_original_trigger_recipes.json')
 _PROFILE_SHA = '17e400e08d3e18f6046b9320d5413fbc7557750a328b3e78095951d9d2230c3b'
@@ -125,6 +126,33 @@ def direct_fight_recipes(catalog):
                       if row.get('route_contract',{}).get('tutorial_callbacks_retained') else [])) for row in _recipes(catalog)}
 
 
+_CONSTRUCTION_NAMES=('Default__GameplayStatics','UpdateTriggerComponentsCollision',
+    'BeginDeferredActorSpawnFromClass','FinishSpawningActor','K2_DestroyActor','K2_GetPawn',
+    'SetActorEnableCollision','SetActorTickEnabled','SetActorHiddenInGame')
+
+
+def _construction_metadata(scope,transport,context,spawner):
+    """Reuse only stabilized static selection, with fresh identity reads.
+
+    Caller owns the same-process read batch. This never caches arena/pawn poses,
+    source admission, property values or native dispatch permission.
+    """
+    from .catalog import capture_matching,capture_selected
+    key=(tuple(context['controller']),tuple(context['world']))
+    cached=getattr(spawner,'_original_construction_metadata',None)
+    if cached is not None and cached['transport'] is transport and cached['context']==key:
+        return capture_selected(scope.pid,cached['identities'])
+    catalog=capture_matching(scope.pid,names=_CONSTRUCTION_NAMES)
+    selected=tuple(obj for obj in catalog.objects if
+        (obj.class_name=='Function' and obj.name in _CONSTRUCTION_NAMES) or obj.name=='Default__GameplayStatics')
+    if selected and len(selected)<=64 and all(obj.serial>0 for obj in selected):
+        spawner._original_construction_metadata=dict(transport=transport,context=key,
+            identities=tuple(_identity(obj) for obj in selected))
+    else:
+        spawner._original_construction_metadata=None
+    return catalog
+
+
 class OriginalTriggerFight:
     """Persistent one-shot composition on the spawner's existing scope/owner.
 
@@ -157,6 +185,8 @@ class OriginalTriggerFight:
         self.phase = 'new'; self.error = None; self._battle = None; self._assembly = {}
         self._cleanup_step = None; self.tuning = config.to_dict()
         self._world_replaced = False; self.observation_error = None
+        self._source_orientation = False
+        self.latency = MenuLatency()
 
     def _thread_check(self):
         if threading.get_ident() != self._thread:
@@ -228,12 +258,14 @@ class OriginalTriggerFight:
                     private_id=private_id, arena=_identity(arena) if arena else None, roster=roster,
                     characters=[_identity(obj) for obj in (*enemies.items, *players.items)])
 
+    @measure_method('prepare.idle_recheck')
     def _idle(self):
         state = self._battle_snapshot()
         if state['started'] is not False or state['ending'] is not False or state['roster'] or state['arena'] is not None:
             raise RuntimeError('Preserve active battle or transition')
         return state
 
+    @measure_method('prepare.asset_retention')
     def _retain(self, path, *, is_class=False):
         from .assets import load_asset
         from .picto_class_load import load_class
@@ -247,15 +279,15 @@ class OriginalTriggerFight:
         if obj is None: raise RuntimeError('Exact original asset did not load: ' + path)
         return obj
 
+    @measure_method('prepare.construction_inputs')
     def _construction_inputs(self, cls, *, trigger):
-        from .catalog import capture_matching, capture_selected
+        from .catalog import capture_selected
         from .enemy_spawning import _fields, _exact
         names = ('GameplayStatics:BeginDeferredActorSpawnFromClass', 'GameplayStatics:FinishSpawningActor',
                  'Actor:K2_DestroyActor', 'Controller:K2_GetPawn', 'Actor:SetActorEnableCollision',
                  'Actor:SetActorTickEnabled', 'Actor:SetActorHiddenInGame')
         with self._batch():
-            c = capture_matching(self._scope.pid, names=('Default__GameplayStatics', 'UpdateTriggerComponentsCollision') +
-                                 tuple(n.split(':')[1] for n in names))
+            c = _construction_metadata(self._scope,self._transport,self._context,self._spawner)
             c = c.with_observations(capture_selected(self._scope.pid, (tuple(self._context['controller'][1:]),
                                      tuple(self._context['world'][1:]), _identity(cls))))
             live = c.by_index[cls.index]
@@ -268,6 +300,10 @@ class OriginalTriggerFight:
             values, c = _fields(c, pawn, ('RootComponent',)); values, c = _fields(c, values['RootComponent'], _GEOMETRY)
             if values['AttachParent'] is not None: raise RuntimeError('Unattached exploration pawn required')
             pose = _stored_pose(values, limit=1e7)
+            if self._source_orientation and not trigger:
+                frame = self.recipe['arena']['frames']['DefaultSceneRoot']
+                authored = _pose(frame['location'], frame['rotation'], frame['scale'], limit=1e7)
+                pose = (*authored[:4], *pose[4:])
             pose = (*pose[:6], pose[6]+50000., *pose[7:])
             if any(abs(value) > 1e7 for value in pose[4:7]):
                 raise RuntimeError('Hidden original staging pose exceeds the existing world bound')
@@ -277,6 +313,7 @@ class OriginalTriggerFight:
         self._idle()
         return tuple(ids), pose
 
+    @measure_method('prepare.arena_frame_validation')
     def _arena_frames(self, staging, *, allow_corrections):
         from .catalog import capture_matching, capture_selected
         from .enemy_spawning import _fields, _exact
@@ -334,6 +371,7 @@ class OriginalTriggerFight:
             self._assembly['corrections'][name] = self._arena.set_component_pose_once(comp, setter, getter, pose)
         return fixes
 
+    @measure_method('prepare.entry_dependencies')
     def _entry_inputs(self):
         from .catalog import capture_matching, capture_selected
         from .enemy_spawning import _fields, _exact
@@ -376,14 +414,22 @@ class OriginalTriggerFight:
         self._private_id = private
         return identities
 
-    def start(self):
-        from .cinematics.original_game_action import controller_context
+    @measure_method('battle.prepare_total')
+    def prepare(self, *, align_source_orientation=False):
+        """Stage the owned arena and collisionless trigger without entering combat.
+
+        A presentation adapter may play an owned introduction before calling
+        dispatch_prepared. All entry dependencies are read again after that
+        presentation; preparation never authorizes a later stale dispatch.
+        """
         from .owned_battle_arena import OwnedBattleArena
         from ._npc_encounter_preparation import bind_original_arena
-        from ._battle_parameter_owner import ParameterResearchOwner
         self._thread_check()
+        if type(align_source_orientation) is not bool:
+            raise ValueError('Source orientation selection must be explicit')
         if self._started or self.phase != 'new': raise RuntimeError('Original fight start is one-shot; close before replacement')
         self._preflight()
+        self._source_orientation = align_source_orientation
         self._spawner.original_fight = self  # Persistent before the first load/mutation.
         self._started = True; self.phase = 'preparing'
         try:
@@ -397,17 +443,22 @@ class OriginalTriggerFight:
             self._idle()
             self._arena = OwnedBattleArena(self._scope)
             ids, staging = self._construction_inputs(arena_class, trigger=False)
-            self._arena.prepare(ids, staging)
+            with self.latency.measure('prepare.arena_native_construction'):
+                self._arena.prepare(ids, staging)
             self._arena_frames(staging, allow_corrections=True)
             self._arena_frames(staging, allow_corrections=False)  # Full reread before grounding.
             self._idle()
-            self._arena.ground_once(**self.recipe['placement'])
-            self._arena.refresh_camera_focus_once()
+            with self.latency.measure('prepare.arena_grounding_clearance'):
+                self._arena.ground_once(**self.recipe['placement'])
+            with self.latency.measure('prepare.arena_camera_focus'):
+                self._arena.refresh_camera_focus_once()
             ids, staging = self._construction_inputs(self._trigger_class, trigger=True)
             self._anchor_attempted = True
-            self._owner.spawn_trigger_prepared(ids, staging)
-            bind_original_arena(self._scope, self._owner, self._arena.actor_identity,
-                                expected_class=self.recipe['arena']['class_path'])
+            with self.latency.measure('prepare.trigger_native_construction'):
+                self._owner.spawn_trigger_prepared(ids, staging)
+            with self.latency.measure('prepare.arena_binding'):
+                bind_original_arena(self._scope, self._owner, self._arena.actor_identity,
+                                    expected_class=self.recipe['arena']['class_path'])
             # Optional observation does not change admission or adopt old residuals.
             try:
                 from ._original_trigger_sequences import OriginalFightSequenceCleanup
@@ -415,19 +466,46 @@ class OriginalTriggerFight:
                 self._sequences.baseline(); self._sequence_ready = True
             except Exception as error:
                 self._sequence_diagnostic = 'Sequence inventory unavailable: ' + str(error)
+            self._entry_inputs()
+            self.phase = 'prepared'
+            return self.status()
+        except BaseException as error:
+            self.error = f'{type(error).__name__}: {error}'
+            self.phase = 'unknown' if self._load_pending else 'preparation_failed'
+            raise
+
+    @measure_method('battle.dispatch_total')
+    def dispatch_prepared(self, *, track_completion=False):
+        """Enter once after a fresh recheck of the held arena and source."""
+        from ._battle_parameter_owner import ParameterResearchOwner
+        self._thread_check()
+        self._scope._check()
+        if type(track_completion) is not bool:
+            raise ValueError('Completion tracking must be explicit')
+        if self.phase != 'prepared' or self.dispatch_attempted:
+            raise RuntimeError('Only a prepared original fight may enter once')
+        capability = getattr(self._transport, 'battle_completion_receipt_protocol', 0)
+        if track_completion and (type(capability) is not int or capability != 1):
+            raise RuntimeError('Authoritative battle completion capability unavailable')
+        try:
             identities = self._entry_inputs()
             self._parameters = ParameterResearchOwner(self._scope)
             if self._sequence_ready:
                 self._sequences.entry_attempted(private_id=self._private_id, arena_identity=self._arena.actor_identity)
             self.dispatch_attempted = True; self.phase = 'entry_pending'
+            options = {'track_completion': True} if track_completion else {}
             self._parameters.dispatch_trigger_cleanup(identities, anchor=self._owner, arena=self._arena,
-                mode=2 if self.recipe['id']=='sciel-tutorial' else 1)
+                mode=2 if self.recipe['id']=='sciel-tutorial' else 1, **options)
             self.entry_acknowledged = True
             return self.status()
         except BaseException as error:
             self.error = f'{type(error).__name__}: {error}'
             self.phase = 'unknown' if self.dispatch_attempted or self._load_pending else 'preparation_failed'
             raise
+
+    def start(self):
+        self.prepare()
+        return self.dispatch_prepared()
 
     def poll(self):
         from . import RuntimeQueryError
@@ -517,7 +595,7 @@ class OriginalTriggerFight:
             self.error = f'{type(error).__name__}: {error}'; self.phase = 'unknown'; raise
 
     def status(self):
-        return dict(recipe=self.recipe['id'], catalog_recipe=self.recipe['recipe_id'], phase=self.phase, error=self.error,
+        return dict(timings=self.latency.snapshot() if hasattr(self,'latency') else None, recipe=self.recipe['id'], catalog_recipe=self.recipe['recipe_id'], phase=self.phase, error=self.error,
             world_replaced=self._world_replaced, observation_error=self.observation_error,
             direct_fight=True, proximity_entry=False, exploration_character_spawned=False,
             dispatch_attempted=self.dispatch_attempted, entry_acknowledged=self.entry_acknowledged,

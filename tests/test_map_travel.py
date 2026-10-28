@@ -15,6 +15,17 @@ spec.loader.exec_module(mod)
 
 
 class MapTravelTests(unittest.TestCase):
+    def test_world_reactivation_does_not_keep_departing_travel_message(self):
+        for state,expected in (('arrived','Arrived: Destination'),('traveling','Ready')):
+            with self.subTest(state=state):
+                model=mod.Mod();model._retirement_result='ack';model.message='Traveling to Destination'
+                model.request=SimpleNamespace(state=state,destination={'title':'Destination'})
+                session=Mock();session._session._transport.zone_travel_protocol=2
+                model._activation_maps=Mock(return_value=[]);model._loading_routes=()
+                model._new_pause_entry=Mock()
+                with patch.object(mod,'attach_routes'):model.enable(session)
+                self.assertEqual(model.message,expected);self.assertIsNone(model.request)
+
     def test_arrival_does_not_attach_destination_button_to_retiring_scope(self):
         model=mod.Mod()
         model.native=Mock()

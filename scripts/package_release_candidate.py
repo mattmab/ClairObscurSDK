@@ -41,9 +41,9 @@ def build(destination, version):
     for source in sorted((ROOT / 'licenses').rglob('*')):
         if source.is_file():
             copy(source.relative_to(ROOT), source.relative_to(ROOT))
-    for directory in ('research-probe', 'readonly-worker', 'research-probe-picto-v4', 'research-probe-cinematic-v213-lease-batch'):
-        copy('build/release/research-probe-cinematic-v213-lease-batch/research_probe.exe', f'build/{directory}/research_probe.exe')
-    copy('build/release/runtime-session-cinematic-v213/runtime_session_cinematic_v213.dll', 'build/runtime-session-cinematic-v213/runtime_session_cinematic_v213.dll')
+    for directory in ('research-probe', 'readonly-worker', 'research-probe-picto-v4', 'research-probe-cinematic-v216-retirement'):
+        copy('build/release/research-probe-cinematic-v216-retirement/research_probe.exe', f'build/{directory}/research_probe.exe')
+    copy('build/release/runtime-session-cinematic-v216/runtime_session_cinematic_v216.dll', 'build/runtime-session-cinematic-v216/runtime_session_cinematic_v216.dll')
     copy('build/readonly-worker-strings-v1/research_probe.exe', 'build/readonly-worker-strings-v1/research_probe.exe')
     copy('build/readonly-worker-values-v2/research_probe.exe', 'build/readonly-worker-values-v2/research_probe.exe')
     copy('build/release/thumbnail-worker-v2/thumbnail_worker.dll', 'build/thumbnail-worker-v2/thumbnail_worker.dll')

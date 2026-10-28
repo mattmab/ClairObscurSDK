@@ -9,6 +9,23 @@ from expedition33.worldbuilder_maps import FORMAT
 
 
 class PreparedRuntimeTests(unittest.TestCase):
+    def test_strict_context_rejects_new_world_before_coordinator_catches_up(self):
+        from expedition33.world_lifecycle import WorldLifecycleError
+        world=SimpleNamespace(index=9,serial=99,address=0x9000,class_name='World')
+        pawn=SimpleNamespace(index=2,serial=22,address=0x2000,class_name='BP_jRPG_Character_World_C',outer_index=9)
+        pc=SimpleNamespace(object_flags=0)
+        catalog=SimpleNamespace(select=lambda _: [pc],by_index={9:world},path_name=lambda _: '/Game/QA.Test')
+        values=SimpleNamespace(values={(0,'Pawn'):pawn,(0,'bIsLocalPlayerController'):True})
+        scope=SimpleNamespace(pid=123,_world_binding_token=((123,1,11,0x1000),(),(),0))
+        with patch.object(source,'ReadBatch',side_effect=lambda _:nullcontext()),patch.object(source,'capture_matching',return_value=catalog),patch.object(source,'read_values_with_references',return_value=(values,catalog)):
+            with self.assertRaisesRegex(WorldLifecycleError,'lifecycle handoff'):
+                source.context(scope,require_bound_world=True)
+            # A newly admitted scope can observe the exact same new world.
+            scope._world_binding_token=((123,9,99,0x9000),(),(),0)
+            self.assertEqual(source.context(scope,require_bound_world=True)['visit'],[9,99,0x9000])
+            scope._world_binding_token=None
+            with self.assertRaises(WorldLifecycleError):source.context(scope,require_bound_world=True)
+            self.assertTrue(source.context(scope)['ready'])
     def owner(self):
         owner=source.MapRuntime.__new__(source.MapRuntime)
         owner.scope=SimpleNamespace(pid=123,_session=SimpleNamespace(_map_runtime_metadata=tuple(range(14))))

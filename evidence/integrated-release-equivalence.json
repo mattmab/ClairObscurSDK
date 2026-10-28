@@ -1,7 +1,0 @@
-{
-  "live_candidate_sha256": "dc37ba179c06e146be0e95dd88e09553ec88f3b83dfb299a5a68a74c90f97b00",
-  "payload_equal_to_live_candidate": true,
-  "revision": "20c8e0ed402c8bcba9fb9e6ee1f84331272876b5",
-  "files": 510,
-  "release_sha256": "48eb38b8f6a1fb58179d7bbcd207bd5d2188d2654ae3cc3a79f6890467577cd2"
-}

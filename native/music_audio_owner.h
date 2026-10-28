@@ -1,4 +1,5 @@
 #pragma once
+#include "retired_collector_release.h"
 #include "music_audio_owner_protocol.h"
 #include "music_audio_profile.h"
 #include "strong_lease_pool.h"
@@ -8,6 +9,9 @@
 #include "audio_destroy_completion.h"
 #ifdef E33_ORIGINAL_AUDIO_PAUSE_SESSION
 #include "original_audio_pause.h"
+#endif
+#ifdef E33_CINEMATIC_EPOCH_RETIRE_SESSION
+#include "cinematic_current_music.h"
 #endif
 
 // Game adapter: owns components found only in an initially-empty private music
@@ -30,6 +34,12 @@ class MusicAudioOwner {
     static_assert(StrongLeasePool<kOwnedAudioCleanupCapacity>::maximum==kOwnedAudioCleanupCapacity);
     uint32_t explicit_count_=0;
     CallPacket stop_{},destroy_{};
+#ifdef E33_CINEMATIC_EPOCH_RETIRE_SESSION
+    e33_retired_world::Snapshot epoch_{};
+    CallIdentity gi_{};
+    bool retiring_=false;
+    uint64_t menu_owner_=0;
+#endif
 #ifdef E33_AUDIO_CLEANUP_DIAGNOSTICS_SESSION
     AudioCleanupDiagnostics diagnostics_;
 #endif
@@ -135,6 +145,14 @@ public:
     }
     template<class Pool>
     uint32_t close(uint64_t base,uint64_t session,Pool&) {
+#ifdef E33_CINEMATIC_EPOCH_RETIRE_SESSION
+        if(active()&&epoch_.world.address) {
+            e33_retired_world::TargetOps current{base};
+            const auto proof=e33_retired_world::double_observe(current,epoch_.world);
+            if(retiring_||proof!=e33_retired_world::Result::SameWorld)
+                return proof==e33_retired_world::Result::Pending?407:1493;
+        }
+#endif
 #ifdef E33_ORIGINAL_AUDIO_PAUSE_SESSION
         // Restore known original pause changes even if owned audio quarantines.
         if(state_!=2) diagnostic_phase(AudioCleanupPhase::PauseRestore);
@@ -256,8 +274,51 @@ public:
         }
         diagnostic_phase(AudioCleanupPhase::Complete);state_=0; return 0;
     }
+#ifdef E33_CINEMATIC_EPOCH_RETIRE_SESSION
+    uint32_t current_state()const{return state_;}
+    const e33_retired_world::Snapshot& captured_epoch()const{return epoch_;}
+    template<class Pool,class Reference>
+    uint32_t retire_world(uint64_t base,uint64_t session,Pool&,const e33_retired_world::Snapshot& source,
+                          Reference& reference,uint64_t source_menu_owner) {
+        if(!active()&&!reference.active())return 0;
+        if(!source_menu_owner||source_menu_owner!=menu_owner_||state_==2||!epoch_.world.address||!e33_retired_world::same(source.world,epoch_.world))return 1493;
+        e33_retired_world::TargetOps current{base};
+        const auto proof=e33_retired_world::double_observe(current,epoch_.world);
+        if(proof!=e33_retired_world::Result::Retired)return proof==e33_retired_world::Result::Pending?407:1493;
+        retiring_=true;
+        // Only current persistent GI state is eligible for compensation. A new
+        // GI or a foreign replacement is preserved by the reference owner.
+        const auto restored=reference.retire_music_reference(base,epoch_,gi_,original_,isolated_,audio_);
+        if(restored) {if(restored!=407)state_=2;return restored;}
+#ifdef E33_ORIGINAL_AUDIO_PAUSE_SESSION
+        auto certificate=[&](const CallIdentity& component) {
+            return e33_cinematic::current_original_audio(base,gi_,original_,audio_,component);
+        };
+        const auto paused=original_pause_.retire_world(epoch_,certificate);
+        if(paused) {if(paused!=407)state_=2;return paused;}
+#endif
+        // No old-world Stop/Destroy, private-container walk or callback. World
+        // teardown owns those components; release only our private collectors.
+        TargetStrongReferenceOps refs{base,{}};
+        const auto released=release_retired_collectors(component_leases_,refs,session);
+        if(released!=StrongLeaseResult::Ok) {
+            if(released!=StrongLeaseResult::Deferred)state_=2;
+            return released==StrongLeaseResult::Deferred?407:1493;
+        }
+        std::memset(component_tokens_,0,sizeof(component_tokens_));
+        state_=0;return 0;
+    }
+    template<class Pool,class Reference>
+    void retire_command(uint64_t base,uint64_t session,Pool&leases,Reference&reference,MusicAudioOwnerPacket&p) {
+        const auto* bytes=reinterpret_cast<const uint8_t*>(&p.original);
+        bool payload=false;for(size_t i=0;i<sizeof(p)-32;++i)payload|=bytes[i]!=0;
+        if(p.version!=1||p.operation!=5||p.owner!=owner_||p.reserved||p.error||p.state||payload) {p.error=1491;return;}
+        p.error=retire_world(base,session,leases,epoch_,reference,menu_owner_);p.state=state_;
+    }
+#endif
     template<class Pool>
-    void command(uint64_t base,uint64_t session,Pool& leases,bool menu_active,MusicAudioOwnerPacket& p) {
+    void command(uint64_t base,uint64_t session,Pool& leases,bool menu_active,MusicAudioOwnerPacket& p,
+                 const CallIdentity* controller=nullptr,uint64_t menu_owner=0) {
         const uint32_t max_operation=
 #ifdef E33_ORIGINAL_AUDIO_PAUSE_SESSION
             4;
@@ -294,6 +355,15 @@ public:
         MusicAudioReferences original_refs{}, isolated{};
         if(!music_audio_references(base,p.original,p.audio_class,original_refs) ||
            !music_audio_references(base,p.isolated,p.audio_class,isolated) || isolated.count) { p.error=1492; return; }
+#ifdef E33_CINEMATIC_EPOCH_RETIRE_SESSION
+        e33_retired_world::Snapshot epoch{};CallIdentity gi{};e33_retired_world::TargetOps current{base};
+        if(!menu_owner||!controller||!e33_cinematic::current_music_gi(base,epoch,gi)||epoch.world.serial<=0||
+           !current.controller_world(*controller,epoch.world)||
+           local_read<uint64_t>(p.original.address+32)!=gi.address||
+           local_read<uint64_t>(p.isolated.address+32)!=gi.address) {p.error=1492;return;}
+#else
+        (void)controller;(void)menu_owner;
+#endif
         const CallPacket* plans[]={&p.stop,&p.destroy};
         for(unsigned i=0;i<2;++i) {
             auto c=*plans[i];
@@ -317,6 +387,9 @@ public:
         explicit_count_=0;
         tokens_[0]=p.original_token; tokens_[1]=p.isolated_token;
         owner_=p.owner; index_=step_=0; state_=p.state=1;
+#ifdef E33_CINEMATIC_EPOCH_RETIRE_SESSION
+        epoch_=epoch;gi_=gi;menu_owner_=menu_owner;retiring_=false;
+#endif
 #ifdef E33_AUDIO_CLEANUP_DIAGNOSTICS_SESSION
         diagnostics_.reset();diagnostic_counts(0,0);
 #endif

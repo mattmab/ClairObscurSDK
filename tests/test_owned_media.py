@@ -55,6 +55,7 @@ class OwnedMediaTests(unittest.TestCase):
     def resource(self):
         resource = OwnedVideoWidget.__new__(OwnedVideoWidget)
         resource.state = 'opened'
+        resource.native_owner = None
         resource.uncertain = False
         resource.attached = True
         resource.widget = object()

@@ -377,16 +377,38 @@ class Session:
         version = getattr(self._transport, 'timespan_values_protocol', 0)
         return self.supports_pod_values and type(version) is int and version == 1
 
+    @property
+    def supports_sequencer_frame_values(self):
+        version=getattr(self._transport,'sequencer_frame_values_protocol',0)
+        return self.supports_pod_values and type(version) is int and version==1
+
+    @property
+    def supports_sequence_binding_values(self):
+        capability=getattr(self._transport,'sequence_binding_values_protocol',0)
+        return type(capability) is int and capability==1
+
     def _check_frame_time_plan(self, plan):
-        from ._pod_values import FRAME_PROFILES, TIMESPAN
+        from ._pod_values import FRAME_PROFILES, QUALIFIED_FRAME_TIME, TIMESPAN, BINDING_ID
         from .invocation import UnsupportedInvocation
+        if any(p.pod_profile=='/Script/CoreUObject.Rotator' for p in plan.parameters) and getattr(self._transport,'rotator_values_protocol',0)!=1:
+            raise UnsupportedInvocation('Rotator transport capability is unavailable')
         if any(p.pod_profile in FRAME_PROFILES for p in plan.parameters) and not self.supports_frame_time_values:
             raise UnsupportedInvocation('Frame timing transport capability is unavailable')
+        if any(p.pod_profile in FRAME_PROFILES and p.pod_profile!=QUALIFIED_FRAME_TIME for p in plan.parameters) and not self.supports_sequencer_frame_values:
+            raise UnsupportedInvocation('Sequencer frame value transport capability is unavailable')
         if any(p.pod_profile == TIMESPAN for p in plan.parameters) and not self.supports_timespan_values:
             raise UnsupportedInvocation('Media Timespan transport capability is unavailable')
+        if any(p.pod_profile==TIMESPAN and not p.flags&0x400 for p in plan.parameters):
+            cap=getattr(self._transport,'media_seek_protocol',0)
+            if type(cap) is not int or cap!=1:raise UnsupportedInvocation('Media Seek transport capability is unavailable')
+        if any(p.pod_profile == BINDING_ID for p in plan.parameters) and not self.supports_sequence_binding_values:
+            raise UnsupportedInvocation('Sequence binding ID transport capability is unavailable')
 
-    def _invoke_retained_plan(self, plan, catalog, *, _return_catalog=False, _selected_results=False):
+    def _invoke_retained_plan(self, plan, catalog, *, _return_catalog=False, _selected_results=False,
+                              _fresh_results=False):
         self._check()
+        if type(_fresh_results) is not bool or (_fresh_results and not _selected_results):
+            raise ValueError('Fresh output discovery requires selected results')
         from .invocation import decode_result, UnsupportedInvocation, InvocationError
         from .ownership import ObjectLease, RetainedInvocation
         from . import _retained_wire as wire
@@ -450,7 +472,15 @@ class Session:
                 # Same-call leases were adopted above before this read can fail.
                 identities = tuple(dict.fromkeys((index, serial, address)
                     for _, index, serial, address in reply.objects))
-                current = catalog.with_observations(capture_selected(self.pid, identities))
+                if _fresh_results:
+                    # A nested factory can stabilize descriptor serials. Read
+                    # output closures and every typed parameter constraint from
+                    # scratch instead of merging into its pre-call catalog.
+                    constraints=tuple((p.constraint.index,p.constraint.serial,p.constraint.address)
+                        for p in plan.parameters if p.constraint is not None)
+                    current=capture_selected(self.pid,tuple(dict.fromkeys(identities+constraints)))
+                else:
+                    current = catalog.with_observations(capture_selected(self.pid, identities))
             else:
                 current = capture() if reply.objects else catalog
             result = decode_result(plan, reply, current, texts=texts)

@@ -13,7 +13,7 @@ class Reads(unittest.TestCase):
    p=Mock();result=MagicMock();result.__enter__.return_value=N(return_value=TimespanValue(10) if name in ('GetTime','GetDuration') else True)
    p.invoke.return_value=result;calls[name]=p;return p
   planner.prepare.side_effect=prepare
-  v.scope=N(_session=N(_transport=N(timespan_values_protocol=1)),invocation_planner=Mock(return_value=planner))
+  v.scope=N(_session=N(_transport=N(timespan_values_protocol=1,media_seek_protocol=1)),invocation_planner=Mock(return_value=planner))
   v.planner=Mock();return v,planner,calls
  def test_warms_once_and_scalar_reads_do_not_refresh(self):
   v,p,c=self.fixture();v.prepare_reads();self.assertEqual(p.prepare.call_count,6)
@@ -24,6 +24,21 @@ class Reads(unittest.TestCase):
  def test_audio_position_omits_duration(self):
   v,p,c=self.fixture();self.assertEqual(v.media_position()['time_ticks'],10)
   c['GetDuration'].invoke.assert_not_called();c['GetTime'].invoke.assert_called_once_with()
+ def test_seek_uses_copied_timespan_and_rejects_invalid_input_before_dispatch(self):
+  v,_,_=self.fixture();v._call=Mock(return_value=True)
+  self.assertTrue(v.seek(1.25))
+  v._call.assert_called_once_with(v.player,'MediaPlayer','Seek',Time=TimespanValue(12500000))
+  v._call.reset_mock()
+  for value in (True,-1,float('nan'),float('inf'),86401,'2'):
+   with self.assertRaises(ValueError):v.seek(value)
+  v._call.assert_not_called()
+  for cap in (None,False,True,0,2):
+   v.scope._session._transport.media_seek_protocol=cap
+   with self.assertRaisesRegex(RuntimeError,'Seek support'):v.seek(0)
+  v.scope._session._transport.media_seek_protocol=1
+  v.state='configured'
+  with self.assertRaises(RuntimeError):v.seek(0)
+  v._call.assert_not_called()
  def test_closed_and_uncertain_never_dispatch(self):
   v,p,c=self.fixture();v.uncertain=True
   with self.assertRaises(RuntimeError):v.media_position()

@@ -45,9 +45,17 @@ class FullscreenTests(unittest.TestCase):
   self.assertEqual(v._call.call_args.kwargs,{'InAnchors':{'Minimum':{'X':0.,'Y':0.},'Maximum':{'X':1.,'Y':1.}}})
   self.assertTrue(v.attached)
  def test_natural_end_uses_stop_and_keeps_pending_owner(self):
-  m=mod.Mod();m.native=N(menu=N(panel=N(state='open')));m.video=Mock(state='opened');m.video.playback_status.return_value={'IsReady':True,'IsPlaying':False,'IsPaused':False};m._play_started=True;m._paused=False;m._next_media_poll=0
-  m.stop=Mock(return_value=False);m._poll_media();m.stop.assert_called_once();self.assertNotEqual(m.playback_status,'Playback ended')
-  m.stop.return_value=True;m._next_media_poll=0;m._poll_media();self.assertEqual(m.playback_status,'Playback ended')
+  from expedition33.cinematics.adapters import MediaAdapter
+  from expedition33.cinematics.controller import ReplayController, StartResult
+  adapter=MediaAdapter(None,{},None,None,None);video=Mock(state='opened')
+  adapter.backend=video;adapter.running=True;adapter._observed_playing=True;adapter.start=Mock(return_value=StartResult.STARTED)
+  video.playback_status.return_value={'IsReady':True,'IsPlaying':False,'IsPaused':False}
+  video.close.return_value=False
+  controller=ReplayController();controller.queue('movie',lambda:adapter,'epoch');controller.poll('epoch')
+  controller.poll('epoch');video.close.assert_called_once();self.assertTrue(controller.status().busy)
+  self.assertNotIn('polling failed',controller.status().detail)
+  video.close.return_value=True;controller.poll('epoch');self.assertFalse(controller.status().busy)
+  self.assertEqual(video.close.call_count,2)
  def test_visible_stop_binding_runs_during_suspension_and_unknown_bind_is_retained(self):
   owner,v,presentation,order=self.fake();panel=N(tree=object(),canvas=object(),invisible=object(),state='open',menu=N(bind_control=Mock(return_value=Mock())))
   owner.menu=N(panel=panel,_presentation_suspended=True)

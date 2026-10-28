@@ -391,7 +391,10 @@ class PauseMenuEntry:
                 if o.outer_index == pause_tree.index and o.name == 'CommonTextBlock_178')
             style = self.reference(source_text,'CommonTextBlock','Style')
             if style is None: raise RuntimeError('Pause text style is unavailable')
-            self.stabilize_borrowed_targets((self.pause,self.grid))
+            # New-world controllers and Blueprint classes can still have
+            # provisional identities while the loading screen is active.
+            self.stabilize_borrowed_targets((self.pause,self.grid,self.player,self.cls('WBP_BaseButton_C')))
+            self.player=self.planner._catalog.by_index[self.player.index]
             self.pause=self.planner._catalog.by_index[self.pause.index]
             self.grid=self.planner._catalog.by_index[self.grid.index]
             bound=self.current_entry(self.planner._catalog)

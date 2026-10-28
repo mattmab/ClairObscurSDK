@@ -280,6 +280,12 @@ class TitleMenuEntry(PauseMenuEntry):
         panel=menu.panel
         return panel.state in ('built','closed') and getattr(panel,'menu',None) is None and not panel.uncertain and not getattr(menu,'failure',None)
 
+    @staticmethod
+    def _invoke_title_restore(prepared):
+        # Input object slots may acquire fresh closures after dispatch. They
+        # must not merge into an older title catalog as a map load starts.
+        with prepared.invoke(fresh_results=True) as result:return result.return_value
+
     def restore_title_input_after_menu_close(self):
         """Restore title UIOnly only after SDK detach ACK and fresh title proof.
 
@@ -297,8 +303,8 @@ class TitleMenuEntry(PauseMenuEntry):
         if not self.invoke(self._active_call):raise RuntimeError('Title is not active; input restoration pending')
         if not self.attachment.restore():raise RuntimeError('Title Overlay restoration deferred; retain owner')
         try:
-            self.invoke(self._title_input)
-            self.invoke(self._button_focus)
+            self._invoke_title_restore(self._title_input)
+            self._invoke_title_restore(self._button_focus)
         except BaseException:
             self._title_restore_unknown=True
             raise

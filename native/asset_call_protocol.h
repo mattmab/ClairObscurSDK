@@ -18,7 +18,14 @@ inline uint32_t validate_asset_call(const RetainedCallPacket& p) {
        r.flags!=6755468160534400ULL || std::strcmp(r.name,"ReturnValue") ||
        std::memcmp(&a.constraint,&r.constraint,sizeof(CallIdentity))) return 1451;
     for(unsigned i=0;i<40;++i)
+#if defined(E33_RUNTIME_CINEMATIC_VERSION) && E33_RUNTIME_CINEMATIC_VERSION>=244
+        if((i<8 || i>=24 || (class_load&&((i>=12&&i<16)||(i>=20&&i<24)))) && c.data[i]) return 1452;
+    uint32_t package_number=0,asset_number=0;
+    std::memcpy(&package_number,c.data+12,4);std::memcpy(&asset_number,c.data+20,4);
+    if(package_number>0x7fffffffU||asset_number>0x7fffffffU)return 1452;
+#else
         if((i<8 || (i>=12 && i<16) || i>=20) && c.data[i]) return 1452;
+#endif
     uint32_t package=0,asset=0;
     std::memcpy(&package,c.data+8,4); std::memcpy(&asset,c.data+16,4);
     if(!package || !asset) return 1452;

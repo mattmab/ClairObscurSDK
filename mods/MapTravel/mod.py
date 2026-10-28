@@ -158,7 +158,10 @@ class Mod:
         return LoadingEntry(self,session)
 
     def enable(self, session):
-        if self._retirement_result == 'ack':self.request=None
+        if self._retirement_result == 'ack':
+            self.message=('Arrived: '+self.request.destination['title']
+                          if self.request is not None and self.request.state=='arrived' else 'Ready')
+            self.request=None
         self._world_retiring=False;self._retirement_result=None
         if not available(session._session._transport):
             raise ManagementError('Map Travel requires the normal zone-transition SDK runtime (v67)')

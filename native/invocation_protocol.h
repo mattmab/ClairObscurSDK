@@ -7,7 +7,29 @@
 constexpr uint32_t kCallVersion = 1, kCallBytes = 4096, kCallFields = 128, kCallObjects = 128;
 constexpr uint32_t kPodCallVersion = 2;
 enum CallKind : uint32_t { CallBool=1, CallByte, CallUInt16, CallInt32, CallFloat, CallDouble, CallObject, CallClass,
-                          CallVector2D, CallLinearColor, CallMargin, CallAnchors, CallVector=15, CallQualifiedFrameTime=19, CallTimespan=20, CallGuid=22 };
+                          CallVector2D, CallLinearColor, CallMargin, CallAnchors, CallVector=15, CallQualifiedFrameTime=19, CallTimespan=20, CallGuid=22,
+                          CallFrameNumber=23, CallFrameTime=24, CallFrameRate=25, CallBindingID=26, CallRotator=27 };
+inline bool rotator_call_enabled(uint32_t kind) {
+#ifdef E33_ROTATOR_SESSION
+    return kind==CallRotator;
+#else
+    (void)kind;return false;
+#endif
+}
+inline bool binding_id_call_enabled(uint32_t kind) {
+#ifdef E33_SEQUENCE_BINDING_VALUE_SESSION
+    return kind==CallBindingID;
+#else
+    (void)kind;return false;
+#endif
+}
+inline bool sequencer_frame_call_enabled(uint32_t kind) {
+#ifdef E33_SEQUENCER_VALUE_SESSION
+    return kind>=CallFrameNumber && kind<=CallFrameRate;
+#else
+    (void)kind;return false;
+#endif
+}
 inline bool frame_time_call_enabled(uint32_t kind) {
 #ifdef E33_FRAME_TIME_SESSION
     return kind==CallQualifiedFrameTime;
@@ -22,8 +44,17 @@ inline bool timespan_call_enabled(uint32_t kind) {
     (void)kind; return false;
 #endif
 }
-inline bool call_pod_kind(uint32_t kind) { return kind==CallGuid || (kind>=CallVector2D && kind<=CallAnchors) || kind==CallVector || kind==CallQualifiedFrameTime || kind==CallTimespan; }
-inline PodValueKind call_pod_profile(uint32_t kind) { return kind==CallGuid ? PodValueKind::Guid : kind==CallTimespan ? PodValueKind::Timespan : kind==CallQualifiedFrameTime ? PodValueKind::QualifiedFrameTime : kind==CallVector ? PodValueKind::Vector : static_cast<PodValueKind>(kind-CallVector2D+1); }
+inline bool call_pod_kind(uint32_t kind) { return kind==CallRotator || kind==CallBindingID || (kind>=CallFrameNumber && kind<=CallFrameRate) || kind==CallGuid || (kind>=CallVector2D && kind<=CallAnchors) || kind==CallVector || kind==CallQualifiedFrameTime || kind==CallTimespan; }
+inline PodValueKind call_pod_profile(uint32_t kind) { return kind==CallRotator ? PodValueKind::Rotator : kind==CallBindingID ? PodValueKind::BindingID : kind==CallFrameNumber ? PodValueKind::FrameNumber : kind==CallFrameTime ? PodValueKind::FrameTime : kind==CallFrameRate ? PodValueKind::FrameRate : kind==CallGuid ? PodValueKind::Guid : kind==CallTimespan ? PodValueKind::Timespan : kind==CallQualifiedFrameTime ? PodValueKind::QualifiedFrameTime : kind==CallVector ? PodValueKind::Vector : static_cast<PodValueKind>(kind-CallVector2D+1); }
+inline bool sequencer_frame_value(uint32_t kind,const uint8_t* data,bool input) {
+    if(kind==CallFrameRate && input) {
+        int32_t rate[2]{};std::memcpy(rate,data,8);return rate[0]>0 && rate[1]>0;
+    }
+    if(kind==CallFrameTime) {
+        float subframe=0;std::memcpy(&subframe,data+4,4);return std::isfinite(subframe) && subframe>=0 && subframe<1;
+    }
+    return true;
+}
 enum CallOutcome : uint32_t { CallNotDispatched=0, CallDispatchReturned=1, CallOutcomeUnknown=2 };
 #pragma pack(push, 1)
 struct CallIdentity { int32_t index, serial; uint64_t address; };
@@ -48,12 +79,26 @@ static_assert(sizeof(CallIdentity)==16 && sizeof(CallField)==140 && sizeof(CallO
 static_assert(sizeof(CallPacket)==24648);
 
 inline bool timespan_media_packet(const CallPacket& p) {
-    return p.version==kPodCallVersion && p.parameter_size==8 && p.allocation_extent==8 &&
+    const bool getter=p.version==kPodCallVersion && p.parameter_size==8 && p.allocation_extent==8 &&
         p.return_offset==0 && p.field_count==1 && p.object_count==0 && p.function_flags==1417806851 &&
         (p.entry_rva==0x3208990 || p.entry_rva==0x3207a70) &&
         p.fields[0].kind==CallTimespan && !std::strcmp(p.fields[0].name,"ReturnValue") &&
         p.fields[0].offset==0 && p.fields[0].width==8 && p.fields[0].dimension==1 &&
         p.fields[0].flags==6755468160534400ULL;
+#ifdef E33_MEDIA_SEEK_SESSION
+    int64_t ticks=0;std::memcpy(&ticks,p.data,8);
+    const auto& time=p.fields[0];const auto& result=p.fields[1];
+    const bool seek=p.version==kPodCallVersion && p.parameter_size==9 && p.allocation_extent==16 &&
+        p.return_offset==8 && p.field_count==2 && p.object_count==0 && p.function_flags==79823875 &&
+        p.entry_rva==0x320ad80 && time.kind==CallTimespan && !std::strcmp(time.name,"Time") &&
+        time.offset==0 && time.width==8 && time.dimension==1 && time.flags==6755468294751106ULL &&
+        result.kind==CallBool && !std::strcmp(result.name,"ReturnValue") && result.offset==8 &&
+        result.width==1 && result.dimension==1 && result.flags==6755469234276224ULL &&
+        result.bool_encoding==0xff010001 && ticks>=0 && ticks<=864000000000LL;
+    return getter || seek;
+#else
+    return getter;
+#endif
 }
 // Pure wire validation: usable in fixtures before reading any game memory.
 inline uint32_t validate_call_packet(const CallPacket& p,bool allow_pod=false) {
@@ -65,7 +110,7 @@ inline uint32_t validate_call_packet(const CallPacket& p,bool allow_pod=false) {
     unsigned returns=0;
     for(unsigned f=0;f<p.field_count;++f) {
         const auto& field=p.fields[f];
-        if(field.kind<CallBool || (field.kind>(pod_packet ? CallAnchors : CallClass) && !(pod_packet && (field.kind==CallGuid || field.kind==CallVector || frame_time_call_enabled(field.kind) || timespan_call_enabled(field.kind)))) || !field.name[0] || field.name[95] || !(field.flags&0x80) ||
+        if(field.kind<CallBool || (field.kind>(pod_packet ? CallAnchors : CallClass) && !(pod_packet && (rotator_call_enabled(field.kind) || binding_id_call_enabled(field.kind) || field.kind==CallGuid || field.kind==CallVector || frame_time_call_enabled(field.kind) || sequencer_frame_call_enabled(field.kind) || timespan_call_enabled(field.kind)))) || !field.name[0] || field.name[95] || !(field.flags&0x80) ||
            !field.dimension || field.dimension>64 || !field.width ||
            uint64_t(field.offset)+uint64_t(field.dimension)*field.width>p.parameter_size) return 301;
         for(unsigned i=0;i<96 && field.name[i];++i) if(static_cast<unsigned char>(field.name[i])>=128) return 301;
@@ -79,6 +124,8 @@ inline uint32_t validate_call_packet(const CallPacket& p,bool allow_pod=false) {
         }
         if(field.kind==CallTimespan && (!timespan_call_enabled(field.kind) || !timespan_media_packet(p))) return 314;
         if(field.kind==CallQualifiedFrameTime && (!(field.flags&0x400) || field.dimension!=1)) return 314;
+        if(sequencer_frame_call_enabled(field.kind) && field.dimension!=1)return 314;
+        if(field.kind==CallBindingID && (!binding_id_call_enabled(field.kind)||field.dimension!=1))return 314;
         uint8_t mask=255, offset=0, byte_mask=0;
         if(field.kind==CallBool) {
             mask=uint8_t(field.bool_encoding>>24); offset=uint8_t(field.bool_encoding>>8);
@@ -99,6 +146,7 @@ inline uint32_t validate_call_packet(const CallPacket& p,bool allow_pod=false) {
             if(field.kind==CallFloat) { float n; std::memcpy(&n,p.data+at,4); if(!std::isfinite(n)) return 308; }
             if(field.kind==CallDouble) { double n; std::memcpy(&n,p.data+at,8); if(!std::isfinite(n)) return 308; }
             if(call_pod_kind(field.kind) && !valid_pod_value(call_pod_profile(field.kind),p.data+at,width)) return 315;
+            if(sequencer_frame_call_enabled(field.kind) && !sequencer_frame_value(field.kind,p.data+at,input))return 315;
             if(field.kind==CallObject || field.kind==CallClass) {
                 uint64_t pointer; std::memcpy(&pointer,p.data+at,8);
                 if(pointer || field.constraint.index<0 || !field.constraint.address) return 309;

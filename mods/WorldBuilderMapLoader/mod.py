@@ -308,6 +308,9 @@ class Mod:
             if self.panel and (not ctx or not self.current or ctx['visit']!=self.current['visit']):self.close_menu()
             if self.runtime.started and ctx and self.runtime.visit!=ctx['visit']:self.runtime.close()
             self.current=ctx
+            if (ctx and ctx['ready'] and not self.assignments.values.get(ctx['world'])
+                    and self.message=='Waiting for a stable exploration pawn.'):
+                self.message='Ready. No automatic map selected for this world.'
             due=self.visits.observe(ctx,now)
             # An assigned map provides the floor beneath a saved player. Do not
             # spend two seconds simulating gravity before restoring that floor.

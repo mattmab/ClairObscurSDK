@@ -1,5 +1,7 @@
 """Scene-specific presenter over the SDK's existing WorldBuilder-style UI."""
 import json
+from dataclasses import replace
+from expedition33.management_view import MenuControl
 from expedition33.mods_workspace_scroll import ScrollWorkspaceView
 from expedition33.management import ManagementError
 from .scene import ROLES,CLIPS,CLIP_LABELS,MAX_ACTORS
@@ -9,6 +11,8 @@ from . import catalog
 class SceneView(ScrollWorkspaceView):
     def __init__(self,registry,model):
         super().__init__(registry);self.model=model;self.screen=getattr(model,'next_screen',None) or 'scene';model.next_screen=None;self.status=model.message;self.actor_id='lune';self.event_id=None;self.edit_field=None;self.animation_query='';self.animation_group='character';self.saved_id=None;self.actor_catalog_all=False;self.actor_asset=None;self.actor_category=None;self.actor_catalog_review=False;self.catalog_asset=None
+        self.authored_path=getattr(model,'authored_selected',None)
+        if self.screen=='scene_authored' and getattr(model,'authored_browser_state',None):self.page,self.query=model.authored_browser_state
     @staticmethod
     def _map_name(path):return path.rsplit('.',1)[-1].replace('Level_','').replace('_',' ')
     def _summary(self,d):
@@ -21,7 +25,133 @@ class SceneView(ScrollWorkspaceView):
         title='Scene Editor';description='Create a scene or open Saved scenes. Photo mode uses the game camera; Flight editor is the fallback. End stops playback.'
         if self.screen=='scene':
             if d:description=self._summary(d)+"\n\nPhoto mode: open the game's photo mode first. Flight editor provides a separate editing camera.\nBackspace: Show / hide Scene Editor UI; press again to restore.\nEnd: stop | Insert: scene menu"
-            rows=[row('New scene','new',enabled=editable),row('Saved scenes','page','scene_saved',editable),row('Photo mode / timeline','photo',enabled=d is not None and editable),row('Flight editor / timeline','live',enabled=d is not None and editable),row('Actors / size / clips','page','scene_actors',d is not None and editable),row('Actor library','page','scene_add',d is not None and editable),row(f"Length: {d['duration']:g}s" if d else 'Scene length','edit',('duration',d['duration'] if d else 20,'float'),d is not None and editable),row('Scene settings / Save','page','scene_settings',d is not None),row('Playback controls','page','scene_playback',d is not None)]
+            rows=[row('New scene','new',enabled=editable),row('Saved scenes','page','scene_saved',editable),row('Game sequences','page','scene_authored',editable),row('Photo mode / timeline','photo',enabled=d is not None and editable),row('Flight editor / timeline','live',enabled=d is not None and editable),row('Actors / size / clips','page','scene_actors',d is not None and editable),row('Actor library','page','scene_add',d is not None and editable),row(f"Length: {d['duration']:g}s" if d else 'Scene length','edit',('duration',d['duration'] if d else 20,'float'),d is not None and editable),row('Scene settings / Save','page','scene_settings',d is not None),row('Playback controls','page','scene_playback',d is not None)]
+        elif self.screen=='scene_authored':
+            title='Game-authored sequences'
+            sources=[source for source in m.authored.catalog if self.query.casefold() in (source['title']+' '+source['path']).casefold()]
+            selected=getattr(self,'authored_path',None)
+            loaded=m.authored.document is not None and m.authored.document['source']['sequence']==selected
+            source=next((source for source in m.authored.catalog if source['path']==selected),None)
+            description=(source['title']+'\n' if source else 'Select a sequence on the left.\n')
+            description+=('Loaded\n'+'\n'.join(m.authored.summary().splitlines()[:2]) if loaded else 'Not loaded. Load source to inspect tracks without starting playback, or Open timeline to load and edit in one step.')
+            if m.pending_authored is not None or m.pending_timeline_source is not None:description+='\nReading source; controls return when loading finishes.'
+            description+=f'\n{len(sources)} matching sequences. Search filters the library.'
+            if source:description+='\n\n'+source['path']
+            rows=[row(('> ' if source['path']==selected else '')+source['title'],'authored_select',source['path']) for source in sources]
+        elif self.screen=='scene_authored_nodes':
+            title='Authored source tracks'
+            description=m.authored.summary()+'\n\nSearch animation, camera or audio to filter. Select an object to inspect its copied fields and unsupported data.'
+            rows=[row('Open timeline editor','authored_editor',enabled=m.authored.document is not None and editable),row('Game sequence library','page','scene_authored'),row('Timeline properties','page','scene_authored_timeline',m.authored.document is not None)]
+            rows += [row(node['class_name'].removeprefix('MovieScene')+'\n'+path.rsplit('.',1)[-1],'authored_node',path) for path,node in m.authored.nodes(self.query)]
+        elif self.screen=='scene_authored_node':
+            title='Authored source object'
+            path=getattr(self,'authored_node',None);node=m.authored.graph['nodes'].get(path) if m.authored.graph else None
+            description=path+'\n\n'+json.dumps(node,indent=2,ensure_ascii=False)[:12000] if node else 'Source is no longer loaded.'
+            rows=[row('Back to source tracks','page','scene_authored_nodes')]
+        elif self.screen=='scene_authored_cast':
+            title='Authored cast and components'
+            description='Select an actor binding to replace its character Blueprint. Component paths and animations depend on Blueprint compatibility; replacements do not automatically retarget them. Replacements save with the timeline. The actor-pool runtime supports up to 32 replacements; older runtimes support one.'
+            rows=[row('Back to authored timeline','page','scene_authored_timeline')]
+            try:
+                cast_rows=sorted(m.authored.cast(self.query),key=lambda c:not (c['template'] and c['template']['class'].startswith('BP_Cine_')))
+                rows += [row(c['name']+' | '+c['kind']+' | '+c['sequence'].rsplit('.',1)[-1],
+                             'authored_cast',(c['sequence'],c['guid'])) for c in cast_rows]
+            except ValueError as error:description+='\n\nCast unavailable: '+str(error)
+        elif self.screen=='scene_authored_cast_binding':
+            title='Authored cast binding'
+            selected=getattr(self,'authored_cast',None)
+            cast=next((c for c in m.authored.cast() if (c['sequence'],c['guid'])==selected),None)
+            description='Binding is no longer loaded.'
+            if cast:
+                template=cast['template'];children=[c['name'] for c in m.authored.cast() if c['sequence']==cast['sequence'] and c['guid'] in cast['children']]
+                description=(cast['name']+'\nShot: '+cast['sequence'].rsplit('.',1)[-1]+'\n'+
+                             (('Blueprint: '+template['class']+'\n') if template else
+                              ('Source template unavailable; replacement disabled\n' if cast['kind']=='spawnable' else 'Component binding\n'))+
+                             f"{len(cast['tracks'])} tracks | {len(cast['unread_tracks'])} unread\n"+
+                             ('Components: '+', '.join(children)+'\n' if children else ''))
+            rows=[row('Back to cast','page','scene_authored_cast')]
+            if cast and cast['kind']=='spawnable' and cast['template'] and cast['template']['class'].startswith('BP_Cine_'):
+                chosen=next((e['profile'] for e in m.authored.document.get('cast_edits',[]) if (e['sequence'],e['guid'])==selected),None)
+                description='Replacement: '+(chosen.title() if chosen else 'Original character')+'\n\n'+description
+                if chosen:
+                    from expedition33.cinematics.authored_cast import replacement_overlap_warning
+                    warning=replacement_overlap_warning(m.authored.cast(),m.authored.document.get('cast_edits',()),selected,chosen)
+                    if warning:description+='\n\n'+warning
+                rows.append(row('Use original character','authored_replace',None,editable))
+                from expedition33.cinematics.blueprint_actor import available_profiles
+                transport=getattr(getattr(m.session,'_session',None),'_transport',None)
+                for profile in available_profiles(transport):
+                    rows.append(row(('> ' if chosen==profile else '')+'Replace with '+profile.title(),'authored_replace',profile,editable))
+                if chosen:
+                    edit=next(e for e in m.authored.document['cast_edits'] if (e['sequence'],e['guid'])==selected)
+                    placement=edit.get('placement',dict(offset=[300.,0.,0.],yaw=0.))
+                    description+='\n\nBlueprint placement is relative to the preview anchor, in centimeters. Authored transform tracks can subsequently move the actor.'
+                    for axis,index in zip('XYZ',range(3)):
+                        rows.append(row(f"Offset {axis}: {placement['offset'][index]:g} cm",'edit',('authored_cast:'+axis,placement['offset'][index],'float'),editable))
+                    rows.append(row(f"Yaw: {placement['yaw']:g} degrees",'edit',('authored_cast:yaw',placement['yaw'],'float'),editable))
+                rows.append(row('Save authored timeline','authored_save',enabled=editable))
+        elif self.screen=='scene_authored_timeline':
+            title='Authored timeline'
+            description=('Section ranges and curve keys use each source sequence\'s native integer ticks. Nested sequences keep their own time space. Edited preview applies changes to a private sequence copy.\n\n'+('Unsaved edits' if m.authored.dirty else 'Saved timeline'))
+            from .authored_preview import preview_supported
+            from expedition33.cinematics.authored_copy import curve_edits_available
+            transport=getattr(getattr(m.session,'_session',None),'_transport',None)
+            previewable=editable and preview_supported(m.authored.document)
+            description+='\n\n'+('Preview adapter available.' if preview_supported(m.authored.document) else 'Playback is unavailable for this source. Open timeline editor to inspect and edit tracks, cast and NPCs without playback.')
+            rows=[row('Open timeline editor','authored_editor',enabled=m.authored.document is not None and editable),row('Preview original source','authored_preview',enabled=previewable),
+                  row('Preview edited timeline','authored_edited_preview',enabled=previewable and (not m.authored.document.get('key_edits') or curve_edits_available(transport))),
+                  row('Save authored timeline','authored_save',enabled=m.authored.document is not None),row('Saved authored timelines','page','scene_authored_saved'),
+                  row('Cast and component bindings','page','scene_authored_cast',m.authored.document is not None),
+                  row('Blueprint NPC tracks','page','scene_authored_npcs',m.authored.document is not None)]
+            rows += [row(r['kind']+'\n'+(f"{r['start']} to {r['end']} ticks" if r['start'] is not None and r['end'] is not None else 'Open / unspecified range'),'authored_section',r['path']) for r in m.authored.sections(self.query)]
+        elif self.screen=='scene_authored_npcs':
+            title='Blueprint NPC tracks'
+            description='Independent NPCs use original character Blueprints in the QA map. Start is inclusive; end is exclusive, in native player frames. Playback pauses briefly for construction/retirement at observed interval changes. Seeking updates the actors too.'
+            rows=[row('Back to authored timeline','page','scene_authored_timeline')]
+            from expedition33.cinematics.blueprint_actor import available_profiles
+            transport=getattr(getattr(m.session,'_session',None),'_transport',None)
+            rows += [row('Add '+p.title()+' NPC','authored_npc_add',p,editable) for p in available_profiles(transport)]
+            rows += [row(f"{r['name']} | {r['start']} to {r['end']}",'authored_npc',r['id'],editable) for r in m.authored.document.get('npc_tracks',[])]
+        elif self.screen=='scene_authored_npc':
+            title='Blueprint NPC track';description='Placement is relative to the preview anchor, in centimeters. This adds an independent actor; it does not replace an authored binding or start a battle.'
+            track=next((r for r in m.authored.document.get('npc_tracks',[]) if r['id']==self.authored_npc),None)
+            rows=[row('Back to NPC tracks','page','scene_authored_npcs')]
+            if track:
+                for field,label,kind in (('name','Name','text'),('start','Start frame','int'),('end','End frame','int')):
+                    rows.append(row(f"{label}: {track[field]}",'edit',('authored_npc:'+field,track[field],kind),editable))
+                for axis,index in zip('XYZ',range(3)):
+                    rows.append(row(f"Offset {axis}: {track['placement']['offset'][index]:g} cm",'edit',('authored_npc:'+axis,track['placement']['offset'][index],'float'),editable))
+                rows.append(row(f"Yaw: {track['placement']['yaw']:g}",'edit',('authored_npc:yaw',track['placement']['yaw'],'float'),editable))
+                rows.append(row('Remove NPC track','authored_npc_remove',track['id'],editable))
+                rows.append(row('Save authored timeline','authored_save',enabled=editable))
+        elif self.screen=='scene_authored_section':
+            path=getattr(self,'authored_section',None)
+            section=next((r for r in m.authored.sections() if r['path']==path),None)
+            title='Authored section range';description=(path or '')+'\n\nStart and end are native source ticks, not display frames. This changes the section bounds; its curve keys stay at their authored times.'
+            rows=[row('Back to authored timeline','page','scene_authored_timeline')]
+            if section:
+                for field,label in (('start','Start tick'),('end','End tick')):
+                    rows.append(row(f'{label}: {section[field]}','edit',('authored:'+field,section[field],'int'),editable and section[field] is not None))
+                rows.append(row('Save authored timeline','authored_save',enabled=editable))
+                rows += [row('Curve: '+'.'.join(map(str,c['path']))+f" | {len(c['keys'])} keys",'authored_channel',c['path']) for c in m.authored.channels(path)]
+        elif self.screen=='scene_authored_channel':
+            title='Authored curve keys';description='Select a key to edit its source tick and value. Original interpolation and tangent data are preserved.'
+            curve=next((c for c in m.authored.channels(self.authored_section) if c['path']==self.authored_channel),None)
+            rows=[row('Back to section','page','scene_authored_section')]
+            if curve:rows += [row(f"Key {k['index']}: {k['at']} | {k['value']}",'authored_key',k['index']) for k in curve['keys']]
+        elif self.screen=='scene_authored_key':
+            title='Authored curve key';description='Times use the source sequence tick resolution. Keys must stay strictly ordered. Save keeps a separate edit document.'
+            curve=next((c for c in m.authored.channels(self.authored_section) if c['path']==self.authored_channel),None)
+            key=next((k for k in curve['keys'] if k['index']==self.authored_key),None) if curve else None
+            rows=[row('Back to curve','page','scene_authored_channel')]
+            if key:
+                rows.append(row(f"Tick: {key['at']}",'edit',('authored_key:at',key['at'],'int'),editable))
+                kind='bool' if curve['kind']=='MovieSceneBoolChannel' else 'int' if curve['kind'] in ('MovieSceneIntegerChannel','MovieSceneByteChannel') else 'float'
+                rows.append(row(f"Value: {key['value']}",'edit',('authored_key:value',key['value'],kind),editable))
+                rows.append(row('Save authored timeline','authored_save',enabled=editable))
+        elif self.screen=='scene_authored_saved':
+            title='Saved authored timelines';description='Load a saved edit document without playing a sequence. Native source assets are retained separately when needed for preview.'
+            rows=[row(saved['name'],'authored_saved',saved['id'],editable) for saved in m.authored.store.list()]
         elif self.screen=='scene_setup':
             description=self._summary(d)+'\n\n1. Set cinematic length.\n2. Add actors from Actor library.\n3. Use Flight timeline, or open game Photo mode before Photo timeline.'
             rows=[row('Actor library','page','scene_add',editable),row('Current cast','page','scene_actors'),row(f"Length: {d['duration']:g}s",'edit',('duration',d['duration'],'float'),editable),row('Length -5 seconds','resize',-5,editable and d['duration']>2),row('Length +5 seconds','resize',5,editable and d['duration']<120),row('Flight editor / timeline','live',enabled=editable),row('Photo mode / timeline','photo',enabled=editable),row('Name / Save scene','page','scene_settings')]
@@ -121,12 +251,34 @@ class SceneView(ScrollWorkspaceView):
         if self.editing:
             option=self.editing[1];description='EDIT '+option['title']+'\n\nType a value into the input field, then click Apply. Cancel keeps the document unchanged.\n\n'+description
         return title,description,rows
+    def render(self):
+        frame=super().render()
+        if self.screen!='scene_authored':return frame
+        m=self.model;selected=getattr(self,'authored_path',None)
+        loaded=m.authored.document is not None and m.authored.document['source']['sequence']==selected
+        idle=m.runtime.scope is None and not m.want_play and m.authored_preview is None and m.pending_authored is None and m.pending_timeline_source is None and m.authored.loading is None
+        from .authored_preview import preview_supported
+        previewable=loaded and idle and preview_supported(m.authored.document)
+        actions=(('Load source','authored_load',selected,selected is not None and idle),
+                 ('Open timeline','authored_open_selected',selected,selected is not None and idle),
+                 ('Source tracks','page','scene_authored_nodes',loaded and idle),
+                 ('Timeline properties','page','scene_authored_timeline',loaded and idle),
+                 ('Cast and bindings','page','scene_authored_cast',loaded and idle),
+                 ('Blueprint NPC tracks','page','scene_authored_npcs',loaded and idle),
+                 ('Preview source','authored_preview',None,previewable),
+                 ('Save timeline','authored_save',None,loaded and idle))
+        controls=list(frame.controls)
+        for token,(label,op,arg,enabled) in enumerate(actions,56):
+            controls[token]=MenuControl(token,label,enabled)
+            self._commands[token]=('scene_'+op,arg,enabled)
+        return replace(frame,controls=tuple(controls),status=m.message if 'failed' in m.message.casefold() else '')
+
     def activate(self,revision,token,*,value=None,reset=False):
         self._check()
         if revision!=self._revision or token not in self._commands or not self._commands[token][2]:raise ManagementError('Stale Scene Editor control')
         op,arg,_=self._commands[token]
         animation_search=op in ('search','clear') and self.screen in ('scene_animation','scene_animation_groups','scene_clips')
-        character_search=op in ('search','clear') and self.screen in ('scene_add','scene_saved')
+        character_search=op in ('search','clear') and self.screen in ('scene_add','scene_saved','scene_authored','scene_authored_nodes','scene_authored_timeline','scene_authored_cast')
         if op.startswith('scene_') or animation_search or character_search or (self.edit_field is not None and op in ('apply','reset','cancel')) or (op=='back' and self.screen.startswith('scene')):
             self._invalidate()
             try:
@@ -139,6 +291,30 @@ class SceneView(ScrollWorkspaceView):
                 elif op=='scene_sample':self.model.load_sample();self.screen='scene';self.page=0
                 elif op=='scene_new':self.model.new_scene();self.model.next_screen=None;self.screen='scene_setup';self.page=0
                 elif op=='scene_saved_select':self.saved_id=arg
+                elif op=='scene_authored_select':self.authored_path=arg;self.model.authored_selected=arg
+                elif op=='scene_authored_load':self.model.queue_authored(arg)
+                elif op=='scene_authored_open_selected':
+                    self.model.authored_return_screen='scene_authored';self.model.authored_browser_state=(self.page,self.query)
+                    if self.model.authored.document is not None and self.model.authored.document['source']['sequence']==arg:self.model.queue_authored_preview(edited=True,editing_only=True)
+                    else:self.model.load_timeline_source(arg,editing_only=True)
+                elif op=='scene_authored_editor':self.model.queue_authored_preview(edited=True,editing_only=True)
+                elif op=='scene_authored_preview':self.model.queue_authored_preview()
+                elif op=='scene_authored_edited_preview':self.model.queue_authored_preview(edited=True)
+                elif op=='scene_authored_unload':self.model.unload_authored();self.screen='scene_authored'
+                elif op=='scene_authored_node':self.authored_node=arg;self.screen='scene_authored_node';self.page=0
+                elif op=='scene_authored_cast':self.authored_cast=arg;self.screen='scene_authored_cast_binding';self.page=0
+                elif op=='scene_authored_replace':
+                    self.model.authored.replace_cast(*self.authored_cast,arg)
+                    self.model.message='Character replacement changed. Save the authored timeline to keep it.'
+                elif op=='scene_authored_npc_add':
+                    self.authored_npc=self.model.authored.add_npc(arg);self.screen='scene_authored_npc';self.page=0
+                elif op=='scene_authored_npc':self.authored_npc=arg;self.screen='scene_authored_npc';self.page=0
+                elif op=='scene_authored_npc_remove':self.model.authored.remove_npc(arg);self.screen='scene_authored_npcs';self.page=0
+                elif op=='scene_authored_section':self.authored_section=arg;self.screen='scene_authored_section';self.page=0
+                elif op=='scene_authored_channel':self.authored_channel=arg;self.screen='scene_authored_channel';self.page=0
+                elif op=='scene_authored_key':self.authored_key=arg;self.screen='scene_authored_key';self.page=0
+                elif op=='scene_authored_save':self.model.authored.save();self.model.message='Authored timeline saved.'
+                elif op=='scene_authored_saved':self.model.authored.load_saved(arg);self.model.message='Authored timeline loaded without playback.';self.screen='scene_authored_timeline';self.page=0
                 elif op=='scene_actor_filter':self.actor_catalog_all=not self.actor_catalog_all;self.page=0
                 elif op=='scene_catalog_review':self.actor_catalog_review=not self.actor_catalog_review;self.actor_catalog_all=False;self.page=0
                 elif op=='scene_catalog_categories':self.screen='scene_catalog_categories';self.page=0
@@ -171,7 +347,25 @@ class SceneView(ScrollWorkspaceView):
                     self.edit_field=field;self.editing=(self.registry.select('e33.scene-editor'),dict(id=field,title=field,kind=kind,value=current,default=current,minimum=None,maximum=None,choices=()))
                 elif op in ('apply','reset'):
                     option=self.editing[1];parsed=option['default'] if op=='reset' else value if option['kind']=='text' else json.loads(value)
-                    if self.edit_field=='save_as':self.model.save(parsed,save_as=True)
+                    if self.edit_field.startswith('authored_key:'):
+                        curve=next(c for c in self.model.authored.channels(self.authored_section) if c['path']==self.authored_channel)
+                        key=next(k for k in curve['keys'] if k['index']==self.authored_key)
+                        field=self.edit_field.split(':')[1];updated=dict(at=key['at'],value=key['value']);updated[field]=parsed
+                        self.model.authored.edit_key(self.authored_section,self.authored_channel,self.authored_key,**updated)
+                        self.model.message='Curve key edited. Apply rebuilds private playback; Save keeps changes.'
+                    elif self.edit_field.startswith('authored_npc:'):
+                        self.model.authored.edit_npc(self.authored_npc,self.edit_field.split(':')[1],parsed)
+                        self.model.message='NPC track changed. Save the authored timeline to keep it.'
+                    elif self.edit_field.startswith('authored_cast:'):
+                        edit=next(e for e in self.model.authored.document['cast_edits'] if (e['sequence'],e['guid'])==self.authored_cast)
+                        placement=edit.get('placement',dict(offset=[300.,0.,0.],yaw=0.))
+                        offset=list(placement['offset']);yaw=placement['yaw'];field=self.edit_field.split(':')[1]
+                        if field=='yaw':yaw=parsed
+                        else:offset['XYZ'.index(field)]=parsed
+                        self.model.authored.place_cast(*self.authored_cast,offset,yaw)
+                        self.model.message='Blueprint placement changed. Save the authored timeline to keep it.'
+                    elif self.edit_field.startswith('authored:'):self.model.edit_authored_range(self.authored_section,self.edit_field.split(':')[1],parsed)
+                    elif self.edit_field=='save_as':self.model.save(parsed,save_as=True)
                     else:self.model.edit(self.edit_field,parsed)
                     self.editing=None;self.edit_field=None
                 elif op=='cancel':self.editing=None;self.edit_field=None
@@ -186,7 +380,11 @@ class SceneView(ScrollWorkspaceView):
                 elif op=='scene_play':self.model.play()
                 elif op=='scene_stop':self.model.stop()
                 elif op=='back':
-                    self.screen='scene_add' if self.screen in ('scene_actor_asset','scene_catalog_asset','scene_catalog_categories') else 'scene_animation' if self.screen in ('scene_clips','scene_animation_groups') else 'scene_actor' if self.screen in ('scene_animation','scene_animation_inventory','scene_remove') else 'scene_actor' if self.screen=='scene_transform' else 'scene_actors' if self.screen in ('scene_actor','scene_add') else 'scene_events' if self.screen=='scene_event' else 'scene'
+                    authored_back={'scene_authored_node':'scene_authored_nodes','scene_authored_nodes':'scene_authored',
+                        'scene_authored_npc':'scene_authored_npcs','scene_authored_npcs':'scene_authored_timeline',
+                        'scene_authored_key':'scene_authored_channel','scene_authored_channel':'scene_authored_section',
+                        'scene_authored_timeline':'scene_authored','scene_authored_section':'scene_authored_timeline','scene_authored_saved':'scene_authored'}
+                    self.screen=authored_back.get(self.screen,'scene_add' if self.screen in ('scene_actor_asset','scene_catalog_asset','scene_catalog_categories') else 'scene_animation' if self.screen in ('scene_clips','scene_animation_groups') else 'scene_actor' if self.screen in ('scene_animation','scene_animation_inventory','scene_remove') else 'scene_actor' if self.screen=='scene_transform' else 'scene_actors' if self.screen in ('scene_actor','scene_add') else 'scene_events' if self.screen=='scene_event' else 'scene')
                     self.page=0;self.editing=None;self.edit_field=None
                     if self.screen!='scene_clips':self.query=''
                     if self.screen=='scene_animation':self.animation_query='';self.animation_group='character'

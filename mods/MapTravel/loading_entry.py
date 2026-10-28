@@ -4,6 +4,7 @@ from expedition33.pause_menu import PauseMenuEntry
 
 
 class LoadingEntry:
+    reprepare_on_world_change=True
     def __init__(self,mod,session):
         self.mod=mod;self.session=session;self.scope=SessionScope(session,lease_owner='MapTravelLoadingUI')
         self.entry=None;self.context=None;self.adopted=False;self._binding=False
@@ -14,9 +15,12 @@ class LoadingEntry:
 
     def prepare(self,context):
         self.mod._loading_entry=self
-        self.mod._loading_routes=None
+        # Retain copied route labels across worlds. Dispatch still revalidates
+        # the exact live table row before every transition.
         self._routes()
-        self._prepare_button()
+        # A previous title's discovery snapshot can include its retired PC.
+        # World loading binds against the destination's fresh pause widget.
+        if context.kind=='title':self._prepare_button()
 
     def _prepare_button(self):
         if self.entry is not None:return
@@ -35,7 +39,7 @@ class LoadingEntry:
     def _routes(self):
         from expedition33.zone_travel import routes
         from expedition33.cinematics.original_game_action import NotReady
-        if self.mod._loading_routes is None:
+        if getattr(self.mod,'_loading_routes',None) is None:
             try:self.mod._loading_routes=routes(self.session.pid)
             except NotReady:pass # Pure table discovery can precede asset load.
 
@@ -53,9 +57,10 @@ class LoadingEntry:
                 self._binding=True
                 self.entry.install()
             except RuntimeQueryError as error:
-                # No widget/lease exists before install enters building. Asset
-                # discovery can race loading GC; discard only that pure read.
-                if self.entry.state=='new' and any(code in str(error) for code in
+                # Both new and detached-prepared entries are still before
+                # install's binding/mutation phase. Keep the prepared tree and
+                # retry only its fresh read after loading GC.
+                if self.entry.state in ('new','prepared') and any(code in str(error) for code in
                     ('READ_FAILED','REFLECTION_TARGET_CHANGED','DESCRIPTOR_IDENTITY_CHANGED','MATCH_TYPE_NOT_REGISTERED')):
                     return
                 raise

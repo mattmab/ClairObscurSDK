@@ -33,8 +33,23 @@ def widget_definition_names(names):
                                else name for name in names))
 
 
+def display_text(value):
+    """Fit display-only labels into the native FText envelope, visibly.
+
+    Editable values and the exact invocation encoder remain strict. Source
+    documents retain the full text; clipping only protects their presentation.
+    """
+    if type(value) is not str:return value
+    encoded=value.encode('utf-16-le')
+    if len(encoded)<=4095*2:return value
+    suffix='\n[Display clipped]'
+    budget=(4095-len(suffix))*2
+    return encoded[:budget].decode('utf-16-le',errors='ignore')+suffix
+
+
 class OwnedMenuPanel:
     EXTRA_NAMES = ()
+    DISCOVERY_NAMES = None
     BATCH_CONSTRUCTION = False
 
     def __init__(self, session, *, controls=12, cached_construction=False, selected_results=False):
@@ -237,7 +252,7 @@ class OwnedMenuPanel:
         log = logging.getLogger(__name__)
         log.info('Building owned native menu panel with %d reusable controls', self.count)
         def discover_metadata():
-            catalog = capture_matching(self.scope.pid, names=widget_definition_names((
+            catalog = capture_matching(self.scope.pid, names=widget_definition_names((self.DISCOVERY_NAMES or (
                 'Widget', 'UserWidget', 'CommonActivatableWidget', 'WidgetTree',
                 'CanvasPanel', 'CanvasPanelSlot', 'Button', 'TextBlock', 'Border',
                 'CommonTextBlock', 'WBP_BaseButton_C', 'CTS_B1_SmallLine_Outline_C', 'SetStyle',
@@ -252,13 +267,14 @@ class OwnedMenuPanel:
                 'SetText', 'AddToViewport', 'IsInViewport', 'ActivateWidget',
                 'IsActivated', 'SetUserFocus', 'HasKeyboardFocus', 'HasUserFocus',
                 'DeactivateWidget', 'RemoveFromParent', 'SetFocusToGameViewport',
-                'SetInputMode_UIOnlyEx','SetInputMode_GameOnly','EMouseLockMode') + self.EXTRA_NAMES),
+                'SetInputMode_UIOnlyEx','SetInputMode_GameOnly','EMouseLockMode')) + self.EXTRA_NAMES + ('SetCursor','EMouseCursor')),
                 classes=('GameEngine',)) if self._selected_results else capture()
             if catalog.pid != self.scope.pid:
                 raise ValueError('Widget catalog belongs to another process')
             if self._selected_results:
-                from .cinematics.original_game_action import controller_context
-                current = controller_context(self.scope)
+                from .cinematics.controller_anchor import context_observer
+                current = context_observer(self.scope)()
+                self._discovery_context = current
                 observed = capture_selected(self.scope.pid, (current['controller'][1:],))
                 catalog = catalog.with_observations(observed)
                 self.player = catalog.by_index[current['controller'][1]]
@@ -310,15 +326,29 @@ class OwnedMenuPanel:
             current = capture()
             self.tree = read_values(current, current.resolve(self.widget)).values[
                 self._class('UserWidget').index, 'WidgetTree']
-        from ._stable_lease import available as stable_tree_available, stabilize_owned_tree, rediscover_owned_tree
+        from ._stable_lease import (available as stable_tree_available, stabilize_owned_tree,
+                                    rediscover_owned_tree, refresh_discovery_owned_tree)
         if (self.tree is not None and self.tree.serial==0 and
                 stable_tree_available(self.scope._session._transport)):
             stable_tree, _ = stabilize_owned_tree(self.scope, current, self.widget,
                 self.tree, self._class('UserWidget'))
             # The old tree's serial changed intentionally. Discard its catalog;
             # never merge the replacement identity through with_observations.
-            self.catalog,self.tree,current = rediscover_owned_tree(self.scope.pid,
-                discover_metadata,self.widget,stable_tree,self._class('UserWidget').index)
+            if self._selected_results and self._metadata_stable_ui:
+                # Retained metadata already defines the needed closure. Re-read
+                # those exact identities instead of enumerating every unrelated
+                # transient UObject again while the old world is being purged.
+                from .cinematics.controller_anchor import context_observer
+                expected=self._discovery_context
+                def check_context():
+                    if context_observer(self.scope)()!=expected:
+                        raise RuntimeError('Widget world or controller changed during metadata refresh')
+                self.catalog,self.tree,current = refresh_discovery_owned_tree(self.scope.pid,
+                    self.catalog,self.widget,stable_tree,self._class('UserWidget').index,
+                    validate_context=check_context)
+            else:
+                self.catalog,self.tree,current = rediscover_owned_tree(self.scope.pid,
+                    discover_metadata,self.widget,stable_tree,self._class('UserWidget').index)
             if self._planner is not None:
                 self._planner.refresh_from(self.catalog)
         if self._planner is not None:
@@ -346,6 +376,9 @@ class OwnedMenuPanel:
             InBrushColor={'R': .015, 'G': .02, 'B': .03, 'A': .55})
         self._build_contents()
         self._flush_layout()
+        # UIOnly controls focus but does not define the cursor over empty space.
+        # Override on this owned root; hiding/removing it restores inherited game UI.
+        self._call(self.widget,'Widget','SetCursor',InCursor=1)
         self._mutate(self.scope.assign_object, self.tree, self._class('WidgetTree'),
             'RootWidget', self.canvas, expected=None, allow_mutation=True,
             catalog=self._planner._catalog if self._planner is not None else None)
@@ -394,6 +427,8 @@ class OwnedMenuPanel:
 
     @measure_method('widget.render_plan')
     def _render_call(self, obj, owner, name, **arguments):
+        if owner=='TextBlock' and name=='SetText' and 'InText' in arguments:
+            arguments['InText']=display_text(arguments['InText'])
         self.latency.count('setter.'+owner+'.'+name)
         function = self._function(owner, name)
         if self._planner is None:
@@ -521,23 +556,45 @@ class OwnedMenuPanel:
         self.state = 'built'
         return True
 
+    def detach_retired_world(self, *, native_retirement_ack=False):
+        """Detach a separately proved GI-owned tree for fresh context rebinding.
+
+        Caller must own the persistent tree outside the departing world scope.
+        No old input restoration or gameplay callback is allowed here.
+        """
+        if self.state not in ('built','open') or self.uncertain:return 'unknown'
+        if self.menu is not None:
+            if not self.menu.retire_world():return 'pending'
+            self.menu=None
+        elif self.state=='open':
+            if not native_retirement_ack:return 'unknown'
+            self._render_call(self.widget,'Widget','RemoveFromParent')
+        self.state='built'
+        return 'ack'
+
     def retire_world(self, *, native_retirement_ack=False):
         """Release this SDK-owned hierarchy without old-world UI restoration."""
         if self.state=='closed':return 'ack'
+        self._world_retirement=True
         if self.uncertain:return 'unknown'
         if self.menu is not None:
             if not self.menu.retire_world():return 'pending'
-        elif self.state=='open':
+        elif self.state=='open' and not getattr(self, '_retirement_detached', False):
             # Noninteractive overlays have no native input owner. Only a
             # preceding native domain retirement ACK permits their detach.
             if not native_retirement_ack:return 'unknown'
-            self._render_call(self.widget,'Widget','RemoveFromParent')
+            if not getattr(self,'_retired_overlay_detached',False):
+                self._render_call(self.widget,'Widget','RemoveFromParent')
+                self._retired_overlay_detached=True
+            self._retirement_detached = True
         if self._planner is not None:self._planner.close();self._planner=None
-        self.scope.close()
+        from ._retired_tracking import close_lease_only_scope
+        if not close_lease_only_scope(self.scope):return 'pending'
         self.menu=None;self.assigned=False;self.children.clear()
         self.state='closed';return 'ack'
 
     def close(self):
+        if getattr(self,'_world_retirement',False):return self.retire_world()=='ack'
         return self._close_tree(detach_children=True)
 
     def close_owned_tree(self):
@@ -547,6 +604,7 @@ class OwnedMenuPanel:
         Children reference only this owned tree; releasing its leases lets UE
         collect the hierarchy together. Never use this for borrowed widgets.
         """
+        if getattr(self,'_world_retirement',False):return self.retire_world()=='ack'
         return self._close_tree(detach_children=False)
 
     def _close_tree(self, *, detach_children):

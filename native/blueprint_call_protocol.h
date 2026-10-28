@@ -17,7 +17,8 @@ inline uint32_t validate_blueprint_call(const CallPacket& p) {
     // Frame-time/Timespan have separate narrow native-only contracts.
     auto normalized=p;normalized.version=kPodCallVersion;
     for(unsigned i=0;i<p.field_count && i<kCallFields;++i) {
-        if(p.fields[i].kind==CallQualifiedFrameTime || p.fields[i].kind==CallTimespan)return 1471;
+        if(p.fields[i].kind==CallBindingID || p.fields[i].kind==CallQualifiedFrameTime || p.fields[i].kind==CallTimespan ||
+           (p.fields[i].kind>=CallFrameNumber && p.fields[i].kind<=CallFrameRate))return 1471;
         const auto& f=p.fields[i];
         if(f.kind==kBlueprintNameKind) {
             const auto identifier=static_cast<const char*>(std::memchr(f.name,0,96));

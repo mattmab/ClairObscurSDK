@@ -18,7 +18,7 @@ class DashboardTests(unittest.TestCase):
     def test_dashboard_has_eight_short_actions_and_single_summary(self):
         model=package.Mod();model.document=blank(WORLD);model.dirty=True
         view=SceneView(None,model);title,details,rows=view._rows()
-        self.assertEqual(len(rows),9)
+        self.assertEqual(len(rows),10)
         self.assertTrue(all(len(r[0])<=24 for r in rows))
         self.assertIn('Unsaved changes',details)
         self.assertNotIn('/Game/',details)

@@ -34,3 +34,36 @@ class PlannerTests(unittest.TestCase):
   with self.assertRaises(RuntimeError):p.commit(Step(s.serial,s.position,s.actions,s.active,s.gains))
   self.assertIs(p.pending,s);self.assertFalse(p.active)
 if __name__=='__main__':unittest.main()
+
+class ElapsedClockTests(unittest.TestCase):
+ def planner(self):
+  return MediaAudioPlanner([Section('s','/Game/Audio/Exact.Exact',0.,20.,0.,lambda _:1.)],capacity=32)
+ def test_live_one_second_poll_gap_is_normal_elapsed_playback(self):
+  p=self.planner();p.commit(p.plan(.033333,playing=True))
+  step=p.plan(1.066666,playing=True,elapsed=1.04)
+  self.assertEqual(step.position,1.066666);self.assertEqual(step.actions,())
+ def test_forward_seek_exceeding_elapsed_budget_and_every_backward_seek_fail(self):
+  for position,elapsed in ((1.066666,.05),(.02,20.)):
+   p=self.planner();p.commit(p.plan(.033333,playing=True))
+   with self.assertRaises(RuntimeError):p.plan(position,playing=True,elapsed=elapsed)
+   self.assertIsNone(p.pending);self.assertEqual(p.position,.033333)
+ def test_bad_monotonic_interval_and_missed_initial_start_still_reject(self):
+  for elapsed in (-1.,float('nan'),float('inf'),True):
+   with self.assertRaises(ValueError):self.planner().plan(.01,playing=True,elapsed=elapsed)
+  with self.assertRaises(RuntimeError):self.planner().plan(1.1,playing=True,elapsed=10.)
+ def test_dispatcher_anchor_includes_time_spent_in_acknowledged_native_work(self):
+  from contextlib import nullcontext
+  from types import SimpleNamespace as N
+  from unittest.mock import Mock
+  from expedition33.cinematics.owned_audio_timeline import OwnedAudioTimelineDispatcher
+  ticks=iter((10.,11.04,11.09))
+  audio=N(scope=N(_session=N(_transport=N(owned_sound_capacity=32,owned_sound_volume_max=1))),_sounds=[])
+  planner=Mock();planner.prepare.return_value.invoke.side_effect=lambda:nullcontext()
+  current_planner=OwnedAudioTimelineDispatcher.__init__.__globals__['MediaAudioPlanner']
+  current_section=current_planner.__init__.__globals__['Section']
+  section=current_section('s','/Game/Audio/Exact.Exact',0.,20.,0.,lambda _:1.)
+  dispatcher=OwnedAudioTimelineDispatcher(audio,planner,None,[section],clock=lambda:next(ticks))
+  dispatcher.prepared=True;dispatcher.components={'s':object()};dispatcher.functions={key:object() for key in ('Play','Stop','SetVolumeMultiplier')}
+  dispatcher.advance(.033333,playing=True);dispatcher.advance(1.066666,playing=True)
+  with self.assertRaises(RuntimeError):dispatcher.advance(2.,playing=True)
+  self.assertEqual(dispatcher.timeline.position,1.066666)

@@ -136,6 +136,24 @@ def describe_selected(pid, identities):
         batches.append((start, rows))
         try:
             for row in rows:
+                if row['event'] == 'struct_metadata':
+                    # Native descriptors also report inherited declaring
+                    # owners. Outer/class closure does not include a UStruct's
+                    # superclass, so select that exact reported identity too.
+                    index,serial,name=row['index'],row['serial'],row['name']
+                    address=int(row['address'],16)
+                    if type(index) is not int or type(serial) is not int or type(name) is not str:
+                        raise ValueError('Invalid reflected owner identity')
+                    identity=(index,serial,address);known=catalog.by_index.get(index)
+                    if known is not None:
+                        if (known.serial,known.address,known.name)!=(serial,address,name):
+                            raise ValueError('Reflected owner changed since catalog')
+                    else:
+                        previous=missing.get(index)
+                        if previous is not None and previous!=(identity,name):
+                            raise ValueError('Conflicting reflected owner identities')
+                        missing[index]=(identity,name)
+                        if len(missing)>1024:raise ValueError('Referenced type limit exceeded')
                 if row['event'] != 'property_metadata':
                     continue
                 for kind in REFERENCE_KINDS:

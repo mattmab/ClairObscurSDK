@@ -677,6 +677,22 @@ class GraphProofTests(unittest.TestCase):
     def test_exact_owned_scroll_tree_outer_gi_and_property_readbacks(self):
         self.assertIs(self.graph(),self.catalog)
 
+    def test_retained_exact_local_player_anchor_is_not_mistaken_for_child_widget(self):
+        local=obj(3,'CurrentLocalPlayer','LocalPlayer')
+        self.rows[local.index]=local
+        self.scope._leases.append(N(active=True,object=local))
+        self.assertIs(self.graph(),self.catalog)
+
+    def test_external_player_or_wrong_anchor_class_remains_rejected(self):
+        for local in (obj(5,'OtherLocalPlayer','LocalPlayer'),obj(3,'NotLocalPlayer','Widget')):
+            with self.subTest(kind=local.class_name,index=local.index):
+                self.rows[local.index]=local
+                self.scope._leases.append(N(active=True,object=local))
+                try:
+                    with self.assertRaisesRegex(proof.UiProofPreflightRejected,'escaped'):
+                        self.graph()
+                finally:self.scope._leases.pop()
+
     def test_large_production_tree_has_complete_bounded_two_pass_coverage(self):
         extras=[obj(200+i,'Child'+str(i),'CanvasPanelSlot',21) for i in range(1300)]
         self.rows.update({o.index:o for o in extras})

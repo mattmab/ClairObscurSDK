@@ -6,6 +6,15 @@ from unittest.mock import Mock,patch
 from expedition33.cinematics import original_game_action as m
 
 class OriginalActionTests(unittest.TestCase):
+    def test_final_readiness_rejection_never_dispatches_or_marks_unknown_native_call(self):
+        from unittest.mock import MagicMock
+        owner=m.PreparedScavenger(Mock(),MagicMock(),None,None,{})
+        owner.validate_dispatch=Mock(side_effect=m.NotReady('world changed'))
+        with self.assertRaises(m.NotReady):owner.play()
+        self.assertFalse(owner.dispatched);owner.call.invoke.assert_not_called()
+        owner.validate_dispatch.side_effect=None
+        owner.play()
+        self.assertTrue(owner.dispatched);owner.call.invoke.assert_called_once()
     def fixture(self):
         self.enterContext(patch.object(m,'ReadBatch'))
         profile=m.profiles()[m.DEFINITION]
@@ -120,12 +129,15 @@ class OriginalActionTests(unittest.TestCase):
         def obj(index,serial):return N(pid=7,index=index,serial=serial,address=1000+index,class_name='BP_GameAction_CinematicWithLightingScenario_C')
         old=Mock();old.with_observations.side_effect=AssertionError('Pre-retention catalog must not be merged')
         asset=obj(1,100);executor=obj(2,22);component=obj(3,33);function=obj(4,44)
-        fresh=N(by_index={o.index:o for o in (asset,executor,component,function)},path_name=lambda _:replay.profile['action_path'])
+        sequence=obj(5,55);sequence.class_name='LevelSequence'
+        fresh=N(by_index={o.index:o for o in (asset,executor,component,function,sequence)},path_name=lambda o:replay.profile['sequence'] if o is sequence else replay.profile['action_path'])
         dependencies=object();fresh.with_observations=Mock(return_value=fresh)
         planner=Mock();session.invocation_planner=Mock(return_value=planner);scope=Mock()
-        with patch.object(m,'_read_action_preflight',return_value=(old,executor,component,function,{})),patch.object(m,'SessionScope',return_value=scope),patch.object(m,'load_asset',return_value=N(return_value=asset)),patch.object(m,'capture_selected',return_value=fresh) as capture,patch.object(m,'capture_matching',return_value=dependencies) as matching:
+        with patch.object(m,'_read_action_preflight',return_value=(old,executor,component,function,{})),patch.object(m,'SessionScope',return_value=scope),patch.object(m,'load_asset',side_effect=[N(return_value=asset),N(return_value=sequence)]) as load,patch.object(m,'capture_selected',return_value=fresh) as capture,patch.object(m,'capture_matching',return_value=dependencies) as matching:
             owner=m.prepare(session,replay.scene,replay.profile)
-        capture.assert_called_once_with(session.pid,tuple((o.index,o.serial,o.address) for o in (asset,executor,component,function)))
+        capture.assert_called_once_with(session.pid,tuple((o.index,o.serial,o.address) for o in (asset,executor,component,function,sequence)))
+        self.assertEqual([c.args[1] for c in load.call_args_list],[replay.profile['action_path'],replay.profile['sequence']])
+        self.assertIs(owner.asset,asset);self.assertIs(owner.sequence,sequence)
         old.with_observations.assert_not_called();session.invocation_planner.assert_called_once_with(catalog=fresh,selected_results=True)
         matching.assert_called_once_with(session.pid,names=('GameAction','GameActionInstance'));fresh.with_observations.assert_called_once_with(dependencies)
         self.assertIs(owner.scope,scope)
@@ -135,24 +147,35 @@ class OriginalActionMenuDisposalTests(unittest.TestCase):
     def setUpClass(cls):
         spec=importlib.util.spec_from_file_location('original_action_menu_test',Path(__file__).resolve().parents[1]/'mods/Cinematics/mod.py')
         cls.mod=importlib.util.module_from_spec(spec);spec.loader.exec_module(cls.mod)
-    def test_travel_disposes_old_view_without_stopping_game_action(self):
-        for state in ('traveling','recovering','starting','playing'):
-            model=N(original_replay=N(status=lambda:dict(active=True,state=state)),stop=Mock(return_value=False))
-            view=self.mod.BrowserView(Mock(),model);view.close()
-            self.assertTrue(view.closed);model.stop.assert_not_called()
+    def test_original_engine_action_cannot_be_stopped_by_closing_browser(self):
+        from cinematics_v2_fixtures import Backend,ready_model
+        scene=dict(id='original',title='Original',replay_kind='original_action',original_supported=True,supported=True)
+        model=ready_model(self.mod,scene);backend=Backend()
+        model.controller.queue('original',lambda:backend,model._last_epoch,engine_owned=True)
+        model.controller.poll(model._last_epoch)
+        view=self.mod.BrowserView(Mock(),model)
+        with self.assertRaisesRegex(self.mod.ManagementError,'cleanup is still finishing'):view.close()
+        self.assertFalse(view.closed);backend.stop.assert_not_called()
+        self.assertTrue(model.controller.status().engine_owned)
+
     def test_owned_title_media_pending_cleanup_still_blocks_close(self):
-        model=N(original_replay=None,stop=Mock(return_value=False))
+        model=N(stop=Mock(return_value=False))
         view=self.mod.BrowserView(Mock(),model)
         with self.assertRaisesRegex(self.mod.ManagementError,'cleanup is still finishing'):view.close()
         self.assertFalse(view.closed);model.stop.assert_called_once()
-    def test_original_route_disposes_tree_before_travel_even_when_locked(self):
-        model=self.mod.Mod();profile=m.profiles()[m.DEFINITION]
-        scene=dict(profile,definition_sha256=profile['definition_sha256'],unlocked=False,supported=True,replay_kind='original_action')
-        model.discovery={'all':[scene],'confirmed':[]};model.stop=Mock(return_value=True);model.discover=Mock()
-        events=[];panel=N(state='open')
-        def dispose():events.append('dispose');panel.state='closed'
-        model.native=N(menu=N(panel=panel),parent=N(dispose_menu=dispose));model.session=Mock()
-        replay=Mock();replay.start.side_effect=lambda:events.append('travel')
-        with patch.object(self.mod,'OriginalActionReplay',return_value=replay):model.control(m.DEFINITION,1)
-        self.assertEqual(events,['dispose','travel'])
+
+    def test_original_route_detaches_browser_before_queued_start_without_travel(self):
+        from cinematics_v2_fixtures import Backend,ready_model,poll
+        profile=m.profiles()[m.DEFINITION]
+        scene=dict(profile,unlocked=False,supported=True,original_supported=True,replay_kind='original_action')
+        model=ready_model(self.mod,scene);events=[];backend=Backend()
+        model.native.parent.close_menu.side_effect=lambda:events.append('detach')
+        model._refresh_now.side_effect=lambda:events.append('admit') or model.discovery
+        backend.start.side_effect=lambda:events.append('start') or self.mod.StartResult.STARTED
+        with patch.object(self.mod,'OriginalActionAdapter',side_effect=lambda *a:events.append('allocate') or backend) as factory:
+            model.control(m.DEFINITION,1);self.assertEqual(events,[]);factory.assert_not_called()
+            poll(model)
+        self.assertEqual(events,['detach','admit','allocate','start'])
+        self.assertTrue(model.controller.status().engine_owned)
+
 if __name__=='__main__':unittest.main()

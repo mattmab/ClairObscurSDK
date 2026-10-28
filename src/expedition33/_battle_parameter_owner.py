@@ -11,6 +11,7 @@ class ParameterResearchOwner:
         if getattr(self._transport,'_parameter_research_owner',None) is not None:raise RuntimeError('Parameter research already owned')
         self._thread=threading.get_ident();self._owner=secrets.randbits(64) or 1
         self._attempted=False;self._unknown=False;self._closed=False
+        self._tracks_completion=False;self._completion_receipt=None
         self._transport._parameter_research_owner=self
         scope._reference_owners.append(self)
 
@@ -60,7 +61,7 @@ class ParameterResearchOwner:
         if self in self._scope._reference_owners:self._scope._reference_owners.remove(self)
         return True
 
-    def dispatch_trigger_cleanup(self,identities,*,anchor,arena,mode=1):
+    def dispatch_trigger_cleanup(self,identities,*,anchor,arena,mode=1,track_completion=False):
         """One isolated original entry, with a held trigger and grounded owned arena.
 
         Native source, private ID, exact arena lease and fresh placement proofs
@@ -83,7 +84,7 @@ class ParameterResearchOwner:
         identities=tuple(identities)
         if len(identities)!=6 or tuple((identities[3].index,identities[3].serial,identities[3].address))!=tuple(anchor.actor_identity or ()):
             raise ValueError('Exact trigger parameter identity required')
-        return self.entry_arena_cleanup(identities,mode=mode,anchor_owner=anchor._owner,dispatch=True,arena_policy=1)
+        return self.entry_arena_cleanup(identities,mode=mode,anchor_owner=anchor._owner,dispatch=True,arena_policy=1,track_completion=track_completion)
 
     def entry_preflight_cleanup(self,identities,*,mode,anchor_owner):
         self._scope._check()
@@ -93,7 +94,7 @@ class ParameterResearchOwner:
         self._attempted=True
         return self._command(128,identities,mode=mode,anchor_owner=anchor_owner)
 
-    def entry_arena_cleanup(self,identities,*,mode,anchor_owner,dispatch=False,arena_policy=0):
+    def entry_arena_cleanup(self,identities,*,mode,anchor_owner,dispatch=False,arena_policy=0,track_completion=False):
         self._scope._check()
         if type(dispatch) is not bool or (dispatch and mode not in (1,2)):raise ValueError('Explicit isolated dispatch required')
         for name in ('battle_entry_preflight_research_protocol','battle_entry_arena_research_protocol')+(
@@ -101,6 +102,26 @@ class ParameterResearchOwner:
             capability=getattr(self._transport,name,0)
             expected=2 if name=='battle_entry_arena_research_protocol' else 1
             if type(capability) is not int or capability!=expected:raise RuntimeError('Owned entry/arena candidate capability unavailable')
+        if type(track_completion) is not bool or (track_completion and not dispatch):
+            raise ValueError('Completion tracking requires explicit dispatch')
+        if track_completion:
+            capability=getattr(self._transport,'battle_completion_receipt_protocol',0)
+            if type(capability) is not int or capability!=1:raise RuntimeError('Verified completion receipt capability required')
         if self._attempted:raise RuntimeError('Parameter entry already attempted; no replay')
         self._attempted=True
-        return self._command(130 if dispatch else 129,identities,mode=mode,anchor_owner=anchor_owner,arena_policy=arena_policy)
+        self._tracks_completion=track_completion
+        return self._command(130 if dispatch else 129,identities,mode=mode,anchor_owner=anchor_owner,arena_policy=arena_policy,
+                             track_completion=track_completion)
+
+    def completion_receipt(self):
+        self._scope._check()
+        if not self._tracks_completion or not self._attempted:
+            raise RuntimeError('No tracked original battle dispatch')
+        from ._battle_completion import decode
+        response=self._command(160)
+        receipt=decode(response[4096:4192],owner=self._owner)
+        if receipt.state=='ready':self._completion_receipt=receipt
+        if receipt.state=='consumed' and self._completion_receipt is not None:
+            return self._completion_receipt
+        # Revoked/unknown never returns an earlier success after a world change.
+        return receipt

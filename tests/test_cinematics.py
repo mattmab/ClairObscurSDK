@@ -14,25 +14,20 @@ spec.loader.exec_module(module)
 
 class CinematicsViewTests(TestCase):
     def test_unlocked_unsupported_scene_reports_adapter_not_unlock(self):
-        mod = module.Mod()
-        mod.stop = Mock(return_value=True)
-        mod.discover = Mock()
-        mod.discovery = {'confirmed': [dict(id='actor-scene', unlocked=True,
-            supported=False, reason='In-engine replay is not implemented for this definition.')]}
-        with self.assertRaisesRegex(ManagementError, 'unlocked, but replay is unavailable'):
-            mod.control('actor-scene', 1)
-        self.assertIsNone(mod.video)
-        mod.discover.assert_called_once()
+        from cinematics_v2_fixtures import ready_model
+        mod=ready_model(module,dict(id='actor-scene',title='Actor',unlocked=True,
+            supported=False,replay_kind=None,reason='Replay adapter unavailable'))
+        with self.assertRaisesRegex(ManagementError,'route is unavailable'):mod.control('actor-scene',1)
+        self.assertFalse(mod.controller.status().busy)
+        mod._refresh_now.assert_not_called()
 
     def test_non_boolean_unlock_cannot_admit_playback(self):
-        for value in (False, None, 1, 'true'):
-            mod = module.Mod()
-            mod.stop = Mock(return_value=True)
-            mod.discover = Mock()
-            mod.discovery = {'confirmed': [dict(id='actor-scene', unlocked=value, supported=True)]}
-            with self.assertRaisesRegex(ManagementError, 'not unlocked'):
-                mod.control('actor-scene', 1)
-            self.assertIsNone(mod.video)
+        from cinematics_v2_fixtures import ready_model
+        for value in (False,None,1,'true'):
+            mod=ready_model(module,dict(id='actor-scene',title='Actor',unlocked=value,supported=True,replay_kind='title'))
+            with self.subTest(value=value),self.assertRaisesRegex(ManagementError,'unavailable'):mod.control('actor-scene',1)
+            self.assertFalse(mod.controller.status().busy)
+            mod._refresh_now.assert_not_called()
 
     def test_definition_catalog_preserves_unlock_and_playback_guards(self):
         catalog=json.loads((Path(__file__).resolve().parents[1]/'mods/Cinematics/catalog.json').read_text())
@@ -94,16 +89,15 @@ class CinematicsViewTests(TestCase):
 
     def test_pending_title_prevents_mod_and_menu_release(self):
         from expedition33._sequence_owner import SequenceCleanupDeferred
-        mod = module.Mod()
-        mod.title_replay = Mock()
-        mod.title_replay.stop.return_value = {'state': 'cleanup_pending', 'active': True}
-        mod.native = Mock()
-        mod.pause = Mock()
-        self.assertFalse(mod.stop())
-        with self.assertRaises(SequenceCleanupDeferred):
-            mod.disable()
-        mod.native.close.assert_not_called()
-        mod.pause.close.assert_not_called()
+        from expedition33.cinematics.controller import StopResult
+        from cinematics_v2_fixtures import Backend,ready_model
+        mod=ready_model(module,dict(id='title',title='Title',replay_kind='title',supported=True,unlocked=True))
+        backend=Backend();backend.stop.return_value=StopResult.DEFERRED;backend.close.return_value=False
+        mod.controller.queue('title',lambda:backend,mod._last_epoch);mod.controller.poll(mod._last_epoch)
+        mod.pause=Mock();self.assertFalse(mod.stop())
+        with self.assertRaises(SequenceCleanupDeferred):mod.disable()
+        mod.native.close.assert_not_called();mod.pause.close.assert_not_called()
+        self.assertTrue(mod.controller.status().busy)
 
     def test_filter_resets_selection_and_revokes_controls(self):
         self.model.discovery['all'] = [dict(id='unknown', title='Unknown', reason='Unlock unknown')]

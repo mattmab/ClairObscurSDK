@@ -32,7 +32,9 @@ struct Memory {
 };
 struct Ops {
     bool proof=true,write=true,verify=true;unsigned writes=0;
+    SequenceOriginPacket observed{};
     bool prove_private_fresh() {return proof;}
+    bool prove_private_current(const SequenceOriginPacket& p) {observed=p;return proof;}
     bool write_translation(const SequenceOriginPacket&) {++writes;return write;}
     bool verify_translation(const SequenceOriginPacket&) {return verify;}
 };
@@ -112,4 +114,33 @@ int main() {
      assert(!j.before_evaluation());assert(j.configure(o,p)==Result::rejected);assert(o.writes==1);}
     {Journal j;Ops o;auto bad=p;bad.x=std::numeric_limits<double>::infinity();
      assert(j.configure(o,bad)==Result::rejected);assert(!o.writes);}
+    {Journal j;Ops o;assert(j.update(o,p)==Result::rejected);assert(!o.writes);
+     assert(j.before_evaluation());assert(j.update(o,p)==Result::rejected);assert(!o.writes);}
+    {Journal j;Ops o;assert(j.configure(o,p)==Result::ok);assert(j.before_evaluation());
+     auto moved=p;moved.x+=100.;assert(j.update(o,moved)==Result::ok);
+     assert(o.observed.x==p.x && o.writes==2);assert(j.before_evaluation());
+     moved.y+=250.;assert(j.update(o,moved)==Result::ok);assert(o.observed.y==p.y && o.observed.x==moved.x);
+     o.proof=false;assert(j.update(o,p)==Result::rejected);assert(o.writes==3);assert(j.before_evaluation());}
+    {Journal j;Ops o;assert(j.configure(o,p)==Result::ok);o.verify=false;
+     assert(j.update(o,p)==Result::unknown);assert(j.quarantined());assert(!j.before_evaluation());
+     assert(j.update(o,p)==Result::rejected);assert(j.configure(o,p)==Result::rejected);assert(o.writes==2);}
+    struct TransformOps {
+        bool proof=true,write=true,verify=true;unsigned writes=0;
+        SequenceOriginTransformPacket observed{};
+        bool prove_private_fresh(){return proof;}
+        bool prove_transform_current(const SequenceOriginTransformPacket& value){observed=value;return proof;}
+        bool write_transform(const SequenceOriginTransformPacket&){++writes;return write;}
+        bool verify_transform(const SequenceOriginTransformPacket&){return verify;}
+    };
+    const SequenceOriginTransformPacket t{0x54533345,1,120.,-20.,402000.,90.};
+    {double q[4]{};sequence_origin_transform_quaternion(t,q);
+     assert(q[0]==0. && q[1]==0. && std::abs(q[2]-std::sqrt(.5))<1e-14 && std::abs(q[3]-std::sqrt(.5))<1e-14);}
+    {TransformJournal j;TransformOps o;assert(j.configure(o,t)==Result::ok);assert(j.before_evaluation());
+     auto changed=t;changed.yaw=-90.;changed.x+=2.;assert(j.update(o,changed)==Result::ok);
+     assert(o.observed.yaw==90. && o.writes==2);o.proof=false;
+     assert(j.update(o,t)==Result::rejected);assert(o.writes==2);}
+    {TransformJournal j;TransformOps o;auto bad=t;bad.yaw=181.;assert(j.configure(o,bad)==Result::rejected);assert(!o.writes);
+     bad=t;bad.yaw=std::numeric_limits<double>::quiet_NaN();assert(j.configure(o,bad)==Result::rejected);assert(!o.writes);}
+    {TransformJournal j;TransformOps o;assert(j.configure(o,t)==Result::ok);o.verify=false;
+     assert(j.update(o,t)==Result::unknown);assert(!j.before_evaluation());assert(j.update(o,t)==Result::rejected);}
 }

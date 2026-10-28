@@ -76,6 +76,46 @@ class PreparedRetainedTests(unittest.TestCase):
         first.release(); self.assertTrue(second.active)
         second.release()
 
+    def test_fresh_selected_results_do_not_merge_old_planner_catalog(self):
+        from dataclasses import replace
+        from expedition33.catalog import Catalog
+        # The result itself keeps its identity, but a recycled outer in the
+        # returned closure conflicts with an older planning observation.
+        rows=[replace(obj,serial=2) if obj.index==4 else
+              replace(obj,outer_serial=2) if obj.index==5 else obj
+              for obj in self.p.catalog.objects]
+        fresh=Catalog(self.p.catalog.pid,rows,tuple(self.p.catalog.classes.values()))
+        with self.assertRaises(RuntimeQueryError):self.p.catalog.with_observations(fresh)
+        with self.session.invocation_planner(catalog=self.p.catalog, selected_results=True) as planner:
+            prepared=planner.prepare(self.p.target, self.p.function)
+            with patch('expedition33.catalog.capture_selected', return_value=fresh) as selected:
+                with prepared.invoke(fresh_results=True) as result:
+                    self.assertEqual(result.return_value,fresh.by_index[self.p.target.index])
+            selected.assert_called_once()
+            self.assertIs(planner._catalog,self.p.catalog)
+        self.assertEqual(self.transport.calls.count('retained-invoke'),1)
+        self.assertFalse(self.transport.tokens)
+
+    def test_fresh_result_failure_releases_new_token_without_replaying_dispatch(self):
+        with self.session.invocation_planner(catalog=self.p.catalog, selected_results=True) as planner:
+            prepared=planner.prepare(self.p.target, self.p.function)
+            with patch('expedition33.catalog.capture_selected',side_effect=RuntimeQueryError('stale result')):
+                with self.assertRaises(InvocationError) as caught:prepared.invoke(fresh_results=True)
+            self.assertEqual(caught.exception.outcome,'dispatch_returned')
+            self.assertIs(planner._catalog,self.p.catalog)
+        self.assertEqual(self.transport.calls.count('retained-invoke'),1)
+        self.assertFalse(self.transport.tokens)
+
+    def test_fresh_results_misconfiguration_rejected_before_dispatch(self):
+        planner,prepared=self.planner()
+        with self.assertRaises(ValueError):prepared.invoke(fresh_results=True)
+        self.assertFalse(self.transport.calls)
+        with self.session.invocation_planner(catalog=self.p.catalog, selected_results=True) as selected:
+            prepared=selected.prepare(self.p.target,self.p.function)
+            with self.assertRaises(ValueError):prepared.invoke(fresh_results=True,refresh_from_result=True)
+            self.assertIs(selected._catalog,self.p.catalog)
+        self.assertFalse(self.transport.calls)
+
     def test_native_rejection_preserves_existing_lease_and_does_not_retry(self):
         planner, prepared = self.planner()
         owner = self.session.retain(self.p.target)

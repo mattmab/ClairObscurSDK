@@ -8,7 +8,9 @@ static void __fastcall foreign(void*,void*,void*){}
 static void observe(void*,void*,void*,void*){++observations;}
 int main(){
     alignas(8) void* volatile entry=reinterpret_cast<void*>(&original);
-    assert(!Pool::install(&entry,original,observe,nullptr,false,false));
+    const auto post_registration=Pool::install(&entry,original,observe,nullptr,false,false);
+    assert(post_registration&&entry==reinterpret_cast<void*>(&original));
+    assert(Pool::remove(post_registration));
     const auto registration=Pool::install(&entry,original,observe,nullptr,true,false);
     assert(registration&&entry==reinterpret_cast<void*>(&original));
     assert(Pool::observes_entry(&entry));

@@ -6,6 +6,13 @@ from expedition33._pod_values import VECTOR, COLOR, MARGIN, ANCHORS, PROFILES, e
 
 
 class PodValueTests(unittest.TestCase):
+    def test_rotator_uses_exact_double_fields_and_rejects_nonfinite_values(self):
+        from expedition33._pod_values import ROTATOR
+        value=dict(Pitch=-20.,Yaw=180.,Roll=0.)
+        self.assertEqual(encode(ROTATOR,value),struct.pack('<3d',-20.,180.,0.))
+        self.assertEqual(dict(decode(ROTATOR,encode(ROTATOR,value))),value)
+        for bad in (float('nan'),float('inf'),True):
+            with self.assertRaises(ValueError):encode(ROTATOR,dict(value,Yaw=bad))
     def test_guid_signed_words_and_exact_schema(self):
         from expedition33._pod_values import GUID
         value = dict(A=1339984714,B=1236766104,C=-1170703726,D=625081477)

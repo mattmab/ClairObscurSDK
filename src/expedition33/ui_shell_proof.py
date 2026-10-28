@@ -355,6 +355,12 @@ class OwnedUiProof:
         for obj in objects:
             fresh=current.resolve(obj)
             if fresh.object_flags&0x40000030:raise UiProofPreflightRejected('Owned UI object lifetime changed')
+            # Widget ownership getters can leave a retained LocalPlayer lease
+            # in the panel scope. It is an independently proved context anchor,
+            # not a child widget. Keep complete two-pass identity coverage and
+            # admit only this exact current LocalPlayer, never another player.
+            if fresh.class_name=='LocalPlayer' and identity(fresh)==context.local_player:
+                continue
             if fresh.index!=root.index and user_class in current.ancestors(fresh.class_index):
                 raise UiProofPreflightRejected('Nested UserWidgets require an independent context proof')
             if fresh.index!=root.index and root.index not in {o.index for o in current.outer_chain(fresh)}:

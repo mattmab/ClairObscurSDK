@@ -1,7 +1,7 @@
 """Fullscreen media in the existing owned menu, with a durable visible Stop control."""
 from expedition33.media import OwnedVideoWidget
 from expedition33.catalog import capture_matching
-from .media_presentation import MenuChildrenPresentation
+from .media_presentation import FullscreenOverlayPresentation
 
 class FullscreenMedia:
     def __init__(self,session):
@@ -16,10 +16,10 @@ class FullscreenMedia:
     def build(self,menu,path,stop_callback):
         if self.state!='new':raise RuntimeError('Fullscreen owner already used')
         self.menu=menu
-        self.presentation=MenuChildrenPresentation(menu,stop_callback)
-        self.presentation.prepare() # Snapshot menu-only children before adding media.
+        self.presentation=FullscreenOverlayPresentation(menu,stop_callback)
         self.video.build(menu.panel,path)
         self._build_stop(stop_callback)
+        self.presentation.prepare()
         self.state='prepared'
         return self
 
@@ -28,25 +28,28 @@ class FullscreenMedia:
         extra=capture_matching(v.scope.pid,names=('Border','SetBrushColor','Button','CommonTextBlock','TextBlock','TextLayoutWidget','Overlay','OverlaySlot',
             'SetBackgroundColor','LinearColor','SetStyle','CTS_B1_SmallLine_Outline_C','SetText','SetJustification',
             'SetVisibility','ESlateVisibility','ETextJustify','EHorizontalAlignment','EVerticalAlignment',
-            'AddChildToOverlay','SetHorizontalAlignment','SetVerticalAlignment'))
+            'AddChildToOverlay','SetHorizontalAlignment','SetVerticalAlignment','SetZOrder'))
         v.planner.refresh_from(v.planner._catalog.with_observations(extra));v.catalog=v.planner._catalog
         default=v._one(o for o in v.catalog.objects if o.name=='Default__GameplayStatics')
         def spawn(name):return v._invoke(default,'GameplayStatics','SpawnObject',ObjectClass=v._class(name),Outer=p.tree).return_value
-        def place(widget):
+        def place(widget,z_order):
             slot=v._invoke(p.canvas,'CanvasPanel','AddChildToCanvas',Content=widget).return_value
+            v._call(slot,'CanvasPanelSlot','SetZOrder',InZOrder=z_order)
             v._call(slot,'CanvasPanelSlot','SetPosition',InPosition={'X':-390.,'Y':-100.})
             v._call(slot,'CanvasPanelSlot','SetSize',InSize={'X':360.,'Y':64.})
             v._call(slot,'CanvasPanelSlot','SetAnchors',InAnchors={'Minimum':{'X':1.,'Y':1.},'Maximum':{'X':1.,'Y':1.}})
         self.backdrop=spawn('Border')
         background_slot=v._invoke(p.canvas,'CanvasPanel','AddChildToCanvas',Content=self.backdrop).return_value
+        v._call(background_slot,'CanvasPanelSlot','SetZOrder',InZOrder=10000)
         v._call(background_slot,'CanvasPanelSlot','SetPosition',InPosition={'X':0.,'Y':0.})
         v._call(background_slot,'CanvasPanelSlot','SetSize',InSize={'X':0.,'Y':0.})
         v._call(background_slot,'CanvasPanelSlot','SetAnchors',InAnchors={'Minimum':{'X':0.,'Y':0.},'Maximum':{'X':1.,'Y':1.}})
         v._call(self.backdrop,'Border','SetBrushColor',InBrushColor={'R':0.,'G':0.,'B':0.,'A':1.})
-        v.attach_fullscreen(p)
-        self.button=spawn('Button');place(self.button)
+        video_slot=v.attach_fullscreen(p)
+        v._call(video_slot,'CanvasPanelSlot','SetZOrder',InZOrder=10001)
+        self.button=spawn('Button');place(self.button,10002)
         v._call(self.button,'Button','SetBackgroundColor',InBackgroundColor={'R':.02,'G':.02,'B':.02,'A':.95})
-        self.label_frame=spawn('Overlay');place(self.label_frame)
+        self.label_frame=spawn('Overlay');place(self.label_frame,10003)
         label=spawn('CommonTextBlock')
         style=v._one(o for o in v.catalog.objects if o.name=='CTS_B1_SmallLine_Outline_C')
         v._call(label,'CommonTextBlock','SetStyle',InStyle=style)
@@ -96,6 +99,28 @@ class FullscreenMedia:
                 self.video._call(widget,'Widget','RemoveFromParent')
                 self._removed.add(name)
         self.video.close()
-        if self.presentation is not None:self.presentation.restore()
+        if self.presentation is not None:
+            if isinstance(self.presentation,FullscreenOverlayPresentation):
+                self.presentation.acknowledge_overlay_closed()
+            self.presentation.restore()
+        self.state='closed'
+        return True
+
+    def retire_world(self):
+        if self.state=='closed':return True
+        self.state='retirement_pending'
+        if self._control_uncertain or self.video.uncertain:
+            raise RuntimeError('Unknown fullscreen ownership cannot be retired as complete')
+        # Native media retirement proves the old epoch, revokes this old menu's
+        # callbacks, retires audio, and releases the owned media collector. It
+        # never calls CommonVideoPlayer.Close or an old Widget.RemoveFromParent.
+        if not self.video.retire_world():return False
+        retired=self.menu.panel.retire_world()
+        if retired=='pending':return False
+        if retired!='ack':raise RuntimeError('Fullscreen panel retirement is unknown')
+        if self.audio_dependency is not None and not self.audio_dependency.retire_world():return False
+        from .retirement import retire_presentation
+        retire_presentation(self.presentation)
+        self.action=self.button=self.label_frame=self.backdrop=None
         self.state='closed'
         return True

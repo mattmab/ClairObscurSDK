@@ -9,6 +9,16 @@ sys.modules[package.__name__]=package
 from retirement_test_builder import retirement as r
 
 class RetirementTests(unittest.TestCase):
+    def test_proved_loading_trees_survive_world_retirement_and_require_fresh_bind(self):
+        panel=N(retire_world=Mock(),close=Mock());hud=object()
+        prepared=N(context=object(),catalog=panel,hud=hud,retire_world=Mock(return_value='ack'))
+        mod=N(_retirement_token=('old',),_retirement_result=None,catalog_menu=panel,hud=hud,_loading_ui=prepared,
+            _menu_reader=None,library=N(_catalog=object(),owned={},preview_key=None,selected=None,world=None),session=object())
+        with patch.object(r,'drain_workers',return_value=True),patch.object(r,'native_retire',return_value='ack'):
+            self.assertEqual(r.poll(mod,N(previous_token=('old',))),'ack')
+        prepared.retire_world.assert_called_once();panel.retire_world.assert_not_called();panel.close.assert_not_called()
+        self.assertIs(mod._loading_ui,prepared);self.assertIsNone(mod.catalog_menu)
+
     def native(self,reply=None):
         transport=N(builder_world_retirement_protocol=1,command=Mock())
         def send(command,packet):

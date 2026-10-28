@@ -18,6 +18,19 @@ public:
     bool active_owner() const { return state_!=idle; }
     bool quarantined() const { return state_==uncertain; }
     size_t count() const { return count_; }
+    bool retirement_ready() const { return state_!=uncertain; }
+    // The caller has detached evaluation hooks and positively proved that this
+    // journal belongs to a replaced World. Do not invoke any old-world widget.
+    template<class Ops>
+    WidgetStep retire(Ops& ops) {
+        if(state_==idle) return WidgetStep::ok;
+        if(state_==uncertain) return WidgetStep::uncertain;
+        state_=uncertain;
+        const auto result=ops.release_all();
+        if(result==WidgetStep::deferred) { state_=releasing;return result; }
+        if(result!=WidgetStep::ok) return WidgetStep::uncertain;
+        entries_={};count_=detach_=0;state_=idle;return WidgetStep::ok;
+    }
     bool begin() { if(state_!=idle) return false; state_=active; return true; }
     template<class Ops>
     bool owns_track(Ops& ops,const Identity& track) const {

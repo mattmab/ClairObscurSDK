@@ -135,6 +135,15 @@ class SequenceCameraOwner {
         }
     };
 public:
+    bool permits_editor_camera(const CallIdentity& camera)const {
+        return associated() && valid(camera) && valid(player_) && owned_proof_ && owned_proof_(base_,player_,camera);
+    }
+    uint32_t retire(bool positively_retired) {
+        Ops ops{*this};const auto result=journal_.retire(ops,positively_retired);
+        if(result==Result::deferred)return 407;
+        if(result!=Result::ok)return 1573;
+        owned_proof_=nullptr;player_={};return 0;
+    }
     bool ready() const {return journal_.ready();}
     bool active() const {return journal_.active() || pool_open_;}
     uint32_t private_active() const {return leases_.active();}

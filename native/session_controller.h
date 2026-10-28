@@ -244,6 +244,9 @@ inline void run_runtime_session(DWORD pid, DWORD thread, int32_t object_index, i
               << ",\"battle_entry_preflight_research_protocol\":1"
               << ",\"battle_entry_arena_research_protocol\":2"
               << ",\"battle_entry_dispatch_research_protocol\":1"
+#if defined(E33_RUNTIME_CINEMATIC_VERSION) && E33_RUNTIME_CINEMATIC_VERSION>=215
+              << ",\"battle_completion_receipt_protocol\":1"
+#endif
 #endif
               << ",\"enemy_retirement_protocol\":1,\"enemy_pose_protocol\":1,\"enemy_arena_protocol\":1,\"enemy_arena_binding_protocol\":1,\"enemy_clearance_protocol\":1,\"enemy_grounded_spawn_protocol\":2,\"enemy_current_world_staging_protocol\":1,\"enemy_extra_spots_protocol\":1"
 #ifdef E33_ENEMY_VISUAL_RESEARCH
@@ -268,6 +271,18 @@ inline void run_runtime_session(DWORD pid, DWORD thread, int32_t object_index, i
 #endif
 #endif
               << ",\"enemy_spawn_protocol\":3,\"enemy_visual_staging_research_protocol\":1,\"enemy_visual_arena_research_protocol\":2,\"enemy_helper_lookup_research_protocol\":1,\"enemy_geometry_placement_research_protocol\":1,\"enemy_authored_encounter_research_protocol\":7"
+#ifdef E33_TIMELINE_BLUEPRINT_SESSION
+              << ",\"timeline_blueprint_protocol\":1"
+#if E33_RUNTIME_CINEMATIC_VERSION >= 236
+              << ",\"timeline_extended_characters_protocol\":1"
+#endif
+#endif
+#ifdef E33_TIMELINE_ACTOR_POOL_SESSION
+              << ",\"timeline_actor_pool_protocol\":1"
+#if E33_RUNTIME_CINEMATIC_VERSION >= 226
+              << ",\"timeline_current_world_protocol\":1"
+#endif
+#endif
 #if E33_RUNTIME_CINEMATIC_VERSION >= 193
               << ",\"enemy_trigger_anchor_research_protocol\":1"
 #endif
@@ -398,6 +413,9 @@ inline void run_runtime_session(DWORD pid, DWORD thread, int32_t object_index, i
 #endif
 #ifdef E33_SEQUENCE_SESSION
               << ",\"asset_load_protocol\":1"
+#if defined(E33_RUNTIME_CINEMATIC_VERSION) && E33_RUNTIME_CINEMATIC_VERSION>=244
+              << ",\"asset_name_number_protocol\":1"
+#endif
 #if defined(E33_RUNTIME_CINEMATIC_VERSION) && E33_RUNTIME_CINEMATIC_VERSION>=176
               << ",\"generated_world_asset_load_protocol\":1"
 #if E33_RUNTIME_CINEMATIC_VERSION>=177 && defined(E33_ENEMY_SPAWN_SESSION)
@@ -449,6 +467,9 @@ inline void run_runtime_session(DWORD pid, DWORD thread, int32_t object_index, i
 #endif
 #ifdef E33_MUSIC_AUDIO_SESSION
               << ",\"music_audio_protocol\":1"
+#ifdef E33_CINEMATIC_EPOCH_RETIRE_SESSION
+              << ",\"music_audio_retirement_protocol\":1"
+#endif
 #endif
 #ifdef E33_OWNED_SOUND_SESSION
               << ",\"owned_sound_protocol\":1"
@@ -474,6 +495,9 @@ inline void run_runtime_session(DWORD pid, DWORD thread, int32_t object_index, i
 #ifdef E33_AUDIO_COMPLETION_SESSION
               << ",\"owned_audio_cleanup_protocol\":1"
 #endif
+#ifdef E33_MEDIA_SEEK_SESSION
+              << ",\"media_seek_protocol\":1"
+#endif
 #ifdef E33_TIMESPAN_SESSION
               << ",\"timespan_values_protocol\":1"
 #endif
@@ -483,6 +507,23 @@ inline void run_runtime_session(DWORD pid, DWORD thread, int32_t object_index, i
 #ifdef E33_SEQUENCE_ORIGIN_SESSION
               << ",\"sequence_origin_protocol\":1"
 #endif
+#ifdef E33_SEQUENCE_ORIGIN_UPDATE_SESSION
+              << ",\"sequence_origin_update_protocol\":1"
+#ifdef E33_SEQUENCE_ORIGIN_TRANSFORM_SESSION
+              << ",\"sequence_origin_transform_protocol\":1"
+#endif
+#ifdef E33_SEQUENCE_FLIGHT_SESSION
+              << ",\"sequence_flight_protocol\":1"
+              << ",\"sequence_placement_input_protocol\":1"
+#endif
+#endif
+#ifdef E33_SEQUENCE_SEEK_SESSION
+              << ",\"sequence_seek_protocol\":1"
+#endif
+#if defined(E33_RETIRED_WORLD_SESSION) && E33_RUNTIME_CINEMATIC_VERSION>=216
+              << ",\"sequence_retirement_protocol\":1"
+              << ",\"media_retirement_protocol\":1"
+#endif
 #ifdef E33_CATALOG_GAME_OWNED_SESSION
               << ",\"original_game_action_protocol\":1"
 #ifdef E33_ZONE_TRAVEL_SESSION
@@ -491,6 +532,24 @@ inline void run_runtime_session(DWORD pid, DWORD thread, int32_t object_index, i
 #endif
 #ifdef E33_SEQUENCE_BINDING_QUERY_SESSION
               << ",\"sequence_binding_query_protocol\":1"
+#endif
+#ifdef E33_SEQUENCE_AUTHORED_BINDING_SESSION
+              << ",\"sequence_authored_binding_diagnostic_protocol\":1"
+#endif
+#ifdef E33_SEQUENCER_ARRAY_SESSION
+              << ",\"sequencer_object_array_protocol\":1"
+#endif
+#ifdef E33_AUTHORED_CURVE_SESSION
+              << ",\"authored_curve_patch_protocol\":1"
+#endif
+#ifdef E33_SEQUENCER_VALUE_SESSION
+              << ",\"sequencer_frame_values_protocol\":1"
+#endif
+#ifdef E33_ROTATOR_SESSION
+              << ",\"rotator_values_protocol\":1"
+#endif
+#ifdef E33_SEQUENCE_BINDING_VALUE_SESSION
+              << ",\"sequence_binding_values_protocol\":1,\"sequence_portable_binding_protocol\":1"
 #endif
 #ifdef E33_FRAME_TIME_SESSION
               << ",\"frame_time_values_protocol\":1"

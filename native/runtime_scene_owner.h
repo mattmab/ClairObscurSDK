@@ -7,6 +7,7 @@
 #include <utility>
 #include "runtime_scene_plan.h"
 #include "runtime_scene_input.h"
+#include "editor_flight_math.h"
 #include "runtime_scene_timeline.h"
 #include "runtime_scene_registry.h"
 #include "music_audio_profile.h"
@@ -536,12 +537,13 @@ class Owner {
         clear();if(!call(ids_[1],36))return false;const double dx=get<float>(),dy=get<float>(4);if(!std::isfinite(dx)||!std::isfinite(dy))return false;
         const bool moving=dx!=0. || dy!=0. || key('W') || key('S') || key('D') || key('A') || key('E') || key(VK_SPACE) || key('Q') || key(VK_CONTROL);
         if(snapped_view_ && moving){snapped_view_=false;if(!editor_fov(90.))return false;}
-        if(!snapped_view_){c[4]=std::remainder(c[4]+std::clamp(dx,-4096.,4096.)*1.25,360.);c[3]=std::clamp(c[3]+std::clamp(dy,-4096.,4096.)*1.25,-89.,89.);c[5]=0.;}
+        if(!snapped_view_){
+            double pose[6]{};std::memcpy(pose,c,sizeof(pose));
+            e33_editor_flight::Input input{dx,dy,double(key('W'))-double(key('S')),double(key('D'))-double(key('A')),
+                double(key('E')||key(VK_SPACE))-double(key('Q')||key(VK_CONTROL)),key(VK_SHIFT)};
+            e33_editor_flight::advance(pose,dt,input);std::memcpy(c,pose,sizeof(pose));
+        }
         const double cp=std::cos(c[3]*rad),sp=std::sin(c[3]*rad),cy=std::cos(c[4]*rad),sy=std::sin(c[4]*rad),f[]={cp*cy,cp*sy,sp};
-        const double forward=double(key('W'))-double(key('S')),side=double(key('D'))-double(key('A')),up=double(key('E')||key(VK_SPACE))-double(key('Q')||key(VK_CONTROL));
-        const double speed=dt*1600.*(key(VK_SHIFT)?4.:1.)/std::max(1.,std::sqrt(forward*forward+side*side+up*up));
-        c[0]+=speed*(f[0]*forward-sy*side);c[1]+=speed*(f[1]*forward+cy*side);c[2]+=speed*(f[2]*forward+up);
-        for(unsigned i=0;i<3;++i)c[i]=std::clamp(c[i],-1.e8,1.e8);
         const double wf[]={std::cos(yaw_*rad),std::sin(yaw_*rad)},wr[]={-wf[1],wf[0]};
         hovered_=-1;double nearest=1.e30;
         for(unsigned i=0;i<unsigned(plan_.count);++i){const auto& v=plan_.poses[i];const auto name=scene_parts[unsigned(plan_.roles[i])][0].name;const bool mask=std::strcmp(name,"Face_Joy")==0 || std::strcmp(name,"Face_Anger")==0 || std::strcmp(name,"Face_Sadness")==0;const double radius=mask?70.:70.*v[8];const double delta[]={origin_[0]+wf[0]*v[0]+wr[0]*v[1]-c[0],origin_[1]+wf[1]*v[0]+wr[1]*v[1]-c[1],origin_[2]+v[2]+(mask?0.:80.*v[8])-c[2]};double along=0.,norm=0.;for(unsigned j=0;j<3;++j){along+=delta[j]*f[j];norm+=delta[j]*delta[j];}if(along>0. && along<nearest && norm-along*along<radius*radius){hovered_=int(i);nearest=along;}}

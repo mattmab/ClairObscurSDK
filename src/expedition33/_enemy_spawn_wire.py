@@ -6,6 +6,8 @@ class EnemyOperationError(RuntimeError):
     def __init__(self,operation,native_error):
         self.operation=operation;self.native_error=native_error
         reasons={
+            3750:'Timeline Blueprint class, QA context, construction ownership or once-only reveal gate did not verify',
+            3751:'Timeline Blueprint reveal was incomplete; the actor remains owned for cleanup and reveal must not be replayed',
             3030:'Owned original class-default retention, identity stabilization or release failed; cleanup remains owned',
             3020:'Authored route class or actual encounter table identity failed preflight',
             3021:'Original encounter table accessor bytes did not match',
@@ -60,7 +62,7 @@ class EnemyCleanupDeferred(EnemyOperationError):
 
 
 SIZE=20984
-OPERATIONS={110:12,111:0,112:2,113:1,114:1,115:7,116:14,117:5,118:4,119:6,120:13,121:9,122:8,123:7,131:1,132:8,133:15}
+OPERATIONS={110:12,111:0,112:2,113:1,114:1,115:7,116:14,117:5,118:4,119:6,120:13,121:9,122:8,123:7,131:1,132:8,133:15,221:0}
 
 
 def validate_request(packet):

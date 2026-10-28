@@ -71,8 +71,12 @@ def validate_request(data):
         raise ValueError('Map runtime snapshot index')
 
 
-def context(scope):
-    """Observe local exploration pawn and serial-checked world/visit identity."""
+def context(scope, *, require_bound_world=False):
+    """Observe the pawn; optionally require this scope's admitted world.
+
+    A fresh query may see travel before the coordinator's asynchronous sample.
+    That new world must not become writable through a previous-world scope.
+    """
     with ReadBatch(scope.pid):
         c = capture_matching(scope.pid, classes=('PlayerController',))
         local = []
@@ -89,6 +93,11 @@ def context(scope):
         obj = pawn
         for _ in range(32):
             if obj.class_name == 'World':
+                if require_bound_world:
+                    token=getattr(scope,'_world_binding_token',None)
+                    if token is None or token[0]!=(scope.pid,obj.index,obj.serial,obj.address):
+                        from .world_lifecycle import WorldLifecycleError
+                        raise WorldLifecycleError('Observed world differs from the scope admission; waiting for lifecycle handoff')
                 return dict(world=c.path_name(obj), visit=[obj.index, obj.serial, obj.address],
                             pawn=[pawn.index, pawn.serial, pawn.address],
                             ready=pawn.class_name in ('BP_jRPG_Character_World_C', 'BP_jRPG_Character_WorldMap_pawn_C'))

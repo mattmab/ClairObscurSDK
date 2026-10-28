@@ -12,7 +12,9 @@ class TimespanTests(unittest.TestCase):
             value=p.decode(p.TIMESPAN,struct.pack('<q',n))
             self.assertEqual(value.ticks,n)
             with self.assertRaises(Exception):value.ticks=1
-            with self.assertRaises(ValueError):p.encode(p.TIMESPAN,value)
+            if 0<=n<=864000000000:self.assertEqual(p.encode(p.TIMESPAN,value),struct.pack('<q',n))
+            else:
+                with self.assertRaises(ValueError):p.encode(p.TIMESPAN,value)
         for size in (0,7,9):
             with self.assertRaises(ValueError):p.decode(p.TIMESPAN,bytes(size))
         for n in (True,1.0,1<<63,-(1<<63)-1):
@@ -45,6 +47,20 @@ class TimespanTests(unittest.TestCase):
                     with self.assertRaises((ValueError,UnsupportedInvocation)):_parameter_schema(catalog,fn,bad,pod_values=True)
                 bad=copy.deepcopy(d);bad.properties[0]['flags']=0x80
                 with self.assertRaises(UnsupportedInvocation):_parameter_schema(catalog,fn,bad,pod_values=True)
+
+    def test_seek_schema_is_exact_and_rejects_layout_substitutions(self):
+        rows=json.loads((ROOT/'evidence/media-seek-schema.json').read_text())
+        fn=NS(index=16352);constraint=NS(index=5759)
+        catalog=NS(path_name=lambda x:'/Script/MediaAssets.MediaPlayer:Seek')
+        d=NS(function=rows['function'],owners=rows['owners'],properties=rows['properties'])
+        with patch('expedition33.invocation._observed_pod_profile',return_value=(constraint,p.PROFILES[p.TIMESPAN])):
+            self.assertEqual(_parameter_schema(catalog,fn,d,pod_values=True)[3][0].pod_profile,p.TIMESPAN)
+            for key,value in (('entry_rva','0x1'),('params_size',16),('return_offset',0),('flags',0)):
+                bad=copy.deepcopy(d);bad.function[key]=value
+                with self.assertRaises((ValueError,UnsupportedInvocation)):_parameter_schema(catalog,fn,bad,pod_values=True)
+            for key,value in (('offset',0),('flags',0x80),('bool_encoding','0x1010001')):
+                bad=copy.deepcopy(d);bad.properties[1][key]=value
+                with self.assertRaises((ValueError,UnsupportedInvocation)):_parameter_schema(catalog,fn,bad,pod_values=True)
 
     def test_wire_and_capability(self):
         from expedition33.sdk import Session

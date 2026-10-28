@@ -108,9 +108,12 @@ def main():
         from expedition33.settings import SettingsStore
         original_transport = sdk.SessionTransport
         def release_transport(*, _executable=None):
-            transport = original_transport(_executable=ROOT / 'build/research-probe-cinematic-v213-lease-batch/research_probe.exe')
+            transport = original_transport(_executable=ROOT / 'build/research-probe-cinematic-v234-retirement/research_probe.exe')
             required = ('map_load_gate_protocol', 'retired_world_cleanup_protocol', 'menu_open_focus_protocol', 'metadata_stabilization_protocol', 'stable_lease_protocol', 'console_color_status_protocol', 'lease_release_batch_protocol', 'original_game_action_protocol', 'blueprint_trace_protocol', 'picto_edit_protocol', 'picto_progression_protocol', 'picto_class_load_protocol', 'picto_cost_protocol')
-            required = (*required,'builder_world_retirement_protocol')
+            required = (*required,'builder_world_retirement_protocol','sequence_retirement_protocol','media_retirement_protocol','music_audio_retirement_protocol')
+            required = (*required,'sequence_seek_protocol','sequencer_frame_values_protocol','sequencer_object_array_protocol')
+            required = (*required,'timeline_blueprint_protocol','sequence_binding_values_protocol','sequence_portable_binding_protocol','timeline_actor_pool_protocol','timeline_current_world_protocol')
+            required = (*required,'rotator_values_protocol','sequence_origin_update_protocol','sequence_flight_protocol','sequence_placement_input_protocol','media_seek_protocol')
             if transport.zone_travel_protocol != 2 or any(getattr(transport, name, 0) != 1 for name in required) or transport.mesh_protocol != 3:
                 transport.close()
                 raise RuntimeError('Combined release runtime is missing capabilities')
@@ -309,11 +312,22 @@ def main():
                             # owners. Repeated old mailbox slots cannot overwrite
                             # a newer token already observed at an enable gate.
                             sampled = packet.admission
+                            destination=getattr(packet,'prewarm_context',None) or getattr(packet,'ui_context',None)
+                            if (destination is not None and destination.kind=='world'
+                                    and world_lifecycle.current_token is not None
+                                    and (destination.world,destination.gi)!=world_lifecycle.current_token[:2]
+                                    and admission_observer.confirms_loading_world(destination.world,destination.gi)):
+                                world_lifecycle.observe_loading_world(destination.world,destination.gi)
                             if (sampled.state == 'world_ready' and world_lifecycle.current_token is not None
                                     and sampled.token != world_lifecycle.current_token):
                                 fresh_world_admission()
                             else:
                                 world_lifecycle.observe(sampled,title=packet.title_ready is True)
+                    if args.early_init and not world_lifecycle.cleanup_ready:
+                        # Domain cleanup can progress behind the game's loading
+                        # screen instead of starting after exploration appears.
+                        session.poll()
+                        world_lifecycle.poll_cleanup()
                     if server:
                         server.poll()
                     if args.early_init:
@@ -564,3 +578,5 @@ if __name__ == '__main__':
         with (ROOT / 'logs/startup-error.log').open('a', encoding='utf8') as stream:
             traceback.print_exc(file=stream)
         raise
+
+

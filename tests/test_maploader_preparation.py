@@ -140,6 +140,24 @@ class PassiveContextTests(unittest.TestCase):
         value['visit'][0]=99
         self.assertEqual(result.visit,(1,2,3))
 
+    def test_ready_unassigned_world_replaces_only_initial_waiting_message(self):
+        from types import SimpleNamespace
+        from maploader_preparation.context_observer import MapContext
+        for ready,assigned,message,expected in (
+            (True,False,'Waiting for a stable exploration pawn.','Ready. No automatic map selected for this world.'),
+            (False,False,'Waiting for a stable exploration pawn.','Waiting for a stable exploration pawn.'),
+            (True,True,'Waiting for a stable exploration pawn.','Waiting for a stable exploration pawn.'),
+            (True,False,'Read failed: invalid map','Read failed: invalid map'),
+            (True,False,'Automatic placement paused.','Automatic placement paused.'),
+        ):
+            with self.subTest(ready=ready,assigned=assigned,message=message):
+                mod=self.mod();mod.message=message
+                if assigned:mod.assignments.values['/Game/Test.Test']='a'*32
+                mod._context_monitor.snapshot.return_value=SimpleNamespace(admission=MapContext('/Game/Test.Test',(1,2,3),(4,5,6),ready))
+                mod.visits=Mock(attempted=True);mod.visits.observe.return_value=False
+                mod.poll()
+                self.assertEqual(mod.message,expected)
+
     def test_disable_retains_pending_worker_owner(self):
         mod=self.mod();mod._context_monitor.close.return_value=False
         monitor=mod._context_monitor;mod.close_menu=Mock()

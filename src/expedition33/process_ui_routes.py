@@ -59,6 +59,13 @@ class ProcessMenuRoute:
     def close_menu(self):
         service=self._service()
         if service is not None:return service.close_menu()
+    def refresh(self):
+        from contextlib import nullcontext
+        from ._reader import active_reader
+        service=self._service(required=True)
+        operation=getattr(self.owner,'_read_operation',None)
+        with operation() if callable(operation) and active_reader() is None else nullcontext():
+            return service.refresh()
     def prepare_travel(self):
         """ACK borrowed input/entry teardown, retaining the GI-owned shell."""
         self._service(required=True)

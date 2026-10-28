@@ -72,6 +72,14 @@ class TitleAnimationOwner {
         }
     };
 public:
+    bool retirement_ready() const {
+        if(uncertain_) return false;
+        for(size_t i=0;i<count_;++i) if(entries_[i].drain.quarantined()) return false;
+        return true;
+    }
+    // Called only after positive epoch retirement and release of the shared
+    // private lease pool. No stop/unbind or animation callback is dispatched.
+    void retired() { entries_={};count_=0;profile_retained_=false;title_class_={}; }
     bool safe_to_release() const {
         if(uncertain_) return false;
         for(size_t i=0;i<count_;++i)

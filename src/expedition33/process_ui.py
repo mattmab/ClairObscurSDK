@@ -551,10 +551,10 @@ class ProcessUI:
                 logging.getLogger(__name__).info('Process UI handoff pending: %s',reason)
             self._pending_reason=reason
             self.phase='proof_pending';return False
-        except UiProofPreflightRejected:
+        except UiProofPreflightRejected as error:
             # Only pure read/shape proof failures enter this state. Do not
             # infer cleanup or retry construction; explicit close owns ACKs.
-            self.frontend_failed=dict(type='UiProofPreflightRejected',outcome='held')
+            self.frontend_failed=dict(type='UiProofPreflightRejected',outcome='held',reason=str(error)[:512])
             self.phase='frontend_held';return False
         except UiFrontendHeld:
             record=self._recorded_rejection()

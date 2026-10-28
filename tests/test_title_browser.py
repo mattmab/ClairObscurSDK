@@ -1,7 +1,8 @@
 import hashlib
 import unittest
 from types import SimpleNamespace as N
-from unittest.mock import Mock
+from unittest.mock import Mock,patch
+from cinematics_v2_fixtures import Backend,ready_model,poll
 from test_cinematics import module
 from expedition33.management import ManagementError
 
@@ -15,16 +16,8 @@ class TitleBrowserTests(unittest.TestCase):
     def catalog(self, row):
         return dict(version=1,manifest_sha256=hashlib.sha256(b'x').hexdigest(),scenes=[row])
 
-    def model(self, row=None):
-        model=module.Mod()
-        model.discovery={'confirmed':[row or self.scene()]}
-        model.show_all=False
-        model.session=N(_session=N(_transport=N(cinematic_title_profiles=['prologue_lumiere'],**dict.fromkeys(module.TITLE_PROTOCOLS,1))))
-        model.discover=Mock()
-        model.prepare_title=Mock()
-        model.title_replay=Mock()
-        model.title_replay.stop.return_value={'active':False,'state':'stopped'}
-        return model
+    def model(self,row=None):
+        return ready_model(module,row or self.scene())
 
     def test_exact_definition_sequence_save_and_unlock_gate(self):
         for changes in ({'id':'wrong'}, {'saved_id':'wrong'}, {'sequence':'wrong'}):
@@ -51,36 +44,37 @@ class TitleBrowserTests(unittest.TestCase):
         self.assertEqual([c.token for c in frame.controls if 1<=c.token<=5],[1,4])
         for token in (2,3,5):
             with self.assertRaisesRegex(ManagementError,'only Play and Stop'):view.activate(frame.revision,token)
-        model.prepare_title.assert_not_called()
+        model._refresh_now.assert_not_called()
 
-    def test_title_uses_fresh_discovery_prepare_and_existing_play(self):
-        model=self.model()
-        events=[]
-        model.discover.side_effect=lambda:events.append('discover')
-        model.prepare_title.side_effect=lambda scene:events.append('prepare')
-        model.title_replay.play.side_effect=lambda:events.append('play')
-        model.control(module.DEFINITION,1)
-        self.assertEqual(events,['discover','prepare','play'])
-        self.assertIsNone(model.video)
-        model.control(module.DEFINITION,4)
-        self.assertEqual(model.playback_status,'Stopped')
+    def test_title_click_queues_then_fresh_admission_precedes_allocation(self):
+        model=self.model();backend=Backend();events=[]
+        model._refresh_now.side_effect=lambda:events.append('admit') or model.discovery
+        backend.start.side_effect=lambda:events.append('start') or module.StartResult.STARTED
+        with patch.object(module,'TitleAdapter',side_effect=lambda *args:events.append('allocate') or backend) as factory:
+            model.control(module.DEFINITION,1)
+            self.assertEqual(events,[]);factory.assert_not_called()
+            poll(model)
+            self.assertEqual(events,['admit','allocate','start'])
+        self.assertTrue(model.controller.status().busy)
+        model.control(module.DEFINITION,4);backend.stop.assert_not_called()
+        poll(model);backend.stop.assert_called_once()
 
     def test_fresh_discovery_revocation_prevents_preparation(self):
         model=self.model()
-        model.discover.side_effect=lambda:model.discovery.update(confirmed=[])
-        with self.assertRaisesRegex(ManagementError,'not unlocked'):model.control(module.DEFINITION,1)
-        model.prepare_title.assert_not_called()
-        model.title_replay.play.assert_not_called()
+        model._refresh_now.side_effect=lambda:setattr(model,'library',()) or model.discovery
+        with patch.object(module,'TitleAdapter') as factory:
+            model.control(module.DEFINITION,1);factory.assert_not_called();poll(model)
+            factory.assert_not_called()
+        self.assertFalse(model.controller.status().busy)
 
     def test_pending_cleanup_keeps_menu_and_prevents_new_title(self):
-        model=self.model()
-        model.title_replay.stop.return_value={'active':True,'state':'cleanup_pending'}
+        from expedition33.cinematics.controller import StopResult
+        model=self.model();backend=Backend();backend.stop.return_value=StopResult.DEFERRED
+        model.controller.queue(module.DEFINITION,lambda:backend,model._last_epoch);model.controller.poll(model._last_epoch)
         with self.assertRaisesRegex(ManagementError,'cleanup'):model.control(module.DEFINITION,1)
-        model.discover.assert_not_called()
-        model.prepare_title.assert_not_called()
+        model._refresh_now.assert_not_called()
         view=module.BrowserView(N(_check=Mock()),model)
         with self.assertRaisesRegex(ManagementError,'cleanup'):view.close()
         self.assertFalse(view.closed)
 
 if __name__=='__main__':unittest.main()
-

@@ -122,6 +122,7 @@ class Registry:
         self._settings = settings
         self._owner = threading.get_ident()
         self._entries = {}
+        self._pending_disables = {}
         self._generation = 0
         self._dispatching = set()
         from .startup_order import StartupOrder
@@ -190,6 +191,7 @@ class Registry:
         self._check()
         for mod_id, entry in tuple(self._entries.items()):
             if entry.name == name:
+                self._pending_disables.pop(mod_id, None)
                 del self._entries[mod_id]
 
     def changed(self, name):
@@ -226,6 +228,7 @@ class Registry:
                 'enabled': active, 'generation': entry.generation,
                 'desired_enabled': entry.preferences.get('enabled', active),
                 'staged_pending': entry.preferences.get('enabled', active) != active,
+                'disable_pending': selection.mod_id in self._pending_disables,
                 'error': entry.error, 'persistence': self._settings is not None,
                 'cleanup_error': next((getattr(s, 'cleanup_error', None)
                     for s in self._loader.status() if s.name == entry.name), None),
@@ -274,9 +277,66 @@ class Registry:
         if self._settings is not None:
             self._settings.save(selection.mod_id, preferences)
         entry.preferences = preferences
+        pending=self._pending_disables.pop(selection.mod_id,None) if enabled else None
+        if pending is not None:
+            name,instance,scope=pending
+            record=self._loader._loaded.get(name)
+            lifecycle=getattr(self._loader,'world_lifecycle',None)
+            binding=None if lifecycle is None else lifecycle.bindings.get(name)
+            if (record is not None and record[1] is instance and record[2] is scope and
+                    (lifecycle is None or (binding is not None and binding.scope is scope and binding.state=='bound'))):
+                # The pending disable never ran. Release only the opt-in
+                # preparation latch; cancelled read-only work still cleans up.
+                instance.cancel_disable_preparation()
+                self._loader._prepared_disable_scopes.pop(name,None)
+                entry.generation=self._next()
+                return self.select(selection.mod_id)
         operation = self._loader.enable if enabled else self._loader.disable
-        operation(entry.name)
+        try:operation(entry.name)
+        except Exception as error:
+            from .mods import ModDisablePending
+            if not enabled and isinstance(error,ModDisablePending):
+                record=self._loader._loaded.get(entry.name)
+                if (record is not None and record[2] is not None and
+                        callable(getattr(record[1],'cancel_disable_preparation',None))):
+                    self._pending_disables[selection.mod_id]=(entry.name,record[1],record[2])
+                    entry.generation=self._next()
+                    return self.select(selection.mod_id)
+            raise
+        self._pending_disables.pop(selection.mod_id,None)
         return self.select(selection.mod_id)
+
+    def poll_pending_disables(self):
+        """Retry opted-in user requests only for the still-admitted owner."""
+        self._check()
+        from .mods import ModDisablePending
+        for mod_id,(name,instance,scope) in tuple(self._pending_disables.items()):
+            entry=self._entries.get(mod_id);record=self._loader._loaded.get(name)
+            if entry is None or record is None or record[1] is not instance or record[2] is not scope:
+                self._pending_disables.pop(mod_id,None);continue
+            lifecycle=getattr(self._loader,'world_lifecycle',None)
+            if lifecycle is not None:
+                binding=lifecycle.bindings.get(name)
+                if binding is None or binding.scope is not scope or binding.state!='bound':
+                    # Retirement owns this scope now. Never dispatch ordinary
+                    # disable against an old or unadmitted world.
+                    self._pending_disables.pop(mod_id,None);continue
+            if entry.preferences.get('enabled') is not False:
+                self._pending_disables.pop(mod_id,None)
+                instance.cancel_disable_preparation()
+                self._loader._prepared_disable_scopes.pop(name,None)
+                entry.generation=self._next();continue
+            if lifecycle is not None and not lifecycle.allows(name):
+                # A transient admission gap may later readmit this exact
+                # owner. Keep its request and do not dispatch yet.
+                continue
+            try:self._loader.disable(name)
+            except ModDisablePending:continue
+            except Exception as error:
+                self._pending_disables.pop(mod_id,None)
+                entry.error=type(error).__name__+': '+str(error)
+                entry.generation=self._next()
+            else:self._pending_disables.pop(mod_id,None)
 
     def stage_enabled(self, selection, enabled):
         """Persist a desired choice without invoking any mod lifecycle callback."""

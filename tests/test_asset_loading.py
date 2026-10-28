@@ -21,10 +21,21 @@ class AssetWireTests(unittest.TestCase):
 
     def test_reject_native_owned_storage(self):
         plan=self.plan()
-        for at in (*range(8),*range(12,16),*range(20,48)):
+        for at in (*range(8),*range(24,48)):
             data=bytearray(plan.data); data[at]=1
             with self.subTest(at=at),self.assertRaises(ValueError):
                 encode_plan(replace(plan,data=bytes(data)))
+    def test_numbered_names_are_bounded_and_do_not_admit_class_or_native_storage(self):
+        plan=self.plan();data=bytearray(plan.data)
+        struct.pack_into('<I',data,12,3);struct.pack_into('<I',data,20,3)
+        self.assertTrue(encode_plan(replace(plan,data=bytes(data))))
+        for at in (12,20):
+            bad=bytearray(data);struct.pack_into('<I',bad,at,0x80000000)
+            with self.assertRaises(ValueError):encode_plan(replace(plan,data=bytes(bad)))
+        cls=replace(plan,entry_rva=0x3860250,data=bytes(data),parameters=(
+            replace(plan.parameters[0],name='AssetClass',kind='SoftClassProperty'),
+            replace(plan.parameters[1],kind='ClassProperty')))
+        with self.assertRaises(ValueError):encode_plan(cls)
 
     def test_reject_other_functions_and_signatures(self):
         p=self.plan()

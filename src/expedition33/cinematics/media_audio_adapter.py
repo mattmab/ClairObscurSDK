@@ -65,3 +65,10 @@ class MediaAudioAdapter:
         if not self.context.close():return False
         if self.dispatcher is not None:self.dispatcher.timeline.discard_after_cleanup()
         self.state='closed';return True
+
+    def retire_world(self):
+        if self.state=='closed':return True
+        self.state='retirement_pending'
+        if not self.context.retire_world():return False
+        if self.dispatcher is not None:self.dispatcher.timeline.discard_after_cleanup()
+        self.state='closed';return True

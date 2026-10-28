@@ -54,17 +54,22 @@ class MediaAudioPlanner:
         self.volume_max=float(volume_max);self.maximum_clock_step=maximum_clock_step
         self.position=None;self.active=frozenset();self.gains={};self.serial=0;self.pending=None
 
-    def plan(self,position,*,playing):
+    def plan(self,position,*,playing,elapsed=None):
         if self.pending is not None:raise RuntimeError('Unacknowledged audio step cannot be replayed')
         if type(playing) is not bool or type(position) not in (int,float) or not math.isfinite(position) or position<0:
             raise ValueError('A valid copied native media clock is required')
+        if elapsed is not None and (type(elapsed) not in (int,float) or not math.isfinite(elapsed) or elapsed<0):
+            raise ValueError('A finite nonnegative monotonic poll interval is required')
         if not playing:
             if self.active:raise RuntimeError('Stopped media requires stopping owned audio')
             return None # Async opening is not a running scheduler clock.
         if self.position is None and position>self.maximum_clock_step:
             raise RuntimeError('Initial media clock missed the synchronized start window')
-        if self.position is not None and (position<self.position or position-self.position>self.maximum_clock_step):
-            raise RuntimeError(f'Media clock discontinuity requires stopping owned audio: previous={self.position:.6f}, current={position:.6f}, delta={position-self.position:.6f}, limit={self.maximum_clock_step:.6f}')
+        # Media advances while controller/native calls are in flight. Bound
+        # unexplained forward movement, not the total time between polls.
+        forward_limit=self.maximum_clock_step+(elapsed if elapsed is not None else 0.)
+        if self.position is not None and (position<self.position or position-self.position>forward_limit):
+            raise RuntimeError(f'Media clock discontinuity requires stopping owned audio: previous={self.position:.6f}, current={position:.6f}, delta={position-self.position:.6f}, elapsed={elapsed!r}, limit={forward_limit:.6f}')
         active=frozenset(s.identity for s in self.sections if s.start<=position<s.end)
         actions=[Action('stop',identity) for identity in sorted(self.active-active)]
         gains={}

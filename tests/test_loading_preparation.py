@@ -36,12 +36,77 @@ class LoadingPreparationTests(unittest.TestCase):
         c.observe(N(ui_context=N(kind='title')))
         mod.prepare_loading_ui.assert_not_called()
 
+    def test_direct_world_loading_recreates_released_preparer_after_cleanup_ack(self):
+        c,mod,owner=self.fixture();c.loader.world_lifecycle=N(cleanup_ready=True,bindings={})
+        packet=N(ui_context=N(kind='world',world='world',gi='gi'),admission=N(activation_ready=False))
+        c.observe(packet)
+        owner.prepare.assert_called_once_with(packet.ui_context)
+        owner.bind.assert_called_once_with(packet.ui_context,preparing=True)
+        owner.released=True
+        replacement=N(prepare=Mock(),bind=Mock(),close=Mock(),released=False)
+        mod.prepare_loading_ui.return_value=replacement
+        c.observe(packet)
+        replacement.prepare.assert_called_once_with(packet.ui_context);owner.close.assert_called_once()
+
+    def test_direct_world_loading_does_not_allocate_before_old_cleanup_ack(self):
+        c,mod,owner=self.fixture();c.loader.world_lifecycle=N(cleanup_ready=False)
+        c.observe(N(ui_context=N(kind='world'),admission=N(activation_ready=False)))
+        mod.prepare_loading_ui.assert_not_called()
+
+    def test_bound_departing_epoch_cannot_authorize_new_preparation(self):
+        c,mod,owner=self.fixture();c.loader.world_lifecycle=N(cleanup_ready=True,bindings={'Old':N(state='bound',token=('old','gi'))})
+        c.observe(N(ui_context=N(kind='world',world='new',gi='gi'),admission=N(activation_ready=False)))
+        mod.prepare_loading_ui.assert_not_called()
+
+    def test_released_travel_entry_is_not_rebuilt_in_still_bound_departing_world(self):
+        c,mod,owner=self.fixture()
+        c.loader.world_lifecycle=N(cleanup_ready=True,bindings={'Travel':N(state='bound',token=('old','gi'))})
+        owner.released=True;c.owners['Builder']=owner
+        packet=N(ui_context=N(kind='world',world='old',gi='gi'),admission=N(activation_ready=False))
+        c.observe(packet);c.observe(packet)
+        owner.close.assert_called_once();mod.prepare_loading_ui.assert_not_called()
+        c.loader.world_lifecycle.bindings['Travel'].state='retired'
+        packet.ui_context=N(kind='world',world='new',gi='gi')
+        c.observe(packet);mod.prepare_loading_ui.assert_called_once()
+
     def test_closed_shared_reader_defers_unattempted_owner_without_failure(self):
         c,mod,owner=self.fixture();packet=N(ui_context=N(kind='title'))
         with patch('expedition33._reader.active_reader',return_value=N(_closed=True)):
-            self.assertTrue(c.observe(packet))
+            self.assertFalse(c.observe(packet))
         mod.prepare_loading_ui.assert_not_called();self.assertFalse(c.failed)
         self.assertTrue(c.observe(packet));owner.prepare.assert_called_once()
+
+    def test_opted_in_destination_ui_waits_for_its_own_close_not_unrelated_gameplay_retirement(self):
+        c,mod,old=self.fixture();c.loader.world_lifecycle=N(cleanup_ready=False)
+        old.released=True;old.reprepare_on_world_change=True;old.context=N(signature=('old',))
+        c.owners['Builder']=old
+        new=N(prepare=Mock(),bind=Mock(),close=Mock(),released=False)
+        mod.prepare_loading_ui.return_value=new
+        packet=N(ui_context=N(kind='world',signature=('destination',)),admission=N(activation_ready=False))
+        c.observe(packet);old.close.assert_called_once()
+        new.prepare.assert_called_once_with(packet.ui_context)
+        new.bind.assert_called_once_with(packet.ui_context,preparing=True)
+        self.assertIs(c.owners['Builder'],new)
+
+    def test_same_context_release_cannot_trigger_independent_repreparation(self):
+        c,mod,old=self.fixture();c.loader.world_lifecycle=N(cleanup_ready=False)
+        old.released=True;old.reprepare_on_world_change=True;old.context=N(signature=('old',))
+        c.owners['Builder']=old
+        c.observe(N(ui_context=N(kind='world',signature=('old',)),admission=N(activation_ready=False)))
+        old.close.assert_called_once();mod.prepare_loading_ui.assert_not_called()
+        self.assertIs(c.owners['Builder'],old)
+        new=N(prepare=Mock(),bind=Mock(),close=Mock(),released=False)
+        mod.prepare_loading_ui.return_value=new
+        c.observe(N(ui_context=N(kind='world',signature=('new',)),admission=N(activation_ready=False)))
+        new.prepare.assert_called_once();new.bind.assert_called_once()
+
+    def test_closed_reader_during_binding_does_not_fail_unattempted_owners_or_allow_activation(self):
+        c,mod,owner=self.fixture();c.owners['Builder']=owner
+        packet=N(ui_context=N(kind='world'),admission=N(activation_ready=True))
+        with patch('expedition33._reader.active_reader',return_value=N(_closed=True)):
+            self.assertFalse(c.observe(packet))
+        owner.bind.assert_not_called();self.assertFalse(c.failed)
+        self.assertTrue(c.observe(packet));owner.bind.assert_called_once()
 
     def test_pending_title_proof_keeps_owner_and_rechecks_without_reconstruction(self):
         c,mod,owner=self.fixture();packet=N(ui_context=N(kind='title'))

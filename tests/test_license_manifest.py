@@ -136,8 +136,8 @@ class LicenseManifestTests(unittest.TestCase):
         for name in ('src/expedition33/__init__.py', 'src/expedition33/assets/map-loading.png', 'scripts/run_release_sdk.py',
                      'scripts/sdk_command.py', 'docs/INSTALLABLE_RELEASE.md', 'LICENSE',
                      'THIRD_PARTY_NOTICES.md',
-                     'build/release/research-probe-cinematic-v213-lease-batch/research_probe.exe',
-                     'build/release/runtime-session-cinematic-v213/runtime_session_cinematic_v213.dll',
+                     'build/release/research-probe-cinematic-v216-retirement/research_probe.exe',
+                     'build/release/runtime-session-cinematic-v216/runtime_session_cinematic_v216.dll',
                      'build/readonly-worker-strings-v1/research_probe.exe', 'build/readonly-worker-values-v2/research_probe.exe', 'build/release/thumbnail-worker-v2/thumbnail_worker.dll', 'build/bootstrap/version.dll', 'mods/SDKManagement/mod.py',
                      'mods/IntrospectionHarness/mod.py', 'mods/LiveObjectViewer/mod.py'):
             self.write(name, b'# fixture\n')
@@ -153,12 +153,12 @@ class LicenseManifestTests(unittest.TestCase):
             self.assertEqual(manifest['sdk_files']['src/expedition33/assets/map-loading.png'],
                              digest(b'# fixture\n'))
             self.assertIn('SDK_Mods/LiveObjectViewer.sdkmod', archive.namelist())
-            self.assertIn('SDK/build/research-probe-cinematic-v213-lease-batch/research_probe.exe',archive.namelist())
-            self.assertIn('SDK/build/runtime-session-cinematic-v213/runtime_session_cinematic_v213.dll',archive.namelist())
+            self.assertIn('SDK/build/research-probe-cinematic-v216-retirement/research_probe.exe',archive.namelist())
+            self.assertIn('SDK/build/runtime-session-cinematic-v216/runtime_session_cinematic_v216.dll',archive.namelist())
             self.assertFalse(any('v202' in name for name in archive.namelist()))
             self.assertNotIn('SDK_Mods/E33WorldBuilder.sdkmod', archive.namelist())
             self.assertFalse(any('/settings/' in name or '/logs/' in name for name in archive.namelist()))
-            self.assertIn('SDK/build/runtime-session-cinematic-v213/runtime_session_cinematic_v213.dll', archive.namelist())
+            self.assertIn('SDK/build/runtime-session-cinematic-v216/runtime_session_cinematic_v216.dll', archive.namelist())
             self.assertEqual(archive.read('SDK/licenses/Expat/COPYING'),
                              b'copyright and permission fixture\n')
         self.write('runtime/new.dll', b'new')

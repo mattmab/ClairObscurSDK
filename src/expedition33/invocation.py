@@ -274,17 +274,27 @@ def _parameter_schema(catalog, function, descriptor, *, pod_values=False, text_v
                 constraint, profile = _observed_pod_profile(catalog, row, pod_descriptors, _metadata)
                 pod_profile, expected = profile.path, profile.width
                 if profile.path == _pod_values.TIMESPAN:
-                    expected_entries={'/Script/MediaAssets.MediaPlayer:GetTime':0x3208990,
-                                      '/Script/MediaAssets.MediaPlayer:GetDuration':0x3207a70}
-                    if (catalog.path_name(function) not in expected_entries or
-                            int(info['entry_rva'],16)!=expected_entries[catalog.path_name(function)] or
-                            info['flags']!=1417806851 or size!=8 or extent!=8 or returned!=0 or
-                            len(descriptor.properties)!=1 or name!='ReturnValue' or offset!=0 or
-                            dimension!=1 or row['flags']!=6755468160534400):
-                        raise UnsupportedInvocation('Timespan supports only verified MediaPlayer timing returns')
-                if profile.path in _pod_values.FRAME_PROFILES and (
-                        profile.path != _pod_values.QUALIFIED_FRAME_TIME or not row['flags'] & RETURN or dimension != 1):
-                    raise UnsupportedInvocation('Frame timing supports only scalar QualifiedFrameTime returns')
+                    path=catalog.path_name(function)
+                    getters={'/Script/MediaAssets.MediaPlayer:GetTime':0x3208990,
+                             '/Script/MediaAssets.MediaPlayer:GetDuration':0x3207a70}
+                    getter=(path in getters and int(info['entry_rva'],16)==getters[path] and
+                            info['flags']==1417806851 and size==8 and extent==8 and returned==0 and
+                            len(descriptor.properties)==1 and name=='ReturnValue' and offset==0 and
+                            dimension==1 and row['flags']==6755468160534400)
+                    seek=(path=='/Script/MediaAssets.MediaPlayer:Seek' and int(info['entry_rva'],16)==0x320ad80 and
+                          info['flags']==79823875 and size==9 and extent==16 and returned==8 and
+                          len(descriptor.properties)==2 and name=='Time' and offset==0 and dimension==1 and
+                          row['flags']==6755468294751106 and
+                          descriptor.properties[1]['name']=='ReturnValue' and descriptor.properties[1]['type']=='BoolProperty' and
+                          descriptor.properties[1]['offset']==8 and descriptor.properties[1]['element_size']==1 and
+                          descriptor.properties[1]['dimension']==1 and descriptor.properties[1]['flags']==6755469234276224 and
+                          int(descriptor.properties[1]['bool_encoding'],16)==0xff010001)
+                    if not (getter or seek):raise UnsupportedInvocation('Timespan requires an exact MediaPlayer timing or Seek schema')
+                if profile.path in _pod_values.FRAME_PROFILES and (dimension!=1 or
+                        profile.path==_pod_values.QUALIFIED_FRAME_TIME and not row['flags'] & RETURN):
+                    raise UnsupportedInvocation('Frame timing requires scalar values and QualifiedFrameTime is return-only')
+                if profile.path==_pod_values.BINDING_ID and dimension!=1:
+                    raise UnsupportedInvocation('Binding IDs require scalar values')
             if kind == 'StrProperty' and string_values:
                 if dimension != 1 or row['flags'] != 0x18000000000280:
                     raise UnsupportedInvocation('FString currently requires scalar by-value input')
@@ -368,7 +378,8 @@ def _prepare(catalog, target, function, descriptor, arguments, *, pod_values=Fal
                 encode_units(item)
                 texts.append((parameter.name, item))
             elif parameter.kind == 'StructProperty':
-                data[at:at + parameter.width] = _pod_values.encode(parameter.pod_profile, item)
+                encoded=_pod_values.encode_argument(parameter.pod_profile,item)
+                data[at:at + parameter.width] = encoded
             elif parameter.kind == 'EnumProperty':
                 if not isinstance(item, EnumValue) or catalog.resolve(item.enum) != parameter.constraint:
                     raise ValueError('Enum argument requires a value of the exact observed enum identity')

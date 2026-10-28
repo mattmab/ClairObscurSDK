@@ -124,6 +124,21 @@ class ViewerTests(unittest.TestCase):
             harness.assert_not_called()
         self.assertIsNone(mod.native)
 
+    def test_retiring_shared_route_changes_only_presenter_not_native_panel(self):
+        from expedition33.management_service import NativeMenuRoute
+        from expedition33.management_view import ManagementView
+        registry=Mock();factory=lambda registry: self.view
+        panel=SimpleNamespace(state='open')
+        menu=SimpleNamespace(_view_factory=factory,view=self.view,panel=panel)
+        parent=SimpleNamespace(menu=menu,registry=registry,close_menu=Mock())
+        route=NativeMenuRoute(parent,factory)
+        route.revoke()
+        parent.close_menu.assert_not_called()
+        self.assertEqual(panel.state,'open')
+        self.assertIsInstance(menu.view,ManagementView)
+        self.assertIsNone(route.menu)
+        route.revoke();parent.close_menu.assert_not_called()
+
     def test_viewer_reuses_management_panel_and_releases_only_route(self):
         from expedition33.management_service import NativeMenuService
         from expedition33.management_view import ManagementView

@@ -1,7 +1,7 @@
 @echo off
 setlocal
 for %%I in ("%~dp0..") do set "PROJECT_ROOT=%%~fI"
-call "%~dp0build-early-lifecycle-runtime.cmd"
+call "%~dp0build-cinematic-retirement-candidate.cmd"
 if errorlevel 1 exit /b 1
 call "%~dp0build-readonly-worker-values.cmd"
 if errorlevel 1 exit /b 1

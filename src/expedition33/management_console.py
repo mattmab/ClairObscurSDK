@@ -50,7 +50,7 @@ class ConsoleMenu:
         views = self.registry.views()
         print('SDK mods — console management (UMG not required)')
         for view in views:
-            print(f"  {view['id']}: {view['name']} — {'enabled' if view['enabled'] else 'disabled'}"
+            print(f"  {view['id']}: {view['name']} — {'disabling' if view.get('disable_pending') else 'enabled' if view['enabled'] else 'disabled'}"
                   + (' [core]' if view['protected'] else ''))
         loaded = {view['folder'] for view in views}
         available = [name for name in self.registry.installed() if name not in loaded]
@@ -94,7 +94,8 @@ class ConsoleMenu:
         elif verb in ('enable', 'disable'):
             self._selected()
             self.selection = self.registry.set_enabled(self.selection, verb == 'enable')
-            print(f"{self.selection.mod_id}: {'enabled' if self._selected()['enabled'] else 'disabled'}")
+            state=self._selected()
+            print(f"{self.selection.mod_id}: {'disabling' if state.get('disable_pending') else 'enabled' if state['enabled'] else 'disabled'}")
         elif verb == 'unload':
             self._selected()
             self.registry.unload(self.selection)

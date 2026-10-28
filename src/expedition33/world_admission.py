@@ -242,6 +242,19 @@ class WarmAdmissionObserver:
             self._discard()
             raise
 
+    def confirms_loading_world(self,world,gi):
+        """Fresh double root-link check for retirement only, never activation."""
+        self._check()
+        if self._reader is None:self._reader=ReadBatch(self.pid,share=True)
+        try:
+            with self._reader.bind():
+                def current():
+                    chain,_=anchor(self.engine_catalog(),project=True)
+                    return tuple(identity(obj) for obj in chain[2:])
+                return current()==(world,gi) and current()==(world,gi)
+        except (NotReady,RuntimeQueryError):
+            self._discard();return False
+
     def seed_activation(self,binding):
         """Copy read-worker selectors only; both activation passes remain fresh."""
         self._check()

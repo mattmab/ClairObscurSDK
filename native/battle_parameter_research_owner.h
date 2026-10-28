@@ -6,6 +6,11 @@
 #include "target_battle_parameter_arena.h"
 #include "mesh_protocol.h"
 #include <optional>
+#include <memory>
+#if defined(E33_RUNTIME_CINEMATIC_VERSION) && E33_RUNTIME_CINEMATIC_VERSION>=215
+#include "battle_completion_owner.h"
+#define E33_BATTLE_COMPLETION_RECEIPT_SESSION 1
+#endif
 #include "parameter_instance_authority.h"
 
 namespace e33_enemy_spawn {
@@ -16,6 +21,23 @@ class ParameterResearchOwner {
     CallIdentity ids_[3]{}; // structure, source, root; stabilized after acquisition
     TargetParameterSourceProof proof_{};
     uint64_t owner_=0;
+#ifdef E33_BATTLE_COMPLETION_RECEIPT_SESSION
+    std::optional<BattleCompletionOwner> completion_;
+    std::shared_ptr<void> completion_proof_;
+    uint32_t completion_query(MeshPacket& packet){
+        if(!completion_||packet.owner!=owner_){packet.error=3661;return 0;}
+        auto* bytes=reinterpret_cast<uint8_t*>(&packet);
+        e33_battle_completion::Receipt receipt{};
+        const bool returned=completion_->take(owner_,receipt);
+        const uint32_t fields[]={0x52423345,1,returned?static_cast<uint32_t>(receipt.result):0U,
+            returned?2U:static_cast<uint32_t>(completion_->state())};
+        std::memcpy(bytes+4096,fields,16);
+        const uint64_t keys[]={owner_,returned?receipt.generation:0};std::memcpy(bytes+4112,keys,16);
+        if(returned){const e33_battle_completion::Identity ids[]={receipt.world,receipt.controller,receipt.source,receipt.arena};
+            std::memcpy(bytes+4128,ids,sizeof(ids));}
+        packet.state=1;return 0;
+    }
+#endif
     CallIdentity entry_ids_[2]{};
     ParameterLease entry_leases_[2]{};
     std::array<uint8_t,344> original_{};
@@ -38,8 +60,23 @@ class ParameterResearchOwner {
         return 0;
     }
 public:
-    bool holds_resources()const{return frame_&&(frame_->pending()||frame_->quarantined());}
+    bool protects(uint64_t token)const{
+#ifdef E33_BATTLE_COMPLETION_RECEIPT_SESSION
+        return completion_&&completion_->protects(token);
+#else
+        (void)token;return false;
+#endif
+    }
+    bool holds_resources()const{return (frame_&&(frame_->pending()||frame_->quarantined()))
+#ifdef E33_BATTLE_COMPLETION_RECEIPT_SESSION
+        || (completion_&&completion_->active())
+#endif
+        ;}
     template<class Pool> uint32_t close(uint64_t b,uint64_t session,Pool& pool) {
+#ifdef E33_BATTLE_COMPLETION_RECEIPT_SESSION
+        if(completion_){const auto error=completion_->close(b,session,pool);if(error)return error;
+            completion_.reset();completion_proof_.reset();}
+#endif
         if(!frame_)return 0;
         if(frame_->quarantined())return 408;
         if(frame_->entry_state()==BattleEntryState::Returned)return 407;
@@ -58,12 +95,25 @@ public:
         using ProofOwner=ParameterProofOwner<Pool,EnemyOwner>;
         ProofOwner enemy{fallback,authority};
         auto* bytes=reinterpret_cast<uint8_t*>(&packet);
-        if(packet.version!=3||packet.operation<124||packet.operation>130||packet.error||packet.state||!packet.owner){packet.error=3050;return;}
+        if(packet.version!=3||packet.operation<124||(packet.operation>130
+#ifdef E33_BATTLE_COMPLETION_RECEIPT_SESSION
+            && packet.operation!=160
+#endif
+            )||packet.error||packet.state||!packet.owner){packet.error=3050;return;}
         std::array<uint8_t,sizeof(MeshPacket)> canonical{};
         const uint32_t header[]={3,packet.operation,0,0};
         std::memcpy(canonical.data(),header,sizeof(header));
         std::memcpy(canonical.data()+16,&packet.owner,8);
-        if(packet.operation!=126)std::memcpy(canonical.data()+88,bytes+88,sizeof(ids_));
+        if(packet.operation!=126&&packet.operation!=160)std::memcpy(canonical.data()+88,bytes+88,sizeof(ids_));
+#ifdef E33_BATTLE_COMPLETION_RECEIPT_SESSION
+        if(packet.operation==160){
+            if(std::memcmp(canonical.data(),bytes,canonical.size())){packet.error=3050;return;}
+            completion_query(packet);return;
+        }
+        uint32_t want_completion=0;
+        if(packet.operation==130){std::memcpy(&want_completion,bytes+48,4);
+            if(want_completion>1){packet.error=3050;return;}std::memcpy(canonical.data()+48,&want_completion,4);}
+#endif
         uint32_t mode=0,arena_policy=0;uint64_t anchor_owner=0;CallIdentity anchor{};
         const bool entry_requested=packet.operation>=128;
         const bool arena_requested=packet.operation>=129;
@@ -164,6 +214,65 @@ public:
                 entry_leases_[0].token,entry_leases_[1].token,&entry,EntryProof::verify,nullptr,EntryProof::begin};
             if(!entry_ops.entry_preflight(frame_->copied_data())){packet.error=3062;return;}
             if(dispatch_requested){
+#ifdef E33_BATTLE_COMPLETION_RECEIPT_SESSION
+                if(want_completion){
+                    // Source/world/arena/private ID originate in the existing
+                    // owned transaction. No caller FName or function is trusted.
+                    struct CompletionProof {
+                        ParameterResearchOwner* parent;uint64_t base,session,token,name;
+                        Pool* pool;EnemyOwner* fallback;ParameterInstanceAuthority<Pool> authority;
+                        CallIdentity anchor,source,arena;
+                        static bool verify(void* opaque,const e33_battle_completion::Context& c,bool post){
+                            auto& p=*static_cast<CompletionProof*>(opaque);uint64_t name=0;CallIdentity arena{};
+                            ParameterProofOwner<Pool,EnemyOwner> enemy{*p.fallback,p.authority};
+                            const auto held=p.fallback->staged_actor();
+                            const bool native_registration=p.parent->owner_==c.battle&&p.parent->owner_&&
+                                p.authority.owner==p.fallback&&p.fallback->has_work()&&p.fallback->is_trigger_anchor()&&
+                                p.fallback->token_matches(p.token)&&held.index==p.anchor.index&&
+                                held.serial==p.anchor.serial&&held.address==p.anchor.address&&
+                                call_identity(p.base,p.anchor)&&call_identity(p.base,p.source)&&call_identity(p.base,p.arena)&&
+                                !(local_read<uint32_t>(p.anchor.address+8)&0x40018030U)&&
+                                !(local_read<uint32_t>(p.source.address+8)&0x40018030U)&&
+                                !(local_read<uint32_t>(p.arena.address+8)&0x40018030U)&&
+                                local_read<uint64_t>(p.anchor.address+24)==p.name&&p.name==c.private_name&&
+                                e33_battle_completion::same(c.source,{p.source.index,p.source.serial,p.source.address})&&
+                                e33_battle_completion::same(c.arena,{p.arena.index,p.arena.serial,p.arena.address})&&
+                                !std::memcmp(p.parent->original_.data(),reinterpret_cast<const void*>(p.source.address+48),344);
+                            if(!native_registration)return false;
+                            // POST runs under TraceSlots lock. Never call the
+                            // broader owned-entry helpers here: they may update
+                            // retirement journals. The already armed native
+                            // source/arena/private-name registration is immutable.
+                            if(post)return true;
+                            return enemy.owned_instance_name(p.base,p.session,*p.pool,p.token,p.anchor,name)&&name==p.name&&
+                                enemy.owned_entry_arena(p.base,p.session,*p.pool,p.token,p.anchor,arena)&&
+                                arena.index==p.arena.index&&arena.serial==p.arena.serial&&arena.address==p.arena.address;
+                        }
+                    };
+                    if(authority.owner!=&fallback||!fallback.is_trigger_anchor()){packet.error=3661;return;}
+                    CallIdentity arena{};
+                    if(!enemy.owned_entry_arena(b,session,pool,anchor_owner,anchor,arena)){packet.error=3661;return;}
+                    e33_retired_world::TargetOps world_ops{b};e33_retired_world::Snapshot current{};
+                    const auto controller=call_capture(b,local_read<uint64_t>(entry_ids_[0].address+32));
+                    if(!world_ops.observe(current)||!world_ops.controller_world(controller,current.world)){packet.error=3661;return;}
+                    const auto cls=local_read<uint64_t>(controller.address+16);
+                    const bool worldmap=exact_name(b,cls+24,"BP_PlayerController_WorldMap_C")&&
+                        exact_name(b,local_read<uint64_t>(cls+32)+24,"/Game/Gameplay/WorldMap/BP_PlayerController_WorldMap");
+                    CallIdentity function{};unsigned found=0,steps=0;
+                    for(auto child=local_read<uint64_t>(cls+0x48);child&&steps<256;++steps,child=local_read<uint64_t>(child+0x28)){
+                        if(!call_capture(b,child).address){packet.error=3661;return;}
+                        if(exact_name(b,child+24,"ResumeExplorationOnBattleEnd")&&local_read<uint64_t>(child+32)==cls){function=call_capture(b,child);++found;}
+                    }
+                    if(found!=1||steps==256){packet.error=3661;return;}
+                    auto proof=std::make_shared<CompletionProof>(CompletionProof{this,b,session,anchor_owner,instance_name,
+                        &pool,&fallback,authority,anchor,ids_[1],arena});
+                    completion_proof_=proof;completion_.emplace();
+                    const CallIdentity completion_ids[]={current.world,controller,ids_[1],arena,function};
+                    const auto error=completion_->arm(b,session,pool,completion_ids,owner_,instance_name,worldmap,
+                                                     proof.get(),CompletionProof::verify);
+                    if(error){packet.error=error;return;}
+                }
+#endif
                 if(!frame_->dispatch_entry(entry_ops)){packet.error=frame_->quarantined()?408:3064;return;}
                 if(!frame_->confirm_entry_copy(entry_ops)){packet.error=3065;return;}
             }

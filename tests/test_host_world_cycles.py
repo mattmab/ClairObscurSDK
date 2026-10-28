@@ -115,6 +115,7 @@ class HostTests(unittest.TestCase):
         class Coordinator:
             current_token=None;ready=False;ever_admitted=False
             def __init__(self):self.cleanup_ready=True
+            def poll_cleanup(self):events.append('cleanup.poll')
             def observe(self,value=None,*,title=False):
                 self.ready=False
                 if title:self.current_token=None;return

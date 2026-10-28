@@ -52,6 +52,20 @@ class LoadingUI:
             for panel,proof in zip((self.catalog,self.hud),self.proofs):
                 proof.verify(panel,context,rebind=True,preparing=preparing)
         self.bound=context.signature
+        if getattr(getattr(self.catalog,'preview_worker',None),'_shutdown',False) is True:
+            from concurrent.futures import ThreadPoolExecutor
+            self.catalog.preview_worker=ThreadPoolExecutor(max_workers=1,thread_name_prefix='BuilderPreview')
+
+    def retire_world(self):
+        # These trees were proved directly GI-owned during prepare(). Only
+        # detach their acknowledged native input/viewport owners; bind() must
+        # re-prove the full graph and new controller before reuse.
+        for panel in (self.catalog,self.hud):
+            outcome=panel.detach_retired_world(native_retirement_ack=True)
+            if outcome!='ack':return outcome
+        self.catalog.bindings=[]
+        self.bound=None
+        return 'ack'
 
     def observe_title(self,context):
         # A loading GC may have interrupted only the final read-only proof.

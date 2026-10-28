@@ -14,16 +14,28 @@ class BlueprintDirectTrace {
     inline static uint64_t damage_name_{};
     inline static uint64_t external_names_[2]{};
     inline static bool external_{};
+    inline static uint64_t completion_name_{};
     inline static unsigned count_{};
+    static void observe(uint64_t function,void* object,void* frame,void* result,bool before,size_t post_handle=0) {
+        const bool previous=blueprint_direct_frame;
+        blueprint_direct_frame=true;
+        __try {
+            auto* address=reinterpret_cast<void* volatile*>(function+0xd8);
+            if(before) e33_trace::TraceSlots<>::observe_entry(address,object,frame,result);
+            else e33_trace::TraceSlots<>::observe_post(post_handle,address,object,frame,result);
+        } __finally {blueprint_direct_frame=previous;}
+    }
     static void __fastcall body(void* object, void* frame, void* result) {
         uint64_t function{};
-        if (target_trace_read(reinterpret_cast<uint64_t>(frame)+0x10,&function,8) && function <= UINT64_MAX-0xd8) {
-            const bool previous=blueprint_direct_frame;
-            blueprint_direct_frame=true;
-            e33_trace::TraceSlots<>::observe_entry(reinterpret_cast<void* volatile*>(function+0xd8),object,frame,result);
-            blueprint_direct_frame=previous;
-        }
+        const bool selected=target_trace_read(reinterpret_cast<uint64_t>(frame)+0x10,&function,8) &&
+            function && function<=UINT64_MAX-0xd8;
+        const auto post_handle=selected ? e33_trace::TraceSlots<>::post_observation(
+            reinterpret_cast<void* volatile*>(function+0xd8)) : 0;
+        if(selected) observe(function,object,frame,result,true);
         reinterpret_cast<e33_trace::Entry>(base_+0x13938a0)(object,frame,result);
+        // Build() still owns this callee frame. Copy only after the original
+        // interpreter returned, before Build destroys temporary parameters.
+        if(post_handle) observe(function,object,frame,result,false,post_handle);
     }
     static bool selected(void* frame, uint64_t& code, uint64_t& function) {
         const auto address=reinterpret_cast<uint64_t>(frame);
@@ -67,8 +79,27 @@ class BlueprintDirectTrace {
         reinterpret_cast<e33_trace::Entry>(base_+0x1398850)(object,frame,result);
     }
 public:
+#ifdef E33_TRACE_ROUTING_FIXTURE
+    static void fixture_body(uint64_t base,void* object,void* frame,void* result) {
+        base_=base;body(object,frame,result);
+    }
+#endif
     static bool matches_name(uint64_t name){return name&&((damage_name_&&damage_name_==name)||
-        (external_&&(external_names_[0]==name||external_names_[1]==name)));}
+        (external_&&(external_names_[0]==name||external_names_[1]==name))||completion_name_==name);}
+    // Exact completion owner validates its function/controller schema first.
+    // This only retains shared opcode routing; its POST slot remains separate.
+    static bool retain_completion(uint64_t base,uint64_t function) {
+        uint64_t name{};
+        if(completion_name_ || !function || function>UINT64_MAX-24 ||
+           !target_trace_read(function+24,&name,8) || !name) return false;
+        const auto old=damage_name_;
+        if(!count_ && !install(base,function)) return false;
+        if(base_!=base) return false;
+        completion_name_=name;damage_name_=old;return true;
+    }
+    static bool release_completion() {
+        completion_name_=0;return damage_name_ ? true : close();
+    }
     // Separate SDK owner for the two bounded encounter callbacks. Trace expiry
     // must not detach this owner's shared opcode routing.
     static bool retain_encounter(uint64_t base,uint64_t spawn,uint64_t difficulty){
@@ -113,7 +144,7 @@ public:
     }
     static bool close() {
         damage_name_=0;
-        if(external_)return true;
+        if(external_ || completion_name_)return true;
         bool ok=true;
         while(count_) {
             auto slot=slots_[--count_];

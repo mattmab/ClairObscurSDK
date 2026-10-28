@@ -24,20 +24,24 @@ COLOR = '/Script/CoreUObject.LinearColor'
 MARGIN = '/Script/SlateCore.Margin'
 ANCHORS = '/Script/Slate.Anchors'
 VECTOR3 = '/Script/CoreUObject.Vector'
+ROTATOR = '/Script/CoreUObject.Rotator'
 FRAME_NUMBER = '/Script/CoreUObject.FrameNumber'
 FRAME_TIME = '/Script/CoreUObject.FrameTime'
 FRAME_RATE = '/Script/CoreUObject.FrameRate'
 QUALIFIED_FRAME_TIME = '/Script/CoreUObject.QualifiedFrameTime'
 TIMESPAN = '/Script/CoreUObject.Timespan'
+BINDING_ID = '/Script/MovieScene.MovieSceneObjectBindingID'
 FRAME_PROFILES = (FRAME_NUMBER, FRAME_TIME, FRAME_RATE, QUALIFIED_FRAME_TIME)
 PROFILES = MappingProxyType({
     GUID: Profile(GUID, 16, tuple((name, i*4, 'IntProperty') for i,name in enumerate('ABCD'))),
+    BINDING_ID: Profile(BINDING_ID,24,(('Guid',0,GUID),('SequenceID',16,'IntProperty'),('ResolveParentIndex',20,'IntProperty'))),
     TIMESPAN: Profile(TIMESPAN, 8, ()),
     FRAME_NUMBER: Profile(FRAME_NUMBER, 4, (('Value', 0, 'IntProperty'),)),
     FRAME_TIME: Profile(FRAME_TIME, 8, (('FrameNumber', 0, FRAME_NUMBER), ('SubFrame', 4, 'FloatProperty'))),
     FRAME_RATE: Profile(FRAME_RATE, 8, (('Numerator', 0, 'IntProperty'), ('Denominator', 4, 'IntProperty'))),
     QUALIFIED_FRAME_TIME: Profile(QUALIFIED_FRAME_TIME, 16, (('Time', 0, FRAME_TIME), ('Rate', 8, FRAME_RATE))),
     VECTOR3: Profile(VECTOR3, 24, tuple((name, i * 8, 'DoubleProperty') for i, name in enumerate('XYZ'))),
+    ROTATOR: Profile(ROTATOR,24,tuple((name,i*8,'DoubleProperty') for i,name in enumerate(('Pitch','Yaw','Roll')))),
     VECTOR: Profile(VECTOR, 16, (('X', 0, 'DoubleProperty'), ('Y', 8, 'DoubleProperty'))),
     COLOR: Profile(COLOR, 16, tuple((name, i * 4, 'FloatProperty') for i, name in enumerate('RGBA'))),
     MARGIN: Profile(MARGIN, 16, tuple((name, i * 4, 'FloatProperty')
@@ -119,6 +123,12 @@ def validate_profile(catalog, descriptor, descriptors):
             raise ValueError('POD struct field layout changed')
         if path == GUID and (row['flags'] != 6755469251052033 or int(row['vtable_rva'],16) != 0x6e10a98):
             raise ValueError('Guid field flags or native type changed')
+        if path==ROTATOR and (row['flags']!=6755469251052037 or int(row['vtable_rva'],16)!=0x6e11788):
+            raise ValueError('Rotator field flags or native type changed')
+        if path == BINDING_ID:
+            flags=(20266268116386305,20266268116386304,20266268116386304)
+            if row['flags']!=flags[field_index] or int(row['vtable_rva'],16)!=(0x6e136a0 if nested else 0x6e10a98):
+                raise ValueError('Binding ID field flags or native property type changed')
         if path in FRAME_PROFILES:
             table = 0x6e136a0 if nested else 0x6e10a98 if kind == 'IntProperty' else 0x6e11560
             if row['flags'] != _FRAME_FLAGS[path][field_index] or int(row['vtable_rva'], 16) != table:
@@ -139,7 +149,9 @@ def encode(path, value):
     """Copy exact named fields; constrain numbers to the verified UI conversion range."""
     profile = PROFILES[path]
     if path == TIMESPAN:
-        raise ValueError('Timespan is return-only')
+        if type(value) is not TimespanValue or not 0<=value.ticks<=86400*10_000_000:
+            raise ValueError('Timespan inputs require typed nonnegative ticks within one day')
+        return struct.pack('<q',value.ticks)
     if type(value) is NumericStructValue:
         if value.path != path:
             raise ValueError('Numeric struct type does not match the parameter profile')
@@ -165,6 +177,16 @@ def encode(path, value):
                 raise ValueError('POD component must be finite and fit the target UI float range')
             struct.pack_into('<d' if kind == 'DoubleProperty' else '<f', output, offset, item)
     return bytes(output)
+
+
+def encode_argument(path,value):
+    """Validate invocation inputs separately from copied native observations."""
+    encoded=encode(path,value)
+    if path==FRAME_RATE and any(n<=0 for n in struct.unpack('<ii',encoded)):
+        raise ValueError('Frame rate input must be positive')
+    if path==FRAME_TIME and not 0<=struct.unpack_from('<f',encoded,4)[0]<1:
+        raise ValueError('Frame time input requires a canonical subframe')
+    return encoded
 
 
 def decode(path, data):

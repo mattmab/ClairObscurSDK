@@ -85,12 +85,17 @@ class LoadingModPreparationTests(unittest.TestCase):
              patch.object(loading,'PauseMenuEntry',return_value=entry) as factory, \
              patch('expedition33.zone_travel.routes',return_value=()):
             owner=loading.LoadingEntry(module.Mod(),session)
-            owner.prepare(N());owner.bind(first,preparing=True)
+            owner.prepare(N(kind='title'));owner.bind(first,preparing=True)
             entry.install.assert_called_once();entry.poll.assert_not_called()
             from expedition33 import RuntimeQueryError
             entry.install.side_effect=RuntimeQueryError('READ_FAILED')
             owner.bind(first,preparing=True) # Pure pre-build read may be sampled again.
             self.assertIs(owner.entry,entry)
+            entry.state='prepared'
+            entry.install.side_effect=RuntimeQueryError('DESCRIPTOR_IDENTITY_CHANGED')
+            owner.bind(first,preparing=True)
+            self.assertIs(owner.entry,entry);self.assertEqual(entry.state,'prepared')
+            entry.close.assert_not_called();self.assertEqual(factory.call_count,1)
             def partial_failure():
                 entry.state='building'
                 raise RuntimeQueryError('READ_FAILED')

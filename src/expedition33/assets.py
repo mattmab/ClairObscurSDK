@@ -5,16 +5,14 @@ separate audit. Missing name-pool entries fail closed without adding names.
 """
 import re
 import struct
-import json
-import subprocess
 from .catalog import capture_matching
 from .reflection import describe
 from .invocation import CallPlan, Parameter, UnsupportedInvocation
 
 
-def load_asset(scope,path):
+def load_asset(scope,path,*,prepared=None):
     """Retain a canonical /Game/Package.Asset through the existing asset loader."""
-    return _load_asset(scope,path)
+    return _load_asset(scope,path,_prepared=prepared)
 
 
 def _generated_world_path(path):
@@ -57,7 +55,31 @@ def load_generated_world(scope,path):
         raise
 
 
-def _load_asset(scope,path,*,_generated=False):
+
+class PreparedAssetLoader:
+    """Retained loader selectors; every load still reads a fresh schema."""
+    def __init__(self,scope):
+        scope._check()
+        self.scope=scope
+        c=capture_matching(scope.pid,names=('KismetSystemLibrary','Default__KismetSystemLibrary','LoadAsset_Blocking'))
+        def one(rows):
+            rows=tuple(rows)
+            if len(rows)!=1:raise ValueError('Ambiguous asset-loading identity')
+            return rows[0]
+        owner=one(o for o in c.objects if o.name=='KismetSystemLibrary' and o.class_name=='Class')
+        target=one(o for o in c.objects if o.name=='Default__KismetSystemLibrary' and o.class_index==owner.index)
+        function=one(o for o in c.objects if o.name=='LoadAsset_Blocking' and o.outer_index==owner.index)
+        self.leases=tuple(scope.retain(obj) for obj in (owner,target,function))
+
+    def capture(self,scope):
+        self.scope._check();scope._check()
+        if scope._session is not self.scope._session or not all(lease.active for lease in self.leases):
+            raise RuntimeError('Prepared asset loader is no longer owned by this SDK session')
+        from .catalog import capture_selected
+        return capture_selected(scope.pid,tuple((lease.object.index,lease.object.serial,lease.object.address)
+                                                for lease in self.leases))
+
+def _load_asset(scope,path,*,_generated=False,_prepared=None):
     """Return a scoped RetainedInvocation; close it to release the asset lease.
 
     Accepts only top-level /Game/Package.Asset paths. The native backend verifies
@@ -70,17 +92,14 @@ def _load_asset(scope,path,*,_generated=False):
         raise UnsupportedInvocation('Verified asset loading requires the sequence candidate runtime')
     if not (_generated_world_path(path) if _generated else type(path) is str and re.fullmatch(r'/Game/(?:[A-Za-z0-9_]+/)*([A-Za-z0-9_]+)\.(?i:\1)',path)):
         raise ValueError('Expected a canonical top-level /Game/Package.Asset path')
-    query=subprocess.run([str(session._transport._executable),'--resolve-export-names' if _generated else '--resolve-asset-names',str(scope.pid),path],
-        capture_output=True,text=True,encoding='utf8',timeout=30,creationflags=subprocess.CREATE_NO_WINDOW)
-    if query.returncode: raise ValueError('Asset name resolution failed: '+query.stderr.strip())
-    records=[json.loads(line) for line in query.stdout.splitlines()]
-    if len(records)!=3 or records[0].get('event')!='snapshot_start' or records[-1]!={'event':'snapshot_end','emitted':1}:
-        raise ValueError('Incomplete asset name observation')
-    start,rows=records[0],records[1:-1]
-    names=[r for r in rows if r['event']=='asset_names']
-    if start['pid']!=scope.pid or len(names)!=1 or names[0]['package']+'.'+names[0]['asset']!=path:
-        raise ValueError('Asset-name observation changed')
-    c=capture_matching(scope.pid,names=('KismetSystemLibrary','Default__KismetSystemLibrary','LoadAsset_Blocking'))
+    from ._asset_names import resolve
+    names=[resolve(scope,path,export=_generated)]
+    numbers=tuple(names[0].get(key+'_number',0) for key in ('package','asset'))
+    cap=getattr(session._transport,'asset_name_number_protocol',0)
+    if any(numbers) and (type(cap) is not int or cap!=1):
+        raise UnsupportedInvocation('Numbered asset names require the newer native asset loader')
+    c=(_prepared.capture(scope) if _prepared is not None else
+       capture_matching(scope.pid,names=('KismetSystemLibrary','Default__KismetSystemLibrary','LoadAsset_Blocking')))
     def one(values):
         values=tuple(values)
         if len(values)!=1: raise ValueError('Ambiguous asset-loading identity')
@@ -102,8 +121,8 @@ def _load_asset(scope,path,*,_generated=False):
             raise ValueError('Asset loader class constraint changed')
         params.append(Parameter(p['name'],p['type'],p['offset'],p['element_size'],p['dimension'],p['flags'],constraint=constraint))
     data=bytearray(48)
-    struct.pack_into('<I',data,8,names[0]['package_id'])
-    struct.pack_into('<I',data,16,names[0]['asset_id'])
+    struct.pack_into('<II',data,8,names[0]['package_id'],numbers[0])
+    struct.pack_into('<II',data,16,names[0]['asset_id'],numbers[1])
     plan=CallPlan(target,function,info['flags'],int(info['entry_rva'],16),info['params_size'],
         d.owners[0]['size'],info['return_offset'],tuple(params),bytes(data),(),6)
     with scope._lease_context():

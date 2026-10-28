@@ -213,6 +213,7 @@ class TitleInputRestorationTests(unittest.TestCase):
   self.entry._current_title=lambda:self.current
   self.entry.attachment=N(restore=lambda:self.events.append('overlay') or True)
   self.entry.invoke=lambda plan:True if plan=='active' else self.events.append(plan)
+  self.entry._invoke_title_restore=lambda plan:self.events.append(plan)
  def test_title_target_rejection_defers_only_stale_busy_before_dispatch(self):
   from expedition33.ownership import LeaseError
   for state in ('new','prepared'):
@@ -251,6 +252,15 @@ class TitleInputRestorationTests(unittest.TestCase):
  def test_acknowledged_hide_restores_overlay_then_uionly_then_button_focus(self):
   self.assertTrue(self.entry.restore_title_input_after_menu_close());self.assertEqual(self.events,['overlay','uionly','focus']);self.assertFalse(self.entry._title_restore_pending)
   self.assertTrue(self.entry.restore_title_input_after_menu_close());self.assertEqual(self.events,['overlay','uionly','focus'])
+ def test_title_restore_uses_fresh_results_for_both_input_calls(self):
+  from unittest.mock import Mock
+  self.entry._title_input=Mock();self.entry._button_focus=Mock()
+  self.entry._title_input.invoke.return_value=nullcontext(N(return_value=None))
+  self.entry._button_focus.invoke.return_value=nullcontext(N(return_value=None))
+  self.entry._invoke_title_restore=TitleMenuEntry._invoke_title_restore
+  self.assertTrue(self.entry.restore_title_input_after_menu_close())
+  self.entry._title_input.invoke.assert_called_once_with(fresh_results=True)
+  self.entry._button_focus.invoke.assert_called_once_with(fresh_results=True)
  def test_unknown_hide_never_restores_input(self):
   self.menu.panel.uncertain=True
   self.assertFalse(self.entry.restore_title_input_after_menu_close());self.assertEqual(self.events,[]);self.assertTrue(self.entry._title_restore_pending)
@@ -262,10 +272,18 @@ class TitleInputRestorationTests(unittest.TestCase):
    if plan=='active':return True
    self.events.append(plan)
    if plan=='uionly':raise RuntimeError('unknown UIOnly acknowledgment')
-  self.entry.invoke=invoke
+  self.entry._invoke_title_restore=invoke
   with self.assertRaisesRegex(RuntimeError,'unknown UIOnly'):self.entry.restore_title_input_after_menu_close()
   with self.assertRaisesRegex(RuntimeError,'without replay'):self.entry.restore_title_input_after_menu_close()
   self.assertEqual(self.events,['overlay','uionly']);self.assertTrue(self.entry._title_restore_pending)
+ def test_unknown_focus_after_input_success_never_replays_either_call(self):
+  def invoke(plan):
+   self.events.append(plan)
+   if plan=='focus':raise RuntimeError('unknown focus acknowledgment')
+  self.entry._invoke_title_restore=invoke
+  with self.assertRaisesRegex(RuntimeError,'unknown focus'):self.entry.restore_title_input_after_menu_close()
+  with self.assertRaisesRegex(RuntimeError,'without replay'):self.entry.restore_title_input_after_menu_close()
+  self.assertEqual(self.events,['overlay','uionly','focus'])
 
 
 class TitleCloseRestorationTests(TitleInputRestorationTests):

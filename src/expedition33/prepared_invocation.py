@@ -201,16 +201,22 @@ class PreparedInvocation:
         prepare = planner.prepare_blueprint if self._plan.wire_version == 8 else planner.prepare
         return prepare(self._plan.target, self._plan.function, **arguments)
 
-    def invoke(self, *, refresh_from_result=False):
+    def invoke(self, *, refresh_from_result=False, fresh_results=False):
         """Optionally reuse the validated object-result catalog for future plans.
 
         This revokes all existing plans before dispatch. A failed operation leaves
         the planner empty, so a caller must explicitly refresh before proceeding.
         Scalar-only success reuses the input catalog; it does not claim freshness.
+        With selected-results planning, fresh_results decodes object slots from
+        a newly selected output/constraint closure without merging older rows.
+        It does not replace or refresh the planner's catalog and cannot be
+        combined with refresh_from_result.
         """
-        if type(refresh_from_result) is not bool:
-            raise ValueError('refresh_from_result must be bool')
+        if type(refresh_from_result) is not bool or type(fresh_results) is not bool:
+            raise ValueError('Result options must be bool')
         planner, session = self._check()
+        if fresh_results and (not planner._selected_results or refresh_from_result):
+            raise ValueError('Fresh results require selected planning without planner refresh')
         scope = planner._scope() if planner._scope is not None else None
         if planner._scope is not None and scope is None:
             raise RuntimeError('Invocation resource scope no longer exists')
@@ -219,9 +225,10 @@ class PreparedInvocation:
             planner._generation += 1
             planner._catalog = None
         with scope._lease_context() if scope is not None else nullcontext():
+            options={'_fresh_results':True} if fresh_results else {}
             result, observed = session._invoke_retained_plan(
                 self._plan, catalog, _return_catalog=True,
-                _selected_results=planner._selected_results)
+                _selected_results=planner._selected_results, **options)
         if scope is not None:
             # Hold scope alive through dispatch and use the existing adoption path.
             scope._adopt_retained(result)

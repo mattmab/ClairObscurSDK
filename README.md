@@ -1,11 +1,11 @@
 # Clair Obscur: Expedition 33 — independent Python SDK
 
-MIT-licensed SDK **0.1.0-rc18** (release candidate) for the verified Windows Steam build. Our native
+MIT-licensed SDK **0.1.0-rc19** (release candidate) for the verified Windows Steam build. Our native
 runtime independently identifies live Unreal objects and executes supported
 engine operations on the game thread. Python runs in a persistent external
 controller. No Borderlands offsets or layouts are used as Expedition 33 facts.
 
-The installable release candidate is built with `scripts/package_rc18.py`.
+The current qualified release is packaged with `scripts/package_rc19.py` from an explicit frozen manifest.
 Extract its game-root ZIP beside `Sandfall`; normal game launch starts the SDK
 and restores saved mod choices after loading a save. SDK Management,
 Introspection Harness and LiveObjectViewer are bundled. Choose optional `.sdkmod` downloads from the
@@ -14,6 +14,15 @@ and Cinematics, plus Asset Creator/Main Character Replacer. Each has its own rel
 [installation and restart instructions](docs/INSTALLABLE_RELEASE.md).
 The checkout's `launch-sdk.cmd` delegates to the installed SDK using `SDK_GAME_DIR`
 or the local, untracked `settings/install-path.txt`.
+
+## RC19: authored cinematics and scene placement
+
+[RC19 downloads](https://github.com/mattmab/ClairObscurSDK/releases/tag/v0.1.0-rc19)
+include the current Scene Editor timeline, flight view, whole-scene placement,
+Blueprint NPC controls, drag seeking and native runtime 245. Backspace hides
+the timeline; numpad movement and Alt fine control position the scene.
+See [validation and experimental limits](docs/RELEASE_0.1.0_RC19.md), including
+remaining scene-import and character-animation compatibility work.
 
 ## RC18: preparation before loading a save
 

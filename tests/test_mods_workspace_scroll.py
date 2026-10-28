@@ -20,6 +20,60 @@ class ScrollFakePanel(WorkspaceFakePanel):
     def _render_call(self,*args,**kw):pass
     def scroll_offset(self):return 0.
 
+class SharedPresenterCompatibilityTests(unittest.TestCase):
+    def test_plain_presenter_rows_and_navigation_expand_before_shell_padding(self):
+        from expedition33.management_view import MenuControl,MenuFrame
+        from expedition33.mods_workspace_scroll import ScrollWorkspaceMenu
+        from expedition33._menu_latency import MenuLatency
+        controls=tuple(MenuControl(100+i,'Root '+str(i)) for i in range(5))
+        controls+=tuple(MenuControl(i,label) for i,label in ((1,'Back'),(2,'Tools'),(4,'Next'),(6,'Close')))
+        original=MenuFrame(1,'Viewer','Details',controls,0,1,'',False)
+        menu=object.__new__(ScrollWorkspaceMenu);menu.latency=MenuLatency()
+        menu.panel=SimpleNamespace(count=301,key_row_capacity=40)
+        menu.view=SimpleNamespace(render=lambda:original)
+        frame=menu._render_view()
+        self.assertEqual(len(frame.controls),301)
+        self.assertEqual([frame.controls[i*6].token for i in range(5)],list(range(100,105)))
+        self.assertEqual([c.label for c in frame.controls[48:52]],['Back','Tools','Next','Close'])
+        self.assertEqual(len(original.controls),9)
+
+    def test_plain_mod_views_layout_without_workspace_keybind_state(self):
+        from unittest.mock import Mock
+        from expedition33.mods_workspace_scroll import ScrollWorkspacePanel
+        from expedition33._menu_latency import MenuLatency
+        for view in (SimpleNamespace(page=2),SimpleNamespace(page=2,screen='browse')):
+            panel=object.__new__(ScrollWorkspacePanel)
+            panel.latency=MenuLatency();panel.layout_mode=('editor',False)
+            panel.scroll_marker=None;panel.content_size='content';panel.key_size='key-size'
+            panel.scroll='scroll';panel.key_scroll='key-scroll';panel.slider='slider'
+            panel.row_slots=[];panel.key_slots=[];panel.switches=[]
+            panel.direct=Mock();panel.position=Mock()
+            panel.layout(view)
+            panel.direct.assert_any_call('key-size','SizeBox','SetHeightOverride',InHeightOverride=672.)
+            panel.direct.assert_any_call('key-scroll','ScrollBox','SetScrollOffset',NewScrollOffset=0.)
+            panel.direct.assert_any_call('slider','Widget','SetIsEnabled',bInIsEnabled=True)
+            self.assertEqual(panel.scroll_marker,('editor',0,2))
+            self.assertFalse(hasattr(view,'key_total'))
+
+    def test_plain_mod_frame_paints_without_workspace_screen_or_selection(self):
+        from unittest.mock import Mock
+        from expedition33.management_view import MenuControl,MenuFrame
+        from expedition33.mods_workspace_scroll import ScrollWorkspaceMenu
+        menu=object.__new__(ScrollWorkspaceMenu)
+        registry=Mock();registry.select.side_effect=ManagementError('No theme')
+        menu.view=SimpleNamespace(registry=registry)
+        menu.frame=MenuFrame(1,'Model catalog','Details',(MenuControl(100,'Model'),MenuControl(7,'Close')),0,1,'Ready',False)
+        menu.error='';menu._button_colors={};menu._set_button_color=Mock();menu._paint_field=Mock()
+        panel=menu.panel=Mock()
+        panel.appearance=('World Builder',1.);panel.text_bounds={}
+        panel.panel_titles=['heading1','heading2','heading3']
+        panel.labels=[SimpleNamespace(index=i) for i in range(105)]
+        menu._paint_frame()
+        panel.set_text.assert_any_call(panel.subtitle,'Model catalog')
+        panel.set_text.assert_any_call('heading1','MOD CONTROLS')
+        self.assertFalse(hasattr(menu.view,'screen'))
+
+
 class ScrollWorkspaceTests(unittest.TestCase):
     setUp=test_management.ManagementTests.setUp
     tearDown=test_management.ManagementTests.tearDown

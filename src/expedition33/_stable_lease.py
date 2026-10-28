@@ -55,6 +55,10 @@ def acquire_stable(scope,obj,*,selectors=(),capture=None):
             session._abort_ownership();raise RuntimeQueryError('Stable lease token aliases ownership')
         lease=ObjectLease(session,reply['token'],None)
         lease._scope=weakref.ref(scope)
+        # The acknowledged identity remains useful for detecting aliases if
+        # a subsequent observation fails. It is not an exposed UObject and
+        # grants no authority to invoke or bind this unresolved lease.
+        lease._pending_identity=(session.pid,*reply['identity'])
         # Adopt ownership BEFORE any reader call or postcondition validation.
         session._leases.add(lease);scope._leases.append(lease)
     if reply['error']:
@@ -62,9 +66,9 @@ def acquire_stable(scope,obj,*,selectors=(),capture=None):
         raise LeaseError('Stable tree acquisition failed',outcome=('not_dispatched','completed','unknown')[reply['outcome']],native_error=reply['error'])
     fresh=capture(session.pid,(reply['identity'],)+tuple(selectors))
     current=fresh.by_index[obj.index]
-    lease._object=current
     if (current.index,current.serial,current.address)!=reply['identity']:
         raise RuntimeQueryError('Stable acquired identity changed')
+    lease._object=current
     return lease,fresh
 
 
@@ -107,9 +111,9 @@ def stabilize_owned_tree(scope,catalog,parent,tree,owner_class,*,field='WidgetTr
     reply={'identity':(lease.object.index,lease.object.serial,lease.object.address)}
     try:
         current=fresh.by_index[tree.index];new_parent=fresh.resolve(parent)
-        lease._object=current
         if (current.index,current.serial,current.address)!=reply['identity']:
             raise RuntimeQueryError('Stable owned tree identity changed')
+        lease._object=current
         _owned_child_chain(fresh,new_parent,current,field)
         after,selected=read_reference(fresh,new_parent,fresh.by_index[owner_class.index],field,project=True)
         if after is None or (after.index,after.serial,after.address)!=reply['identity']:
@@ -138,6 +142,25 @@ def rediscover_owned_tree(pid,discover,parent,stable_tree,owner_class_index,*,ca
             (stable_tree.index,stable_tree.serial,stable_tree.address) or tree.outer_index!=parent.index):
         raise RuntimeQueryError('Owned tree changed during detached rediscovery')
     return catalog,tree,current
+
+
+def refresh_discovery_owned_tree(pid,metadata,parent,stable_tree,owner_class_index,*,
+                                 validate_context,capture=None,read_reference=None):
+    """Recapture known metadata and a leased tree without scanning unrelated slots.
+
+    No prior observations are merged. Every original metadata identity is
+    selected afresh, then the owned parent/property are independently read.
+    Context validation brackets the detached read; any changed identity fails
+    closed and no create, acquire or mutation is replayed.
+    """
+    if metadata.pid!=pid or not callable(validate_context):raise ValueError('Expected owned metadata and context check')
+    validate_context()
+    fresh=fresh_catalog_replacing(metadata,(),capture=capture)
+    validate_context()
+    result=rediscover_owned_tree(pid,lambda:fresh,parent,stable_tree,owner_class_index,
+                                capture=capture,read_reference=read_reference)
+    validate_context()
+    return result
 
 
 def refresh_owned_tree_catalog(catalog,parent,old_tree,stable_tree,owner_class_index,*,field='WidgetTree',capture=None,read_reference=None):

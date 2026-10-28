@@ -363,6 +363,14 @@ class NativeMenuRoute:
 
     def close(self):
         self.close_menu()
+        self.revoke()
+
+    def revoke(self):
+        """Drop a retiring presenter's Python callbacks; parent owns native UI.
+
+        World retirement must not restore input through the old controller.
+        Process UI performs its own acknowledged detach/rebind independently.
+        """
         if self.menu is not None:
             # Release the mod-bound factory even when the tree stays cached.
             from .management_view import ManagementView

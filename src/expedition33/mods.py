@@ -505,6 +505,10 @@ class ModLoader:
             if self._session is not shared or getattr(shared, '_closed', False):
                 return delivered
             if lifecycle is not None:lifecycle.poll_cleanup()
+            # Only explicitly queued user disables with cancellable read-only
+            # barriers are retried; registry validates scope and world again.
+            self.registry.poll_pending_disables()
+            if self._session is not shared or getattr(shared, '_closed', False):return delivered
             from ._session import supports_keys
             if supports_keys(getattr(shared, '_transport', None)) and (lifecycle is None or lifecycle.ever_admitted):
                 from .keybind_service import KeybindService
@@ -524,12 +528,20 @@ class ModLoader:
                     return delivered
             failures = []
             records = [(key, self._loaded.get(key)) for key in selected]
+            # One-shot intent hints reorder this pass only. Shared transport,
+            # keys and lifecycle gates still run first; no mod callback runs
+            # recursively inside the UI/console event that queued the intent.
+            def urgent(pair):
+                record=pair[1]
+                return record is not None and getattr(record[1],'__dict__',{}).get('poll_urgent') is True
+            records.sort(key=lambda pair:not urgent(pair))
             for key, record in records:
                 if record is None or self._loaded.get(key) is not record or record[2] is None:
                     continue
                 if lifecycle is not None and not lifecycle.allows(key):continue
                 callback = getattr(record[1], 'poll', None)
                 if callback is not None:
+                    if urgent((key,record)):record[1].__dict__['poll_urgent']=False
                     try:
                         if self._poll_diagnostics:
                             self._timed_poll('mod.' + key, callback)
