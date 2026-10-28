@@ -175,7 +175,7 @@ class SceneView(ScrollWorkspaceView):
             description='Choose a scene actor to change its size, animation or placement. Then open Flight editor / timeline to preview and scrub. Changes affect only the temporary scene actors.'
         elif self.screen=='scene_actor':
             a=m.actor(self.actor_id);p=a['transform'];assembly=d['assemblies'][a['assembly']]
-            description=a['name']+f" | Size: {p['scale'][0]*100:g}%\n\nHalf / Double size changes this actor only. Exact size uses a multiplier: 1 = 100%, 0.01 = 1%.\nChoose Animation to browse this character’s clips. Position / rotation controls its placement and orientation.\n\nOpen Flight editor / timeline from the scene menu to preview and scrub. Save scene keeps these changes."
+            description=a['name']+f" | Size: {p['scale'][0]*100:g}%\n\nHalf / Double size changes this actor only. Exact size uses a multiplier: 1 = 100%, 0.01 = 1%.\nChoose Animation to browse this character's clips. Position / rotation controls its placement and orientation.\n\nOpen Flight editor / timeline from the scene menu to preview and scrub. Save scene keeps these changes."
             present=any(e['id']=='anim-'+a['id'] for e in d['events']);anim=next((e for e in d['events'] if e['id']=='anim-'+a['id']),dict(id='anim-'+a['id'],at=0.,params=dict(asset='bind_pose',loop=False)));clip='Bind pose (no animation)' if anim['params']['asset']=='bind_pose' else CLIP_LABELS[CLIPS.index(anim['params']['asset'])]
             rows=[row(f'Size: {p['scale'][0]*100:g}%','edit',(f'pose:{a["id"]}:scale:0',p['scale'][0],'float'),editable),row('Half size','size',0.5,editable),row('Double size','size',2.,editable),row('Position / rotation','page','scene_transform',editable),row('Animation: '+clip,'page','scene_animation',editable),row('Animation start: '+f'{anim["at"]:g}s','edit',('event:'+anim['id'],anim['at'],'float'),editable and present),row('Loop: '+('On' if anim['params']['loop'] else 'Off'),'loop',a['id'],editable and present),row('Remove character...','page','scene_remove',editable),row('Name: '+a['name'],'edit',('actor_name:'+a['id'],a['name'],'text'),editable)]
         elif self.screen=='scene_transform':
@@ -243,7 +243,7 @@ class SceneView(ScrollWorkspaceView):
             description='Select an event to edit its start time. Audio, effects and recoil have separate events. The experimental v12 recoil curve is unchanged.'
             rows=[row(f'{e["at"]:6.3f}s  {e["type"]} / {e["target"]}','event',e['id']) for e in sorted(d['events'],key=lambda e:(e['at'],e['id']))]
         elif self.screen=='scene_event':
-            e=m.event(self.event_id);description=e['id']+'\n'+e['type']+' → '+e['target']+'\n\n'+json.dumps(e['params'],indent=2)
+            e=m.event(self.event_id);description=e['id']+'\n'+e['type']+' -> '+e['target']+'\n\n'+json.dumps(e['params'],indent=2)
             rows=[row(f'Start time: {e["at"]:g} seconds','edit',('event:'+e['id'],e['at'],'float'),editable)]
         else:
             rows=[row(r['name'],'load',r['id'],editable) for r in m.store.list()]
