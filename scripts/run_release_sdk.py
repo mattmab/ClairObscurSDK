@@ -108,12 +108,12 @@ def main():
         from expedition33.settings import SettingsStore
         original_transport = sdk.SessionTransport
         def release_transport(*, _executable=None):
-            transport = original_transport(_executable=ROOT / 'build/research-probe-cinematic-v234-retirement/research_probe.exe')
+            transport = original_transport(_executable=ROOT / 'build/research-probe-cinematic-v251-retirement/research_probe.exe')
             required = ('map_load_gate_protocol', 'retired_world_cleanup_protocol', 'menu_open_focus_protocol', 'metadata_stabilization_protocol', 'stable_lease_protocol', 'console_color_status_protocol', 'lease_release_batch_protocol', 'original_game_action_protocol', 'blueprint_trace_protocol', 'picto_edit_protocol', 'picto_progression_protocol', 'picto_class_load_protocol', 'picto_cost_protocol')
             required = (*required,'builder_world_retirement_protocol','sequence_retirement_protocol','media_retirement_protocol','music_audio_retirement_protocol')
             required = (*required,'sequence_seek_protocol','sequencer_frame_values_protocol','sequencer_object_array_protocol')
             required = (*required,'timeline_blueprint_protocol','sequence_binding_values_protocol','sequence_portable_binding_protocol','timeline_actor_pool_protocol','timeline_current_world_protocol')
-            required = (*required,'rotator_values_protocol','sequence_origin_update_protocol','sequence_flight_protocol','sequence_placement_input_protocol','media_seek_protocol')
+            required = (*required,'rotator_values_protocol','sequence_origin_update_protocol','command_wait_protocol','sequence_flight_protocol','sequence_flight_keyboard_protocol','sequence_flight_playback_protocol','sequence_placement_input_protocol','media_seek_protocol')
             if transport.zone_travel_protocol != 2 or any(getattr(transport, name, 0) != 1 for name in required) or transport.mesh_protocol != 3:
                 transport.close()
                 raise RuntimeError('Combined release runtime is missing capabilities')
