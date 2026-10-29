@@ -215,8 +215,8 @@ class AuthoredPreview:
                 from expedition33.cinematics.timeline_media import TimelineMedia
                 with self.latency.measure('timeline.media_prepare'):
                     path=authored_media.resolve(self.play_scope,movie)
-                    start,end=authored_media.playback_window(self.document,self.rate)
-                    self.media=TimelineMedia(self.play_scope,self.menu.panel,path,self.rate,start,end)
+                    start,end,origin=authored_media.playback_clock(self.document,self.rate)
+                    self.media=TimelineMedia(self.play_scope,self.menu.panel,path,self.rate,start,end,origin=origin)
                     self.media.prepare()
             self.frame=initial;self.subframe=subframe;self.ready=True;self.message='Ready'
             if not self._sync_media():self.message='Opening authored movie; playback waits for its first frame'

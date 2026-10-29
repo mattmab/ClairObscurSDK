@@ -205,11 +205,12 @@ def playback_document(document):
     return result
 
 
-def playback_window(document,rate):
-    """Map one original movie spawn interval into player frames.
+def playback_clock(document,rate):
+    """Return visible start/end and the original film origin in player frames.
 
     A missing end means the movie's duration is the endpoint. More than one
-    interval is not a single-clock movie and needs a separate adapter.
+    interval is not a single-clock movie and needs a separate adapter. A parent
+    may clip the visible start without resetting the film's playback clock.
     """
     from fractions import Fraction
     from .authored_timeline import channel
@@ -248,14 +249,21 @@ def playback_window(document,rate):
     if len(stops)>1 or (stops and stops[0]<=starts[0]):raise ValueError('One authored movie interval is required')
     convert=lambda tick:float(Fraction(tick*d*rate[0],n*rate[1]))
     start=convert(starts[0]);end=convert(stops[0]) if stops else None
+    origin=start
     if actor['sequence']!=document['source']['sequence']:
         from .authored_media_occurrence import occurrence
         offset,lower,upper=occurrence(document['source'],actor['sequence'],section_edits=document.get('section_edits',{}))
         factor=Fraction(rate[0],rate[1]);start+=float(offset*factor)
+        origin=start
         end=min(float(upper*factor),float(offset*factor)+end) if end is not None else float(upper*factor)
-        if start<float(lower*factor):raise ValueError('Clipped movie start requires a media offset adapter')
+        start=max(start,float(lower*factor))
         if end<=start:raise ValueError('Authored movie is outside its nested occurrence')
-    return start,end
+    return start,end,origin
+
+
+def playback_window(document,rate):
+    """Return visible bounds; playback_clock also preserves the film origin."""
+    return playback_clock(document,rate)[:2]
 
 
 def start_frame(document,rate):

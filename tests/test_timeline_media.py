@@ -60,7 +60,7 @@ class TimelineMediaTests(unittest.TestCase):
     def test_negative_start_and_exclusive_end_across_forward_and_reverse_scrubs(self):
         # Frame boundaries from the captured Depends Which Family source;
         # this checks clock arithmetic, not that the original renders fullscreen.
-        m,v=self.model();m.start=-49.;m.end=773.
+        m,v=self.model();m.start=m.origin=-49.;m.end=773.
         v.media_time.return_value=dict(duration_seconds=60.)
         m.sync(-49.01,False);self.assertFalse(m.shown)
         m.sync(-49.,False);self.assertTrue(m.shown);v.seek.assert_called_with(0.)
@@ -71,7 +71,7 @@ class TimelineMediaTests(unittest.TestCase):
         m.sync(-49.01,False);self.assertFalse(m.shown)
 
     def test_movie_audio_pauses_at_exclusive_end_and_resumes_when_reentered(self):
-        m,v=self.model();m.start=-49.;m.end=773.
+        m,v=self.model();m.start=m.origin=-49.;m.end=773.
         v.media_time.return_value=dict(duration_seconds=60.)
         v.media_position.return_value=dict(time_seconds=0.)
         m.sync(-49.,True);self.assertTrue(m.playing);v.resume.assert_called_once()
@@ -82,6 +82,19 @@ class TimelineMediaTests(unittest.TestCase):
         m,v=self.model();v.seek.return_value=False
         with self.assertRaisesRegex(ValueError,'seeking'):m.sync(0,False)
         self.assertIsNone(m.last);v.resume.assert_not_called()
+    def test_clipped_visible_start_preserves_original_film_clock(self):
+        m,v=self.model();m.origin=-60.;m.start=0.;m.end=90.
+        m.sync(-1.,True);self.assertFalse(m.shown);v.resume.assert_not_called()
+        m.sync(0.,True);self.assertTrue(m.shown);v.seek.assert_called_with(2.)
+        m.sync(90.,True);self.assertFalse(m.shown);self.assertFalse(m.playing)
+        m.sync(30.,False);self.assertTrue(m.shown);v.seek.assert_called_with(3.)
+        m.sync(0.,False);v.seek.assert_called_with(2.)
+    def test_invalid_origin_is_rejected_before_creating_a_video_owner(self):
+        for origin in (float('nan'),float('inf'),True,1.):
+            with patch('expedition33.cinematics.timeline_media.OwnedVideoWidget') as factory:
+                with self.assertRaisesRegex(ValueError,'clock origin'):
+                    TimelineMedia(object(),object(),'./Movies/Film.mp4',(30,1),0.,origin=origin)
+                factory.assert_not_called()
     def test_known_owner_closes_and_retirement_can_defer(self):
         m,v=self.model();v.state='closed';self.assertTrue(m.close());v.close.assert_called_once()
         v.retire_world.return_value=False;self.assertFalse(m.retire_world())

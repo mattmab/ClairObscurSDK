@@ -165,5 +165,6 @@ class AuthoredMediaTests(unittest.TestCase):
             document['section_edits']={'section':dict(start=480000,end=720000)}
             self.assertEqual(playback_window(document,(30,1)),(630.,900.))
             document['key_edits'][0]['at']=-48000
-            with self.assertRaisesRegex(ValueError,'Clipped movie start'):
-                playback_window(document,(30,1))
+            from expedition33.cinematics.authored_media import playback_clock
+            self.assertEqual(playback_window(document,(30,1)),(600.,900.))
+            self.assertEqual(playback_clock(document,(30,1)),(600.,900.,570.))
