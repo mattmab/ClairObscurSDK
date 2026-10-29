@@ -2,6 +2,7 @@
 #include "session_protocol.h"
 #include "target_process_exit.h"
 #include "session_wait.h"
+#include "session_command_wait_policy.h"
 
 inline void decode_console_payload(const std::string& encoded,wchar_t (&out)[32769]) {
     require(encoded.size()%4==0 && encoded.size()/4<=32768,"CONSOLE_PAYLOAD_SIZE");
@@ -33,6 +34,7 @@ struct RuntimeSessionController {
     DWORD tid = 0, controller = GetCurrentProcessId();
     uint64_t nonce = 0;
     bool opened = false;
+    uint64_t command_sequence=0;
     ~RuntimeSessionController() {
         if (opened && packet && !InterlockedCompareExchange(&packet->closed, 0, 0) &&
             InterlockedCompareExchange(&packet->request.state, 0, 0) == kComplete) {
@@ -47,6 +49,7 @@ struct RuntimeSessionController {
     void command(DWORD action) {
         require_live_target(target_process);
         require(!InterlockedCompareExchange(&packet->closed, 0, 0), "SESSION_ALREADY_CLOSED");
+        ++command_sequence;
         packet->request.action = action; packet->request.error = 0;
         InterlockedExchange(&packet->request.state, kRequested);
         UINT message = RegisterWindowMessageW(kSessionMessage);
@@ -55,8 +58,23 @@ struct RuntimeSessionController {
             throw std::runtime_error("SESSION_POST_FAILED");
         }
         ULONGLONG start = GetTickCount64();
-        while (InterlockedCompareExchange(&packet->request.state, 0, 0) != kComplete && GetTickCount64() - start < 5000) {
+#if E33_RUNTIME_CINEMATIC_VERSION>=251
+        e33_command_wait::Policy policy;
+        const uint64_t budget=opened?e33_command_wait::deadline_ms:5000;
+#else
+        const uint64_t budget=5000;
+#endif
+        while (InterlockedCompareExchange(&packet->request.state, 0, 0) != kComplete && GetTickCount64() - start < budget) {
             require_live_target(target_process);
+#if E33_RUNTIME_CINEMATIC_VERSION>=251
+            const auto elapsed=GetTickCount64()-start;
+            if(opened && policy.notice(elapsed)) {
+                const auto state=InterlockedCompareExchange(&packet->request.state,0,0);
+                if(state==kRequested || state==kRunning)
+                    std::cout << "{\"event\":\"session_pending\",\"version\":1,\"sequence\":" << command_sequence
+                              << ",\"elapsed_ms\":" << elapsed << ",\"state\":" << state << "}" << std::endl;
+            }
+#endif
             completion_wait.wait();
         }
         require_live_target(target_process);
@@ -227,6 +245,9 @@ inline void run_runtime_session(DWORD pid, DWORD thread, int32_t object_index, i
     require(packet.request.observed_pid == pid && packet.request.observed_tid == thread, "SESSION_THREAD_MISMATCH");
     require(UnhookWindowsHookEx(connection.bootstrap), "SESSION_BOOTSTRAP_REMOVE_FAILED"); connection.bootstrap = nullptr;
     std::cout << "{\"event\":\"session_ready\",\"pid\":" << pid << ",\"game_thread_id\":" << thread
+#if E33_RUNTIME_CINEMATIC_VERSION>=251
+              << ",\"command_wait_protocol\":1,\"command_wait_sequence\":" << connection.command_sequence
+#endif
 #ifdef E33_MESH_SESSION
               << ",\"mesh_protocol\":3"
               << ",\"map_runtime_protocol\":1"
@@ -1022,6 +1043,9 @@ inline void run_runtime_session(DWORD pid, DWORD thread, int32_t object_index, i
         require(action != 0, "SESSION_UNKNOWN_COMMAND");
         connection.command(action);
         std::cout << "{\"event\":\"session_response\",\"command\":" << quote(command)
+#if E33_RUNTIME_CINEMATIC_VERSION>=251
+                  << ",\"command_sequence\":" << connection.command_sequence
+#endif
                   << ",\"result\":" << packet.request.result << ",\"closed\":" << (packet.closed ? "true" : "false")
                   << ",\"close_reason\":" << packet.close_reason << ",\"dropped\":" << (action == SessionDrain ? packet.events.dropped : 0)
                   << ",\"console_text\":" << quote(action==SessionConsolePoll ? console_utf8(packet.console_text) : "")

@@ -4,6 +4,7 @@ from pathlib import Path
 import queue
 import subprocess
 import threading
+import time
 
 from . import RuntimeQueryError, TargetExitedError
 
@@ -192,6 +193,10 @@ class SessionTransport:
             self.sequence_origin_protocol = ready.get('sequence_origin_protocol', 0)
             self.sequence_origin_update_protocol = ready.get('sequence_origin_update_protocol', 0)
             self.sequence_origin_transform_protocol = ready.get('sequence_origin_transform_protocol', 0)
+            self.command_wait_protocol = ready.get('command_wait_protocol', 0)
+            self._native_command_sequence = ready.get('command_wait_sequence', 0)
+            if self.command_wait_protocol==1 and (type(self._native_command_sequence) is not int or self._native_command_sequence!=1):
+                raise RuntimeQueryError('Invalid native wait handshake')
             self.sequence_flight_protocol = ready.get('sequence_flight_protocol', 0)
             self.sequence_flight_keyboard_protocol = ready.get('sequence_flight_keyboard_protocol', 0)
             self.sequence_flight_playback_protocol = ready.get('sequence_flight_playback_protocol', 0)
@@ -239,7 +244,7 @@ class SessionTransport:
         if threading.get_ident() != self._owner:
             raise RuntimeError('Native sessions must be used on their owning Python thread')
 
-    def _read(self):
+    def _read_line(self):
         try:
             line = self._lines.get(timeout=15)
         except queue.Empty as error:
@@ -265,6 +270,26 @@ class SessionTransport:
         if value.get('event') == 'error':
             raise RuntimeQueryError(value.get('message', 'Native session failed'))
         return value
+
+    def _read(self):
+        deadline=time.monotonic()+70.
+        elapsed=-1
+        while True:
+            if time.monotonic()>=deadline:raise RuntimeQueryError('Native command wait deadline exceeded')
+            value=self._read_line()
+            if value.get('event')!='session_pending':return value
+            expected=getattr(self,'_awaiting_command_sequence',None)
+            fields=('event','version','sequence','elapsed_ms','state')
+            if (getattr(self,'command_wait_protocol',0)!=1 or expected is None or set(value)!=set(fields) or
+                type(value['version']) is not int or value['version']!=1 or
+                type(value['sequence']) is not int or value['sequence']!=expected or
+                type(value['elapsed_ms']) is not int or not max(5000,elapsed+1)<=value['elapsed_ms']<60000 or
+                type(value['state']) is not int or value['state'] not in (1,2)):
+                raise RuntimeQueryError('Invalid pending native command acknowledgement')
+            if elapsed<0:
+                import logging
+                logging.getLogger(__name__).info('Game thread busy; retaining original native command %s without replay',expected)
+            elapsed=value['elapsed_ms']
 
     def command(self, command, payload=None):
         telemetry = getattr(self, '_workflow_telemetry', None)
@@ -760,9 +785,16 @@ class SessionTransport:
                 owner=getattr(self,'_lease_owner',0)
                 if type(owner) is not int or not 0<=owner<2**64:raise ValueError('Invalid lease owner')
                 prefix=f'lease-owner {owner} '
+            if getattr(self,'command_wait_protocol',0)==1:
+                self._native_command_sequence+=1
+                self._awaiting_command_sequence=self._native_command_sequence
             self._process.stdin.write(prefix + command + suffix + '\n')
             self._process.stdin.flush()
             response = self._read()
+            if getattr(self,'command_wait_protocol',0)==1:
+                if type(response.get('command_sequence')) is not int or response['command_sequence']!=self._awaiting_command_sequence:
+                    raise RuntimeQueryError('Native command sequence mismatch')
+                self._awaiting_command_sequence=None
             if response.get('event') != 'session_response' or response.get('command') != command:
                 raise RuntimeQueryError('Native session response does not match its command')
             if command == 'close':
