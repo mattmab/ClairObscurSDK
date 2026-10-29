@@ -498,6 +498,7 @@ class OwnedMenuPanel:
             # acknowledged rejection is safe to dispose; uncertainty stays latched.
             code = error.native_error
             if error.outcome == 'returned' and (code in (811, 901, 902) or
+                    code == 90220 and error.active is False or
                     isinstance(code, int) and (910 <= code <= 919 or 10000 <= code < 20000)):
                 self.uncertain = False
             raise

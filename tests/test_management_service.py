@@ -103,6 +103,25 @@ class NativeServiceTests(unittest.TestCase):
         self.assertIsNone(service.menu)
         self.assertFalse(service.status()['available'])
 
+    def test_returned_inactive_focus_rejection_keeps_service_retryable(self):
+        from expedition33.menu import MenuError
+        service=self.service();service.prepare();menu=service.menu
+        menu.panel.uncertain=False
+        for code in (901,90220):
+            error=MenuError('focus unavailable',outcome='returned',native_error=code,active=False)
+            with patch.object(menu,'open',side_effect=error):
+                self.assertIn('viewport focus',service.open())
+        self.assertIsNone(service._failure);self.assertIsNone(service._frontend_rejection)
+        self.assertIsNone(menu._frontend_rejection)
+        self.assertIn('opened',service.open())
+
+    def test_focus_rejection_without_inactive_ack_is_not_suppressed(self):
+        from expedition33.menu import MenuError
+        from expedition33.frontend_rejection import known_rejection
+        for outcome,active in (('unknown',False),('returned',True),('returned',None)):
+            error=MenuError('focus failure',outcome=outcome,native_error=90220,active=active)
+            self.assertIsNone(known_rejection(error))
+
     def test_routes_share_widgets_and_restore_default_presenter(self):
         from expedition33.management_view import ManagementView
         service = self.service()

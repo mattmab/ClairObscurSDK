@@ -195,6 +195,14 @@ class NativeMenuService:
                 if source is not None for key,row in source.snapshot()['timings'].items()
                 if key in ('menu.paint_total','menu.bind_controls','widget.layout_total','widget.appearance_total','widget.open_attach_focus','widget.prime_menu_plan')})
         except BaseException as error:
+            record=known_rejection(error)
+            if record is not None and record.kind=='MenuFocusUnavailable' and not self.menu.panel.uncertain:
+                # Native acknowledgement proves no menu owner remains active.
+                # Keep the detached tree for an explicit retry, without killing
+                # the SDK poll or suspending unrelated console/mod services.
+                self.menu._frontend_rejection=None
+                self._frontend_rejection=None;self._failure=None
+                return 'Native menu waiting for game viewport focus; try opening again'
             self._frontend_rejection = known_rejection(error) or getattr(self,'_frontend_rejection',None)
             self._failure = f'{type(error).__name__}: {error}'
             raise

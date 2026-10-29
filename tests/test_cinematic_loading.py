@@ -84,3 +84,25 @@ class CinematicLoadingTests(unittest.TestCase):
             owner.pause.state='building';raise RuntimeQueryError('DESCRIPTOR_IDENTITY_CHANGED')
         owner.pause.install.side_effect=partial
         with self.assertRaises(RuntimeQueryError):owner._prepare_pause(N(controller=(7,1,2,3)))
+
+    def test_controller_not_ready_before_panel_allocation_retires_and_retries(self):
+        from expedition33.cinematics.original_game_action import NotReady
+        owner,mod,deps,title=self.fixture()
+        context=N(gi=title.gi,kind='world',controller=(7,1,2,3),signature=('world',))
+        first=Mock(panel=None,context=None,retire_world=Mock(return_value='ack'))
+        first.prepare.side_effect=NotReady('Player controller is not available yet')
+        second=Mock()
+        with patch.object(loading,'CinematicPanelPool',side_effect=(first,second)),patch('expedition33.cinematics.history.PreparedHistorySelectors'),patch('expedition33._reader.ReadBatch'):
+            with self.assertRaises(UiProofPending):owner.bind(context,preparing=True)
+            self.assertIsNone(owner.pool);self.assertIsNone(owner.signature)
+            first.retire_world.assert_called_once();mod.prepare_loading_pause.assert_not_called()
+            owner.bind(context)
+            second.prepare.assert_called_once();self.assertIs(owner.pool,second)
+
+    def test_not_ready_after_panel_allocation_is_not_replayed(self):
+        from expedition33.cinematics.original_game_action import NotReady
+        owner,mod,deps,title=self.fixture()
+        pool=Mock(panel=object(),context={});pool.prepare.side_effect=NotReady('late failure')
+        with patch.object(loading,'CinematicPanelPool',return_value=pool):
+            with self.assertRaises(NotReady):owner.bind(N(gi=title.gi,kind='world',signature=('world',)))
+        pool.retire_world.assert_not_called();self.assertIs(owner.pool,pool)
