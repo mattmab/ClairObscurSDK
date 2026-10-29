@@ -53,10 +53,17 @@ class BlueprintActor:
     @property
     def identity(self):return self.owner.actor_identity
 
-    def prepare(self,profile,pose):
+    def prepare(self,profile,pose):return self._prepare(profile,pose)
+
+    def prepare_camera(self,pose):
+        if getattr(self.scope._session._transport,'sequence_flight_playback_protocol',0)!=1:
+            raise ValueError('Owned viewport camera runtime required')
+        return self._prepare('camera',pose,_camera=True)
+
+    def _prepare(self,profile,pose,*,_camera=False):
         if self.state!='new':raise RuntimeError('Blueprint construction is never replayed')
-        if type(profile) is not str or profile not in PROFILES:raise ValueError('Choose a reviewed cinematic Blueprint')
-        if profile not in available_profiles(self.scope._session._transport):
+        if not _camera and (type(profile) is not str or profile not in PROFILES):raise ValueError('Choose a reviewed cinematic Blueprint')
+        if not _camera and profile not in available_profiles(self.scope._session._transport):
             raise RuntimeError('This cinematic character requires the newer native character runtime')
         pose=transform(pose);self.scope._check();self.state='preparing';self.profile=profile
         try:
@@ -68,7 +75,8 @@ class BlueprintActor:
                 portable=getattr(self.scope._session._transport,'timeline_current_world_protocol',0)
                 if context['world_path']!=QA_WORLD and not (type(portable) is int and portable==1):
                     raise ValueError('Blueprint timeline construction requires the QA map or current-world capability')
-                cls=load_class(self.scope,PROFILES[profile]).return_value
+                cls=(capture_matching(self.scope.pid,names=('CameraActor',)).find_path('/Script/Engine.CameraActor')
+                     if _camera else load_class(self.scope,PROFILES[profile]).return_value)
                 if cls is None:raise RuntimeError('Cinematic Blueprint class was not loaded')
                 names=('Default__GameplayStatics','BeginDeferredActorSpawnFromClass','FinishSpawningActor','K2_DestroyActor',
                        'K2_GetPawn','SetActorEnableCollision','SetActorTickEnabled','SetActorHiddenInGame','SetMovementMode')

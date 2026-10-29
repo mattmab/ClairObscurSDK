@@ -180,10 +180,12 @@ character origin. Original level geometry and campaign actions are not imported.
 
 On a supported scene, seek into a camera shot and select 3D overview. Orbit left
 and right, Camera closer/farther and Camera up/down inspect the paused scene.
-Seek or Play restores the authored shot camera. Flight editor uses the same
-movement math as the custom scene editor: hold right mouse for mouse look and
-WASD, E/Q (or Space/Ctrl) up/down; Shift moves faster. Release right mouse to
-use the timeline controls. Place whole scene here positions the complete scene
+Seek restores the authored shot camera. Flight editor uses a separately owned
+camera: WASD moves without holding a mouse button; E/Q (or Space/Ctrl) moves
+up/down and Shift moves faster. Hold right mouse only for mouse look.
+In flight view, Play from flight view resumes the scene and Start in flight view
+rewinds it while keeping this camera. You can fly while actors and audio play.
+Exit flight view returns to the authored scene camera. Place whole scene here positions the complete scene
 1000 cm in front of this view. Save retains the position for later playback.
 
 Backspace or Hide timeline hides the overlay without leaving the flight editor;

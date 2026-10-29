@@ -217,6 +217,8 @@ class TimelineView:
                 if not self.picker:
                     labels.update({2:'Orbit left',3:'Orbit right',4:'Camera closer',11:'Camera farther',12:'Camera up',13:'Camera down'})
                     labels[17]='Exit flight view' if getattr(getattr(p,'flight',None),'active',False) else 'Flight editor'
+                    if getattr(getattr(p,'flight',None),'active',False):
+                        labels[5]='Start in flight view';labels[8]='Pause' if p.playing else 'Play from flight view'
                     labels[18]='Place whole scene here'
                     labels[19]='Hide timeline (Backspace)'
                     if getattr(p,'editing_only',False):disabled.add(19)
@@ -704,6 +706,8 @@ class TimelineMenu(NativeManagementMenu):
             updated=control
             if control.token==17:updated=replace(control,label='Exit flight view' if active else 'Flight editor')
             elif control.token==18:updated=replace(control,enabled=active)
+            elif control.token==5:updated=replace(control,label='Start in flight view' if active else 'Start playback')
+            elif control.token==8:updated=replace(control,label='Pause' if self.model.playing else 'Play from flight view' if active else 'Play')
             if updated!=control:
                 changed=True
             controls.append(updated)

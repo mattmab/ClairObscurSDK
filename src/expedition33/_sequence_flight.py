@@ -9,7 +9,17 @@ INPUT=struct.Struct('<4I3d')
 INPUT_MAGIC=0x49533345
 
 def validate(operation,payload):
-    if operation in (10,12):
+    if operation==19:
+        if len(payload)!=2*call.SIZE:raise ValueError('Observer view and camera-cut plans required')
+        a=call.HEADER.unpack_from(payload);b=call.HEADER.unpack_from(payload,call.SIZE)
+        if a[0:4]!=(1,21,24,65535) or a[6:10]!=(5,1,0,0) or b[0:4]!=(1,1,1,65535) or b[6:10]!=(1,0,0,0):
+            raise ValueError('Unexecuted observer view plans required')
+    elif operation==18:
+        if any(payload[call.SIZE:]):raise ValueError('One owned text focus plan required')
+        version,size,extent,returned,_,_,fields,objects,outcome,error=call.HEADER.unpack_from(payload)
+        if version!=1 or (size,extent,returned)!=(1,1,0) or fields!=1 or objects or outcome or error:
+            raise ValueError('Unexecuted text focus query required')
+    elif operation in (10,12):
         if len(payload)!=2*call.SIZE:raise ValueError('Two flight call plans required')
         for at in (0,call.SIZE):
             version,size,extent,returned,_,_,fields,objects,outcome,error=call.HEADER.unpack_from(payload,at)
@@ -41,7 +51,13 @@ class SequenceFlight:
         if (operation==13 or action==2) and getattr(sequence.scope._session._transport,'sequence_placement_input_protocol',0)!=1:
             raise ValueError('Native scene placement input required')
         if owner.state!='armed' or sequence.uncertain:raise RuntimeError('Owned sequence is unavailable')
-        if operation in (10,12):payload=b''.join(call.encode_plan(replace(p,wire_version=2 if operation==10 and i==0 else 1)) for i,p in enumerate(plans))
+        if operation==19:
+            if getattr(sequence.scope._session._transport,'sequence_flight_playback_protocol',0)!=1:raise ValueError('Observer flight runtime required')
+            payload=b''.join(call.encode_plan(replace(p,wire_version=1)) for p in plans)
+        elif operation==18:
+            if getattr(sequence.scope._session._transport,'sequence_flight_keyboard_protocol',0)!=1:raise ValueError('Keyboard flight runtime required')
+            payload=call.encode_plan(replace(plans[0],wire_version=1))+bytes(call.SIZE)
+        elif operation in (10,12):payload=b''.join(call.encode_plan(replace(p,wire_version=2 if operation==10 and i==0 else 1)) for i,p in enumerate(plans))
         elif operation==13:payload=INPUT.pack(INPUT_MAGIC,1,0,0,0.,0.,0.)+bytes(2*call.SIZE-INPUT.size)
         else:
             action=(1 if plans else 0) if action is None else action
@@ -75,6 +91,8 @@ class SequenceFlight:
             if sequence.uncertain:
                 owner.state='unknown';sequence.scope._session._abort_ownership()
             raise
+    def observer_view(self,view,cuts):self._send(19,(view,cuts))
+    def bind_input(self,focus):self._send(18,(focus,))
     def start(self,move,status,source,component_owner):
         if self.active:raise ValueError('Stop the current flight view before starting another')
         self._send(12,(source,component_owner));self._send(10,(move,status));self.active=True

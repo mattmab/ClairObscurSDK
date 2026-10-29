@@ -1,7 +1,7 @@
-"""Paused overview of the reviewed player's own spawnable camera.
+"""Authored shot overview and an owned camera for independent flight playback.
 
-No extra camera actor or gameplay view target is created. Scrubbing/playing
-returns the camera to its authored track; the sequence owner retires it.
+The sequence camera journal restores the original view before the independently
+constructed viewport camera is retired. Original assets remain unchanged.
 """
 import math
 from expedition33.catalog import capture_matching,capture_selected
@@ -103,6 +103,8 @@ def restore(preview):
         call(preview,component,'CameraComponent','SetPostProcessBlendWeight',InPostProcessBlendWeight=preview.overview_weight)
         preview.sequence.seek_frame(preview.frame,preview.subframe)
     preview.overview_camera=preview.overview_component=None
+    if getattr(preview,'observer_camera',None) is not None:
+        preview.sequence.seek_frame(preview.frame,preview.subframe)
 
 
 def fly(preview,pose=None):
@@ -121,8 +123,19 @@ def fly(preview,pose=None):
         if call(preview,camera,'Actor','K2_TeleportTo',DestLocation=location,DestRotation=rotation) is not True:
             raise ValueError('Flight camera placement failed')
     scope=preview.play_scope
-    catalog=capture_matching(scope.pid,names=('K2_TeleportTo','GetActiveCameraComponent','GetOwner','Vector','Rotator','Actor','ActorComponent','CameraComponent','MovieSceneSequencePlayer','LevelSequencePlayer'))
-    ids=tuple((obj.index,obj.serial,obj.address) for obj in (camera,component,preview.sequence.player))
+    observer=getattr(preview,'observer_camera',None)
+    if getattr(preview.scope._session._transport,'sequence_flight_playback_protocol',0)==1:
+        if observer is None:
+            from expedition33.cinematics.blueprint_actor import BlueprintActor
+            from expedition33.cinematics.authored_replacement import placement_pose
+            observer=BlueprintActor(scope);preview.observer_camera=observer
+            row=dict(placement=dict(offset=[0.,0.,0.],yaw=0.))
+            observer.prepare_camera(placement_pose(row,tuple(location[k] for k in ('X','Y','Z')),0,0.));observer.reveal()
+        camera=capture_selected(scope.pid,(observer.identity,)).by_index[observer.identity[0]]
+        if call(preview,camera,'Actor','K2_TeleportTo',DestLocation=dict(location),DestRotation=dict(rotation)) is not True:
+            raise RuntimeError('Owned flight camera could not be positioned')
+    catalog=capture_matching(scope.pid,names=('K2_TeleportTo' ,'GetActiveCameraComponent','GetOwner','Vector','Rotator','Actor','ActorComponent','CameraComponent','MovieSceneSequencePlayer','LevelSequencePlayer','PlayerController','SetViewTargetWithBlend','EViewTargetBlendFunction','SetDisableCameraCuts'))
+    ids=tuple((obj.index,obj.serial,obj.address) for obj in (camera,component,preview.sequence.player,preview.menu.panel.player))
     catalog=catalog.with_observations(capture_selected(scope.pid,ids))
     planner=scope.invocation_planner(catalog=catalog,selected_results=True)
     move=planner.prepare(camera,catalog.find_path('/Script/Engine.Actor:K2_TeleportTo'),DestLocation=dict(location),DestRotation=dict(rotation))._plan
@@ -130,9 +143,21 @@ def fly(preview,pose=None):
     component_owner=planner.prepare(component,catalog.find_path('/Script/Engine.ActorComponent:GetOwner'))._plan
     status=preview.sequence.planner.prepare(preview.sequence.player,preview.sequence._function('MovieSceneSequencePlayer','IsPlaying'))._plan
     from expedition33._sequence_flight import SequenceFlight
-    flight=SequenceFlight(preview.sequence);flight.start(move,status,source,component_owner)
+    flight=SequenceFlight(preview.sequence)
+    if getattr(preview.scope._session._transport,'sequence_flight_keyboard_protocol',0)==1:
+        panel=preview.menu.panel
+        focus=panel._planner.prepare(panel.field,panel._function('Widget','HasKeyboardFocus'))._plan
+        flight.bind_input(focus)
+    if observer is not None:
+        panel=preview.menu.panel
+        view=planner.prepare(panel.player,catalog.find_path('/Script/Engine.PlayerController:SetViewTargetWithBlend'),
+            NewViewTarget=camera,BlendTime=0.,blendFunc=0,BlendExp=0.,bLockOutgoing=False)._plan
+        cuts=planner.prepare(preview.sequence.player,
+            catalog.find_path('/Script/MovieScene.MovieSceneSequencePlayer:SetDisableCameraCuts'),bInDisableCameraCuts=True)._plan
+        flight.observer_view(view,cuts)
+    flight.start(move,status,source,component_owner)
     preview.flight=flight;preview.menu.view.picker=False
-    preview.message='Flight | RMB + WASD / E,Q | Numpad 8,2 forward/back; 6,4 right/left; 9,3 up/down | Alt: fine | Backspace: timeline | Save keeps placement'
+    preview.message='Flight | WASD / E,Q move; RMB look | Numpad 8,2 forward/back; 6,4 right/left; 9,3 up/down | Alt: fine | Backspace: timeline | Save keeps placement'
 
 
 def place_at_view(preview):

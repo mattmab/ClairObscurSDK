@@ -520,3 +520,34 @@ class AuthoredPreviewTests(unittest.TestCase):
         with self.assertRaises(ValueError):model.queue_authored_preview()
         model.authored_preview=N(queue=Mock());self.assertEqual(model.stop(),'Closing authored preview')
         model.authored_preview.queue.assert_called_once_with('close');self.assertFalse(model.pending_authored_preview)
+
+    def test_idle_flight_does_not_query_or_repaint_the_paused_sequence(self):
+        p=object.__new__(AuthoredPreview)
+        p.closed=False;p.pending=None;p.ready=True;p.playing=False;p.next_sample=0.
+        p.sequence=Mock();p.menu=Mock();p.menu.poll_scrub.return_value=None
+        p.flight=N(active=True);p.scope=N(pid=42,_session=N(_transport=N(_executable='reader')))
+        with patch('scene_editor_tests.authored_preview.shared_operation',return_value=nullcontext()):
+            self.assertFalse(p.poll())
+        p.sequence._call.assert_not_called();p.menu.draw_tracks.assert_not_called()
+
+    def test_start_and_toggle_keep_flight_camera_on_capable_runtime(self):
+        for action in ('start','toggle'):
+            p=object.__new__(AuthoredPreview)
+            p.closed=False;p.pending=action;p.ready=True;p.playing=False;p.next_sample=float('inf');p.npcs=None
+            p.start_frame=93;p.end_frame=2174;p.frame=800;p.subframe=.5;p.sequence=Mock();p.menu=Mock()
+            p.flight=N(active=True);p.overview_component=object();p.overview_camera=object()
+            p.scope=N(pid=42,_session=N(_transport=N(_executable='reader',sequence_flight_playback_protocol=1)))
+            with patch('scene_editor_tests.authored_preview.shared_operation',return_value=nullcontext()), \
+                 patch('scene_editor_tests.sequence_viewport.restore') as restore:
+                p.poll()
+            restore.assert_not_called();self.assertTrue(p.flight.active);self.assertTrue(p.playing)
+            p.sequence.play.assert_called_once();self.assertIsNone(p.overview_component)
+            self.assertIn('flight view',p.message)
+
+    def test_observer_camera_outlives_consuming_sequence_and_defers_cleanup(self):
+        p=object.__new__(AuthoredPreview);events=[]
+        p.sequence=N(close=lambda:events.append('sequence'));p.services=None;p.play_scope=None
+        p.observer_camera=N(close=Mock(side_effect=(False,True)))
+        self.assertFalse(p._close_player());self.assertEqual(events,['sequence'])
+        self.assertIsNone(p.sequence);self.assertIsNotNone(p.observer_camera)
+        self.assertTrue(p._close_player());self.assertIsNone(p.observer_camera)

@@ -257,7 +257,9 @@ class AuthoredPreview:
         if not getattr(self,'editing_only',False) and not self._sync_media():
             self.pending=action
             return False
-        if not getattr(self,'editing_only',False) and getattr(self.scope._session._transport,'sequence_placement_input_protocol',0)==1:
+        if (not getattr(self,'editing_only',False) and getattr(self.scope._session._transport,'sequence_placement_input_protocol',0)==1
+                and time.monotonic()>=getattr(self,'next_editor_input',0.)):
+            self.next_editor_input=time.monotonic()+.05
             from expedition33._sequence_flight import SequenceFlight
             toggle,delta=SequenceFlight(self.sequence).inputs()
             typing=False
@@ -266,7 +268,7 @@ class AuthoredPreview:
                 with panel._planner.prepare(panel.field,panel._function('Widget','HasKeyboardFocus')).invoke() as result:
                     typing=bool(result.return_value)
             if toggle and not typing:self.menu.set_sequence_shown(self.menu.hidden)
-            if any(delta) and not typing and getattr(getattr(self,'flight',None),'active',False) and action is None:
+            if any(delta) and not typing and not self.playing and getattr(getattr(self,'flight',None),'active',False) and action is None:
                 from .sequence_viewport import nudge_scene
                 with shared_operation(self.scope.pid,_executable=self.scope._session._transport._executable):
                     try:nudge_scene(self,delta)
@@ -378,9 +380,15 @@ class AuthoredPreview:
         with shared_operation(self.scope.pid,_executable=self.scope._session._transport._executable):
             if action is not None:
                 try:
-                    if getattr(self,'overview_component',None) is not None:
+                    flight_play=(action in ('start','toggle') and getattr(getattr(self,'flight',None),'active',False) and
+                                 getattr(self.scope._session._transport,'sequence_flight_playback_protocol',0)==1)
+                    if getattr(self,'overview_component',None) is not None and not flight_play:
                         from .sequence_viewport import restore
                         restore(self)
+                    if flight_play:
+                        # Do not later restore settings through a camera from an
+                        # earlier shot; the native flight owner follows cuts.
+                        self.overview_camera=self.overview_component=None
                     if action=='toggle':
                         if self.playing:self.sequence.pause()
                         else:
@@ -395,11 +403,14 @@ class AuthoredPreview:
                         if not self._sync_npcs():return False
                         if action=='start':self._sync_media(True);self.sequence.play();self.playing=True
                     self._sync_media()
-                    self.message='Playing' if self.playing else 'Paused';self.menu.refresh()
+                    self.message=('Playing from flight view' if flight_play else 'Playing') if self.playing else 'Paused';self.menu.refresh()
                 except Exception as error:
                     self.message=str(error)
                     if self.sequence.uncertain:raise
                     self.menu.refresh()
+            # Flight owns a paused cursor on the game thread. Re-querying and
+            # repainting that same cursor needlessly interrupts camera updates.
+            if action is None and not self.playing and getattr(getattr(self,'flight',None),'active',False):return False
             if time.monotonic()>=self.next_sample:
                 self.next_sample=time.monotonic()+.2
                 current=self.sequence._call('GetCurrentTime');self.frame=current['Time']['FrameNumber']['Value'];self.subframe=current['Time']['SubFrame']
@@ -445,6 +456,9 @@ class AuthoredPreview:
                     for actor in self.replacements:
                         if not actor.close():return False
                 self.sequence.close();self.sequence=None;self.replacements=()
+            if getattr(self,'observer_camera',None) is not None:
+                if not self.observer_camera.close():return False
+                self.observer_camera=None
             if self.services is not None:self.services.close();self.services=None
         except SequenceCleanupDeferred:return False
         if getattr(self,'play_scope',None) is not None:
@@ -480,6 +494,9 @@ class AuthoredPreview:
             widgets=getattr(self.services,'widgets',None)
             if not self.sequence.retire_world(closed_dependents=(widgets,) if widgets else ()):return 'deferred'
             self.sequence=None
+        if getattr(self,'observer_camera',None) is not None:
+            if not self.observer_camera.retire_world():return 'deferred'
+            self.observer_camera=None
         if self.services is not None:
             if not self.services.retire_world():return 'deferred'
             self.services=None

@@ -3,6 +3,10 @@
 #include <cmath>
 
 namespace e33_editor_flight {
+struct TickGate {
+    double next=0.;
+    bool due(double now){if(now<next)return false;next=now+1./120.;return true;}
+};
 struct Input {double dx=0,dy=0,forward=0,side=0,up=0;bool fast=false;};
 inline bool moving(const Input& i){return i.dx || i.dy || i.forward || i.side || i.up;}
 // Shared by the Scene Editor's custom scene and imported sequence viewports.

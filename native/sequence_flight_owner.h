@@ -1,15 +1,24 @@
 #pragma once
 #include "editor_flight_math.h"
 
-// The menu keeps its existing input/cursor ownership. RMB gates the same flight
-// keys as the custom scene editor, so text fields and normal clicks stay usable.
+// The menu keeps its existing input/cursor ownership. Keyboard movement is
+// independent of RMB look; the owned value field blocks movement while typing.
 // This borrows only a positively owned source camera, never the gameplay camera.
+static bool timeline_viewport_camera_proof(uint64_t,const CallIdentity&,const CallIdentity&);
 class SequenceFlightOwner {
-    CallPacket move_{},status_{};
+    CallPacket move_{},status_{},text_focus_{};
+    bool input_bound_=false;
+    bool external_=false;CallPacket cuts_{};
+    CallIdentity external_camera_{},external_player_{};
     CallPacket source_camera_{},camera_owner_{};
     bool bound_=false;
     double pose_[6]{};
-    ULONGLONG sampled_=0;
+    double sampled_=0;
+    e33_editor_flight::TickGate tick_gate_;
+    static double seconds(){
+        static const double frequency=[](){LARGE_INTEGER f{};QueryPerformanceFrequency(&f);return double(f.QuadPart);}();
+        LARGE_INTEGER now{};QueryPerformanceCounter(&now);return double(now.QuadPart)/frequency;
+    }
     POINT pointer_{};
     bool active_=false,dragging_=false;
     double nudge_[3]{};
@@ -21,6 +30,30 @@ class SequenceFlightOwner {
             exact_name(base,local_read<uint64_t>(cls+32)+24,package);
     }
 public:
+    void reset(){*this=SequenceFlightOwner{};}
+    bool due(){return tick_gate_.due(seconds());}
+    bool external()const{return external_;}
+    uint32_t external_view(uint64_t base,const CallPacket& cuts,const CallIdentity& camera,const CallIdentity& player){
+        if(active_ || !timeline_viewport_camera_proof(base,player,camera))return 1791;
+        cuts_=cuts;external_camera_=camera;external_player_=player;external_=true;return 0;
+    }
+    uint32_t release_external(uint64_t base){
+        if(!external_)return 0;
+        auto cuts=cuts_;cuts.data[0]=0;
+        if(reflected_call(base,cuts) || cuts.outcome!=CallDispatchReturned)return 1793;
+        external_=false;return 0;
+    }
+    uint32_t bind_input(uint64_t base,const CallPacket& field,const CallIdentity& root){
+        if(active_ || !named(base,field,"Widget","HasKeyboardFocus","/Script/UMG") ||
+           field.parameter_size!=1 || field.allocation_extent!=1 || field.return_offset || field.field_count!=1 || field.object_count ||
+           field.fields[0].kind!=CallBool || field.fields[0].offset || field.fields[0].width!=1)return 1791;
+        auto object=call_identity(base,field.target);
+        if(!object || !exact_name(base,local_read<uint64_t>(object+16)+24,"EditableText"))return 1791;
+        auto outer=object;bool owned=false;
+        for(unsigned i=0;outer && i<16;++i,outer=local_read<uint64_t>(outer+32)){if(outer==root.address){owned=true;break;}}
+        auto check=field;if(!owned || reflected_call(base,check,nullptr,nullptr,nullptr,nullptr,true))return 1791;
+        text_focus_=field;input_bound_=true;return 0;
+    }
     void sample_input(bool eligible){
         const auto now=GetTickCount64();const double dt=input_sampled_?std::min(.05,double(now-input_sampled_)/1000.):0.;input_sampled_=now;
         DWORD pid=0;GetWindowThreadProcessId(GetForegroundWindow(),&pid);
@@ -56,6 +89,7 @@ public:
         source_camera_=source;camera_owner_=owner;bound_=true;return 0;
     }
     bool current_camera(uint64_t base,const CallIdentity& camera)const{
+        if(external_)return !std::memcmp(&camera,&external_camera_,sizeof(camera)) && timeline_viewport_camera_proof(base,external_player_,camera);
         if(!bound_ || !call_identity(base,camera) || !(local_read<uint32_t>(camera.address+8)&0x40))return false;
         auto source=source_camera_,owner=camera_owner_;
         if(reflected_call(base,source) || source.outcome!=CallDispatchReturned || source.object_count!=1 ||
@@ -90,28 +124,32 @@ public:
         if(b.data[0])return 1791;
         move_=move;status_=status;std::memcpy(pose_,move.data,sizeof(pose_));
         for(double v:pose_)if(!std::isfinite(v))return 1791;
-        sampled_=GetTickCount64();dragging_=false;active_=true;return 0;
+        sampled_=seconds();tick_gate_={};dragging_=false;active_=true;return 0;
     }
-    uint32_t tick(uint64_t base,const CallPodValidation* pod){
+    uint32_t tick(uint64_t base,const CallPodValidation* pod,bool eligible){
         if(!active_)return 0;
-        const auto now=GetTickCount64();const double dt=std::min(.05,double(now-sampled_)/1000.);sampled_=now;
+        const auto now=seconds();const double dt=std::min(.05,now-sampled_);sampled_=now;
         DWORD pid=0;const auto window=GetForegroundWindow();GetWindowThreadProcessId(window,&pid);
         POINT point{};RECT area{};
-        const bool held=pid==GetCurrentProcessId() && (GetAsyncKeyState(VK_RBUTTON)&0x8000) &&
+        const bool foreground=eligible && pid==GetCurrentProcessId() &&
             GetCursorPos(&point) && ScreenToClient(window,&point) && GetClientRect(window,&area) &&
             point.x>=0 && point.y>=0 && point.x<area.right && point.y<area.bottom;
-        if(!held){dragging_=false;return 0;}
+        if(!foreground){dragging_=false;return 0;}
         const auto down=[](int key){return (GetAsyncKeyState(key)&0x8000)!=0;};
         e33_editor_flight::Input input;
-        input.dx=dragging_?double(point.x-pointer_.x)/8.:0.;input.dy=dragging_?double(pointer_.y-point.y)/8.:0.;
-        pointer_=point;dragging_=true;
+        const bool look=(GetAsyncKeyState(VK_RBUTTON)&0x8000)!=0;
+        input.dx=look && dragging_?double(point.x-pointer_.x)/8.:0.;input.dy=look && dragging_?double(pointer_.y-point.y)/8.:0.;
+        pointer_=point;dragging_=look;
         input.forward=double(down('W'))-double(down('S'));input.side=double(down('D'))-double(down('A'));
         input.up=double(down('E')||down(VK_SPACE))-double(down('Q')||down(VK_CONTROL));input.fast=down(VK_SHIFT);
         if(!e33_editor_flight::moving(input))return 0;
-        if(!current_camera(base,move_.target))return 1791;
+        if(input_bound_){auto focus=text_focus_;if(reflected_call(base,focus) || focus.outcome!=CallDispatchReturned)return 1791;
+            if(focus.data[0]){dragging_=false;return 0;}
+        }else if(!look)return 0;
         auto query=status_;
         if(reflected_call(base,query) || query.outcome!=CallDispatchReturned)return query.outcome==CallNotDispatched?1791:1793;
-        if(query.data[0]){cancel();return 0;}
+        if(query.data[0] && !external_){cancel();return 0;}
+        if(!current_camera(base,move_.target))return 1791;
         e33_editor_flight::advance(pose_,dt,input);
         auto move=move_;std::memcpy(move.data,pose_,sizeof(pose_));
         if(reflected_call(base,move,nullptr,pod) || move.outcome!=CallDispatchReturned || !move.data[48])return 1793;

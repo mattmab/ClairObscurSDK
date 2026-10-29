@@ -151,6 +151,15 @@ class Owner {
 #include "enemy_trigger_anchor.inl"
 public:
     explicit Owner(bool arena_staging=false,bool timeline_only=false):arena_staging_(arena_staging),timeline_only_(timeline_only){}
+    template<class Pool> bool proves_viewport_camera(uint64_t b,const CallIdentity& player,const CallIdentity& camera,uint64_t session,Pool& pool)const{
+        if(!timeline_only_ || !owner_ || !lease_ || construction_.phase!=e33_owned_actor::ConstructionPhase::Complete || !call_identity(b,player) ||
+           std::memcmp(&camera,&actor_,sizeof(camera)) || !call_identity(b,camera) ||
+           !named(b,ids_[4].address,"CameraActor","/Script/Engine") || local_read<uint64_t>(camera.address+16)!=ids_[4].address ||
+           !pool.owns_object(session,lease_,camera.address) || !call_identity(b,ids_[2]))return false;
+        auto outer=player.address;
+        for(unsigned i=0;outer && i<32;++i,outer=local_read<uint64_t>(outer+32))if(outer==ids_[2].address)return true;
+        return false;
+    }
     bool has_work()const{return owner_||lease_;}
     bool is_trigger_anchor()const{return trigger_anchor_;}
     CallIdentity staged_actor()const{return actor_;}

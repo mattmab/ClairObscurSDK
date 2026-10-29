@@ -193,6 +193,8 @@ class SessionTransport:
             self.sequence_origin_update_protocol = ready.get('sequence_origin_update_protocol', 0)
             self.sequence_origin_transform_protocol = ready.get('sequence_origin_transform_protocol', 0)
             self.sequence_flight_protocol = ready.get('sequence_flight_protocol', 0)
+            self.sequence_flight_keyboard_protocol = ready.get('sequence_flight_keyboard_protocol', 0)
+            self.sequence_flight_playback_protocol = ready.get('sequence_flight_playback_protocol', 0)
             self.sequence_placement_input_protocol = ready.get('sequence_placement_input_protocol', 0)
             self.sequence_seek_protocol = ready.get('sequence_seek_protocol', 0)
             self.sequence_retirement_protocol = ready.get('sequence_retirement_protocol', 0)
@@ -619,6 +621,10 @@ class SessionTransport:
                 raise ValueError('Native sequence origin transform unavailable')
             if int.from_bytes(payload[4:8],'little') in (10,11,12) and getattr(self,'sequence_flight_protocol',0)!=1:
                 raise ValueError('Native sequence flight unavailable')
+            if int.from_bytes(payload[4:8],'little')==19 and getattr(self,'sequence_flight_playback_protocol',0)!=1:
+                raise RuntimeError('Observer flight runtime required')
+            if int.from_bytes(payload[4:8],'little')==18 and getattr(self,'sequence_flight_keyboard_protocol',0)!=1:
+                raise RuntimeError('Keyboard flight runtime required')
             if int.from_bytes(payload[4:8],'little')==13 and getattr(self,'sequence_placement_input_protocol',0)!=1:
                 raise ValueError('Native sequence placement input unavailable')
             if int.from_bytes(payload[4:8],'little') in (16,17):

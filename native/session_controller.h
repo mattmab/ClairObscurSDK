@@ -514,6 +514,12 @@ inline void run_runtime_session(DWORD pid, DWORD thread, int32_t object_index, i
 #endif
 #ifdef E33_SEQUENCE_FLIGHT_SESSION
               << ",\"sequence_flight_protocol\":1"
+#if E33_RUNTIME_CINEMATIC_VERSION>=247
+              << ",\"sequence_flight_keyboard_protocol\":1"
+#if E33_RUNTIME_CINEMATIC_VERSION>=249
+              << ",\"sequence_flight_playback_protocol\":1"
+#endif
+#endif
               << ",\"sequence_placement_input_protocol\":1"
 #endif
 #endif

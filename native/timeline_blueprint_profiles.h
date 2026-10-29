@@ -12,5 +12,8 @@ inline constexpr Profile profiles[]={
     {"BP_Cine_Maelle_C","/Game/Characters/Heros/Cinematics/BP_Cine_Maelle"},
     {"BP_Cine_Monoco_C","/Game/Characters/Heros/Cinematics/BP_Cine_Monoco"}
 #endif
+#if E33_RUNTIME_CINEMATIC_VERSION>=249
+    ,{"CameraActor","/Script/Engine"}
+#endif
 };
 }

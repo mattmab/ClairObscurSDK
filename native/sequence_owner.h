@@ -304,6 +304,9 @@ public:
 #ifdef E33_EMPTY_TITLE_SESSION
         if(empty_title_owner_==this)empty_title_owner_=nullptr;empty_title_={};
 #endif
+#ifdef E33_SEQUENCE_FLIGHT_SESSION
+        flight_.reset();
+#endif
         state_=p.state=0;step_=2;
     }
 #endif
@@ -335,6 +338,9 @@ public:
 #ifdef E33_SEQUENCE_CAMERA_SESSION
             if(auto error=camera_.close()) return error;
 #endif
+#ifdef E33_SEQUENCE_FLIGHT_SESSION
+            flight_.reset();
+#endif
             state_=0; return 0;
         }
         while(step_<2) {
@@ -361,6 +367,9 @@ public:
 #ifdef E33_SEQUENCE_ORIGIN_SESSION
         if(origin_owner_==this) origin_owner_=nullptr;
 #endif
+#ifdef E33_SEQUENCE_FLIGHT_SESSION
+        flight_.reset();
+#endif
         state_=0; return 0;
     }
     void command(uint64_t base,const TargetMenuStorage& menu,SequenceOwnerPacket& p,const CallPodValidation* pod=nullptr) {
@@ -368,7 +377,9 @@ public:
         (void)pod;
 #endif
         if(p.version!=1 || !p.owner || p.reserved || p.error || p.state || p.operation<1 || p.operation>
-#ifdef E33_SEQUENCE_ORIGIN_TRANSFORM_SESSION
+#if defined(E33_SEQUENCE_FLIGHT_SESSION) && E33_RUNTIME_CINEMATIC_VERSION>=247
+            19
+#elif defined(E33_SEQUENCE_ORIGIN_TRANSFORM_SESSION)
             15
 #elif defined(E33_SEQUENCE_FLIGHT_SESSION)
             13
@@ -388,10 +399,33 @@ public:
             ) { p.error=1470; return; }
         p.state=state_;
 #ifdef E33_SEQUENCE_FLIGHT_SESSION
-        if(p.operation==10 || p.operation==11 || p.operation==12 || p.operation==13){
+        if(p.operation==10 || p.operation==11 || p.operation==12 || p.operation==13
+#if E33_RUNTIME_CINEMATIC_VERSION>=247
+           || p.operation==18 || p.operation==19
+#endif
+        ){
             if(state_!=1 || p.owner!=owner_ || !menu.menu.active() || menu.owner!=epoch_menu_owner_ ||
                std::memcmp(&menu.player,&origin_context_,sizeof(CallIdentity)) || !epoch_current(base)){p.error=1791;return;}
-            if(p.operation==13){
+            if(p.operation==19){
+                auto view=p.stop;const auto cuts=p.destroy;
+                if(view.object_count!=1 || view.objects[0].offset || std::memcmp(&view.target,&menu.player,sizeof(CallIdentity)) ||
+                   std::memcmp(&cuts.target,&plans_[0].target,sizeof(CallIdentity))){p.error=1791;return;}
+                const auto camera=view.objects[0].identity;view.object_count=0;view.objects[0]={};
+                if(!camera_restore_packet(view) || !timeline_viewport_camera_proof(base,plans_[0].target,camera) ||
+                   !exact_name(base,cuts.function.address+24,"SetDisableCameraCuts") ||
+                   !exact_name(base,local_read<uint64_t>(cuts.function.address+32)+24,"MovieSceneSequencePlayer") ||
+                   cuts.parameter_size!=1 || cuts.allocation_extent!=1 || cuts.return_offset!=65535 || cuts.field_count!=1 || cuts.object_count ||
+                   cuts.fields[0].kind!=CallBool || cuts.fields[0].offset || cuts.fields[0].width!=1 || cuts.data[0]!=1){p.error=1791;return;}
+                auto a=p.stop,b=cuts;
+                if(reflected_call(base,a,nullptr,nullptr,nullptr,nullptr,true) || reflected_call(base,b,nullptr,nullptr,nullptr,nullptr,true)){p.error=1791;return;}
+                if(!camera_.owns_camera(camera))p.error=camera_.admit_owned(camera,timeline_viewport_camera_proof);
+                if(p.error)return;
+                p.error=flight_.external_view(base,cuts,camera,plans_[0].target);if(p.error)return;
+                if(reflected_call(base,b) || b.outcome!=CallDispatchReturned || reflected_call(base,a) || a.outcome!=CallDispatchReturned){p.error=1793;state_=2;return;}
+            }else if(p.operation==18){
+                if(!empty(reinterpret_cast<const uint8_t*>(&p.destroy),sizeof(p.destroy))){p.error=1791;return;}
+                p.error=flight_.bind_input(base,p.stop,menu.widget);
+            }else if(p.operation==13){
                 const auto* payload=reinterpret_cast<const uint8_t*>(&p.stop);uint32_t header[4]{};std::memcpy(header,payload,16);
                 if(header[0]!=0x49533345 || header[1]!=1 || header[2] || header[3] || !empty(payload+16,sizeof(p.stop)+sizeof(p.destroy)-16)){p.error=1791;return;}
                 double delta[3]{};flight_.drain_input(header[3],delta);
@@ -406,7 +440,13 @@ public:
                 uint32_t header[4]{};std::memcpy(header,payload,16);
                 if(header[0]!=0x46533345 || header[1]!=1 || header[2]>2 || header[3] ||
                    !empty(payload+16,sizeof(p.stop)+sizeof(p.destroy)-16)){p.error=1791;return;}
-                if(header[2]==1)flight_.cancel();
+                if(header[2]==1){
+                    if(flight_.external()){
+                        p.error=camera_.restore_view();if(!p.error)p.error=flight_.release_external(base);
+                        if(p.error){state_=2;return;}
+                    }
+                    flight_.cancel();
+                }
                 if(header[2]==2){p.error=flight_.restore_pose(base,pod);if(p.error==1793)state_=2;}
                 header[3]=flight_.active()?1:0;std::memcpy(&p.stop,header,16);
                 flight_.pose(reinterpret_cast<double*>(reinterpret_cast<uint8_t*>(&p.stop)+16));
@@ -641,12 +681,13 @@ public:
     }
 #ifdef E33_SEQUENCE_FLIGHT_SESSION
     void editor_tick(uint64_t base,const TargetMenuStorage& menu,const CallPodValidation* pod,bool input){
-        if(state_!=1)return;
+        if(state_!=1 || !flight_.due())return;
         if(state_!=1 || !menu.menu.active() || menu.owner!=epoch_menu_owner_ || !epoch_current(base) ||
            std::memcmp(&menu.player,&origin_context_,sizeof(CallIdentity))){flight_.cancel();return;}
         flight_.sample_input(input);
         if(!flight_.active())return;
-        if(flight_.tick(base,pod)){flight_.cancel();state_=2;}
+        if(flight_.tick(base,pod,input) ||
+           (input && flight_.external() && camera_.focus_owned_view())){flight_.cancel();state_=2;}
     }
     void editor_fault(){flight_.cancel();state_=2;}
 #endif

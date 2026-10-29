@@ -115,6 +115,11 @@ static e33_enemy_spawn::Owner session_enemy_spawn;
 struct TimelineActorOwner: e33_enemy_spawn::Owner {TimelineActorOwner():Owner(false,true){}};
 static TimelineActorOwner session_timeline_actors[e33_timeline_actor::capacity];
 static e33_timeline_actor::Slots session_timeline_slots;
+static bool timeline_viewport_camera_proof(uint64_t b,const CallIdentity& player,const CallIdentity& camera){
+    for(auto& actor:session_timeline_actors)
+        if(actor.proves_viewport_camera(b,player,camera,lease_session,session_leases))return true;
+    return false;
+}
 #endif
 #if E33_RUNTIME_CINEMATIC_VERSION>=186
 #include "encounter_tuning_owner.h"

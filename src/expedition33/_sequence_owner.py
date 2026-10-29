@@ -36,14 +36,14 @@ class SequenceCleanupDeferred(RuntimeError):
 def validate_request(data):
     if type(data) is not bytes or len(data)!=SIZE: raise ValueError('Sequence owner size')
     version,op,owner,reserved,error,state=HEADER.unpack_from(data)
-    if version!=1 or op not in (1,2,3,4,5,6,7,8,9,10,11,12,13,14,15,16,17) or not owner or reserved or error or state:
+    if version!=1 or op not in (1,2,3,4,5,6,7,8,9,10,11,12,13,14,15,16,17,18,19) or not owner or reserved or error or state:
         raise ValueError('Sequence owner header')
     if op==16:
         from ._authored_binding_diagnostic import SIZE as diagnostic_size,validate_request as validate_diagnostic
         validate_diagnostic(data[32:32+diagnostic_size])
         if any(data[32+diagnostic_size:]):raise ValueError('Unexpected authored binding diagnostic tail')
     if op==17 and any(data[32:]):raise ValueError('Unexpected authored binding release payload')
-    if op in (10,11,12,13):
+    if op in (10,11,12,13,18,19):
         from ._sequence_flight import validate
         validate(op,data[32:]);return
     if op in (2,3,7) and any(data[HEADER.size:]): raise ValueError('Unexpected sequence owner payload')

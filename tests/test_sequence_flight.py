@@ -73,3 +73,28 @@ class FlightTests(unittest.TestCase):
         flight,session=self.make();flight.active=True
         with self.assertRaisesRegex(ValueError,'Stop'):flight.start(None,None,None,None)
         session._transport.command.assert_not_called()
+
+    def test_keyboard_focus_plan_is_single_read_only_boolean_and_capability_gated(self):
+        from expedition33 import _invocation_wire as call
+        from expedition33._sequence_flight import validate
+        payload=bytearray(2*call.SIZE)
+        call.HEADER.pack_into(payload,0,1,1,1,0,0,0,1,0,0,0)
+        validate(18,bytes(payload))
+        payload[-1]=1
+        with self.assertRaises(ValueError):validate(18,bytes(payload))
+        flight,session=self.make()
+        with self.assertRaisesRegex(ValueError,'Keyboard'):flight.bind_input(None)
+        session._transport.command.assert_not_called()
+
+    def test_observer_view_requires_two_exact_frames_and_negotiated_capability(self):
+        from expedition33 import _invocation_wire as call
+        from expedition33._sequence_flight import validate
+        payload=bytearray(2*call.SIZE)
+        call.HEADER.pack_into(payload,0,1,21,24,65535,0,0,5,1,0,0)
+        call.HEADER.pack_into(payload,call.SIZE,1,1,1,65535,0,0,1,0,0,0)
+        validate(19,bytes(payload))
+        struct.pack_into('<I',payload,call.SIZE+28,1)
+        with self.assertRaises(ValueError):validate(19,bytes(payload))
+        flight,session=self.make()
+        with self.assertRaisesRegex(ValueError,'Observer'):flight.observer_view(None,None)
+        session._transport.command.assert_not_called()
