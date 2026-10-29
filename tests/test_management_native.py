@@ -197,6 +197,23 @@ class NativeManagementTests(unittest.TestCase):
         self.assertEqual(self.registry.view(self.registry.select('specimen'))['description'], description)
         self.assertLessEqual(len(self.menu.panel.text['detail'].splitlines()), 18)
 
+    def test_feedback_keeps_callbacks_live_but_refresh_still_revokes_them(self):
+        from dataclasses import replace
+        self.start()
+        old=self.menu.actions[0]
+        controls=tuple(replace(c,label=c.label+' feedback') if c.token==0 else c for c in self.menu.frame.controls)
+        self.menu.update_control_feedback(controls)
+        self.menu.update_control_feedback(controls)
+        old.callback(None)
+        self.assertEqual(self.menu.view.selection.mod_id,'specimen')
+        with self.assertRaises(ManagementError):old.callback(None)
 
-if __name__ == '__main__':
-    unittest.main()
+    def test_feedback_disables_queued_click_without_permitting_new_actions(self):
+        from dataclasses import replace
+        self.start();old=self.menu.actions[0]
+        controls=tuple(replace(c,enabled=False) if c.token==0 else c for c in self.menu.frame.controls)
+        self.menu.update_control_feedback(controls)
+        old.callback(None)
+        self.assertIsNone(self.menu.view.selection)
+        with self.assertRaises(ManagementError):
+            self.menu.update_control_feedback(tuple(replace(c,enabled=True) if c.token==0 else c for c in controls))

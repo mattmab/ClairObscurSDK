@@ -42,7 +42,7 @@ class AuthoredPreviewTests(unittest.TestCase):
         nudge.assert_not_called();p.menu.set_sequence_shown.assert_not_called()
     def test_scrub_camera_restore_updates_flight_controls_without_rebinding(self):
         from expedition33.management_view import MenuFrame,MenuControl
-        menu=object.__new__(TimelineMenu)
+        menu=object.__new__(TimelineMenu);menu._feedback_binding_frame=None
         menu.model=N(sequence_timeline=True,flight=None);menu.view=N(picker=False)
         menu.panel=Mock();menu.panel.labels=list(range(20));menu.refresh=Mock();menu._revoke=Mock()
         menu.frame=MenuFrame(7,'Timeline','',
@@ -51,7 +51,7 @@ class AuthoredPreviewTests(unittest.TestCase):
         self.assertEqual(menu.frame.revision,7)
         self.assertEqual(menu.frame.controls[0].label,'Flight editor')
         self.assertFalse(menu.frame.controls[1].enabled)
-        menu.panel.set_enabled.assert_any_call(18,False)
+        menu.panel.set_enabled.assert_any_call(1,False)
         menu.refresh.assert_not_called();menu._revoke.assert_not_called()
         menu.panel.reset_mock();menu.sync_sequence_flight_controls()
         menu.panel.set_text.assert_not_called();menu.panel.set_enabled.assert_not_called()

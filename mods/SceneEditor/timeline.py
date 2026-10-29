@@ -705,11 +705,9 @@ class TimelineMenu(NativeManagementMenu):
             if control.token==17:updated=replace(control,label='Exit flight view' if active else 'Flight editor')
             elif control.token==18:updated=replace(control,enabled=active)
             if updated!=control:
-                self.panel.set_text(self.panel.labels[control.token],updated.label)
-                self.panel.set_enabled(control.token,updated.enabled)
                 changed=True
             controls.append(updated)
-        if changed:self.frame=replace(self.frame,controls=tuple(controls))
+        if changed:self.update_control_feedback(controls)
     def close(self):
         if getattr(self.model,'sequence_timeline',False):
             self.panel.restore_child_focus()
