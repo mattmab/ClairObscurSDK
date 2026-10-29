@@ -46,11 +46,14 @@ class LoadingReplay:
         try:self.pool.prepare()
         except Exception as error:
             from expedition33.cinematics.original_game_action import NotReady
+            from expedition33 import RuntimeQueryError
+            transient_read=(isinstance(error,RuntimeQueryError) and any(code in str(error) for code in
+                ('READ_FAILED','MODULE_SNAPSHOT_FAILED','REFLECTION_TARGET_CHANGED','DESCRIPTOR_IDENTITY_CHANGED')))
             # Controller observation precedes panel construction. This loading
             # race owns no widget/input tree and can be retired before retry.
-            if isinstance(error,NotReady) and self.pool.panel is None and self.pool.context is None:
+            if (isinstance(error,NotReady) or transient_read) and self.pool.panel is None and self.pool.context is None:
                 self._retire_pool()
-                raise UiProofPending('Cinematic player controller is not ready during loading') from None
+                raise UiProofPending('Cinematic controller observation is not ready during loading') from None
             raise
         from expedition33.cinematics.history import PreparedHistorySelectors
         from expedition33._reader import ReadBatch

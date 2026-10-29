@@ -106,3 +106,31 @@ class CinematicLoadingTests(unittest.TestCase):
         with patch.object(loading,'CinematicPanelPool',return_value=pool):
             with self.assertRaises(NotReady):owner.bind(N(gi=title.gi,kind='world',signature=('world',)))
         pool.retire_world.assert_not_called();self.assertIs(owner.pool,pool)
+
+    def test_controller_snapshot_race_retries_only_before_allocation(self):
+        from expedition33 import RuntimeQueryError
+        for code in ('READ_FAILED','MODULE_SNAPSHOT_FAILED','REFLECTION_TARGET_CHANGED','DESCRIPTOR_IDENTITY_CHANGED'):
+            with self.subTest(code=code):
+                owner,mod,deps,title=self.fixture()
+                context=N(gi=title.gi,kind='world',controller=(7,1,2,3),signature=('world',))
+                first=Mock(panel=None,context=None,retire_world=Mock(return_value='ack'))
+                first.prepare.side_effect=RuntimeQueryError(code)
+                second=Mock()
+                with patch.object(loading,'CinematicPanelPool',side_effect=(first,second)),patch('expedition33.cinematics.history.PreparedHistorySelectors'),patch('expedition33._reader.ReadBatch'):
+                    with self.assertRaises(UiProofPending):owner.bind(context,preparing=True)
+                    self.assertIsNone(owner.pool);self.assertIsNone(owner.signature)
+                    first.retire_world.assert_called_once()
+                    owner.bind(context);second.prepare.assert_called_once()
+                owner,mod,deps,title=self.fixture()
+                late=Mock(panel=object(),context={});late.prepare.side_effect=RuntimeQueryError(code)
+                with patch.object(loading,'CinematicPanelPool',return_value=late):
+                    with self.assertRaises(RuntimeQueryError):owner.bind(context)
+                late.retire_world.assert_not_called()
+
+    def test_unknown_read_failure_before_allocation_is_not_replayed(self):
+        from expedition33 import RuntimeQueryError
+        owner,mod,deps,title=self.fixture()
+        pool=Mock(panel=None,context=None);pool.prepare.side_effect=RuntimeQueryError('UNEXPECTED_NATIVE_FAILURE')
+        with patch.object(loading,'CinematicPanelPool',return_value=pool):
+            with self.assertRaises(RuntimeQueryError):owner.bind(N(gi=title.gi,kind='world',signature=('world',)))
+        pool.retire_world.assert_not_called()
