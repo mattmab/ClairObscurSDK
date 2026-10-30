@@ -142,6 +142,39 @@ class ModTests(unittest.TestCase):
             self.assertTrue(loader._loaded['Other'][1].poll_urgent)
             del loader.world_lifecycle
 
+    def test_fast_refresh_interleaves_callbacks_and_respects_world_gates(self):
+        self.source('class Mod:\n def enable(self, session): pass\n def poll(self): pass\n def disable(self): pass\n')
+        other=self.root/'Other';other.mkdir()
+        (other/'mod.py').write_text((self.root/'Specimen/mod.py').read_text())
+        with ModLoader(self.root) as loader:
+            for name in ('Specimen','Other'):loader.load(name);loader.enable(name)
+            calls=[]
+            for name in ('Specimen','Other'):
+                loader._loaded[name][1].poll=lambda name=name:calls.append(name)
+            loader._loaded['Other'][1].poll_fast=lambda:calls.append('fast')
+            loader.poll()
+            self.assertEqual(calls,['fast','Specimen','fast','Other','fast'])
+            loader.world_lifecycle=SimpleNamespace(poll_cleanup=lambda:None,ever_admitted=False,
+                                                   allows=lambda name:name!='Other')
+            calls.clear();loader.poll()
+            self.assertEqual(calls,['Specimen'])
+            del loader.world_lifecycle
+            loader.disable('Other');calls.clear();loader.poll()
+            self.assertEqual(calls,['Specimen'])
+
+    def test_failed_fast_refresh_is_not_reentered_in_the_same_pass(self):
+        self.source('class Mod:\n def enable(self, session): pass\n def poll(self): pass\n def disable(self): pass\n')
+        with ModLoader(self.root) as loader:
+            loader.load('Specimen');loader.enable('Specimen')
+            calls=[]
+            def fail():
+                calls.append('fast');raise RuntimeError('failed')
+            loader._loaded['Specimen'][1].poll_fast=fail
+            loader._loaded['Specimen'][1].poll=lambda:calls.append('ordinary')
+            with self.assertRaisesRegex(ModError,'fast poll failed'):
+                loader.poll()
+            self.assertEqual(calls,['fast'])
+
     def test_two_mods_share_session_and_cleanup_owned_commands(self):
         self.source('class Mod:\n def enable(self, session):\n  self.session=session\n  session.console.register("first", lambda _: "one", owner=self)\n def disable(self): pass\n')
         other = self.root / 'Other'; other.mkdir()

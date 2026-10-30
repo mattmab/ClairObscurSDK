@@ -535,8 +535,26 @@ class ModLoader:
                 record=pair[1]
                 return record is not None and getattr(record[1],'__dict__',{}).get('poll_urgent') is True
             records.sort(key=lambda pair:not urgent(pair))
+            fast_failed = set()
+            def fast_refresh():
+                # Opt-in bounded refresh work shares this owner thread and all
+                # ordinary lifecycle gates. No recursive event/key delivery.
+                for fast_key, fast_record in records:
+                    if (fast_key in fast_failed or fast_record is None or
+                            self._loaded.get(fast_key) is not fast_record or fast_record[2] is None):
+                        continue
+                    if lifecycle is not None and not lifecycle.allows(fast_key):continue
+                    fast = getattr(fast_record[1], 'poll_fast', None)
+                    if callable(fast):
+                        try:
+                            if self._poll_diagnostics:self._timed_poll('fast.' + fast_key, fast)
+                            else:fast()
+                        except BaseException as error:
+                            fast_failed.add(fast_key)
+                            failures.append(str(_error('fast poll', error)))
+            fast_refresh()
             for key, record in records:
-                if record is None or self._loaded.get(key) is not record or record[2] is None:
+                if key in fast_failed or record is None or self._loaded.get(key) is not record or record[2] is None:
                     continue
                 if lifecycle is not None and not lifecycle.allows(key):continue
                 callback = getattr(record[1], 'poll', None)
@@ -548,7 +566,9 @@ class ModLoader:
                         else:
                             callback()
                     except BaseException as error:
+                        fast_failed.add(key)
                         failures.append(str(_error('poll', error)))
+                fast_refresh()
             if failures:
                 raise ModError('; '.join(failures))
             return delivered

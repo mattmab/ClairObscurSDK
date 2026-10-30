@@ -1,19 +1,30 @@
 # Clair Obscur: Expedition 33 — independent Python SDK
 
-MIT-licensed SDK **0.1.0-rc23** (release candidate) for the verified Windows Steam build. Our native
+MIT-licensed SDK **0.1.0-rc24** (release candidate) for the verified Windows Steam build. Our native
 runtime independently identifies live Unreal objects and executes supported
 engine operations on the game thread. Python runs in a persistent external
 controller. No Borderlands offsets or layouts are used as Expedition 33 facts.
 
-The current qualified release is packaged with `scripts/package_rc23.py` from an explicit frozen manifest.
+The current qualified release is packaged with `scripts/package_rc24.py` from an explicit frozen manifest.
 Extract its game-root ZIP beside `Sandfall`; normal game launch starts the SDK
 and restores saved mod choices after loading a save. SDK Management,
 Introspection Harness and LiveObjectViewer are bundled. Choose optional `.sdkmod` downloads from the
-[Mods catalog](mods/README.md), including ContinentFlight, Picto Editor, Statistics,
+[Mods catalog](https://github.com/mattmab/ClairObscureSDKMods), including ContinentFlight, Picto Editor, Statistics,
 and Cinematics, plus Asset Creator/Main Character Replacer. Each has its own release. See
 [installation and restart instructions](docs/INSTALLABLE_RELEASE.md).
 The checkout's `launch-sdk.cmd` delegates to the installed SDK using `SDK_GAME_DIR`
 or the local, untracked `settings/install-path.txt`.
+
+## RC24: responsive mod updates and separate mod releases
+
+[RC24 downloads](https://github.com/mattmab/ClairObscurSDK/releases/tag/v0.1.0-rc24)
+contain the SDK and three core mods. Optional mod sources and downloads now live in
+[ClairObscureSDKMods](https://github.com/mattmab/ClairObscureSDKMods).
+Enemy HP 0.1.4 shows current health on natural enemy and boss bars, with faster
+damage updates and clearance for status icons. See [RC24 notes](docs/RELEASE_0.1.0_RC24.md).
+
+For development, clone with `--recurse-submodules`, or run `git submodule update --init`.
+The SDK pins the tested mods commit; mod changes are committed in their own repository.
 
 ## RC23: independent flight playback and stall recovery
 
@@ -105,9 +116,9 @@ Older Nexus releases remain available; World Builder requires RC12.
 | [**AssetConverter 0.3.0**](https://github.com/mattmab/ClairObscurSDK/releases/download/asset-creator-v0.3.0/AssetConverter-0.3.0.zip) | One-pass local conversion of the documented Ayane FBX and 2B Blender sources. Requires Python 3.13 x64; first run installs pinned dependencies from PyPI. Download models separately. |
 
 The Asset Creator mod and converter are **MIT-licensed code**:
-[mod license](mods/CatalogModels/LICENSE), [converter license](tools/asset_converter/LICENSE).
+[mod license](https://github.com/mattmab/ClairObscureSDKMods/blob/main/CatalogModels/LICENSE), [converter license](tools/asset_converter/LICENSE).
 This does not license the separately downloaded models, textures or animations.
-See [model sources, conversion commands and installation instructions](mods/CatalogModels/README.txt).
+See [model sources, conversion commands and installation instructions](https://github.com/mattmab/ClairObscureSDKMods/blob/main/CatalogModels/README.txt).
 
 Close the game and controller, then extract each Nexus mod ZIP into the game root
 containing `Sandfall`. Leave the inner `SDK_Mods/NAME.sdkmod` archive intact.
@@ -266,4 +277,4 @@ in a fresh game process without manual controller startup.
 
 ## Experimental custom models (RC6)
 
-[Asset Creator/Main Character Replacer](mods/CatalogModels/README.txt) offers a model browser, static spawning, and approximate current-character replacement. **Animation is not 1:1; model loading needs improvement and meshes may lag.** Ayane and 2B must be downloaded separately and converted locally. No model assets are bundled. Mod and converter code are MIT; source model rights are separate. [RC6 release notes](docs/RELEASE_0.1.0_RC6.md).
+[Asset Creator/Main Character Replacer](https://github.com/mattmab/ClairObscureSDKMods/blob/main/CatalogModels/README.txt) offers a model browser, static spawning, and approximate current-character replacement. **Animation is not 1:1; model loading needs improvement and meshes may lag.** Ayane and 2B must be downloaded separately and converted locally. No model assets are bundled. Mod and converter code are MIT; source model rights are separate. [RC6 release notes](docs/RELEASE_0.1.0_RC6.md).
