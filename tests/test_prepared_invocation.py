@@ -251,8 +251,8 @@ class PreparedTextTests(unittest.TestCase):
                 original = planner.prepare(self.p.target, self.p.function, Input='first')
                 updated = original.bind(Input='second')
                 with patch('expedition33.catalog.capture', side_effect=AssertionError('unexpected full scan')):
-                    with original.invoke() as result: self.assertEqual(result.return_value, 'Returned 🚀')
-                    with updated.invoke() as result: self.assertEqual(result.return_value, 'Returned 🚀')
+                    with original.invoke() as result: self.assertEqual(result.return_value, 'Returned \U0001F680')
+                    with updated.invoke() as result: self.assertEqual(result.return_value, 'Returned \U0001F680')
                 self.assertEqual(original._plan.texts, (('Input', 'first'),))
                 self.assertEqual(updated._plan.texts, (('Input', 'second'),))
             self.assertEqual(capture.call_count, 1)
