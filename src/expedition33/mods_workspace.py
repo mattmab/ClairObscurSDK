@@ -191,7 +191,7 @@ class ModsWorkspaceView(ManagementView):
             elif operation == 'bulk_confirm':
                 self.bulk_enabled = argument
                 self.bulk_plan = tuple(v for v in self.registry.views() if not v['protected'] and (
-                    v['enabled'] != argument if type(argument) is bool else
+                    (v['desired_enabled'] if v.get('disable_pending') else v['enabled']) != argument if type(argument) is bool else
                     v['enabled'] if argument == 'reload' else bool(v['keybinds'])))
                 self.screen, self.page = 'bulk_confirm', 0
             elif operation == 'bulk_apply':
@@ -203,7 +203,9 @@ class ModsWorkspaceView(ManagementView):
                         if current['protected']:
                             raise ManagementError('Protected mod')
                         if type(self.bulk_enabled) is bool:
-                            self.registry.set_enabled(selection, self.bulk_enabled)
+                            selection=self.registry.set_enabled(selection, self.bulk_enabled)
+                            if self.registry.view(selection).get('disable_pending'):
+                                results.append(view['name'] + ': disabling');continue
                         elif self.bulk_enabled == 'reload':
                             self.registry.reload_current(selection)
                         else:

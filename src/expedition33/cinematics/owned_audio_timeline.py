@@ -3,16 +3,18 @@
 No scene/profile admission occurs here. Caller retains the isolated audio owner,
 its scoped music assignment and presentation until native cleanup is confirmed.
 """
+import time
 from .media_audio_timeline import MediaAudioPlanner
 
 class OwnedAudioTimelineDispatcher:
-    def __init__(self,audio_owner,planner,panel,sections):
+    def __init__(self,audio_owner,planner,panel,sections,*,clock=None):
         self.audio=audio_owner;self.planner=planner;self.panel=panel
         transport=audio_owner.scope._session._transport
         capacity=getattr(transport,'owned_sound_capacity',16)
         volume_max=getattr(transport,'owned_sound_volume_max',1)
         self.timeline=MediaAudioPlanner(sections,capacity=capacity-len(getattr(audio_owner,'_sounds',())),volume_max=volume_max)
         self.components={};self.uncertain=False;self.prepared=False
+        self._clock=clock or time.monotonic;self._clock_anchor=None
 
     def prepare(self,sources):
         if self.prepared or self.components or self.uncertain:raise RuntimeError('Timeline dispatcher already used')
@@ -43,7 +45,9 @@ class OwnedAudioTimelineDispatcher:
 
     def advance(self,seconds,*,playing):
         if not self.prepared or self.uncertain:raise RuntimeError('Audio dispatcher is unavailable')
-        step=self.timeline.plan(seconds,playing=playing)
+        observed=self._clock()
+        elapsed=None if self._clock_anchor is None else observed-self._clock_anchor
+        step=self.timeline.plan(seconds,playing=playing,elapsed=elapsed)
         if step is None:return None
         for action in step.actions:
             component=self.components[action.section]
@@ -56,6 +60,7 @@ class OwnedAudioTimelineDispatcher:
             with prepared.invoke():pass
             self.uncertain=False
         self.timeline.commit(step)
+        self._clock_anchor=observed
         return dict(position=step.position,actions=len(step.actions),active=len(step.active))
 
     def close_audio(self):

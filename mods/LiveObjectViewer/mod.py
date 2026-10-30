@@ -412,14 +412,24 @@ class Mod:
     def __init__(self):
         self.session = self.harness = self.browser = self.native = self.shared = None
         self.commands = []
+        self._world_retiring = False
+        self._retirement_result = None
+        self._retirement_leases = []
+        self._retirement_closed = False
+        self._retirement_release_started = set()
 
     def management(self):
-        return ModDefinition('sdk.live-object-viewer', 'Live Object Viewer', version='0.2.0',
+        return ModDefinition('sdk.live-object-viewer', 'Live Object Viewer', version='0.2.1',
             description='Native live roots, property monitoring, guarded edits, schemas and scoped snapshots.',
             actions=(Action('open', 'Open Live Object Viewer', lambda _: self.open()),),
             keybinds=(Keybind('toggle', 'Toggle Live Object Viewer', None, lambda _: self.toggle()),))
 
     def enable(self, session):
+        self._world_retiring = False
+        self._retirement_result = None
+        self._retirement_leases = []
+        self._retirement_closed = False
+        self._retirement_release_started = set()
         shared = getattr(session._session, '_native_menu_service', None)
         if shared is None or not callable(getattr(shared, 'for_view', None)):
             raise RuntimeError('Live Object Viewer requires SDK Management with shared native views; restart the updated SDK controller')
@@ -454,6 +464,8 @@ class Mod:
         return result
 
     def open(self):
+        if self._world_retiring:
+            raise ManagementError('Live Object Viewer is waiting for the new world')
         if self.native.menu is not None and self.native.menu.panel.state == 'open':
             return 'Live Object Viewer is already open'
         if not self.browser.result or self.browser.request['op'] == 'roots':
@@ -539,9 +551,76 @@ class Mod:
     def poll(self):
         # SDK Management polls the shared panel. Never construct or poll a
         # second panel here, including while another view is active.
-        if self.browser:
+        if self.browser and not self._world_retiring:
             visible=self.native.menu is not None and self.native.menu.panel.state == 'open'
             if self.browser.poll(visible): self._paint(None)
+
+    def revoke_world(self, context):
+        self._world_retiring = True
+        if self.browser is not None:
+            self.browser.live = False
+            self.browser.draft = None
+            self.browser.generation += 1
+        if self.harness is not None:
+            self.harness.revoke()
+        if self.native is not None:
+            self.native.revoke()
+
+    def begin_world_retirement(self, context):
+        if self._retirement_result is not None:
+            return self._retirement_result
+        if self.harness is not None:
+            owners = [pair[1] for pair in self.harness._explorer._owners.values()]
+            pending = self.harness._backend.pending_owner
+            if pending is not None:
+                owners.append(pending)
+            for owner in owners:
+                for lease in owner._leases:
+                    if not any(lease is old for old in self._retirement_leases):
+                        self._retirement_leases.append(lease)
+        return self.poll_world_retirement(context)
+
+    def poll_world_retirement(self, context):
+        if self._retirement_result in ('ack', 'unknown'):
+            return self._retirement_result
+        if self.harness is not None and self.harness._running:
+            self._retirement_result = 'pending'
+            return 'pending'
+        try:
+            closed_now = False
+            if not self._retirement_closed:
+                while self.commands:
+                    self.commands[0].remove()
+                    self.commands.pop(0)
+                if self.harness is not None:
+                    self.harness.close()
+                self._retirement_closed = True
+                closed_now = True
+            pending = False
+            for lease in self._retirement_leases:
+                state = lease._state
+                if state == 'released':
+                    continue
+                if closed_now and state == 'pending_release':
+                    pending = True
+                    continue
+                if state not in ('active', 'pending_release') or (state == 'active' and id(lease) in self._retirement_release_started):
+                    self._retirement_result = 'unknown'
+                    return 'unknown'
+                self._retirement_release_started.add(id(lease))
+                if not lease.release():
+                    if lease._state != 'pending_release':
+                        self._retirement_result = 'unknown'
+                        return 'unknown'
+                    pending = True
+            self._retirement_result = 'pending' if pending else 'ack'
+            if not pending:
+                self.harness = self.browser = self.native = self.shared = self.session = None
+            return self._retirement_result
+        except BaseException:
+            # Retain exact owners and never replay an uncertain release.
+            self._retirement_result = 'unknown'
+            return 'unknown'
 
     def disable(self):
         if self.native:

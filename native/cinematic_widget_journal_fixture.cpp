@@ -16,6 +16,26 @@ struct Ops {
 };
 int main() {
     {
+        WidgetJournal<uint64_t> j;Ops ops;assert(j.begin());assert(j.admit(ops,1,2));
+        // Positive world retirement bypasses all old-widget detach callbacks.
+        ops.alive=false;ops.release_result=WidgetStep::deferred;
+        assert(j.retire(ops)==WidgetStep::deferred);assert(ops.detached==0 && j.active_owner());
+        ops.release_result=WidgetStep::ok;assert(j.retire(ops)==WidgetStep::ok);
+        assert(ops.detached==0 && !j.active_owner());assert(j.retire(ops)==WidgetStep::ok);
+        assert(ops.released==2);
+    }
+    {
+        WidgetJournal<uint64_t> j;Ops ops;assert(j.begin());ops.fail_retain=2;
+        assert(!j.admit(ops,1,2));assert(!j.retirement_ready());
+        assert(j.retire(ops)==WidgetStep::uncertain);assert(ops.detached==0 && ops.released==0);
+    }
+    {
+        WidgetJournal<uint64_t> j;Ops ops;assert(j.begin());assert(j.admit(ops,1,2));
+        ops.release_result=WidgetStep::uncertain;assert(j.retire(ops)==WidgetStep::uncertain);
+        ops.release_result=WidgetStep::ok;assert(j.retire(ops)==WidgetStep::uncertain);
+        assert(ops.released==1 && ops.detached==0);
+    }
+    {
         WidgetJournal<uint64_t,2> j; Ops ops;
         assert(j.begin());assert(!j.begin());assert(j.admit(ops,1,2));
         assert(j.admit(ops,1,2));assert(ops.retained==2);assert(j.owns_track(ops,1));

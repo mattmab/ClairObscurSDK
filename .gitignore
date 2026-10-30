@@ -27,3 +27,4 @@ research/USER_REQUEST*.txt
 .test-tmp/
 .agent-work/
 ClairObscurSDK.zip.*
+/private/

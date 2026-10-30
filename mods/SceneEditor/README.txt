@@ -96,3 +96,107 @@ This inserts or updates a CAM key at the current frame (16 keys maximum).
 Numpad translation/yaw also edits the selected camera. Select a character to
 return these controls to character placement. Save persists camera transforms.
 Only one crosshair is drawn. First-time timeline construction still takes time.
+
+GAME-AUTHORED CAST REPLACEMENTS
+Open Game sequences, load a source, then open Authored timeline and
+Cast and component bindings. Character actors appear before cameras/effects;
+search by character or shot name. Select an actor, choose Lune, Sciel, Verso, Maelle or Monoco,
+then Save authored timeline. Use original character removes that replacement.
+Saved authored timelines restore these choices without starting playback.
+Replacement controls also save X/Y/Z offsets in centimeters and yaw in degrees,
+relative to the preview anchor. The original Blueprint is constructed at that
+pose; authored transform tracks can subsequently move it. These controls place
+replacement cast members, not independent NPC timeline events.
+
+Preview edited timeline applies section ranges to a private sequence copy and
+constructs the replacement through the original cinematic character Blueprint.
+The original game sequence/template stays unchanged. Replacements use the
+current gameplay world with a compatible runtime; older runtimes require the
+QA battle-testing map. The actor-pool runtime supports up to 32
+replacements per preview; older runtimes support one. Animation
+and facial compatibility vary between characters; automatic retargeting is not
+provided. Broader NPC profiles are in development.
+
+SHARED TIMELINE WORKFLOW
+Game-authored sequences use Scene Editor's existing timeline panel, ruler,
+property field and Track library. There is no separate cinematic editor UI.
+Game sequences is available from the Flight/Photo timeline and from an open
+game-authored timeline. Search, select a source and choose Load into timeline.
+Imports run in bounded chunks; End cancels an import. Switching sources keeps
+unfinished section, curve, cast and NPC edits in a separate (Recovered) entry
+under Saved authored timelines, without overwriting the last explicit save.
+When opened from a custom scene, Back to scene timeline restores that scene's
+mode, cursor and selected actor after the source player has closed.
+
+Preview original source and Preview edited timeline open the existing Scene
+Editor timeline. The ruler uses the actual sequence player's frame rate and
+shows source and audio sections, including supported nested sequence timing.
+Track library provides Sections, Cast and Blueprint NPCs in the same panel.
+Select a track on the left to see its full name and properties in the right
+inspector. Active tabs and selected rows are highlighted. Previous/Next property
+chooses the value field; Stage property records the change. The inspector shows
+whether edits await Apply and whether the document is saved. Section bounds
+remain in that source's native ticks.
+
+Blueprint NPCs adds independent Lune, Sciel, Verso, Maelle or Monoco character Blueprints.
+Their start/end intervals use player frames; placement is relative to the
+preview anchor. Apply edits rebuilds owned playback in the same timeline panel
+at the previous cursor. Playback pauses during NPC construction and retirement.
+Save keeps the authored document. Back releases playback before returning to
+the custom scene timeline or the existing editor menu. Source assets remain
+unchanged.
+
+Looping, reversed and held nested timing is reported as unresolved. Blueprint
+NPCs and cast replacements require a compatible native runtime and a ready
+gameplay world. The QA battle-testing map provides an open staging area;
+animation compatibility is character-specific.
+
+CURVE KEYS IN THE SHARED TIMELINE
+In Track library, select a section and choose Section keys. Select a channel key,
+then switch between time (native source ticks) and value with Previous/Next
+property. Set property validates the complete channel's key ordering and value
+type. Save retains the edit without changing the game asset. Back to section
+returns to section properties. With the native curve-editing runtime, Apply
+patches a fresh private copy before constructing its player. Numeric and Boolean
+channels retain their interpolation and tangents. Keys cannot cross neighbors;
+each channel supports up to 64 edited keys per rebuild. Locked sections and
+unexpected storage layouts are rejected. Older runtimes keep Apply unavailable
+for documents containing curve edits.
+Reset key removes the selected key's saved override and restores its source time
+and value. Reset is rejected if it would cross another key moved independently.
+
+GAME SEQUENCE PLAYBACK AND 3D PLACEMENT
+Drag anywhere across the source, audio or NPC lanes to scrub forward or back.
+Dragging pauses playback and evaluates the shot camera, cast and NPC intervals
+at the new playhead. Releasing the mouse leaves playback paused; Play resumes.
+Select a source in the left library to use its controls on the right. Open
+Timeline retains the selection and current edits. Start playback rewinds and
+plays; Play/Pause starts at the current playhead. Imported LevelSequence sources
+use the owned cinematic player directly, including nested shots. The scene
+origin is derived from cinematic character transforms, or camera transforms for
+camera-only sources. Simon and LuneArrives retain their measured source origins.
+Sources containing only media or audio use their own native tracks without a
+character origin. Original level geometry and campaign actions are not imported.
+
+On a supported scene, seek into a camera shot and select 3D overview. Orbit left
+and right, Camera closer/farther and Camera up/down inspect the paused scene.
+Seek restores the authored shot camera. Flight editor uses a separately owned
+camera: WASD moves without holding a mouse button; E/Q (or Space/Ctrl) moves
+up/down and Shift moves faster. Hold right mouse only for mouse look.
+In flight view, Play from flight view resumes the scene and Start in flight view
+rewinds it while keeping this camera. You can fly while actors and audio play.
+Exit flight view returns to the authored scene camera. Place whole scene here positions the complete scene
+1000 cm in front of this view. Save retains the position for later playback.
+
+Backspace or Hide timeline hides the overlay without leaving the flight editor;
+Backspace restores it. In flight view Numpad8/2 moves the whole scene forward/back,
+Numpad6/4 right/left and Numpad9/3 up/down. Directions follow the flight camera's
+yaw. Hold Alt for one-tenth movement speed. The flight camera remains fixed while
+the cast and additional Blueprint NPCs move together. Save keeps placement.
+
+In Track library choose Scene position. Set property accepts [X, Y, Z] world
+coordinates in centimeters; null restores staging relative to the player.
+Placement-only Apply retains the player and moves the sequence origin,
+cast replacements and additional Blueprint NPCs together. Save keeps
+the location. The initial adapter supports translation, not whole-scene rotation.
+Map geometry, original level actors and campaign dependencies are not moved.

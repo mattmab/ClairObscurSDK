@@ -5,15 +5,28 @@
 constexpr uint32_t kStringCallVersion=5, kStringCallKind=16;
 inline uint32_t validate_string_call(const TextCallPacket& p) {
     const auto& c=p.retained.call;
+    const bool texture=c.entry_rva==0x3854c30;
     if(p.version!=1 || p.count!=1 || !retained_call_empty(p.retained) ||
-       c.version!=5 || c.field_count!=1 || c.object_count || c.parameter_size!=16 ||
-       c.allocation_extent!=16 || c.return_offset!=65535 || c.function_flags!=0x4020403 ||
-       c.entry_rva!=0x320b2d0) return 760;
-    const auto& f=c.fields[0];
-    if(f.kind!=16 || f.offset || f.width!=16 || f.dimension!=1 ||
+       c.version!=5 || c.field_count!=(texture?3U:1U) || c.object_count!=(texture?1U:0U) ||
+       c.parameter_size!=(texture?32U:16U) || c.allocation_extent!=(texture?32U:16U) ||
+       c.return_offset!=(texture?24U:65535U) || c.function_flags!=(texture?0x4022403U:0x4020403U) ||
+       (!texture&&c.entry_rva!=0x320b2d0)) return 760;
+    const unsigned string_index=texture?1:0;
+    const auto& f=c.fields[string_index];
+    if(f.kind!=16 || f.offset!=(texture?8U:0U) || f.width!=16 || f.dimension!=1 ||
        f.flags!=0x18000000000280ULL || f.bool_encoding || f.constraint.index!=-1 ||
-       f.constraint.serial || f.constraint.address || std::strcmp(f.name,"Path")) return 761;
-    if(p.texts[0].field_index || !valid_text_units(p.texts[0].units,p.texts[0].count)) return 762;
+       f.constraint.serial || f.constraint.address || std::strcmp(f.name,texture?"Filename":"Path")) return 761;
+    if(texture){
+        for(unsigned i=0;i<=2;i+=2){
+            const auto& object=c.fields[i];
+            if(object.kind!=CallObject||object.offset!=(i?24U:0U)||object.width!=8||object.dimension!=1||
+               object.flags!=(i?0x18001000000780ULL:0x18001000000280ULL)||object.bool_encoding||
+               object.constraint.index<0||object.constraint.serial<0||!object.constraint.address||
+               std::strcmp(object.name,i?"ReturnValue":"WorldContextObject"))return 761;
+        }
+        if(c.objects[0].offset||c.objects[0].identity.index<0||c.objects[0].identity.serial<0||!c.objects[0].identity.address)return 761;
+    }
+    if(p.texts[0].field_index!=string_index || !valid_text_units(p.texts[0].units,p.texts[0].count)) return 762;
     for(uint32_t i=p.texts[0].count;i<kOwnedTextUnits;++i) if(p.texts[0].units[i]) return 762;
     for(uint32_t i=1;i<kTextCallSlots;++i) {
         if(p.texts[i].field_index || p.texts[i].count) return 762;
@@ -21,8 +34,8 @@ inline uint32_t validate_string_call(const TextCallPacket& p) {
     }
     for(auto b:c.data) if(b) return 763;
     auto normalized=c; normalized.version=2;
-    normalized.fields[0].kind=CallUInt16; normalized.fields[0].width=2;
-    normalized.fields[0].dimension=8;
+    normalized.fields[string_index].kind=CallUInt16; normalized.fields[string_index].width=2;
+    normalized.fields[string_index].dimension=8;
     return validate_call_packet(normalized,true);
 }
 
@@ -41,18 +54,24 @@ struct StringCallFrame {
         std::memcpy(units,p.texts[0].units,sizeof(units));
         expected={reinterpret_cast<uint64_t>(units),static_cast<int32_t>(p.texts[0].count),
                   static_cast<int32_t>(p.texts[0].count)};
-        std::memcpy(arguments,&expected,16); state=StringFrameState::Ready; return true;
+        const auto offset=p.retained.call.fields[p.texts[0].field_index].offset;
+        // Reflection has already patched validated input object slots. Only
+        // the string slot is ours; preserve those inputs and the return slot.
+        std::memcpy(arguments+offset,&expected,16); state=StringFrameState::Ready; return true;
     }
     bool begin() {
         if(state!=StringFrameState::Ready) return false;
         state=StringFrameState::DispatchUnknown; return true;
     }
     bool returned(const TextCallPacket& p) {
+        const auto offset=p.retained.call.fields[p.texts[0].field_index].offset;
         if(state!=StringFrameState::DispatchUnknown ||
-           std::memcmp(arguments,&expected,16) || std::memcmp(units,p.texts[0].units,sizeof(units))) {
+           std::memcmp(arguments+offset,&expected,16) || std::memcmp(units,p.texts[0].units,sizeof(units))) {
             state=StringFrameState::Quarantined; return false;
         }
-        std::memset(arguments,0,sizeof(arguments)); state=StringFrameState::Returned; return true;
+        // reflected_call captures/retains output objects after this callback.
+        // Scrub the borrowed FString pointer now, leaving object slots intact.
+        std::memset(arguments+offset,0,16); state=StringFrameState::Returned; return true;
     }
     bool reset() {
         if(state==StringFrameState::DispatchUnknown || state==StringFrameState::Quarantined) return false;

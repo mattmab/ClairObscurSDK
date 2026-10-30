@@ -2,28 +2,28 @@ import unittest
 from types import SimpleNamespace as N
 from unittest.mock import Mock,patch
 from test_cinematics import module
+from cinematics_v2_fixtures import Backend,ready_model,poll
+from expedition33.cinematics.controller import ReplayObservation,BackendState
 from expedition33.cinematics.title_replay import ExactTitleReplay
 from expedition33.cinematics.title_profiles import PROLOGUE
 
 class TitleStatusTimingTests(unittest.TestCase):
-    def test_browser_reads_current_status_and_only_changed_states_refresh(self):
-        mod=module.Mod();mod.show_all=False
-        mod.discovery={'confirmed':[dict(id=module.DEFINITION,title='Prologue',reason='ready',replay_kind='title',supported=True)]}
-        view=module.BrowserView(N(_check=Mock()),mod);view.selected=module.DEFINITION;view.status='Starting'
-        menu=N(panel=N(state='open'),view=view)
-        mod.native=N(menu=menu,parent=N(refresh=Mock()),poll=Mock())
-        mod.title_replay=N(poll=Mock(return_value={'state':'ended'}))
-        mod.playback_status='Starting'
-        mod.poll()
-        self.assertEqual(view.render().status,'Title: ended')
-        mod.native.parent.refresh.assert_called_once()
-        mod.poll()
-        mod.native.parent.refresh.assert_called_once()
+    def test_browser_reads_cached_status_and_only_changed_states_refresh(self):
+        row=dict(id=module.DEFINITION,title='Prologue',reason='ready',replay_kind='title',supported=True,unlocked=True)
+        mod=ready_model(module,row);view=module.BrowserView(N(_check=Mock()),mod)
+        view.selected=module.DEFINITION;view.status='Starting';mod.native.menu.view=view
+        backend=Backend();backend.poll.return_value=ReplayObservation(BackendState.ACTIVE,'Title: ended')
+        mod.controller.queue(row['id'],lambda:backend,mod._last_epoch);mod.controller.poll(mod._last_epoch)
+        mod.playback_status='Starting';poll(mod)
+        self.assertEqual(view.render().status,'Title: ended');mod.native.parent.refresh.assert_called_once()
+        backend.poll.reset_mock();view.render();view.render();backend.poll.assert_not_called()
+        poll(mod);mod.native.parent.refresh.assert_called_once()
 
     def test_other_views_are_not_refreshed_by_title_status(self):
-        mod=module.Mod();mod.title_replay=N(poll=Mock(return_value={'state':'ended'}))
-        mod.native=N(menu=N(panel=N(state='open'),view=object()),parent=N(refresh=Mock()),poll=Mock())
-        mod.poll();mod.native.parent.refresh.assert_not_called()
+        mod=ready_model(module,dict(id='title',title='Title'));backend=Backend()
+        backend.poll.return_value=ReplayObservation(BackendState.ACTIVE,'Title: ended')
+        mod.controller.queue('title',lambda:backend,mod._last_epoch);mod.controller.poll(mod._last_epoch)
+        mod.native.menu.view=object();poll(mod);mod.native.parent.refresh.assert_not_called()
 
     def test_timing_records_failed_phase_without_retry(self):
         replay=ExactTitleReplay.__new__(ExactTitleReplay);replay.evidence={}

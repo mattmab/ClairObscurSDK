@@ -114,6 +114,30 @@ class DirectMenuTests(unittest.TestCase):
         self.assertEqual(m.catalog,before)
         self.assertFalse(next(r for r in m.catalog['entries'] if r['id']==CATALOG_ID)['spawn_available'])
 
+    def test_original_stage_descriptions_distinguish_combat_from_cinematic_completion(self):
+        from expedition33._original_trigger_fight import direct_fight_recipes
+        m=self.model();m.direct_catalog=direct_fight_recipes(m.catalog)
+        v=self.view.EnemyView.__new__(self.view.EnemyView)
+        v.model=m;v.screen='enemy_details'
+        for identity in ('e7e263f066d33733','ab11b529310fbd73'):
+            with self.subTest(identity=identity):
+                v.selected=identity
+                _,description,rows=v._rows()
+                self.assertIn('separate original direct-fight choices',description)
+                self.assertIn('cinematic handoff between battles',description)
+                self.assertIn('not implemented',description)
+                self.assertNotIn('not a standalone original encounter',description)
+                self.assertTrue(any(r[1]=='enemy_direct_begin' and r[3] for r in rows))
+        v.selected='e02190410f616184'
+        _,description,_=v._rows()
+        self.assertIn('direct fight was tested',description)
+        self.assertNotIn('direct fight and original exploration presentation have not been qualified',description)
+        v.selected='d6ec611a700522e6'
+        _,description,_=v._rows()
+        self.assertIn('cutscene was not visible',description)
+        self.assertIn('do not verify camera visibility',description)
+        self.assertIn('relocation remains unqualified',description)
+
 class DirectSdkLifetimeTests(unittest.TestCase):
     def spawner(self):
         s=EnemySpawner.__new__(EnemySpawner)

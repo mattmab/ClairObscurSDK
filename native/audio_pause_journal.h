@@ -3,6 +3,7 @@
 #include <cstdint>
 
 enum class AudioPauseResult { Ok, Deferred, Rejected, Unknown };
+enum class AudioPauseCertificate { Current, Foreign, Pending, Unknown };
 
 // Operations run on the game thread. Identity retention belongs to the adapter.
 // Never replay an uncertain setter; known completed entries can still restore.
@@ -40,6 +41,34 @@ public:
         // Validate all entries first; never partially erase an unknown setter.
         for(size_t i=0;i<count_;++i)if(stages_[i]==Uncertain)return AudioPauseResult::Unknown;
         for(size_t i=0;i<count_;++i)stages_[i]=Restored;
+        return AudioPauseResult::Ok;
+    }
+    template<class Ops> AudioPauseResult retire_world(Ops& ops) {
+        // A current persistent-music certificate may authorize restoring ONLY
+        // our acknowledged pause. Foreign/replaced references are left alone.
+        for(size_t i=0;i<count_;++i)if(stages_[i]==Uncertain)return AudioPauseResult::Unknown;
+        for(size_t i=0;i<count_;++i) {
+            if(stages_[i]!=Paused) { stages_[i]=Restored;continue; }
+            auto certificate=ops.certificate(i);
+            if(certificate==AudioPauseCertificate::Foreign) {stages_[i]=Restored;continue;}
+            if(certificate==AudioPauseCertificate::Pending)return AudioPauseResult::Deferred;
+            if(certificate!=AudioPauseCertificate::Current)return AudioPauseResult::Unknown;
+            bool playing=false,paused=false;
+            if(!ops.inspect(i,playing,paused))return AudioPauseResult::Unknown;
+            if(!paused) {stages_[i]=Restored;continue;}
+            certificate=ops.certificate(i);
+            if(certificate==AudioPauseCertificate::Foreign) {stages_[i]=Restored;continue;}
+            if(certificate==AudioPauseCertificate::Pending)return AudioPauseResult::Deferred;
+            if(certificate!=AudioPauseCertificate::Current)return AudioPauseResult::Unknown;
+            stages_[i]=Uncertain;
+            const auto result=ops.set(i,false);
+            if(result==AudioPauseResult::Deferred || result==AudioPauseResult::Rejected) {
+                stages_[i]=Paused;return result;
+            }
+            if(result!=AudioPauseResult::Ok || ops.certificate(i)!=AudioPauseCertificate::Current)
+                return AudioPauseResult::Unknown;
+            stages_[i]=Restored;
+        }
         return AudioPauseResult::Ok;
     }
     template<class Ops> AudioPauseResult close(Ops& ops) {

@@ -13,6 +13,7 @@ class Mod:
     def __init__(self):
         self.scope=None;self.model=None;self.pending=[];self.last={};self.session=None;self.catalog=None;self.future=None;self.pool=None;self.native=None;self.shared=None;self.entries=[];self.open_pending=False;self.next_poll=0;self.painted=None;self.skin_path=None;self.driver_index=None
         self.rig=None;self.follow_character=False;self.prepared_skin=None;self.next_character_check=0;self.rig_future=None;self.replacement_asset='2b'
+        self._world_retiring=False;self._retirement_token=None;self._retirement_futures=[]
     @property
     def busy(self):return self.model is not None or self.future is not None
     def summary(self):return str(self.last) if not self.model else f"{self.last.get('state')} - {self.last.get('asset')} - {self.last.get('uploaded',0)}/{self.last.get('sections',0)} sections"
@@ -21,6 +22,7 @@ class Mod:
             description='EXPERIMENTAL. User-supplied models only. Animation is not 1:1; loading needs improvement and meshes may lag.',
             actions=(Action('browse','Browse model catalog',lambda _:self.open()),Action('preview_2b','Preview 2B on current character (experimental)',lambda _:self.replacement_preview()),Action('replace_2b','Replace selected character with 2B',lambda _:self.select_replacement('2b')),Action('replace_ayane','Replace selected character with Ayane (prototype)',lambda _:self.select_replacement('ayane')),Action('destroy','Destroy current model / restore character',lambda _:self.destroy())))
     def enable(self,session):
+        self._world_retiring=False;self._retirement_token=None;self._retirement_futures=[]
         if getattr(session._session._transport,'mesh_protocol',0)!=3:raise RuntimeError('Asset Creator requires SDK RC6 or newer with mesh protocol 3; public RC5 is unsupported')
         from .library import entries as user_entries
         self.entries=user_entries()+entries(DEFAULT_ROOT);self.shared=getattr(session._session,'_native_menu_service',None)
@@ -114,13 +116,15 @@ class Mod:
         self.skin_path=data.get("skin")
         self.scope=SessionScope(self.session,lease_owner='CatalogModels');self.model=Tetrahedron(self.scope)
         try:
-            if self.skin_path and getattr(self,"replacement_profile",2) in (10,11):
-                from expedition33.assets import load_asset
-                from expedition33.procedural_mesh import MATERIAL_PROFILES
-                self.material_asset=load_asset(self.scope,MATERIAL_PROFILES[self.replacement_profile][0])
-            for profile in data.get("material_profiles",[]):
-                from expedition33.assets import load_asset
-                from expedition33.procedural_mesh import MATERIAL_PROFILES
+            from expedition33.assets import load_asset
+            from expedition33.procedural_mesh import MATERIAL_PROFILES
+            # Converted models declare materials on each section, not only in
+            # the optional top-level list. Load them before taking the catalog
+            # snapshot so previews also work in maps that never used them.
+            profiles=list(data.get('material_profiles',()))
+            profiles.extend((getattr(self,'replacement_profile',2) if self.skin_path else row.get('profile',2))
+                            for row in data['sections'] if row.get('texture'))
+            for profile in dict.fromkeys(profiles):
                 load_asset(self.scope,MATERIAL_PROFILES[profile][0])
             self.model.spawn(ground=True)
             names=('Widget3DPassThrough_Opaque','SetVectorParameterValue','DefaultImagePlateMaterial','Default__KismetStringLibrary','Default__KismetRenderingLibrary','ImportFileAsTexture2D',
@@ -134,6 +138,7 @@ class Mod:
         except BaseException:
             self._retire();raise
     def poll(self):
+        if self.session is None or self._world_retiring:return
         if self.open_pending:
             self.open_pending=False
             if self.shared.menu is not None and self.shared.menu.panel.state=='open':self.shared.close_menu()
@@ -216,3 +221,31 @@ class Mod:
         self.destroy()
         if self.pool:self.pool.shutdown(wait=True,cancel_futures=True)
         self.session=None;self.pool=None;self.native=None;self.shared=None
+
+    def revoke_world(self,context):
+        self._world_retiring=True;self._retirement_token=context.previous_token
+        self.open_pending=False;self.follow_character=False;self.pending=[]
+        self._retirement_futures=[future for future in (self.future,self.rig_future) if future is not None]
+        for future in self._retirement_futures:future.cancel()
+
+    def begin_world_retirement(self,context):
+        return self.poll_world_retirement(context)
+
+    def poll_world_retirement(self,context):
+        if context.previous_token!=self._retirement_token:return 'unknown'
+        # Preparation workers do local conversion or read-only observation.
+        # Discard results only once they settle; never upload into a new world.
+        if any(not future.done() for future in self._retirement_futures):return 'pending'
+        if self.model is not None:
+            if not self.model.retire_world():return 'pending'
+            self.model=None
+        if self.scope is not None:
+            from expedition33._retired_tracking import close_lease_only_scope
+            if not close_lease_only_scope(self.scope):return 'pending'
+            self.scope=None
+        if self.pool is not None:self.pool.shutdown(wait=False,cancel_futures=True)
+        self.future=self.rig_future=self.pool=None;self._retirement_futures=[]
+        self.catalog=self.rig=self.prepared_skin=self.skin_path=self.driver_index=None
+        self.native=self.shared=self.session=None
+        self.last=dict(state='world-retired')
+        return 'ack'

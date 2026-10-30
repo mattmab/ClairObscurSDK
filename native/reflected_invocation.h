@@ -16,6 +16,9 @@
 inline bool (*cinematic_empty_trap_armed)(const CallIdentity&)=nullptr;
 inline uint32_t (*cinematic_play_preflight)(uint64_t,const CallPacket&)=nullptr;
 #endif
+#ifdef E33_SEQUENCE_ORIGIN_SESSION
+inline uint32_t (*sequence_origin_play_preflight)(uint64_t,const CallPacket&)=nullptr;
+#endif
 
 // Uses the target's own dispatcher, with no thunk ABI emulation or promise that
 // an RPC body ran. The optional retention sink owns object outputs before return.
@@ -201,15 +204,15 @@ inline uint32_t reflected_call(uint64_t base,CallPacket& packet,const CallRetent
     unsigned seen=0, walked=0, returns=0;
     const char* kinds[]={"", "BoolProperty","ByteProperty","UInt16Property","IntProperty",
                          "FloatProperty","DoubleProperty","ObjectProperty","ClassProperty",
-                         "StructProperty","StructProperty","StructProperty","StructProperty","TextProperty","EnumProperty","StructProperty","StrProperty","SoftObjectProperty","StructProperty","StructProperty","StructProperty","NameProperty","StructProperty"};
-    static_assert(sizeof(kinds)/sizeof(kinds[0])==CallGuid+1, "Reflected kind table must cover every admitted kind");
+                         "StructProperty","StructProperty","StructProperty","StructProperty","TextProperty","EnumProperty","StructProperty","StrProperty","SoftObjectProperty","StructProperty","StructProperty","StructProperty","NameProperty","StructProperty","StructProperty","StructProperty","StructProperty","StructProperty","StructProperty"};
+    static_assert(sizeof(kinds)/sizeof(kinds[0])==CallRotator+1, "Reflected kind table must cover every admitted kind");
     for(;property;property=local_read<uint64_t>(property+0x18)) {
         if(++walked>4096) return 207;
         auto flags=local_read<uint64_t>(property+0x38);
         if(!(flags&0x80)) continue;
         if(seen>=packet.field_count) return 208;
         const auto& field=packet.fields[seen++];
-        if(field.kind>=sizeof(kinds)/sizeof(kinds[0]) || field.kind<CallBool || (field.kind>(sequence_enabled ? kSequenceSettingsKind : asset_enabled ? kAssetCallKind : enum_enabled ? kEnumCallKind : text_enabled ? (text->strings ? kStringCallKind : kTextCallKind) : pod_enabled && (packet.version==kPodCallVersion || blueprint_enabled) ? CallAnchors : CallClass) && !(blueprint_enabled && field.kind==kBlueprintNameKind) && !(pod_enabled && (field.kind==CallGuid || field.kind==CallVector || frame_time_call_enabled(field.kind) || timespan_call_enabled(field.kind)))) || !field.name[0] || field.name[95] ||
+        if(field.kind>=sizeof(kinds)/sizeof(kinds[0]) || field.kind<CallBool || (field.kind>(sequence_enabled ? kSequenceSettingsKind : asset_enabled ? kAssetCallKind : enum_enabled ? kEnumCallKind : text_enabled ? (text->strings ? kStringCallKind : kTextCallKind) : pod_enabled && (packet.version==kPodCallVersion || blueprint_enabled) ? CallAnchors : CallClass) && !(blueprint_enabled && field.kind==kBlueprintNameKind) && !(pod_enabled && (rotator_call_enabled(field.kind) || binding_id_call_enabled(field.kind) || field.kind==CallGuid || field.kind==CallVector || frame_time_call_enabled(field.kind) || sequencer_frame_call_enabled(field.kind) || timespan_call_enabled(field.kind)))) || !field.name[0] || field.name[95] ||
            field.flags!=flags || local_read<uint64_t>(property+0x10)!=(function|1) ||
            !exact_name(base,property+0x20,field.name) ||
            !exact_name(base,local_read<uint64_t>(property+8),(asset_enabled && packet.entry_rva==0x3860250 && field.kind==kAssetCallKind)?"SoftClassProperty":kinds[field.kind]) ||
@@ -236,13 +239,16 @@ inline uint32_t reflected_call(uint64_t base,CallPacket& packet,const CallRetent
         }
         if(field.kind==kStringCallKind) {
             width=16;
+            const bool file=exact_name(base,function+0x18,"SetFilePath")&&exact_name(base,owner+0x18,"FileMediaSource")&&
+                exact_name(base,local_read<uint64_t>(owner+0x20)+0x18,"/Script/MediaAssets");
+            const bool texture=exact_name(base,function+0x18,"ImportFileAsTexture2D")&&exact_name(base,owner+0x18,"KismetRenderingLibrary")&&
+                exact_name(base,local_read<uint64_t>(owner+0x20)+0x18,"/Script/Engine")&&
+                exact_name(base,object+0x18,"Default__KismetRenderingLibrary")&&(local_read<uint32_t>(object+8)&0x10);
             if(!text_enabled || !text->strings || local_read<uint64_t>(property)!=base+0x6e131d8 ||
                local_read<uint64_t>(base+0x6e132e8)!=base+0x133a600 ||
                local_read<uint64_t>(base+0x6e132c8)!=base+0x1368400 ||
                local_read<uint64_t>(base+0x6e13258)!=base+0x10044f0 ||
-               !exact_name(base,function+0x18,"SetFilePath") ||
-               !exact_name(base,owner+0x18,"FileMediaSource") ||
-               !exact_name(base,local_read<uint64_t>(owner+0x20)+0x18,"/Script/MediaAssets")) return 764;
+               (!file&&!texture)) return 764;
         }
         if(field.kind==kTextCallKind) {
             width=16;
@@ -252,9 +258,13 @@ inline uint32_t reflected_call(uint64_t base,CallPacket& packet,const CallRetent
             if(!timespan_call_enabled(field.kind) || !timespan_media_packet(packet) ||
                !call_capture(base,owner).address || !exact_name(base,owner+0x18,"MediaPlayer") ||
                !exact_name(base,local_read<uint64_t>(owner+0x20)+0x18,"/Script/MediaAssets") ||
-               !exact_name(base,function+0x18,packet.entry_rva==0x3208990 ? "GetTime" : "GetDuration")) return 225;
+               !exact_name(base,function+0x18,packet.entry_rva==0x3208990 ? "GetTime" : packet.entry_rva==0x320ad80 ? "Seek" : "GetDuration")) return 225;
         }
+        if(field.kind==CallBindingID && (!binding_id_call_enabled(field.kind) || packet.version!=kPodCallVersion || field.dimension!=1))return 225;
         if(field.kind==CallQualifiedFrameTime && (packet.version!=kPodCallVersion || !(field.flags&0x400) || field.dimension!=1 || !frame_time_call_enabled(field.kind))) return 225;
+        if(field.kind>=CallFrameNumber && field.kind<=CallFrameRate &&
+           (!sequencer_frame_call_enabled(field.kind) || (packet.version!=kPodCallVersion && packet.version!=kEnumCallVersion) || field.dimension!=1 || field.width!=pod_value_width(call_pod_profile(field.kind)) ||
+            !sequencer_frame_value(field.kind,arguments+field.offset,!(field.flags&0x400) && (!(field.flags&0x100) || (field.flags&0x8000000)))))return 225;
         if(call_pod_kind(field.kind)) {
             width=pod_value_width(call_pod_profile(field.kind));
             if(!pod->validate(base,property,call_pod_profile(field.kind),field.constraint)) return 225;
@@ -334,6 +344,11 @@ inline uint32_t reflected_call(uint64_t base,CallPacket& packet,const CallRetent
         if(auto error=cinematic_play_preflight(base,packet)) return error;
     }
 #endif
+#ifdef E33_SEQUENCE_ORIGIN_SESSION
+    if(sequence_origin_play_preflight) {
+        if(auto error=sequence_origin_play_preflight(base,packet)) return error;
+    }
+#endif
 #ifdef E33_GAME_OWNED_CINEMATIC_SESSION
     bool scoped_scavenger_repeat=false;
     ScavengerRepeatGuard repeat_guard{};
@@ -378,9 +393,13 @@ inline uint32_t reflected_call(uint64_t base,CallPacket& packet,const CallRetent
             if(!timespan_call_enabled(field.kind) || !timespan_media_packet(packet) ||
                !call_capture(base,owner).address || !exact_name(base,owner+0x18,"MediaPlayer") ||
                !exact_name(base,local_read<uint64_t>(owner+0x20)+0x18,"/Script/MediaAssets") ||
-               !exact_name(base,function+0x18,packet.entry_rva==0x3208990 ? "GetTime" : "GetDuration")) return 225;
+               !exact_name(base,function+0x18,packet.entry_rva==0x3208990 ? "GetTime" : packet.entry_rva==0x320ad80 ? "Seek" : "GetDuration")) return 225;
         }
+        if(field.kind==CallBindingID && (!binding_id_call_enabled(field.kind) || packet.version!=kPodCallVersion || field.dimension!=1))return 225;
         if(field.kind==CallQualifiedFrameTime && (packet.version!=kPodCallVersion || !(field.flags&0x400) || field.dimension!=1 || !frame_time_call_enabled(field.kind))) return 225;
+        if(field.kind>=CallFrameNumber && field.kind<=CallFrameRate &&
+           (!sequencer_frame_call_enabled(field.kind) || (packet.version!=kPodCallVersion && packet.version!=kEnumCallVersion) || field.dimension!=1 || field.width!=pod_value_width(call_pod_profile(field.kind)) ||
+            !sequencer_frame_value(field.kind,arguments+field.offset,!(field.flags&0x400) && (!(field.flags&0x100) || (field.flags&0x8000000)))))return 225;
         if(call_pod_kind(field.kind)) {
             for(unsigned i=0;i<field.dimension;++i)
                 if(!valid_pod_value(call_pod_profile(field.kind),arguments+field.offset+i*field.width,field.width)) return 226;

@@ -75,10 +75,16 @@ def poll(mod,context):
     if not drain_workers(mod):return 'pending'
     outcome=native_retire(mod)
     if outcome!='ack':return outcome
-    for panel in (mod.catalog_menu,mod.hud):
-        if panel is None:continue
-        outcome=panel.retire_world(native_retirement_ack=True)
+    prepared=getattr(mod,'_loading_ui',None)
+    if (prepared is not None and prepared.catalog is mod.catalog_menu and prepared.hud is mod.hud
+            and prepared.context is not None):
+        outcome=prepared.retire_world()
         if outcome!='ack':return outcome
+    else:
+        for panel in (mod.catalog_menu,mod.hud):
+            if panel is None:continue
+            outcome=panel.retire_world(native_retirement_ack=True)
+            if outcome!='ack':return outcome
     if mod._menu_reader is not None:mod._menu_reader.close();mod._menu_reader=None
     mod.library._catalog=None;mod.library.owned.clear();mod.library.preview_key=None
     mod.library.selected=None;mod.library.world=None

@@ -166,6 +166,10 @@ def discover(pid):
         ids.append(one(o for o in c.objects if o.name==name and o.outer_index==cls.index and o.class_name=='Function'))
     return ids
 
+class MeshStatusPending(RuntimeError):
+    """Read-only status was deferred before observing native ownership."""
+
+
 class Tetrahedron:
     """One native-owned static custom model. Explicit close or scope cleanup."""
     def __init__(self,scope):
@@ -221,7 +225,9 @@ class Tetrahedron:
             hair_samples=[struct.unpack_from('<Q16d',raw,16744+i*136) for i in range(hc)]
             if any(not math.isfinite(v) for row in hair_samples for v in row):raise RuntimeError('Hair nonfinite sample')
             self.last.update(samples=samples,total=total,frozen=bool(frozen),hair_samples=hair_samples,hair_total=ht)
-        if error:raise RuntimeError('Mesh operation rejected: '+str(self.last))
+        if error:
+            if op==3 and error==407:raise MeshStatusPending('Native mesh status deferred')
+            raise RuntimeError('Mesh operation rejected: '+str(self.last))
         return self.last
 
     def spawn(self,geometry=None,ground=False):
@@ -322,6 +328,23 @@ class Tetrahedron:
         self.closed=True
         if self in self.scope._mesh_models:self.scope._mesh_models.remove(self)
         return self.last
+
+    def retire_world(self):
+        """Release tracking only after native automatic cleanup reports idle.
+
+        Never restore a driver or destroy an actor from the retired world here.
+        The native owner retains its resources until its own cleanup completes.
+        """
+        if self.closed:return True
+        try:result=self.status()
+        except MeshStatusPending:return False
+        state=result.get('state') if type(result) is dict else None
+        if type(state) is not int or state not in (0,1,2,3):raise RuntimeError('Invalid native mesh retirement receipt')
+        if state==3:raise RuntimeError('Native mesh retirement outcome is uncertain')
+        if state:return False
+        self.created=False;self.closed=True
+        if self in self.scope._mesh_models:self.scope._mesh_models.remove(self)
+        return True
 
     def __enter__(self):return self
     def __exit__(self,*_):self.close()

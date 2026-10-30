@@ -1,573 +1,557 @@
-"""Cinematic browser with isolated adapters and mapped original game actions."""
-import logging
-import json
-import hashlib
-import time
+"""Cinematics v2: catalog UI and explicit owner-scoped replay routing."""
+from dataclasses import asdict
+from contextlib import nullcontext
 from pathlib import Path
+import logging
+import time
+
+from expedition33.management import Action, Keybind, ModDefinition, Option, ManagementError
 from expedition33.paths import game_root
-from expedition33.catalog import capture_matching
-from expedition33.values import read_values, read_object_reference, StoredMap
-from expedition33._reader import ReadBatch
-from expedition33.management import Action, ModDefinition, ManagementError
-from expedition33.management_view import MenuControl, MenuFrame
-from expedition33.pause_menu import PauseMenuEntry
+from expedition33._reader import shared_operation
+from expedition33.cinematics.history import read_current_history, observation_error_reason
+from expedition33.cinematics.original_game_action import controller_context, profiles as original_profiles, available as original_available
 from expedition33.cinematics.title_replay import DEFINITION, SEQUENCE, SAVE_ID
 from expedition33.cinematics.title_profiles import TITLE_PROFILES, PROLOGUE
 from expedition33.cinematics.media_profiles import MEDIA_PROFILES
-from expedition33.cinematics.original_game_action import profiles as original_profiles, profile_matches, available as original_available, OriginalActionReplay
+from expedition33.cinematics.library import (CatalogStore, PREVIEW_PROFILES, catalog_scenes,
+    installed_cinematics, exact_title, preview_available, protocol, title_available as _title_available)
+from expedition33.cinematics.browser_view import BrowserView, WorkspaceBrowserView, availability_label, menu_scene_label
+from expedition33.cinematics.controller import (ReplayController, ControllerState, StartResult,
+    ReplayBusy)
+from expedition33.cinematics.adapters import TitleAdapter, MediaAdapter, PreviewAdapter, OriginalActionAdapter
+from expedition33.cinematics.movie_clips import installed_movie_clips
+from expedition33.cinematics.portable import PortableSceneAdapter, available as portable_available
 
 LOG = logging.getLogger('expedition33.cinematics')
 TITLE_PROTOCOLS = PROLOGUE.required_protocols
 
-# Representative live results recorded in research/CINEMATICS_COMPLETION.md.
-LIVE_ORIGINAL_ACTIONS = frozenset((
-    'Sandfall/Content/Levels/OrangeForest/GameActions/DA_GA_CIN_MCS_ScavengerIntro.uasset',
-    'Sandfall/Content/Cinematics/Camp/Forced/LuneCampFairytales/DA_GA_CIN_LuneCampFairytales.uasset',
-))
-
-
-def availability_label(scene):
-    if not scene.get('supported'):
-        return 'Unavailable'
-    if scene.get('validation') == 'live_partial':
-        return 'Available - partial'
-    if (scene.get('validation') == 'live_mechanism_verified' or
-            (scene.get('replay_kind') == 'original_action' and scene.get('id') in LIVE_ORIGINAL_ACTIONS)):
-        return 'Available - tested'
-    return 'Available - unverified'
-
-
-def menu_scene_label(scene):
-    title = scene['title']
-    for suffix in (' [unlocked]', ' [locked]', ' [unlock unknown]'):
-        title = title.removesuffix(suffix)
-    return f'[{availability_label(scene)}] {title}'
-
 
 def title_available(transport, definition=DEFINITION):
-    profile=TITLE_PROFILES.get(definition)
-    return profile is not None and profile.available(transport)
+    return _title_available(transport, definition)
 
 
-def exact_title(scene):
-    profile=TITLE_PROFILES.get(scene.get('id'))
-    return profile is not None and profile.matches(scene)
+def _epoch(context):
+    return tuple(context['world']), tuple(context['controller'])
 
 
-def catalog_scenes(history, media_available, catalog, manifest_bytes, *, title_profile_ids=(), original_action_available=False):
-    if catalog.get('version') != 1 or catalog.get('manifest_sha256') != hashlib.sha256(manifest_bytes).hexdigest():
-        raise ValueError('Cinematic catalog does not match the installed manifest')
-    scenes=[]; identities=set();actions=original_profiles() if original_action_available else {}
-    for item in catalog['scenes']:
-        identity=item['id']
-        if identity in identities: raise ValueError('Duplicate cinematic definition')
-        identities.add(identity)
-        saved_id=item.get('saved_id')
-        unlocked=history.get(saved_id) if saved_id else None
-        if type(unlocked) is not bool: unlocked=None
-        # Only independently verified exact adapters grant playback.
-        media_profile=MEDIA_PROFILES.get(identity)
-        mapped=media_profile is not None and media_profile.matches(item)
-        title_mapped=exact_title(item)
-        original=actions.get(identity)
-        original_mapped=original is not None and profile_matches(original,item) and not title_mapped
-        if original_mapped:mapped=False
-        supported=bool(unlocked is True and ((mapped and media_available) or (title_mapped and TITLE_PROFILES[identity].profile_id in title_profile_ids)))
-        if original_mapped:supported=True
-        title=media_profile.label if mapped else item['title']
-        label='unlocked' if unlocked is True else 'locked' if unlocked is False else 'unlock unknown'
-        reason=(f"Save ID: {saved_id}. " if saved_id else 'No verified saved unlock ID. ')
-        reason+=('Reviewed isolated title adapter; per-scene live validation is reported separately. Play and Stop are supported; pause, restart and speed are unavailable.' if title_mapped else
-                 media_profile.limitation if mapped else
-                 'In-engine replay is not implemented for this definition. Playback is unavailable.')
-        if title_mapped and TITLE_PROFILES[identity].validation == 'static_admitted_live_pending': reason+=' Live playback of this profile is not yet verified.'
-        if mapped and media_profile.validation == 'static_mapping_live_pending': reason+=' Live playback of this segment is not yet verified.'
-        if title_mapped and TITLE_PROFILES[identity].profile_id not in title_profile_ids: reason+=' Required native title/audio cleanup capabilities are unavailable.'
-        if unlocked is not True: reason+=' This entry cannot be replayed without a verified current-save unlock.'
-        if original_mapped:reason=f"Original game cinematic action. Play travels to {original['exact_map']}, restores the native spawn and starts the action. Experimental per-scene playback; Stop is not yet available. Game story transitions may run."
-        scenes.append(dict(id=identity,saved_id=saved_id,title=title+f' [{label}]',
-            supported=supported,unlocked=unlocked,reason=reason,sequence=item.get('sequence'),
-            definition_sha256=item.get('sha256'), title_profile=TITLE_PROFILES[identity].profile_id if title_mapped else None,
-            media_profile=identity if mapped else None, full_scene=False if mapped else None, validation=media_profile.validation if mapped else TITLE_PROFILES[identity].validation if title_mapped else 'original_action_live_pending' if original_mapped else 'unsupported', replay_kind='title' if title_mapped else 'movie' if mapped else 'original_action' if original_mapped else None))
-    return scenes
+class AdmittedReplay:
+    """Recheck selection, slot and current catalog before any backend allocation."""
+    def __init__(self, admit, factory, *, requested_at=None):
+        self.admit, self.factory, self.inner = admit, factory, None
+        self.requested_at=requested_at
 
+    def start(self):
+        started=time.perf_counter()
+        try:
+            scene = self.admit()
+        except Exception:
+            # Admission is read-only and precedes backend allocation. Its
+            # rejection is known, not an uncertain native playback attempt.
+            LOG.exception('Cinematic admission rejected')
+            return StartResult.REJECTED
+        self.inner = self.factory(scene)
+        admitted=time.perf_counter()
+        result=self.inner.start()
+        LOG.info('Cinematic request timings: queue_wait_ms=%.1f admission_ms=%.1f backend_ms=%.1f request_to_dispatch_ms=%.1f result=%s',
+                 (started-self.requested_at)*1000 if self.requested_at is not None else 0.,
+                 (admitted-started)*1000,(time.perf_counter()-admitted)*1000,
+                 (time.perf_counter()-(self.requested_at if self.requested_at is not None else started))*1000,result.value)
+        return result
 
-def installed_cinematics(lines):
-    """Manifest candidates, never evidence of a save unlock or safe playback."""
-    found = {}
-    for line in lines:
-        path = line.split('\t', 1)[0].replace('\\', '/')
-        name = Path(path).stem
-        if path.startswith('Sandfall/Content/Movies/CS_') and path.endswith('.mp4'):
-            kind, prefix = 'Video', 'CS_'
-        elif path.startswith('Sandfall/Content/') and name.startswith('DA_GA_CIN_') and path.endswith('.uasset'):
-            kind, prefix = 'Cinematic entry', 'DA_GA_CIN_'
-        else:
-            continue
-        title = name.removeprefix(prefix).replace('_', ' ')
-        found.setdefault(path.casefold(), dict(id=path, title=f'{title} [{kind}; unlock unknown]',
-            supported=False, unlocked=None,
-            reason=f'Installed {kind.lower()}. Its saved cinematic ID is not mapped yet; '
-                   'unlock status and isolated playback remain unverified. Showing all does not unlock it.'))
-    return sorted(found.values(), key=lambda scene: (scene['title'].casefold(), scene['id']))
+    def poll(self):
+        return self.inner.poll()
 
+    def status(self):
+        if self.inner is None:
+            from expedition33.cinematics.controller import ReplayObservation, BackendState
+            return ReplayObservation(BackendState.FAILED, 'Admission failed before native preparation')
+        return self.inner.status()
 
-class BrowserView:
-    def __init__(self, registry, model):
-        self.registry, self.model = registry, model
-        self.closed = False
-        self.revision = 0
-        self.status = ''
-        self.page = 0
-        self.selected = None
+    def stop(self):
+        from expedition33.cinematics.controller import StopResult
+        return self.inner.stop() if self.inner is not None else StopResult.STOPPED
 
-    def scenes(self):
-        key = 'all' if self.model.show_all else 'confirmed'
-        return self.model.discovery.get(key, [])
-
-    def render(self):
-        self.registry._check()
-        if self.closed:
-            raise ManagementError('Cinematics browser is closed')
-        self.revision += 1
-        controls = [MenuControl(0, 'Refresh current-save history')]
-        controls.append(MenuControl(10, 'Show: All cinematics' if self.model.show_all else 'Show: Unlocked only'))
-        # Original-action routes use the latest user-authorized history override;
-        # isolated title/media routes retain their current-history requirements.
-        scenes = self.scenes()
-        pages = max(1, (len(scenes) + 5) // 6)
-        self.page = min(self.page, pages - 1)
-        available = sum(bool(scene.get('supported')) for scene in scenes)
-        description = (f'{available} of {len(scenes)} listed cinematics available to Play.\n'
-                       'Tested = observed in-game; unverified = enabled but not individually tested; '
-                       'partial = only part of the cinematic. Unlock history is separate from playback availability.\n\n'
-                       + self.model.reason)
-        if self.selected is None:
-            controls.extend(MenuControl(100 + index, menu_scene_label(scene)) for index, scene in
-                            enumerate(scenes) if self.page * 6 <= index < (self.page + 1) * 6)
-            controls.extend((MenuControl(7, 'Previous', self.page > 0),
-                             MenuControl(8, 'Next', self.page + 1 < pages)))
-        else:
-            scene = next((s for s in scenes if s['id'] == self.selected), None)
-            if scene is None:
-                self.selected = None
-                return self.render()
-            description = availability_label(scene) + '\n' + scene['title'] + '\n' + scene['id'] + '\n\n' + scene['reason']
-            controls.extend(MenuControl(token, label, bool(scene.get('supported')))
-                for token, label in (((1,'Travel and Play'),) if scene.get('replay_kind')=='original_action' else ((1, 'Play'), (4, 'Stop')) if scene.get('replay_kind') in ('title','movie') else
-                    ((1, 'Play'), (2, 'Pause / Resume'), (3, 'Restart'), (4, 'Stop'), (5, 'Playback speed'))))
-            controls.append(MenuControl(9, 'Back to cinematics'))
-        controls.append(MenuControl(6, 'Close'))
-        return MenuFrame(self.revision, 'Cinematics', description,
-                         tuple(controls), self.page, pages,
-                         self.model.playback_status if self.selected in TITLE_PROFILES or self.selected in MEDIA_PROFILES else self.status, False)
-
-    def activate(self, revision, token, **_):
-        self.registry._check()
-        if self.closed or revision != self.revision:
-            raise ManagementError('Stale cinematic control')
-        scenes = self.scenes()
-        if token == 10:
-            self.model.show_all = not self.model.show_all
-            self.selected, self.page = None, 0
-            return self.render()
-        if token >= 100 and self.selected is None and self.page * 6 <= token - 100 < min(len(scenes), (self.page + 1) * 6):
-            self.selected = scenes[token - 100]['id']
-            return self.render()
-        if token in (7, 8) and self.selected is None:
-            new_page = self.page + (-1 if token == 7 else 1)
-            if not 0 <= new_page < max(1, (len(scenes) + 5) // 6):
-                raise ManagementError('Cinematic page is unavailable')
-            self.page = new_page
-            return self.render()
-        if token == 9 and self.selected is not None:
-            if hasattr(self.model,'stop') and self.model.stop() is False:
-                self.status = 'Finishing cinematic cleanup'
-                return self.render()
-            self.selected = None
-            return self.render()
-        if token in range(1,6) and self.selected is not None:
-            scene = next((s for s in scenes if s['id']==self.selected),None)
-            if not scene or not scene.get('supported') or (scene.get('replay_kind')!='original_action' and not scene.get('unlocked')):
-                raise ManagementError('This cinematic has no verified playback mapping')
-            if scene.get('replay_kind') in ('title','movie') and token not in (1, 4):
-                raise ManagementError('Reviewed replay supports only Play and Stop')
-            self.model.control(self.selected,token)
-            if self.closed:return MenuFrame(self.revision,'Cinematics','',(),0,1,'Traveling to cinematic',True)
-            self.status = self.model.playback_status
-            return self.render()
-        if token not in (0, 6):
-            raise ManagementError('Replay is unavailable: isolation has not been verified')
-        self.revision += 1
-        if token == 6:
-            self.close()
-            return MenuFrame(self.revision, 'Cinematics', '', (), 0, 1, '', True)
-        self.model.discover()
-        self.status = 'Current-save discovery refreshed'
-        return self.render()
-
-    def close(self):
-        # Travel disposes the old menu tree. The original game action owns its
-        # playback independently; disposing this view must not try to stop it.
-        original=getattr(self.model,'original_replay',None)
-        game_owned=original is not None and original.status().get('active') is True
-        if not game_owned and hasattr(self.model,'stop') and self.model.stop() is False:
-            raise ManagementError('Cinematic cleanup is still finishing; close again when it completes')
-        self.closed = True
-        self.revision += 1
+    def close(self, request):
+        return self.inner.close(request) if self.inner is not None else True
 
 
 class Mod:
-    def __init__(self):
+    def __init__(self, *, installation=None):
         self.session = self.native = self.pause = None
-        self.reason = 'Current-save cinematic history has not been read.'
-        self.discovery = {'state': 'not_scanned', 'confirmed': []}
-        self.show_all = True
-        self.video = None
-        self.title_replay = None
-        self.original_replay = None
-        self.playback_status = 'Stopped'
-        self._next_media_poll = 0.
-        self._opening_deadline = 0.
-        self._play_started = False
-        self._paused = False
-        self._rate = 1.
-        self._static_catalog_inputs=None
-        self.static_preparation_error=None
+        self.controller = ReplayController()
+        self.library = ()
+        self.discovery = {'state': 'not_scanned', 'confirmed': [], 'all': []}
+        self.reason = 'The cinematic library is prepared from local files before gameplay.'
+        self.playback_status = 'Idle'
+        self.show_all, self.filter = True, 'all'
+        self.allow_original_actions = False
+        self._installation = Path(installation) if installation is not None else None
+        self._catalog_store = None
+        self._catalog_store_paths = None
+        self.static_preparation_error = None
+        self._pending_refresh = False
+        self._pending_open = False
+        self._want_stop = False
+        self._detaching_browser = False
+        self._route = None
+        self._last_epoch = None
+        self._context = None
+        self._slot = None
+        self._retirement_token = None
+        self._revoked = False
+        self._next_playback_poll = 0.
+        self._portable_panel_pool = None
+        self._history_selectors = None
+        self.poll_urgent = False
+        self._requested_at = self._dispatch_entered_at = None
+        self._dispatch_phases = {}
+        self._dispatch_reader = None
 
     def management(self):
-        return ModDefinition('sdk.cinematics', 'Cinematics', version='0.1-browser',
-            description='Mapped original cinematic travel/play plus isolated title and video adapters. Save history is shown separately.',
-            actions=(Action('status', 'Cinematic discovery status', self.status),
-                     Action('refresh', 'Refresh current-save history', self.discover)))
+        return ModDefinition('sdk.cinematics', 'Cinematics', version='0.2.4-dispatch',
+            description='Browse the original cinematic library and use explicitly supported replay routes.',
+            options=(Option('original_story_actions', 'Allow original-map story actions (save/progression effects)',
+                            'bool', False, on_change=self._set_original_actions),),
+            actions=(Action('open', 'Open Cinematics', self.open),
+                     Action('stop', 'Stop owned replay', self.request_stop),
+                     Action('refresh', 'Refresh cinematic history', self.discover),
+                     Action('status', 'Cinematic status', self.status)),
+            keybinds=(Keybind('open', 'Open Cinematics', None, self.open),
+                      Keybind('stop', 'Stop owned replay', None, self.request_stop)))
 
-    def prepare_startup(self, context):
-        # Files/profile validation needs no process or world. A missing local
-        # manifest must not prevent current-save history discovery later.
-        try:self._catalog_inputs()
-        except (OSError,UnicodeError,ValueError,KeyError,RuntimeError) as error:
-            self.static_preparation_error=str(error)
+    def _set_original_actions(self, value):
+        if type(value) is not bool:
+            raise ManagementError('Original story playback requires an explicit Boolean setting')
+        self.allow_original_actions = value
+        self._pending_refresh = True
 
     def _catalog_inputs(self):
-        manifest=game_root() / 'Manifest_UFSFiles_Win64.txt'
-        source=Path(__file__).with_name('catalog.json')
-        signature=tuple((str(path),path.stat().st_mtime_ns,path.stat().st_size)
-                        for path in (source,manifest))
-        cached=self._static_catalog_inputs
-        if cached is None or cached[0]!=signature:
-            catalog=json.loads(source.read_text(encoding='utf8'))
-            manifest_bytes=manifest.read_bytes()
-            # Validate installed mapping, duplicates and exact static profiles
-            # before publishing the cache. Current history is always read live.
-            catalog_scenes({},False,catalog,manifest_bytes,original_action_available=True)
-            self._static_catalog_inputs=(signature,catalog,manifest_bytes)
-            self.static_preparation_error=None
-        return self._static_catalog_inputs[1:]
+        root = self._installation or game_root()
+        paths = Path(__file__).with_name('catalog.json'), root / 'Manifest_UFSFiles_Win64.txt'
+        if paths != self._catalog_store_paths:
+            self._catalog_store, self._catalog_store_paths = CatalogStore(*paths), paths
+        return self._catalog_store.read()
+
+    def prepare_startup(self, context):
+        try:
+            catalog, manifest = self._catalog_inputs()
+            self.library = tuple(catalog_scenes({}, False, catalog, manifest,
+                                                gameplay_world_available=False))
+            self.library += tuple(installed_movie_clips(manifest))
+            self.discovery = {'state': 'catalog_ready', 'all': list(self.library), 'confirmed': [],
+                              'definition_catalog_complete': True}
+            self.static_preparation_error = None
+        except (OSError, UnicodeError, ValueError, KeyError, RuntimeError) as error:
+            self.static_preparation_error = str(error)
+            self.reason = 'Library preparation: ' + str(error)
 
     def enable(self, session):
+        from expedition33._reader import active_reader
+        started=time.perf_counter()
+        # Share one read worker across anchor, history and pool adoption. The
+        # observations stay fresh; repeated process handshakes do not.
+        loading=getattr(self,'_loading_replay',None)
+        reader=getattr(loading,'reader',None)
+        operation=(reader.bind() if reader is not None and active_reader() is None
+                   else shared_operation(session.pid,_executable=session._session._transport._executable))
+        with operation:
+            self._enable(session)
+        LOG.info('Cinematics activation ready in %.1f ms (loading pool=%s)',
+                 (time.perf_counter()-started)*1000,getattr(self,'_loading_replay',None) is not None)
+
+    def _enable(self, session):
+        from expedition33.pause_menu import PauseMenuEntry
         self.session = session
-        self.discover()
+        self.controller.enable()
+        self._revoked = False
         shared = getattr(session._session, '_native_menu_service', None)
         if shared is None:
-            raise RuntimeError('Enable SDK Management before Cinematics')
-        self.native = shared.for_view(lambda registry: BrowserView(registry, self))
+            raise RuntimeError('Cinematics requires SDK Management')
+        self.native = shared.for_view(lambda registry: WorkspaceBrowserView(registry, self))
         self.pause = PauseMenuEntry(session, self.native, label='Cinematics')
+        self._pending_refresh = True
         session.actions.register('cinematics.status', self.status, mutates=False)
         session.actions.register('cinematics.discover', self.discover, mutates=False)
-        session.console.expose('cinematics', self)
+        session.console.register('cinematics', self.command, owner=self)
+        loading=getattr(self,'_loading_replay',None)
+        prepared_pool=loading.take(session) if loading is not None else None
+        if prepared_pool is not None and loading.pause is not None:
+            if loading.pause.state!='attached':raise RuntimeError('Cinematic loading pause entry is not ready')
+            self.pause=loading.pause
+        self._controller_anchor=None
+        if prepared_pool is not None:
+            from expedition33.cinematics.controller_anchor import for_scope
+            self._controller_anchor=for_scope(prepared_pool.scope)
+            self._history_selectors=loading.history
+        capability=getattr(session._session._transport,'stable_lease_protocol',0)
+        if prepared_pool is None and type(capability) is int and capability==1:
+            from expedition33.cinematics.controller_anchor import for_scope
+            for_scope(session)
+            from expedition33.cinematics.history import PreparedHistorySelectors
+            self._history_selectors=PreparedHistorySelectors(session)
+        if portable_available(session._session._transport):
+            from expedition33._cinematic_panel_pool import CinematicPanelPool
+            self._portable_panel_pool=prepared_pool
+            if self._portable_panel_pool is None:
+                self._portable_panel_pool=CinematicPanelPool(session)
+                self._portable_panel_pool.prepare()
+            from expedition33._reader import ReadBatch
+            self._dispatch_reader=loading.take_reader() if prepared_pool is not None else None
+            if self._dispatch_reader is None:self._dispatch_reader=ReadBatch(session.pid,share=True,_executable=session._session._transport._executable)
+            self._dispatch_reader.warm()
+
+    def prepare_loading_ui(self,session):
+        from .loading import LoadingReplay
+        return LoadingReplay(self,session)
+
+    def prepare_loading_pause(self,scope):
+        from expedition33.pause_menu import PauseMenuEntry
+        shared=scope._session._native_menu_service
+        native=shared.for_view(lambda registry:WorkspaceBrowserView(registry,self))
+        return PauseMenuEntry(scope,native,label='Cinematics',readiness=lambda:True)
+
+    def startup_ready(self):
+        return self.session is not None and self.native is not None
 
     def discover(self, _=None):
-        self.discovery = {'state': 'unavailable', 'confirmed': []}
-        try:
-            with ReadBatch(self.session.pid):
-                from expedition33.cinematics.history import read_current_history
-                current = read_current_history(self.session)
-                history = current.pop('history')
-                self.discovery.update(current)
-                self.discovery['state'] = 'history_verified'
-                self.discovery['confirmed'] = [dict(id=name, title=name.replace('CS_', '').replace('_', ' '),
-                    supported=False, unlocked=True, reason='Seen in current-session game history. Replay disabled: asset mapping and isolated playback have not been verified.')
-                    for name, seen in history.items.items() if seen is True]
-                transport = getattr(getattr(self.session,'_session',None),'_transport',None)
-                # Current game history and the installed catalog have independent failure
-                # modes: a missing manifest must not discard verified history.
-                all_scenes = list(self.discovery['confirmed'])
-                all_scenes.extend(dict(id=name, title=name.replace('CS_', '').replace('_', ' ') + ' [locked]',
-                    supported=False, unlocked=False, reason='Not unlocked in current-session game history. Replay is disabled.')
-                    for name, seen in history.items.items() if seen is False)
-                try:
-                    catalog,manifest_bytes=self._catalog_inputs()
-                    all_scenes=catalog_scenes(history.items,
-                        type(getattr(transport,'media_owner_protocol',0)) is int and transport.media_owner_protocol==1,
-                        catalog,manifest_bytes, title_profile_ids=tuple(p.profile_id for p in TITLE_PROFILES.values() if p.available(transport)),original_action_available=original_available(transport))
-                    mapped_ids={s['saved_id'] for s in all_scenes}
-                    self.discovery['unmapped_history']=[s for s in self.discovery['confirmed'] if s['id'] not in mapped_ids]
-                    self.discovery['confirmed']=[s for s in all_scenes if s['unlocked'] is True]
-                    self.discovery['definition_catalog_complete']=True
-                except (OSError, UnicodeError, ValueError, KeyError) as error:
-                    self.discovery['catalog_error'] = str(error)
-                self.discovery['all'] = all_scenes
-                self.discovery['catalog_complete'] = False
-                self.reason = (f"{len(all_scenes)} installed cinematic definitions. "
-                    f"{len(self.discovery['confirmed'])} entries are unlocked in current-session game history.\n\n"
-                    'This is the active game history, not a persisted save snapshot. '
-                    'Select a scene for playback availability. Most scenes require in-engine replay support. '
-                    'Unlock unknown does not mean unlocked. Related definitions can share a saved ID.')
-        except Exception as error:
-            self.reason = 'Cinematic history is unavailable. ' + str(error)
-            self.discovery['error'] = str(error)
-            # Original action travel was explicitly authorized independently of
-            # history. Exact installed catalog/map/runtime checks still apply.
-            transport=getattr(getattr(self.session,'_session',None),'_transport',None)
-            if original_available(transport):
-                try:
-                    catalog,manifest_bytes=self._catalog_inputs()
-                    self.discovery['all']=catalog_scenes({},False,catalog,manifest_bytes,original_action_available=True)
-                except (OSError,UnicodeError,ValueError,KeyError) as catalog_error:self.discovery['catalog_error']=str(catalog_error)
-        LOG.info('Cinematic discovery: %s', self.discovery)
+        self._pending_refresh = True
         return self.status()
 
-    def status(self, _=None):
-        return dict(discovery=self.discovery, reason=self.reason,
-                    pause_state=self.pause.state if self.pause else 'not_attached',
-                    pause_error=self.pause.error if self.pause else None,
-                    menu=self.native.status() if self.native else None,
-                    playback_supported=any(s.get('supported') for s in self.discovery.get('confirmed',())),
-                    playback=self.playback_status,
-                    title_candidate=self.title_replay.status() if self.title_replay else None,
-                    original_action=self.original_replay.status() if self.original_replay else None)
+    def _refresh_now(self):
+        self.session._check()
+        self._pending_refresh = False
+        self._context, self._last_epoch, self._slot = None, None, None
+        history, current = {}, {}
+        try:
+            with shared_operation(self.session.pid,
+                           _executable=self.session._session._transport._executable):
+                context = self._context_now()
+                current = (read_current_history(self.session,prepared=self._history_selectors)
+                           if self._history_selectors is not None else read_current_history(self.session))
+            if tuple(current['context_identities']['world']) != tuple(context['world']):
+                raise ManagementError('History belongs to another world')
+            history = dict(current.pop('history').items)
+            self._context, self._last_epoch = context, _epoch(context)
+            self._slot = current['selected_slot']
+            error = None
+        except Exception as failure:
+            LOG.exception('Cinematics current-history observation failed')
+            error = observation_error_reason(failure)
+        transport = self.session._session._transport
+        try:
+            catalog, manifest = self._catalog_inputs()
+            self.library = tuple(catalog_scenes(history,
+                protocol(transport, 'media_owner_protocol'), catalog, manifest,
+                title_profile_ids=tuple(p.profile_id for p in TITLE_PROFILES.values() if p.available(transport)),
+                original_action_available=original_available(transport),
+                allow_original_actions=self.allow_original_actions,
+                owned_preview_available=preview_available(transport),
+                portable_scene_available=portable_available(transport),
+                gameplay_world_available=self._context is not None,
+                current_world_path=self._context['world_path'] if self._context else None))
+            self.library += tuple(installed_movie_clips(manifest,
+                available=protocol(transport, 'media_owner_protocol') and
+                          protocol(transport, 'media_retirement_protocol'),
+                gameplay=self._context is not None))
+            catalog_error = None
+        except (OSError, UnicodeError, ValueError, KeyError, RuntimeError) as failure:
+            self.library = tuple(dict(id=name, title=name, saved_id=name, unlocked=value,
+                supported=False, reason='No verified catalog mapping', replay_kind=None, controls=())
+                for name, value in history.items())
+            catalog_error = str(failure)
+        confirmed = [dict(row) for row in self.library if row.get('unlocked') is True]
+        self.discovery = dict(current, state='history_verified' if error is None else 'history_unavailable',
+            all=[dict(row) for row in self.library], confirmed=confirmed, error=error, catalog_error=catalog_error,
+            definition_catalog_complete=catalog_error is None)
+        self.reason = (f'{len(self.library)} library entries; {len(confirmed)} unlocked in current-session history. '
+                       'Availability and visual qualification are listed separately.')
+        if error:
+            self.reason += ' History unavailable: ' + error
+        if catalog_error:
+            self.reason += ' Catalog unavailable: ' + catalog_error
+        return self.discovery
 
-    def prepare_title(self, scene_id=DEFINITION):
-        """Prepare the exact unlocked title; this candidate command never plays."""
-        from expedition33.cinematics.title_replay import ExactTitleReplay
-        from expedition33.cinematics.title_adapters import OwnedTitleAdapters
-        from expedition33.cinematics.presentation import MenuPresentation
-        if not title_available(self.session._session._transport, scene_id):
-            raise ManagementError('Verified native title and audio cleanup capabilities are required')
-        if self.video is not None:
-            raise ManagementError('Stop the current movie first')
-        profile = TITLE_PROFILES[scene_id]
-        if self.title_replay is not None and self.title_replay.profile is not profile:
-            if self.title_replay.status().get('active'):
-                raise ManagementError('Wait for the previous title cleanup to finish')
-            self.title_replay = None
-        if self.title_replay is None:
-            def fresh_discovery():
-                self.discover()
-                return self.discovery
-            self.title_replay=ExactTitleReplay(self.session,
-                lambda:self.native.menu.panel if self.native and self.native.menu else None,
-                fresh_discovery,adapter_factory=lambda session,panel:OwnedTitleAdapters(session,panel,profile=profile),
-                profile=profile,
-                presentation_factory=lambda:MenuPresentation(self.native.menu))
-        return self.title_replay.start()
+    def open(self, _=None):
+        self._pending_open = True
+        return 'Opening Cinematics'
 
-    def stop_title(self):
-        return self.title_replay.stop() if self.title_replay else {'state':'idle'}
+    def request_stop(self, _=None):
+        self._want_stop = True
+        self.poll_urgent = True
+        return 'Stopping owned replay'
 
     def stop(self):
-        if self.original_replay is not None and self.original_replay.status()['active']:
-            self.playback_status='Original game cinematic is active; native Stop unavailable'
-            return False
-        had_media = self.video is not None
-        result = self.stop_title()
-        if result.get('active'):
-            self.playback_status = 'Finishing cinematic cleanup'
-            return False
-        if self.video is not None:
-            if self.video.close() is False:
-                self.playback_status = "Finishing media cleanup"
-                return False
-            self.video = None
-        self._play_started = self._paused = False
-        self.playback_status = 'Stopped'
-        if had_media and self.native and self.native.menu and self.native.menu.panel.state == 'open':
-            self.native.parent.refresh()
-        return True
+        if self._detaching_browser:
+            return True
+        if not self.controller.status().busy:
+            return True
+        self._want_stop = True
+        return False
+
+    def _current_epoch(self):
+        if self._revoked:
+            return ('retired', self.controller.status().generation)
+        with shared_operation(self.session.pid,
+                       _executable=self.session._session._transport._executable):
+            return _epoch(self._context_now())
+
+    def _context_now(self):
+        if getattr(self,'_controller_anchor',None) is not None:return self._controller_anchor.context()
+        capability=getattr(self.session._session._transport,'stable_lease_protocol',0)
+        if type(capability) is int and capability==1:
+            from expedition33.cinematics.controller_anchor import for_scope
+            return for_scope(self.session).context()
+        return controller_context(self.session,project=True)
+
+    def _menu(self):
+        menu = self.native.menu if self.native else None
+        if menu is None or menu.panel.state != 'open' or menu.panel.uncertain:
+            raise ManagementError('The cinematic browser is not attached to the current context')
+        return menu
+
+    def _admit(self, scene_id, token, expected_slot, expected_epoch, signature):
+        fresh = self._refresh_now()
+        if self._slot != expected_slot or self._last_epoch != expected_epoch:
+            raise ManagementError('Save slot or world changed after cinematic selection')
+        row = next((s for s in self.library if s['id'] == scene_id), None)
+        if row is None or (row.get('definition_sha256'), row.get('sequence')) != signature:
+            raise ManagementError('Cinematic definition changed after selection')
+        self._check_route(row, token)
+        return dict(row)
+
+    @staticmethod
+    def _check_route(scene, token):
+        if token == 13:
+            admitted = scene.get('original_supported') is True
+        elif token == 14:
+            admitted = scene.get('portable_supported') is True and scene.get('unlocked') is True
+        elif token == 11:
+            admitted = scene.get('preview_supported') is True and scene.get('unlocked') is True
+        elif token == 1 and scene.get('replay_kind') in ('preview', 'original_action'):
+            admitted = scene.get('original_supported') is True
+        elif token == 1 and scene.get('replay_kind') == 'movie_clip':
+            admitted = scene.get('supported') is True
+        else:
+            admitted = (token == 1 and scene.get('replay_kind') in ('title', 'movie') and
+                        scene.get('supported') is True and scene.get('unlocked') is True)
+        if not admitted:
+            raise ManagementError('This cinematic route is unavailable; refresh the library for details')
 
     def control(self, scene_id, token):
         if token == 4:
-            self.stop(); return
-        if token == 1:
-            if self.stop() is False:
-                raise ManagementError('Wait for the previous cinematic cleanup to finish')
-            discovery_started = time.perf_counter()
-            try:
-                self.discover() # Recheck current save immediately before starting.
-            finally:
-                LOG.info('Cinematic preparation phase menu_discovery: %.3fs', time.perf_counter() - discovery_started)
-            candidates=self.discovery.get('all',self.discovery.get('confirmed',()))
-            scene=next((s for s in candidates if s['id']==scene_id
-                        and (s.get('unlocked') is True or s.get('replay_kind')=='original_action')),None)
-            if scene is None:
-                raise ManagementError('Cinematic is not unlocked in the current save')
-            if scene.get('replay_kind')=='original_action':
-                profile=original_profiles().get(scene_id)
-                if profile is None or not profile_matches(profile,scene):raise ManagementError('Exact original-action mapping required')
-                menu=self.native.menu
-                self.native.parent.dispose_menu()
-                if menu.panel.state!='closed':raise ManagementError('Menu must fully dispose before native travel')
-                self.original_replay=OriginalActionReplay(self.session,scene,profile)
-                self.native.parent.travel_recovery=self.original_replay
-                self.original_replay.start()
-                self.playback_status='Traveling to original cinematic'
-                return
-            if not scene.get('supported'):
-                raise ManagementError('Cinematic is unlocked, but replay is unavailable: ' +
-                                      scene.get('reason', 'No verified playback adapter for this definition'))
-            if scene.get('replay_kind') == 'title':
-                if not exact_title(scene) or not title_available(self.session._session._transport, scene_id):
-                    raise ManagementError('Exact title mapping and verified native cleanup are required')
-                self.prepare_title(scene_id)
-                self.title_replay.play() # Performs another fresh unlock/context check after arming.
-                self.playback_status = 'Starting title'
-                return
-            from expedition33.cinematics.fullscreen_media import FullscreenMedia
-            self.video = FullscreenMedia(self.session)
-            try:
-                panel = self.native.menu.panel
-                profile=MEDIA_PROFILES.get(scene_id)
-                if profile is None or not profile.matches(scene):
-                    raise ManagementError('Exact media profile mapping is required')
-                self.video.build(self.native.menu,profile.movie_path,self.stop)
-                from expedition33.cinematics.media_audio_adapter import MediaAudioAdapter,admitted_audio_profile
-                audio_profile=admitted_audio_profile(profile)
-                if audio_profile is not None:
-                    self.video.audio_dependency=MediaAudioAdapter(self.session,panel,audio_profile)
-                    self.video.audio_dependency.prepare()
-                    self.discover()
-                    fresh=next((s for s in self.discovery.get('confirmed',()) if s['id']==scene_id),None)
-                    if fresh is None or not fresh.get('unlocked') or not profile.matches(fresh):
-                        raise ManagementError('Current cinematic unlock changed during preparation')
-                self.video.play()
-                self._opening_deadline = time.monotonic()+10
-                self._rate = 1.
-                self.playback_status = 'Opening intro segment'
-            except BaseException:
-                LOG.exception('Cinematic playback setup failed')
-                self.stop()
-                raise
+            self.request_stop()
             return
-        if scene_id in TITLE_PROFILES or scene_id in MEDIA_PROFILES:
-            raise ManagementError('Reviewed replay supports only Play and Stop')
-        if self.video is None or not self._play_started:
-            raise ManagementError('Start the cinematic segment first')
-        if token == 2:
-            if self._paused:
-                if not self.video.resume(): raise ManagementError('Resume was not accepted')
-            elif not self.video.pause(): raise ManagementError('Pause was not accepted')
-            self._paused = not self._paused
-            self.playback_status = 'Paused' if self._paused else 'Playing'
-        elif token == 3:
-            self.video.restart(); self._paused = False
-            self.playback_status = 'Restarted intro segment'
-        elif token == 5:
-            rate = .5 if self._rate == 1 else 1.
-            if not self.video.set_rate(rate): raise ManagementError('Playback rate was not accepted')
-            self._rate = rate; self._paused = False
-            self.playback_status = f'Playing at {rate:g}x'
+        if token not in (1, 11, 13, 14):
+            raise ManagementError('This replay route supports only Play and Stop')
+        if self.controller.status().busy:
+            raise ManagementError('Finish the current replay cleanup before starting another')
+        row = next((s for s in self.library if s['id'] == scene_id), None)
+        if row is None:
+            raise ManagementError('Cinematic selection is no longer available')
+        self._check_route(row, token)
+        if self._last_epoch is None or self._slot is None:
+            raise ManagementError('A loaded save is required for cinematic playback')
+        kind = ('portable' if token == 14 else 'preview' if token == 11 else 'original_action'
+                if token == 13 or row['replay_kind'] in ('preview', 'original_action') else row['replay_kind'])
+        expected_slot, expected_epoch = self._slot, self._last_epoch
+        signature = row.get('definition_sha256'), row.get('sequence')
+        def factory(scene):
+            if kind == 'title':
+                return TitleAdapter(self.session, scene, self._menu, self._refresh_now)
+            if kind in ('movie', 'movie_clip'):
+                return MediaAdapter(self.session, scene, self._menu, self._refresh_now, self.request_stop)
+            if kind == 'preview':
+                return PreviewAdapter(self.session, scene)
+            if kind == 'portable':
+                return PortableSceneAdapter(self.session,scene,panel_pool=self._portable_panel_pool)
+            return OriginalActionAdapter(self.session, scene, original_profiles()[scene_id])
+        requested_at=time.perf_counter()
+        self._requested_at=requested_at;self._dispatch_phases={}
+        self.controller.queue(scene_id, lambda: AdmittedReplay(
+            lambda: self._admit(scene_id, token, expected_slot, expected_epoch, signature), factory,requested_at=requested_at),
+            expected_epoch, engine_owned=kind == 'original_action')
+        self._want_stop = False
+        self._route = kind
+        self.playback_status = 'Queued: ' + row['title']
+        self.poll_urgent = True
 
-    def _poll_media(self):
-        if self.video is None or time.monotonic() < self._next_media_poll: return
-        self._next_media_poll = time.monotonic()+.1
-        if self.native.menu is None or self.native.menu.panel.state != 'open':
-            self.stop(); return
-        if self.video.state == 'cleanup_pending':
-            self.stop(); return
-        state = self.video.playback_status(opening=not self._play_started)
-        if not self._play_started:
-            if state.get('IsReady'):
-                if not self.video.resume(): raise RuntimeError('Media playback was rejected')
-                self._play_started = True
-                self.playback_status = 'Playing intro segment'
-                # The opening observation predates Play. Observe the acknowledged
-                # running state now so audio need not wait a complete poll cycle.
-                state = self.video.playback_status()
-            elif time.monotonic() >= self._opening_deadline:
-                if self.stop():self.playback_status = 'Movie could not be opened'
-        elif not self._paused and not state.get('IsPlaying') and not state.get('IsPaused'):
-            if self.stop():self.playback_status = 'Playback ended'
-        if (self.video is not None and self._play_started and state.get('IsPaused') and
-                getattr(self.video,'audio_dependency',None) is not None):
-            # This composition supports Play/Stop only. A native/external pause
-            # must not leave its independently owned audio advancing silently.
-            if self.stop():self.playback_status = 'Playback stopped after native media pause'
-            return
-        if self.video is not None and self._play_started and state.get('IsPlaying'):
-            audio=getattr(self.video,'audio_dependency',None)
-            if audio is not None:
-                try:audio.poll(self.video,True)
-                except BaseException:
-                    LOG.exception('Synchronized audio failed; stopping owned playback')
-                    if self.stop():self.playback_status='Audio playback failed; cleanup completed'
+    def command(self, arguments):
+        command = arguments.strip().split(maxsplit=1)
+        verb = command[0].casefold() if command else 'open'
+        if verb == 'open':
+            return self.open()
+        if verb == 'stop':
+            return self.request_stop()
+        if verb == 'refresh':
+            return self.discover()
+        if verb == 'status':
+            return self.status()
+        if verb == 'search' and len(command) == 2:
+            menu = self._menu()
+            menu.view.search(command[1])
+            self.native.parent.refresh()
+            return 'Cinematic search updated'
+        raise ManagementError('Use cinematics open | stop | refresh | status | search TEXT')
 
     def poll(self):
-        previous_playback_status = self.playback_status
-        if self.original_replay is not None:
-            original=self.original_replay.poll()
-            self.playback_status='Original cinematic: '+original['state']
-            if original['active']:return
-        if self.title_replay is not None:
-            title_state = self.title_replay.poll()
-            if self.video is None:
-                self.playback_status = 'Title: ' + title_state['state']
-        self._poll_media()
-        if self.pause:
-            previous = self.pause.state
-            self.pause.poll()
-            if previous == 'attached' and self.pause.state == 'new':
-                self.discovery = {'state': 'unavailable_after_travel', 'confirmed': []}
-                self.reason = 'Zone changed. Refresh current-save cinematic history.'
-            if self.pause.state != 'attached':
-                return
-        if self.native:
-            menu = self.native.menu
-            if (self.playback_status != previous_playback_status and menu is not None and
-                    not getattr(menu,'_presentation_suspended',False) and
-                    menu.panel.state == 'open' and isinstance(menu.view, BrowserView) and
-                    menu.view.model is self and menu.view.selected in (*TITLE_PROFILES,*MEDIA_PROFILES)):
-                # Only state transitions repaint. During presentation suspension
-                # the shared menu defers the newest frame until cleanup.
+        if self.session is None or self._revoked:
+            return
+        playback=self.controller.status()
+        if playback.busy and (playback.state is ControllerState.QUEUED or self._want_stop or self._pending_open):
+            # An accepted play/stop intent precedes routine menu maintenance.
+            # Admission, browser detachment and epoch checks still run below
+            # in the normal playback path, on this same owner thread.
+            if self._pending_open:self._want_stop=True
+            self._advance_playback()
+            return
+        if self._pending_refresh and not self.controller.status().busy:
+            self._refresh_now()
+            menu = self.native.menu if self.native else None
+            view = getattr(menu, 'view', None)
+            if (isinstance(view, BrowserView) and view.model is self and
+                    menu.panel.state == 'open' and not getattr(menu, '_presentation_suspended', False)):
+                view.status = ('Current-save discovery refreshed' if not self.discovery.get('error')
+                               else 'Current-save history unavailable')
                 self.native.parent.refresh()
+        if self.pause is not None:
+            self.pause.poll()
+        if self.native is not None:
             self.native.poll()
+        if self._pending_open:
+            if self.controller.status().busy:
+                self._want_stop = True
+            else:
+                active = self.native.menu
+                if active is not None and active.panel.state == 'open':
+                    self._pending_open = False
+                else:
+                    previous = getattr(self.native.parent, 'menu', None)
+                    if previous is not None and previous.panel.state == 'open':
+                        self.native.parent.close_menu()
+                    if previous is None or previous.panel.state != 'open':
+                        self.native.open()
+                        self._pending_open = False
+        self._advance_playback()
 
-    def revoke_world(self,context):
-        self._retirement_token=context.previous_token
-        self.playback_status='World retired; gameplay callbacks revoked'
+    def _advance_playback(self):
+        now = time.monotonic();playback=self.controller.status()
+        urgent=playback.state is ControllerState.QUEUED or self._want_stop
+        if not playback.busy or (not urgent and now < self._next_playback_poll):
+            return
+        self._next_playback_poll = now + .2
+        if playback.state is ControllerState.QUEUED:
+            self._dispatch_entered_at=time.perf_counter()
+            requested=getattr(self,'_requested_at',None)
+            self._dispatch_phases={'queue_wait_ms':(self._dispatch_entered_at-requested)*1000 if requested is not None else 0.}
+        try:
+            # One short-lived worker spans context, fresh admission and native
+            # preparation. Runtime observations are still read on every step.
+            queued_portable=(self.controller.status().state is ControllerState.QUEUED and self._route=='portable')
+            from expedition33._reader import active_reader
+            reader=getattr(self,'_dispatch_reader',None)
+            operation=(reader.bind() if queued_portable and reader is not None and active_reader() is None else
+                       shared_operation(self.session.pid,_executable=self.session._session._transport._executable)
+                       if queued_portable else nullcontext())
+            with operation:self._poll_playback()
+        except Exception as error:
+            if self.controller.status().state is ControllerState.QUEUED:
+                # No backend exists yet. Cancel a failed worker/context setup
+                # rather than leaving an intent queued forever or retrying IO.
+                self.controller.request_stop(None)
+            self.playback_status = 'Cinematic lifecycle error: ' + str(error)
+            LOG.exception('Cinematic lifecycle error')
 
-    def begin_world_retirement(self,context):
+    def _poll_playback(self):
+        queued=self.controller.status().state is ControllerState.QUEUED
+        entered=time.perf_counter()
+        current = self._current_epoch()
+        context_ready=time.perf_counter()
+        if queued:
+            phases=self._dispatch_phases
+            phases['worker_ms']=(entered-(self._dispatch_entered_at or entered))*1000
+            phases['context_ms']=(context_ready-entered)*1000
+        previous = self.playback_status
+        if self._want_stop:
+            self.controller.request_stop(current)
+            self._want_stop = False
+            snapshot = self.controller.status()
+            self.playback_status = ('Playback stopped' if not snapshot.busy
+                                    else snapshot.detail or snapshot.state.value)
+        else:
+            if self.controller.status().state is ControllerState.QUEUED and self._route in ('portable','preview', 'original_action'):
+                self._detaching_browser = True
+                try:
+                    self.native.parent.close_menu()
+                finally:
+                    self._detaching_browser = False
+            if queued:self._dispatch_phases['browser_detach_ms']=(time.perf_counter()-context_ready)*1000
+            snapshot = self.controller.poll(current, presentation_ready=True)
+            self.playback_status = snapshot.detail or snapshot.state.value
+        if previous != self.playback_status and self.native and self.native.menu:
+            menu = self.native.menu
+            view = getattr(menu, 'view', None)
+            if isinstance(view, BrowserView) and view.model is self and menu.panel.state == 'open' and not getattr(menu, '_presentation_suspended', False):
+                view.status = self.playback_status
+                self.native.parent.refresh()
+
+    def status(self, _=None):
+        snapshot = asdict(self.controller.status())
+        snapshot['state'] = snapshot['state'].value
+        return dict(playback=snapshot, discovery=dict(self.discovery), reason=self.reason,
+                    playback_supported=any(s.get('supported') or s.get('original_supported') for s in self.library),
+                    catalog_count=len(self.library), original_story_actions=self.allow_original_actions,
+                    static_preparation_error=self.static_preparation_error,
+                    dispatch_phases=dict(self._dispatch_phases))
+
+    def revoke_world(self, context):
+        self._close_dispatch_reader()
+        self._retirement_token = context.previous_token
+        self._revoked = True
+        self._pending_open = self._pending_refresh = False
+
+    def begin_world_retirement(self, context):
         return self.poll_world_retirement(context)
 
-    def poll_world_retirement(self,context):
-        if getattr(self,'_retirement_token',None)!=context.previous_token:return 'unknown'
-        # Ordinary stop restores presentation, original music and camera/input.
-        # Never invoke that compensation against a retired epoch.
-        if self.video is not None:return 'unknown'
-        replay=self.title_replay
-        if replay is not None and any(getattr(replay,key,None) is not None for key in ('sequence','adapters','presentation')):
+    def poll_world_retirement(self, context):
+        if context.previous_token != self._retirement_token:
             return 'unknown'
-        if self.pause is not None:
-            result=self.pause.retire_world()
+        self.controller.poll(('retired', self.controller.status().generation))
+        if self.controller.status().busy:
+            return 'pending'
+        if self._portable_panel_pool is not None:
+            result=self._portable_panel_pool.retire_world()
             if result!='ack':return result
-            self.pause=None
-        if self.original_replay is not None:
-            prepared=self.original_replay.prepared
-            if prepared is not None:prepared.close();self.original_replay.prepared=None
-            # Original actions are game-owned. Revoke polling/travel progression,
-            # not the campaign action itself; no Stop or new target is invoked.
-            self.original_replay=None
-        self.title_replay=self.native=self.session=None
-        self.discovery={'state':'world_retired','confirmed':[]}
+            self._portable_panel_pool=None
+        if self.pause is not None:
+            result = self.pause.retire_world()
+            if result != 'ack':
+                return result
+            self.pause = None
+        self.native = self.session = None
+        self._context = self._last_epoch = self._slot = None
+        self.library = ()
+        self.discovery = {'state': 'world_retired', 'all': [], 'confirmed': []}
         return 'ack'
 
     def disable(self):
-        if self.stop() is False:
+        self._close_dispatch_reader()
+        if not self.controller.close(self._current_epoch() if self.controller.status().busy else None):
             from expedition33._sequence_owner import SequenceCleanupDeferred
-            raise SequenceCleanupDeferred('Cinematic cleanup must finish before disabling its menu')
-        if self.native:
+            raise SequenceCleanupDeferred('Cinematic cleanup is not yet acknowledged')
+        if self._portable_panel_pool is not None:
+            if not self._portable_panel_pool.close():
+                from expedition33._sequence_owner import SequenceCleanupDeferred
+                raise SequenceCleanupDeferred('Cinematic panel cleanup is not yet acknowledged')
+            self._portable_panel_pool=None
+        if self.native is not None:
             self.native.close()
             self.native = None
-        if self.pause:
+        if self.pause is not None:
             self.pause.close()
             self.pause = None
         self.session = None
+
+    def _close_dispatch_reader(self):
+        reader=getattr(self,'_dispatch_reader',None)
+        if reader is not None:
+            reader.close();self._dispatch_reader=None

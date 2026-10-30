@@ -81,9 +81,37 @@ struct Fixture {
         return validate_pod_schema(memory,kind,memory.capture(object));
     }
 };
+struct BindingFixture:Fixture {
+    uint64_t binding=0,guid=0;
+    BindingFixture(){
+        guid=make("Guid",core,16,{"A","B","C","D"},"IntProperty",0x6e10a98,4,6755469251052033ULL);
+        const auto package=memory.object("/Script/MovieScene",memory.words.at(core+16),0);
+        binding=memory.object("MovieSceneObjectBindingID",script_struct,package);
+        memory.words[binding+0x40]=0;memory.words[binding+0x58]=24;
+        auto a=memory.field(binding,"Guid","StructProperty",0x6e136a0,0,16,20266268116386305ULL);
+        auto b=memory.field(binding,"SequenceID","IntProperty",0x6e10a98,16,4,20266268116386304ULL);
+        auto c=memory.field(binding,"ResolveParentIndex","IntProperty",0x6e10a98,20,4,20266268116386304ULL);
+        memory.words[binding+0x50]=a;memory.words[a+0x18]=b;memory.words[b+0x18]=c;memory.words[a+0x70]=guid;
+    }
+};
 int main() {
     try {
+        BindingFixture binding;
+        if(!binding.check(binding.binding,PodValueKind::BindingID))return 20;
+        auto reject_binding=[](auto mutate){BindingFixture test;mutate(test);
+            if(test.check(test.binding,PodValueKind::BindingID))throw std::runtime_error("accepted altered binding ID schema");};
+        reject_binding([](auto& t){t.memory.words[t.binding+32]=t.core;});
+        reject_binding([](auto& t){t.memory.words[t.binding+0x58]=32;});
+        reject_binding([](auto& t){auto p=t.memory.words.at(t.binding+0x50);t.memory.words[p+0x70]=t.color;});
+        reject_binding([](auto& t){auto p=t.memory.words.at(t.guid+0x50);t.memory.words[p+0x38]^=1;});
+        reject_binding([](auto& t){auto p=t.memory.words.at(t.binding+0x50);p=t.memory.words.at(p+0x18);t.memory.words[p+0x44]=20;});
+        reject_binding([](auto& t){auto p=t.memory.words.at(t.binding+0x50);t.memory.words[p+0x38]^=1;});
+        reject_binding([](auto& t){t.memory.stop_after=1;});
         Fixture f;
+        auto rotator=f.make("Rotator",f.core,24,{"Pitch","Yaw","Roll"},"DoubleProperty",0x6e11788,8,6755469251052037ULL);
+        if(!f.check(rotator,PodValueKind::Rotator))return 20;
+        auto pitch=f.memory.words.at(rotator+0x50);f.memory.words[pitch+0x44]=8;
+        if(f.check(rotator,PodValueKind::Rotator))return 21;
         auto vector3=f.make("Vector",f.core,24,{"X","Y","Z"},"DoubleProperty",0x6e11788,8,6755469251052037ULL);
         if(!f.check(vector3,PodValueKind::Vector)) return 6;
         f.memory.words[vector3+0x58]=16;

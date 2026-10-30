@@ -94,6 +94,10 @@ struct TimingFixture : Fixture {
 int main() {
     try {
         TimingFixture good; if(!good.valid()) return 1;
+        for(auto kind:{PodValueKind::FrameNumber,PodValueKind::FrameTime,PodValueKind::FrameRate}) {
+            TimingFixture t;auto object=kind==PodValueKind::FrameNumber ? t.number : kind==PodValueKind::FrameTime ? t.time : t.rate;
+            if(!t.check(object,kind))return 8;
+        }
         auto reject=[](auto change) { TimingFixture t; change(t); if(t.valid()) throw std::runtime_error("bad timing schema accepted"); };
         reject([](auto& t){t.memory.words[t.sub+0x38]=0;});
         reject([](auto& t){t.memory.words[t.sub+0x44]=0;});

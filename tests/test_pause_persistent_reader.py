@@ -78,5 +78,18 @@ class PersistentPauseReaderTests(unittest.TestCase):
         self.assertIsNone(entry._world_reader)
         entry.service.dispose_menu.assert_called_once()
 
+    def test_process_owned_shell_survives_controller_replacement(self):
+        entry=self.entry();entry._process_owned_shell=True
+        original=entry.service.menu
+        with patch('expedition33.pause_menu.ReadBatch'), \
+             patch('expedition33.pause_menu.active_reader',return_value=None), \
+             patch('expedition33.pause_menu.capture_selected',return_value='fresh'), \
+             patch('expedition33.pause_menu.read_object_reference',return_value=(NS(index=2,serial=3,address=200),None)):
+            entry.poll()
+        self.assertEqual(entry.state,'closed')
+        entry.service.dispose_menu.assert_not_called()
+        self.assertIs(entry.service.menu,original)
+        entry.attachment.close.assert_called_once()
+
 
 if __name__=='__main__': unittest.main()

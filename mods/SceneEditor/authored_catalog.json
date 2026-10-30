@@ -1,0 +1,625 @@
+{
+  "version": 1,
+  "sequences": [
+    {
+      "path": "/Game/Cinematics/Lumiere/Act03/AliciaAtelier/MCS_AliciaAtelier.MCS_AliciaAtelier",
+      "title": "AliciaAtelier"
+    },
+    {
+      "path": "/Game/Cinematics/Lumiere/Act03/AliciaBirth/MCS_AliciaBirth.MCS_AliciaBirth",
+      "title": "AliciaBirth"
+    },
+    {
+      "path": "/Game/Cinematics/Lumiere/Act03/AliciaBirth/MCS_AliciaBirth_P3.MCS_AliciaBirth_P3",
+      "title": "AliciaBirth P3 PreRender"
+    },
+    {
+      "path": "/Game/Cinematics/Camp/Forced/AliciasNightPoem/MCS_AliciasNightPoem.MCS_AliciasNightPoem",
+      "title": "AliciasNightPoem"
+    },
+    {
+      "path": "/Game/Cinematics/SpringMeadow/Alone/MCS_Alone.MCS_Alone",
+      "title": "Alone"
+    },
+    {
+      "path": "/Game/Cinematics/Visages/Anger/MCS_AngerIntro.MCS_AngerIntro",
+      "title": "AngerIntro"
+    },
+    {
+      "path": "/Game/Cinematics/Visages/Anger/MCS_AngerOutro.MCS_AngerOutro",
+      "title": "AngerOutro"
+    },
+    {
+      "path": "/Game/Cinematics/AncientSanctuary/ArrivingInTheRedForest/MCS_ArrivingInAncientSanctuary.MCS_ArrivingInAncientSanctuary",
+      "title": "ArrivingInAncientSanctuary"
+    },
+    {
+      "path": "/Game/Cinematics/OldLumiere/ArrivingInOldLumiere/MCS_ArrivingInOldLumiereP1.MCS_ArrivingInOldLumiereP1",
+      "title": "ArrivingInOldLumiere P1"
+    },
+    {
+      "path": "/Game/Cinematics/OldLumiere/ArrivingInOldLumiere/MCS_ArrivingInOldLumiereP2.MCS_ArrivingInOldLumiereP2",
+      "title": "ArrivingInOldLumiere P2"
+    },
+    {
+      "path": "/Game/Cinematics/ForgottenBattlefield/Cutscene/ArrivingInTheBattleField/MCS_ArrivingInTheBattlefield.MCS_ArrivingInTheBattlefield",
+      "title": "ArrivingInTheBattlefield"
+    },
+    {
+      "path": "/Game/Cinematics/ForgottenBattlefield/Cutscene/BattleDuelliste/MCS_BattleDuelliste_V2.MCS_BattleDuelliste_V2",
+      "title": "BattleDuelliste"
+    },
+    {
+      "path": "/Game/Cinematics/OldLumiere/MirrorRenoirRematch/MCS_BlackScreenTransitionAfterRenoirFirstBattle.MCS_BlackScreenTransitionAfterRenoirFirstBattle",
+      "title": "BlackScreenTransitionAfterRenoirFirstBattle"
+    },
+    {
+      "path": "/Game/Cinematics/TheBarrier/BreakingTheBarrier/MCS_BreakingTheBarrier.MCS_BreakingTheBarrier",
+      "title": "BreakingTheBarrier"
+    },
+    {
+      "path": "/Game/Cinematics/Camp/Forced/CampAfterFirstAxon/MCS_CampAfterFIrstAxon_Enter.MCS_CampAfterFIrstAxon_Enter",
+      "title": "CampAfterTheFirstAxon Enter"
+    },
+    {
+      "path": "/Game/Cinematics/Camp/Forced/CampAfterFirstAxon/MCS_CampAfterFirstAxon_Exit.MCS_CampAfterFirstAxon_Exit",
+      "title": "CampAfterTheFirstAxon Exit"
+    },
+    {
+      "path": "/Game/Cinematics/Lumiere/Act03/EndingIfMaelleWins/CreditEndMaelle/MCS_Credit_EndingMaelle.MCS_Credit_EndingMaelle",
+      "title": "Credit EndingMaelle"
+    },
+    {
+      "path": "/Game/Cinematics/Lumiere/Act03/EndingIfVersoWins/CreditEndVerso/MCS_Credit_EndingVerso.MCS_Credit_EndingVerso",
+      "title": "Credit EndingVerso"
+    },
+    {
+      "path": "/Game/Cinematics/Lumiere/Act03/Credits/MCS_Credits.MCS_Credits",
+      "title": "CREDITS"
+    },
+    {
+      "path": "/Game/Levels/SmallLevels/Reacher/GameActions/SEQ_IW_SmallLevel_Crows.SEQ_IW_SmallLevel_Crows",
+      "title": "Crows"
+    },
+    {
+      "path": "/Game/Cinematics/Camp/Forced/DependWhichFamily/MCS_DependsWhichFamily.MCS_DependsWhichFamily",
+      "title": "DependsWhichFamily"
+    },
+    {
+      "path": "/Game/Cinematics/OldLumiere/DiscoveringTheTruth/MCS_DiscoveringTheTruth_P1.MCS_DiscoveringTheTruth_P1",
+      "title": "DiscoveringTheTruth P1"
+    },
+    {
+      "path": "/Game/Cinematics/OldLumiere/DiscoveringTheTruth/MCS_DiscoveringTheTruth_P2.MCS_DiscoveringTheTruth_P2",
+      "title": "DiscoveringTheTruth P2"
+    },
+    {
+      "path": "/Game/Cinematics/Lumiere/Act03/EndingIfMaelleWins/MCS_EndingIfMaelleWins_P1.MCS_EndingIfMaelleWins_P1",
+      "title": "EndingIfMaelleWins P1"
+    },
+    {
+      "path": "/Game/Cinematics/Lumiere/Act03/EndingIfMaelleWins/MCS_EndingIfMaelleWins_P2_PreRender.MCS_EndingIfMaelleWins_P2_PreRender",
+      "title": "EndingIfMaelleWins P2"
+    },
+    {
+      "path": "/Game/Cinematics/Lumiere/Act03/EndingIfVersoWins/MCS_EndingIfVersoWins_P1.MCS_EndingIfVersoWins_P1",
+      "title": "EndingIfVersoWins P1"
+    },
+    {
+      "path": "/Game/Cinematics/Lumiere/Act03/EndingIfVersoWins/MCS_EndingIfVersoWins_P2_PreRender.MCS_EndingIfVersoWins_P2_PreRender",
+      "title": "EndingIfVersoWins P2"
+    },
+    {
+      "path": "/Game/Cinematics/SeaCliff/EnteringCliffs/MCS_EnteringSeaCliffs_V02.MCS_EnteringSeaCliffs_V02",
+      "title": "EnteringCliffs"
+    },
+    {
+      "path": "/Game/Cinematics/EsquieNest/EntereringEsquiesNest/MCS_EnteringEsquiesNest.MCS_EnteringEsquiesNest",
+      "title": "EnteringEsquieNest"
+    },
+    {
+      "path": "/Game/Cinematics/EsquieNest/EsquieJoinsTheGroup/MCS_EsquieJoinsTheGroup.MCS_EsquieJoinsTheGroup",
+      "title": "EsquieJoinsTheGroup"
+    },
+    {
+      "path": "/Game/Cinematics/Lumiere/Act03/FacingRenoir/MCS_FacingRenoir.MCS_FacingRenoir",
+      "title": "FacingRenoir"
+    },
+    {
+      "path": "/Game/Cinematics/Lumiere/Act03/Finale/MCS_FINALE.MCS_FINALE",
+      "title": "Finale"
+    },
+    {
+      "path": "/Game/Cinematics/Lumiere/Act03/Finale/MCS_FINALE_P1.MCS_FINALE_P1",
+      "title": "Finale P1"
+    },
+    {
+      "path": "/Game/Cinematics/MonolithInterior/FinalFightWithMirrorRenoir/MCS_FinalFightWithMirrorRenoir.MCS_FinalFightWithMirrorRenoir",
+      "title": "FinalFightWithMirrorRenoir"
+    },
+    {
+      "path": "/Game/Cinematics/Goblu/FindingMaelleInTheManor/MCS_FindingMaelleintheManor_GobluPart.MCS_FindingMaelleintheManor_GobluPart",
+      "title": "FindingMaelleintheManor GobluPart"
+    },
+    {
+      "path": "/Game/Cinematics/Goblu/FindingMaelleInTheManor/MCS_FindingMaelleintheManor_ManorPart.MCS_FindingMaelleintheManor_ManorPart",
+      "title": "FindingMaelleintheManor ManorPart"
+    },
+    {
+      "path": "/Game/Cinematics/SpringMeadow/FirstLancelierIntro/MCS_FirstLancelierIntro.MCS_FirstLancelierIntro",
+      "title": "FirstLancelierIntro"
+    },
+    {
+      "path": "/Game/Cinematics/SpringMeadow/FirstLancelierOutro/MCS_FirstLancelierOutro.MCS_FirstLancelierOutro",
+      "title": "FirstLancelierOutro"
+    },
+    {
+      "path": "/Game/Cinematics/Lumiere/Act02/FlyBackToLumiere/MCS_FlyBackToLumiere.MCS_FlyBackToLumiere",
+      "title": "FlyBackToLumiere"
+    },
+    {
+      "path": "/Game/Cinematics/Camp/Forced/ForcedCampPostGestralVillage/MCS_ForcedCampPostGestralVillage.MCS_ForcedCampPostGestralVillage",
+      "title": "ForcedCampPostGestralVillage"
+    },
+    {
+      "path": "/Game/Cinematics/Camp/Forced/ForcedCampSciel/MCS_ForcedCampSciel.MCS_ForcedCampSciel",
+      "title": "ForcedCampSciel"
+    },
+    {
+      "path": "/Game/Cinematics/EsquieNest/Francois/MCS_Francois.MCS_Francois",
+      "title": "Francois"
+    },
+    {
+      "path": "/Game/Cinematics/Goblu/Goblu/MCS_Goblu.MCS_Goblu",
+      "title": "Goblu"
+    },
+    {
+      "path": "/Game/Cinematics/Goblu/GobluOutro/MCS_GobluOutro.MCS_GobluOutro",
+      "title": "GobluOutro"
+    },
+    {
+      "path": "/Game/Cinematics/WalkToThePaintress/GoingInsideTheMonolith/MCS_GoingInsideTheMonolith.MCS_GoingInsideTheMonolith",
+      "title": "GoingInsideTheMonolith"
+    },
+    {
+      "path": "/Game/Cinematics/SeaCliff/GustavesFinalAct/MCS_GustaveFinalAct_P1_V02.MCS_GustaveFinalAct_P1_V02",
+      "title": "GustavesFinalAct Part1"
+    },
+    {
+      "path": "/Game/Cinematics/SeaCliff/GustavesFinalAct/MCS_GustaveFinalAct_P2.MCS_GustaveFinalAct_P2",
+      "title": "GustavesFinalAct Part2"
+    },
+    {
+      "path": "/Game/Cinematics/Siren/IntroSirene/MCS_IntroSirene.MCS_IntroSirene",
+      "title": "IntroSirene"
+    },
+    {
+      "path": "/Game/Cinematics/SpringMeadow/JarQuest/MCS_JarQuest_A.MCS_JarQuest_A",
+      "title": "JarQuestA"
+    },
+    {
+      "path": "/Game/Cinematics/SpringMeadow/JarQuest/MCS_JarQuest_B.MCS_JarQuest_B",
+      "title": "JarQuestB"
+    },
+    {
+      "path": "/Game/Cinematics/Visages/Joy/MCS_JoyIntro.MCS_JoyIntro",
+      "title": "JoyIntro"
+    },
+    {
+      "path": "/Game/Cinematics/Visages/Joy/MCS_JoyOutro.MCS_JoyOutro",
+      "title": "JoyOutro"
+    },
+    {
+      "path": "/Game/Cinematics/MonolithInterior/Locomotive/CS_GPE_MonolithInterior_Locomotive_Lumiere_Leaving.CS_GPE_MonolithInterior_Locomotive_Lumiere_Leaving",
+      "title": "Locomotive LumiereToMonoco"
+    },
+    {
+      "path": "/Game/Cinematics/MonolithInterior/Locomotive/CS_GPE_MonolithInterior_Locomotive_MonocoToLumiere.CS_GPE_MonolithInterior_Locomotive_MonocoToLumiere",
+      "title": "Locomotive MonocoToLumiere"
+    },
+    {
+      "path": "/Game/Cinematics/SpringMeadow/LuminizerIntro/MCS_LuminizerIntro.MCS_LuminizerIntro",
+      "title": "LuminizerIntro"
+    },
+    {
+      "path": "/Game/Cinematics/Camp/Forced/LuneAndSciel/MCS_LuneAndSciel.MCS_LuneAndSciel",
+      "title": "LuneAndSciel"
+    },
+    {
+      "path": "/Game/Cinematics/SpringMeadow/LuneArrives/MCS_LuneArrives.MCS_LuneArrives",
+      "title": "LuneArrives"
+    },
+    {
+      "path": "/Game/Cinematics/Camp/Forced/LuneCampFairytales/MCS_LuneCampFairytales.MCS_LuneCampFairytales",
+      "title": "LuneCampFairytales"
+    },
+    {
+      "path": "/Game/Cinematics/Camp/Forced/MaelleAndVersoBond/MCS_MaelleAndVersoBond.MCS_MaelleAndVersoBond",
+      "title": "MaelleAndVersoBond"
+    },
+    {
+      "path": "/Game/Cinematics/Goblu/MaelleReunion/CS_MaelleReunion.CS_MaelleReunion",
+      "title": "MaelleReunion"
+    },
+    {
+      "path": "/Game/Cinematics/Camp/Forced/MaelleThePyro/MCS_MaelleThePyro.MCS_MaelleThePyro",
+      "title": "MaelleThePyro"
+    },
+    {
+      "path": "/Game/Cinematics/Camp/Forced/MagicVerso/MCS_MagicVerso.MCS_MagicVerso",
+      "title": "MagicVerso"
+    },
+    {
+      "path": "/Game/Cinematics/Camp/Forced/CampAfterSecondAxon/MCS_CampAfterSecondAxon_Enter.MCS_CampAfterSecondAxon_Enter",
+      "title": "MCS CampAfterSecondAxon Enter"
+    },
+    {
+      "path": "/Game/Cinematics/Camp/Forced/CampAfterSecondAxon/MCS_CampAfterSecondAxon_Exit.MCS_CampAfterSecondAxon_Exit",
+      "title": "MCS CampAfterSecondAxon Exit"
+    },
+    {
+      "path": "/Game/Cinematics/CleaWorkshop/CS_Mini_CleaWorkshop_Lampmaster.CS_Mini_CleaWorkshop_Lampmaster",
+      "title": "MCS CleaWorkshop Lampmaster"
+    },
+    {
+      "path": "/Game/Cinematics/CleasFlyingHouse/CS_CleasFlyingHouse_DuallisteDeath.CS_CleasFlyingHouse_DuallisteDeath",
+      "title": "MCS CS CleasFlyingHouse DuallisteDeath"
+    },
+    {
+      "path": "/Game/Cinematics/CleasFlyingHouse/CS_CleasFlyingHouse_EvequeDeath.CS_CleasFlyingHouse_EvequeDeath",
+      "title": "MCS CS CleasFlyingHouse EvequeDeath"
+    },
+    {
+      "path": "/Game/Cinematics/CleasFlyingHouse/CS_CleasFlyingHouse_GobluDeath.CS_CleasFlyingHouse_GobluDeath",
+      "title": "MCS CS CleasFlyingHouse GobluDeath"
+    },
+    {
+      "path": "/Game/Cinematics/CleasFlyingHouse/CS_CleasFlyingHouse_LampmasterDeath.CS_CleasFlyingHouse_LampmasterDeath",
+      "title": "MCS CS CleasFlyingHouse LampmasterDeath"
+    },
+    {
+      "path": "/Game/Cinematics/SpringMeadow/EvequeIntro/MCS_EvequeIntro_2.MCS_EvequeIntro_2",
+      "title": "MCS EvequeIntro"
+    },
+    {
+      "path": "/Game/Cinematics/SpringMeadow/EvequeOutro/MCS_EvequeOutro.MCS_EvequeOutro",
+      "title": "MCS EvequeOutro"
+    },
+    {
+      "path": "/Game/Cinematics/YellowForest/GlaiseArrives/CS_YellowForest_GlaiseArrives.CS_YellowForest_GlaiseArrives",
+      "title": "MCS GlaiseArrives"
+    },
+    {
+      "path": "/Game/Cinematics/VersoDraft/MeetingOsquio/MCS_MeetingOsquio.MCS_MeetingOsquio",
+      "title": "MCS MeetingOsquio"
+    },
+    {
+      "path": "/Game/Cinematics/TwilightSanctuary/CS_TwilightSanctuary_SakapatateTwilightBossIntro.CS_TwilightSanctuary_SakapatateTwilightBossIntro",
+      "title": "MCS SakapatateTwilightIntro"
+    },
+    {
+      "path": "/Game/Cinematics/OrangeForest/CS_OrangeForest_ScavengerIntro.CS_OrangeForest_ScavengerIntro",
+      "title": "MCS ScavengerIntro"
+    },
+    {
+      "path": "/Game/Cinematics/EsquieNest/MeetingEsquie/MCS_MeetingEsquie_V02.MCS_MeetingEsquie_V02",
+      "title": "MeetingEsquie"
+    },
+    {
+      "path": "/Game/Cinematics/MonocoStation/MeetingMonoco/MSC_MeetingMonoco.MSC_MeetingMonoco",
+      "title": "MeetingMonoco"
+    },
+    {
+      "path": "/Game/Cinematics/Lumiere/Act03/MeetingRealRenoir/MCS_MeetingRealRenoir.MCS_MeetingRealRenoir",
+      "title": "MeetingRealRenoir"
+    },
+    {
+      "path": "/Game/Cinematics/SeaCliff/MeetingTheLampmaster/MCS_MeetingTheLampmaster.MCS_MeetingTheLampmaster",
+      "title": "MeetingTheLampmaster"
+    },
+    {
+      "path": "/Game/Cinematics/WalkToThePaintress/MeetingThePaintress/MCS_MeetingThePaintress.MCS_MeetingThePaintress",
+      "title": "MeetingThePaintress"
+    },
+    {
+      "path": "/Game/Cinematics/ReacherZone/MeetingTheReacher/MCS_MeetingTheReacher.MCS_MeetingTheReacher",
+      "title": "MeetingTheReacher"
+    },
+    {
+      "path": "/Game/Cinematics/CleasTower/MirrorCleaIntro/MCS_MirrorCleaIntro.MCS_MirrorCleaIntro",
+      "title": "MirrorCleaIntro"
+    },
+    {
+      "path": "/Game/Cinematics/CleasTower/MirrorCleaOutro/MCS_MirrorCleaOutro.MCS_MirrorCleaOutro",
+      "title": "MirrorCleaOutro"
+    },
+    {
+      "path": "/Game/Cinematics/OldLumiere/MirrorRenoirRematch/MCS_MirrorRenoirRematch.MCS_MirrorRenoirRematch",
+      "title": "MirrorRenoirRematch"
+    },
+    {
+      "path": "/Game/Cinematics/OldLumiere/MirrorRenoirRound2/MCS_MirrorRenoirRound2.MCS_MirrorRenoirRound2",
+      "title": "MirrorRenoirRound2"
+    },
+    {
+      "path": "/Game/Cinematics/MonocoStation/MonocoJoinsTheGroup/MSC_MonocoJoinsTheGroup.MSC_MonocoJoinsTheGroup",
+      "title": "MonocoJoinsTheGroup"
+    },
+    {
+      "path": "/Game/Cinematics/MonocoStation/MonocoJoinsTheGroup/CS_MonocoJoinsTheGroup_GrandisOutside.CS_MonocoJoinsTheGroup_GrandisOutside",
+      "title": "MonocoJoinsTheGroup GrandisOutside"
+    },
+    {
+      "path": "/Game/Cinematics/Camp/Forced/MourningGustave/MCS_MourningGustave.MCS_MourningGustave",
+      "title": "MourningGustave"
+    },
+    {
+      "path": "/Game/Cinematics/Lumiere/Act01/MyFlower/MCS_MyFlower_P1.MCS_MyFlower_P1",
+      "title": "MyFlower P1"
+    },
+    {
+      "path": "/Game/Cinematics/Lumiere/Act01/MyFlower/MCS_MyFlower_P2.MCS_MyFlower_P2",
+      "title": "MyFlower P2"
+    },
+    {
+      "path": "/Game/Cinematics/Goblu/NocoIntro/MCS_NocoIntro.MCS_NocoIntro",
+      "title": "NocoIntro"
+    },
+    {
+      "path": "/Game/Cinematics/OldLumiere/NocosDeath/MCS_NocosDeath.MCS_NocosDeath",
+      "title": "NocosDeath"
+    },
+    {
+      "path": "/Game/Cinematics/Camp/Forced/OnwardToMonocosStation/MCS_OnwardToMonocosStation.MCS_OnwardToMonocosStation",
+      "title": "OnwardToMonocosStation"
+    },
+    {
+      "path": "/Game/Cinematics/Lumiere/Act03/Paris/MCS_Paris.MCS_Paris",
+      "title": "Paris"
+    },
+    {
+      "path": "/Game/Cinematics/ForgottenBattlefield/Cutscene/PostDuallist/MCS_PostDuallist.MCS_PostDuallist",
+      "title": "PostDuallist"
+    },
+    {
+      "path": "/Game/Cinematics/GestralVillage/PostGestralTournament/MCS_PostGestralTournament.MCS_PostGestralTournament",
+      "title": "PostGestralTournament"
+    },
+    {
+      "path": "/Game/Cinematics/AncientSanctuary/PostSakapatate/MCS_PostSakapatate.MCS_PostSakapatate",
+      "title": "PostSakapatate"
+    },
+    {
+      "path": "/Game/Cinematics/Camp/Forced/PostSpringMeadows/MCS_PostSpringMeadows.MCS_PostSpringMeadows",
+      "title": "PostSpringMeadows"
+    },
+    {
+      "path": "/Game/Cinematics/Lumiere/Act03/RedAndWhiteTree/MCS_RedAndWhiteTree.MCS_RedAndWhiteTree",
+      "title": "RedAndWhiteTree"
+    },
+    {
+      "path": "/Game/Cinematics/Lumiere/Act03/RenoirsEnd/MCS_RenoirsEnd.MCS_RenoirsEnd",
+      "title": "RenoirsEnd"
+    },
+    {
+      "path": "/Game/Cinematics/ForgottenBattlefield/Cutscene/RipGustave/MCS_RipGustave_V3_Cut.MCS_RipGustave_V3_Cut",
+      "title": "RipGustave"
+    },
+    {
+      "path": "/Game/Cinematics/Visages/Sadness/MCS_SadnessIntro.MCS_SadnessIntro",
+      "title": "SadnessIntro"
+    },
+    {
+      "path": "/Game/Cinematics/Visages/Sadness/MCS_SadnessOutro.MCS_SadnessOutro",
+      "title": "SadnessOutro"
+    },
+    {
+      "path": "/Game/Cinematics/Simon/SimonIntro/MCS_SimonIntro.MCS_SimonIntro",
+      "title": "SimonIntro"
+    },
+    {
+      "path": "/Game/Cinematics/Simon/SimonOutro/MCS_SimonOutro.MCS_SimonOutro",
+      "title": "SimonOutro"
+    },
+    {
+      "path": "/Game/Characters/Enemies/HumanEnnemies/Simon/Sequences/SEQ_Simon_Skill_10_PhaseSwitch.SEQ_Simon_Skill_10_PhaseSwitch",
+      "title": "SimonPhaseTransition"
+    },
+    {
+      "path": "/Game/Cinematics/Siren/SirenesDeath/MCS_SirenesDeath.MCS_SirenesDeath",
+      "title": "SirenesDeath"
+    },
+    {
+      "path": "/Game/Cinematics/Camp/Forced/SoStartTheAxonHunt/MCS_SoStartsTheAxonHunt_02.MCS_SoStartsTheAxonHunt_02",
+      "title": "SoStartTheAxonHunt"
+    },
+    {
+      "path": "/Game/Cinematics/MonocoStation/StalactAttacks/MCS_StalactAttacks.MCS_StalactAttacks",
+      "title": "StalactAttacksP1"
+    },
+    {
+      "path": "/Game/Cinematics/MonocoStation/StalactAttacks/MCS_StalactAttacks_P2.MCS_StalactAttacks_P2",
+      "title": "StalactAttacksP2"
+    },
+    {
+      "path": "/Game/Cinematics/WalkToThePaintress/StartThePaintressFight/MCS_StartThePaintressFight.MCS_StartThePaintressFight",
+      "title": "StartThePaintressFight"
+    },
+    {
+      "path": "/Game/Cinematics/TheBarrier/TheBarrierStand/MCS_TheBarrierStands.MCS_TheBarrierStands",
+      "title": "TheBarrierStand"
+    },
+    {
+      "path": "/Game/Cinematics/Visages/TheCentralPlazaOfVisages/MCS_TheCentralPlazaOfVisages.MCS_TheCentralPlazaOfVisages",
+      "title": "TheCentralPlazaOfVisages"
+    },
+    {
+      "path": "/Game/Cinematics/Lumiere/Act01/TheDeparture/MCS_TheDeparture_V2_Prerender.MCS_TheDeparture_V2_Prerender",
+      "title": "TheDeparture"
+    },
+    {
+      "path": "/Game/Cinematics/DarkShores/TheEndOfExpedition33/MCS_TheEndOfExpedition33.MCS_TheEndOfExpedition33",
+      "title": "TheEndOfExpedition33"
+    },
+    {
+      "path": "/Game/Cinematics/MonolithInterior/TheEndOfMirrorRenoir/MCS_TheEndOfMirrorRenoir.MCS_TheEndOfMirrorRenoir",
+      "title": "TheEndOfMirrorRenoir"
+    },
+    {
+      "path": "/Game/Cinematics/VersoDraft/TheEndOfOsquio/MCS_TheEndOfOsquio.MCS_TheEndOfOsquio",
+      "title": "TheEndOfOsquio"
+    },
+    {
+      "path": "/Game/Cinematics/ThePaintress/TheEndOfThePaintress/MCS_TheEndOfThePaintress.MCS_TheEndOfThePaintress",
+      "title": "TheEndOfThePaintress"
+    },
+    {
+      "path": "/Game/Cinematics/ReacherZone/TheEndOfTheRealReacher/MCS_TheEndOfTheRealReacher.MCS_TheEndOfTheRealReacher",
+      "title": "TheEndOfTheRealReacher"
+    },
+    {
+      "path": "/Game/Cinematics/AncientSanctuary/TheEndOfTheUltimateSakapatate/MCS_TheEndOfTheUltimateSakapatate.MCS_TheEndOfTheUltimateSakapatate",
+      "title": "TheEndOfTheUltimateSakapatate"
+    },
+    {
+      "path": "/Game/Cinematics/Visages/TheEndOfVisages/MCS_TheEndOfVisages.MCS_TheEndOfVisages",
+      "title": "TheEndOfVisages"
+    },
+    {
+      "path": "/Game/Cinematics/Lumiere/Act01/ExpeditionFestival/MCS_TheExpeditionFestival.MCS_TheExpeditionFestival",
+      "title": "TheExpeditionFestival"
+    },
+    {
+      "path": "/Game/Cinematics/Lumiere/Act02/TheFinalGommage/MCS_TheFinalGommage.MCS_TheFinalGommage",
+      "title": "TheFinalGommage"
+    },
+    {
+      "path": "/Game/Cinematics/AncientSanctuary/TheGestralDidAMassacre/MCS_TheGestralDidAMassacre.MCS_TheGestralDidAMassacre",
+      "title": "TheGestralDidAMassacre"
+    },
+    {
+      "path": "/Game/Cinematics/Lumiere/Act01/TheGommage/MCS_TheGommage_P1.MCS_TheGommage_P1",
+      "title": "TheGommage"
+    },
+    {
+      "path": "/Game/Cinematics/Lumiere/Act01/TheGommage/MCS_TheGommageP2_PreRender.MCS_TheGommageP2_PreRender",
+      "title": "TheGommage P2"
+    },
+    {
+      "path": "/Game/Cinematics/Lumiere/Act03/TheGreatestExpeditionInHistory/MCS_TheGreatestExpeditionInHistory.MCS_TheGreatestExpeditionInHistory",
+      "title": "TheGreatestExpeditionInHistory"
+    },
+    {
+      "path": "/Game/Cinematics/ThePaintress/ThePaintress/MCS_ThePaintress.MCS_ThePaintress",
+      "title": "ThePaintress"
+    },
+    {
+      "path": "/Game/Cinematics/Lumiere/Act03/ThePlanToCounterAttack/MCS_ThePlanToCounterAttack.MCS_ThePlanToCounterAttack",
+      "title": "ThePlanToCounterAttack"
+    },
+    {
+      "path": "/Game/Cinematics/Siren/TheSirene/MCS_TheSirene.MCS_TheSirene",
+      "title": "TheSirene"
+    },
+    {
+      "path": "/Game/Cinematics/ReacherZone/TheTwinTowers/MCS_TheTwinTowers.MCS_TheTwinTowers",
+      "title": "TheTwinTowers"
+    },
+    {
+      "path": "/Game/Cinematics/ReacherZone/TheWorkshop/MCS_TheWorkshop.MCS_TheWorkshop",
+      "title": "TheWorkshop"
+    },
+    {
+      "path": "/Game/Cinematics/Titles/SequenceTitles/LS_Title_Act1.LS_Title_Act1",
+      "title": "Title Act1"
+    },
+    {
+      "path": "/Game/Cinematics/Titles/SequenceTitles/LS_Title_Act2.LS_Title_Act2",
+      "title": "Title Act2"
+    },
+    {
+      "path": "/Game/Cinematics/Titles/SequenceTitles/LS_Title_Act3.LS_Title_Act3",
+      "title": "Title Act3"
+    },
+    {
+      "path": "/Game/Cinematics/Titles/SequenceTitles/LS_Title_BackAtCamp.LS_Title_BackAtCamp",
+      "title": "Title BackAtCamp"
+    },
+    {
+      "path": "/Game/Cinematics/Titles/SequenceTitles/LS_Title_EpilogueAlicia.LS_Title_EpilogueAlicia",
+      "title": "Title EpilogueAlicia"
+    },
+    {
+      "path": "/Game/Cinematics/Titles/SequenceTitles/LS_Title_EpilogueAlicia_Fakeout.LS_Title_EpilogueAlicia_Fakeout",
+      "title": "Title EpilogueAliciaFakeout"
+    },
+    {
+      "path": "/Game/Cinematics/Titles/SequenceTitles/LS_Title_EpilogueMaelleWins.LS_Title_EpilogueMaelleWins",
+      "title": "Title EpilogueMaelleWins"
+    },
+    {
+      "path": "/Game/Cinematics/Titles/SequenceTitles/LS_Title_EpilogueVersoWins.LS_Title_EpilogueVersoWins",
+      "title": "Title EpilogueVersoWins"
+    },
+    {
+      "path": "/Game/Cinematics/Titles/SequenceTitles/LS_Title_InThePast.LS_Title_InThePast",
+      "title": "Title InThePast"
+    },
+    {
+      "path": "/Game/Cinematics/Titles/SequenceTitles/LS_Title_PrologueLumiere.LS_Title_PrologueLumiere",
+      "title": "Title PrologueLumiere"
+    },
+    {
+      "path": "/Game/Cinematics/Lumiere/Act03/TomorrowComes/MCS_TomorrowComes.MCS_TomorrowComes",
+      "title": "TomorrowComes"
+    },
+    {
+      "path": "/Game/Cinematics/AncientSanctuary/UltimateSakapatate/MCS_UltimateSakapatateArrives.MCS_UltimateSakapatateArrives",
+      "title": "UltimateSakapatateArrives"
+    },
+    {
+      "path": "/Game/Cinematics/OldLumiere/VersoDisappears/MCS_VersoDisappears.MCS_VersoDisappears",
+      "title": "VersoDisappears"
+    },
+    {
+      "path": "/Game/Cinematics/Camp/Forced/VersoTriesToTalkToMaelle/MCS_VersoTriesToTalkToMaelle.MCS_VersoTriesToTalkToMaelle",
+      "title": "VersoTriesToTalkToMaelle"
+    },
+    {
+      "path": "/Game/Cinematics/Visages/Visages/MCS_Visages.MCS_Visages",
+      "title": "Visages"
+    },
+    {
+      "path": "/Game/Cinematics/Visages/LevelTeleport/LS_Visages_Teleport_VisageAnger_Entry.LS_Visages_Teleport_VisageAnger_Entry",
+      "title": "Visages Teleport Anger Entry"
+    },
+    {
+      "path": "/Game/Cinematics/Visages/LevelTeleport/LS_Visages_Teleport_VisageAnger_Exit.LS_Visages_Teleport_VisageAnger_Exit",
+      "title": "Visages Teleport Anger Exit"
+    },
+    {
+      "path": "/Game/Cinematics/Visages/LevelTeleport/LS_Visages_Teleport_VisageJoy_Entry.LS_Visages_Teleport_VisageJoy_Entry",
+      "title": "Visages Teleport Joy Entry"
+    },
+    {
+      "path": "/Game/Cinematics/Visages/LevelTeleport/LS_Visages_Teleport_VisageJoy_Exit.LS_Visages_Teleport_VisageJoy_Exit",
+      "title": "Visages Teleport Joy Exit"
+    },
+    {
+      "path": "/Game/Cinematics/Visages/LevelTeleport/LS_Visages_Teleport_VisageSad_Entry.LS_Visages_Teleport_VisageSad_Entry",
+      "title": "Visages Teleport SadnessEntry"
+    },
+    {
+      "path": "/Game/Cinematics/Visages/LevelTeleport/LS_Visages_Teleport_VisageSad_Exit.LS_Visages_Teleport_VisageSad_Exit",
+      "title": "Visages Teleport SadnessEXit"
+    },
+    {
+      "path": "/Game/Cinematics/SpringMeadow/VolesterIntro/SEQ_IW_VolesterIntro.SEQ_IW_VolesterIntro",
+      "title": "VolesterIntro"
+    },
+    {
+      "path": "/Game/Cinematics/Goblu/WelcomeToTheFlyingWaters/MCS_WelcometotheFlyingWaters.MCS_WelcometotheFlyingWaters",
+      "title": "WelcometotheFlyingWaters"
+    }
+  ]
+}

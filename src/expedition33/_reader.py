@@ -11,11 +11,27 @@ import time
 from . import RuntimeQueryError
 
 _active = ContextVar('expedition33_read_batch', default=None)
-_SELECTED = frozenset(('--catalog-select', '--catalog-match', '--describe', '--read-values', '--read-table', '--describe-enums'))
+_SELECTED = frozenset(('--catalog-values', '--catalog-select', '--catalog-match', '--describe', '--read-values', '--read-table', '--describe-enums'))
+_NAME_RESOLVERS = frozenset(('--resolve-asset-names','--resolve-export-names'))
+
+
+class ReadCancelled(RuntimeQueryError):
+    """An owner cancelled read-only work; the worker must not be reused."""
 
 
 def active_reader():
     return _active.get()
+
+
+@contextmanager
+def shared_operation(pid, *, _executable=None):
+    """A local operation shares an existing owner or owns its own worker.
+
+    Unlike a retained ReadBatch(share=True), this context is never stored for
+    later use. A borrower cannot acquire or close its enclosing owner's IO.
+    """
+    with ReadBatch(pid,share=active_reader() is None,_executable=_executable) as reader:
+        yield reader
 
 
 class ReadBatch:
@@ -30,11 +46,19 @@ class ReadBatch:
     Failure terminates this read-only child and forbids subsequent requests;
     it never retries and owns no hooks, widgets, leases, or engine mutations.
     """
-    def __init__(self, pid, *, share=False, _executable=None):
+    supports_source_line_limit=True
+    def __init__(self, pid, *, share=False, _executable=None, _cancel=None, _timing=None,_line_limit=1048576):
         if type(pid) is not int or not 0 < pid <= 0xffffffff:
             raise ValueError('Expected a process ID')
         self.pid = pid
+        if type(_line_limit) is not int or not 1048576<=_line_limit<=16*1024*1024:
+            raise ValueError('Read worker line limit must be between 1 and 16 MiB')
+        self._line_limit=_line_limit
         self._executable = _executable
+        if _cancel is not None and not callable(getattr(_cancel,'is_set',None)):
+            raise ValueError('Cancellation event must expose is_set')
+        self._cancel = _cancel
+        self._timing = _timing
         self._share = bool(share)
         self._borrowed = None
         self._owner = threading.get_ident()
@@ -43,6 +67,7 @@ class ReadBatch:
         self._stop = threading.Event()
         self._closed = False
         self._sequence = 0
+        self.supports_catalog_values = False
 
     def _check(self):
         if threading.get_ident() != self._owner:
@@ -60,10 +85,10 @@ class ReadBatch:
                     pass
         try:
             while not self._stop.is_set():
-                line = self._process.stdout.readline(1048577)
+                line = self._process.stdout.readline(self._line_limit+1)
                 if not line:
                     break
-                if len(line) > 1048576 or not line.endswith('\n'):
+                if len(line) > self._line_limit or not line.endswith('\n'):
                     raise RuntimeQueryError('Read worker line exceeded bounds or was truncated')
                 deliver(line)
         except BaseException as error:
@@ -72,10 +97,19 @@ class ReadBatch:
             deliver(None)
 
     def _line(self, deadline):
-        try:
-            value = self._lines.get(timeout=max(0., deadline - time.monotonic()))
-        except queue.Empty:
-            raise RuntimeQueryError('Read worker timed out; request was not retried') from None
+        while True:
+            if self._cancel is not None and self._cancel.is_set():
+                raise ReadCancelled('Read worker cancelled; request was not retried')
+            remaining=deadline-time.monotonic()
+            if remaining<=0:
+                raise RuntimeQueryError('Read worker timed out; request was not retried') from None
+            try:
+                value=self._lines.get(timeout=min(remaining,.1) if self._cancel is not None else remaining)
+                break
+            except queue.Empty:
+                continue
+        if self._cancel is not None and self._cancel.is_set():
+            raise ReadCancelled('Read worker cancelled; request was not retried')
         if isinstance(value, BaseException):
             raise RuntimeQueryError(f'Read worker stream failed: {value}') from value
         if value is None:
@@ -89,21 +123,41 @@ class ReadBatch:
             raise RuntimeQueryError('Read batches cannot be nested or reentered')
         if parent is not None:
             parent._check()
-            if not parent._share or parent.pid != self.pid or self._share:
+            if self._cancel is not None or not parent._share or parent.pid != self.pid or self._share:
                 raise RuntimeQueryError('Read batches cannot be nested across owners or processes')
             self._borrowed = parent
             return self
-        executable = self._executable or Path(__file__).resolve().parents[2] / 'build/readonly-worker-strings-v1/research_probe.exe'
+        self.warm()
+        self._token=_active.set(self)
+        return self
+
+    def warm(self):
+        """Start validated read-only IO without borrowing or binding an operation.
+
+        No catalog request is issued here. A different owned reader may be
+        active; this worker remains unusable for queries until bind() is entered.
+        """
+        self._check()
+        if self._borrowed is not None:raise RuntimeQueryError('Borrowed reader cannot own another worker')
+        if self._process is not None:return self
+        root=Path(__file__).resolve().parents[2]
+        combined=root/'build/readonly-worker-values-v2/research_probe.exe'
+        executable = self._executable or (combined if combined.is_file() else root/'build/readonly-worker-strings-v1/research_probe.exe')
         try:
+            if self._cancel is not None and self._cancel.is_set():
+                raise ReadCancelled('Read worker cancelled; request was not retried')
             self._process = subprocess.Popen([str(executable), '--reader-session', str(self.pid)],
                 stdin=subprocess.PIPE, stdout=subprocess.PIPE, stderr=subprocess.STDOUT,
                 encoding='utf-8', errors='strict', creationflags=subprocess.CREATE_NO_WINDOW)
             self._thread = threading.Thread(target=self._read, name='e33-read-worker', daemon=True)
             self._thread.start()
             ready = json.loads(self._line(time.monotonic() + 120))
-            if ready != {'event': 'reader_ready', 'version': 1, 'pid': self.pid}:
+            if (type(ready) is not dict or set(ready)!={'event','version','pid'}
+                    or ready.get('event')!='reader_ready' or type(ready.get('version')) is not int
+                    or ready['version'] not in (1,2,3) or ready.get('pid')!=self.pid):
                 raise RuntimeQueryError(f'Read worker rejected startup: {ready}')
-            self._token = _active.set(self)
+            self.supports_catalog_values=ready['version']>=2
+            self.supports_asset_names=ready['version']>=3
             return self
         except BaseException:
             self.close()
@@ -116,13 +170,18 @@ class ReadBatch:
         if self._token is None:
             raise RuntimeQueryError('Enter the read batch before querying')
         allowed = (arguments == ['--catalog'] or
-            (len(arguments) == 3 and arguments[0] in _SELECTED and arguments[1] == str(self.pid)))
+            (len(arguments) == 3 and arguments[1] == str(self.pid) and
+             (arguments[0] in _SELECTED or arguments[0] in _NAME_RESOLVERS and
+              getattr(self,'supports_asset_names',False) is True)))
         if not allowed or any(type(arg) is not str or any(c in arg for c in '\r\n\t\0') for arg in arguments):
             raise RuntimeQueryError('Operation is not allowed in a read batch')
         request = '\t'.join(arguments) + '\n'
         if len(request.encode('utf-8')) > 131072:
             raise RuntimeQueryError('Read worker request exceeded bounds')
+        started=time.perf_counter() if self._timing is not None else None
         try:
+            if self._cancel is not None and self._cancel.is_set():
+                raise ReadCancelled('Read worker cancelled; request was not retried')
             self._sequence += 1
             self._process.stdin.write(request)
             self._process.stdin.flush()
@@ -137,6 +196,8 @@ class ReadBatch:
                     end = json.loads(line)
                     if end != {'event': 'reader_result', 'sequence': self._sequence, 'code': 0}:
                         raise RuntimeQueryError('Read worker rejected query: ' + ''.join(lines)[-4096:])
+                    if self._timing is not None:
+                        self._timing['source_reader_io_ms']=self._timing.get('source_reader_io_ms',0.)+(time.perf_counter()-started)*1000
                     return ''.join(lines)
                 if line.startswith('{"event":"reader_error",'):
                     raise RuntimeQueryError('Read worker rejected request: ' + line.strip())

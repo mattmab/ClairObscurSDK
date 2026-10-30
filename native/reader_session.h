@@ -1,6 +1,7 @@
 // Operation-scoped read-only worker. No UObject observations survive a request.
 // Only verified disk-image anchors are reused, under a deny-write/delete handle.
 #pragma once
+#include "reader_command_policy.h"
 
 using ImageAnchors = std::pair<Anchor, Anchor>;
 
@@ -22,7 +23,7 @@ struct ReaderSessionGate {
     explicit ReaderSessionGate(DWORD expected) : pid(expected),
         process(OpenProcess(SYNCHRONIZE | PROCESS_QUERY_LIMITED_INFORMATION, FALSE, expected)) {
         require(process.value != nullptr, "READER_PROCESS_OPEN_FAILED");
-        require(discover_process() == pid, "READER_PROCESS_CHANGED");
+        require(discover_process(pid) == pid, "READER_PROCESS_CHANGED");
         Handle snapshot(CreateToolhelp32Snapshot(TH32CS_SNAPMODULE | TH32CS_SNAPMODULE32, pid));
         require(snapshot.value != INVALID_HANDLE_VALUE, "READER_MODULE_SNAPSHOT_FAILED");
         MODULEENTRY32W module{}; module.dwSize = sizeof(module);
@@ -66,13 +67,6 @@ ImageAnchors observed_image_anchors(DWORD pid, const MODULEENTRY32W& module) {
     return active_reader_gate->anchors;
 }
 
-bool reader_arguments(const std::vector<std::string>& args, DWORD pid) {
-    if (args.size() == 1 && args[0] == "--catalog") return true;
-    if (args.size() != 3 || args[1] != std::to_string(pid)) return false;
-    return args[0] == "--catalog-select" || args[0] == "--catalog-match" || args[0] == "--describe" ||
-        args[0] == "--read-values" || args[0] == "--read-table" || args[0] == "--describe-enums";
-}
-
 int run_reader_session(const std::string& expected_pid, int (*query)(int, char**)) {
     try {
         require(!expected_pid.empty() && expected_pid.size() <= 10 &&
@@ -82,7 +76,7 @@ int run_reader_session(const std::string& expected_pid, int (*query)(int, char**
         require(value > 0 && value <= 0xffffffffULL, "READER_PID_INVALID");
         ReaderSessionGate gate(static_cast<DWORD>(value));
         active_reader_gate = &gate;
-        std::cout << "{\"event\":\"reader_ready\",\"version\":1,\"pid\":" << gate.pid << "}\n" << std::flush;
+        std::cout << "{\"event\":\"reader_ready\",\"version\":3,\"pid\":" << gate.pid << "}\n" << std::flush;
         uint64_t sequence = 0;
         while (true) {
             std::string line;

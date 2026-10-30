@@ -77,6 +77,29 @@ public:
         return journal_.open(*this,refs_.count)==AudioPauseResult::Ok ? 0 : 1513;
     }
 #ifdef E33_RETIRED_WORLD_SESSION
+    template<class Certificate>
+    uint32_t retire_world(const e33_retired_world::Snapshot& epoch,Certificate& certificate) {
+        if(!active_)return 0;
+        e33_retired_world::TargetOps current{base_};
+        const auto proof=e33_retired_world::double_observe(current,epoch.world);
+        if(proof!=e33_retired_world::Result::Retired)return proof==e33_retired_world::Result::Pending?407:1513;
+        struct Ops {
+            OriginalAudioPause& self;Certificate& current;
+            AudioPauseCertificate certificate(size_t i){return current(self.refs_.items[i]);}
+            bool inspect(size_t i,bool& playing,bool& paused){return self.inspect(i,playing,paused);}
+            AudioPauseResult set(size_t i,bool paused){return self.set(i,paused);}
+        } ops{*this,certificate};
+        const auto restored=journal_.retire_world(ops);
+        if(restored!=AudioPauseResult::Ok)return restored==AudioPauseResult::Deferred?407:1513;
+        for(unsigned i=0;i<refs_.count;++i)if(tokens_[i]) {
+            TargetStrongReferenceOps refs{base_,refs_.items[i]};const auto released=leases_.release(refs,session_,tokens_[i]);
+            if(released!=StrongLeaseResult::Ok)return released==StrongLeaseResult::Deferred?407:1513;
+            tokens_[i]=0;
+        }
+        TargetStrongReferenceOps refs{base_,{}};const auto released=leases_.close(refs,session_);
+        if(released!=StrongLeaseResult::Ok)return released==StrongLeaseResult::Deferred?407:1513;
+        active_=false;return 0;
+    }
     uint32_t retire_world(const e33_retired_world::Anchor&anchor) {
         if(!active_)return 0;
         if(!anchor.retired())return 1513;

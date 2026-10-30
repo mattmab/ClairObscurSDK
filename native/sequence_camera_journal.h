@@ -26,6 +26,20 @@ public:
         state_=captured; return Result::ok;
     }
     bool created() { if(state_!=captured) return false;state_=playing;return true; }
+    template<class Ops> Result retire(Ops& ops,bool positively_retired) {
+        if(!positively_retired) return Result::rejected;
+        if(state_==idle) return Result::ok;
+        if(state_==uncertain || state_==restoring) return Result::unknown;
+        if(!ops.context()) return Result::deferred;
+        // Never read or restore the old camera/view target. The game owns old
+        // World destruction; only our private collector storage is released.
+        state_=uncertain;
+        const auto result=ops.release();
+        if(result==Result::deferred){state_=releasing;return result;}
+        if(result!=Result::ok){state_=uncertain;return Result::unknown;}
+        state_=idle;controller_={};original_={};owned_={};owns_camera_=false;
+        return Result::ok;
+    }
     template<class Ops> Result admit_owned(Ops& ops,const Identity& camera) {
         if(state_!=playing || owns_camera_ || !ops.proven_owned(camera)) return Result::rejected;
         state_=uncertain;

@@ -1,6 +1,7 @@
 #pragma once
 #include "asset_call_protocol.h"
 #include "asset_path_match.h"
+#include "asset_name_number.h"
 
 // Entry walk and allocator bounds independently verified at 1411a5a70.
 // Walk one immutable block to establish an entry boundary, not arbitrary reads.
@@ -43,6 +44,13 @@ inline bool validate_target_asset(uint64_t base,uint64_t property,const CallIden
     uint32_t p=0,a=0; std::memcpy(&p,value+8,4); std::memcpy(&a,value+16,4);
     if(!asset_name(base,p,package,sizeof(package)) || !asset_name(base,a,asset,sizeof(asset)) ||
        std::strncmp(package,"/Game/",6) || std::strstr(package,"//") || std::strchr(asset,'/')) return false;
+#if defined(E33_RUNTIME_CINEMATIC_VERSION) && E33_RUNTIME_CINEMATIC_VERSION>=244
+    uint32_t package_number=0,asset_number=0;
+    std::memcpy(&package_number,value+12,4);std::memcpy(&asset_number,value+20,4);
+    if((class_load&&(package_number||asset_number))||
+       !asset_append_number(package,sizeof(package),package_number)||
+       !asset_append_number(asset,sizeof(asset),asset_number))return false;
+#endif
     if(asset_basename_matches(package,asset,class_load))return true;
 #if defined(E33_RUNTIME_CINEMATIC_VERSION) && E33_RUNTIME_CINEMATIC_VERSION>=176
     return !class_load&&generated_world_export_matches(package,asset);

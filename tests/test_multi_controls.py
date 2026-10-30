@@ -107,3 +107,14 @@ class MultiControlsTests(unittest.TestCase):
         with self.assertRaises(MenuError): self.bind(2, lambda e: None)
         with self.assertRaises(ValueError): self.menu.bind_control(Lease(99).object, lambda e: None)
         self.assertEqual(before, len(self.sent))
+
+    def test_single_control_does_not_ignore_an_unresolved_alias(self):
+        self.session.pid=1
+        pending=Lease(99);target=self.leases[2].object
+        pending._pending_identity=(target.pid,target.index,target.serial,target.address);pending.object=None
+        self.session._leases.add(pending)
+        with self.assertRaises(ValueError):self.bind(2,lambda e:None)
+        self.assertEqual(self.sent,[]);self.assertTrue(pending.active)
+        pending._pending_identity=(1,99,1,0x10318)
+        action=self.bind(2,lambda e:None)
+        self.assertTrue(action.active);self.assertIn(pending,self.session._leases)

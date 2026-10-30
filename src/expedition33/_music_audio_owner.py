@@ -14,9 +14,9 @@ SIZE = 32 + 64 + 2*call.SIZE
 def validate_request(data):
     if type(data) is not bytes or len(data) != SIZE: raise ValueError('Music owner size')
     version, op, owner, reserved, error, state = HEADER.unpack_from(data)
-    if version != 1 or op not in (1,2,3,4) or not owner or reserved or error or state:
+    if version != 1 or op not in (1,2,3,4,5) or not owner or reserved or error or state:
         raise ValueError('Music owner header')
-    if op in (2,3) and any(data[32:]): raise ValueError('Unexpected music owner payload')
+    if op in (2,3,5) and any(data[32:]): raise ValueError('Unexpected music owner payload')
     if op == 4 and (any(data[32:96]) or any(data[96+call.SIZE:])):
         raise ValueError('Unexpected audio pause payload')
 
@@ -26,6 +26,7 @@ class NativeMusicAudioOwner:
         self.owner = secrets.randbits(64) or 1
         self.state = 'new'
         self._sounds = []
+        self._retiring = False
         scope._audio_owners.append(self)
 
     def create_sound(self, planner, panel, sound, *, volume=1.0, pitch=1.0):
@@ -95,12 +96,15 @@ class NativeMusicAudioOwner:
             if len(data) != SIZE or data[:24] != request[:24] or data[32:] != request[32:]:
                 raise ValueError('Music owner acknowledgement mismatch')
             error, state = HEADER.unpack_from(data)[4:]
-            if error == 407 and state in (1,3):
-                self.state = 'armed'; return False
+            if error == 407 and (state in (1,3) or (op==5 and state==0)):
+                self.state = 'armed' if state else 'closed'; return False
             if error or state not in (0,1): raise RuntimeError(f'Music owner rejected ({error}, {state})')
             self.state = 'armed' if state else 'closed'
             return True
         except BaseException:
+            if op==5:
+                self.state='unknown'
+                raise
             session._abort_ownership()
             raise
 
@@ -120,4 +124,13 @@ class NativeMusicAudioOwner:
 
     def close(self):
         if self.state in ('new','closed'): return True
+        if self._retiring:return self.retire_world()
         return self._send(2)
+
+    def retire_world(self):
+        if self.state=='new':return True
+        value=getattr(self.scope._session._transport,'music_audio_retirement_protocol',0)
+        if type(value) is not int or value!=1:
+            raise RuntimeError('Verified native retired-world audio cleanup required')
+        self._retiring=True
+        return self._send(5)

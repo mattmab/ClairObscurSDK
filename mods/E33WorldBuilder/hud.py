@@ -6,6 +6,12 @@ from expedition33.enums import describe_enums
 
 
 class BuilderHUD(OwnedMenuPanel):
+    def _place(self,child,*args):
+        slot=super()._place(child,*args)
+        if not hasattr(self,'_slots'):self._slots={}
+        self._slots[child.index]=slot
+        return slot
+
     def __init__(self, session, help_minimized=False):
         super().__init__(session, controls=1, cached_construction=True, selected_results=True)
         self.help_minimized = help_minimized
@@ -41,6 +47,8 @@ class BuilderHUD(OwnedMenuPanel):
         self._planner.refresh_from(current)
         if self.tree is None or self._root() is not None:
             raise RuntimeError('Expected an empty owned HUD tree')
+        from expedition33 import _ui_construction
+        if _ui_construction.available(self.scope._session):self._construction=_ui_construction.Construction()
         self.canvas = self._spawn('CanvasPanel')
         for i in range(6):
             line = self._spawn('Border')
@@ -56,16 +64,14 @@ class BuilderHUD(OwnedMenuPanel):
         self.detail = self.title
         # The most recently placed child is the label; center its slot using
         # the reflected PanelSlot reference instead of fixed screen dimensions.
-        slot,current = read_object_reference(self._planner._catalog,self.title,self._class('Widget'),'Slot')
-        self._planner.refresh_from(current)
+        slot=self._slots[self.title.index]
         self._call(slot,'CanvasPanelSlot','SetAnchors',InAnchors={'Minimum':{'X':.5,'Y':0.},'Maximum':{'X':.5,'Y':0.}})
         self._call(self.title,'TextLayoutWidget','SetJustification',InJustification=1)
         self.selection_label=self._label(-490,110,760,100)
         self.controls_label=self._label(-490,190,760,690)
         self.labels.extend((self.selection_label,self.controls_label))
         for label in (self.selection_label,self.controls_label):
-            slot,current=read_object_reference(self._planner._catalog,label,self._class('Widget'),'Slot')
-            self._planner.refresh_from(current)
+            slot=self._slots[label.index]
             self._call(slot,'CanvasPanelSlot','SetAnchors',InAnchors={'Minimum':{'X':1.,'Y':0.},'Maximum':{'X':1.,'Y':0.}})
             self._call(label,'Widget','SetRenderTransformPivot',Pivot={'X':0.,'Y':0.})
             self._call(label,'Widget','SetRenderScale',Scale={'X':.6,'Y':.6})

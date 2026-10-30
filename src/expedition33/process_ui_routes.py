@@ -29,6 +29,8 @@ class ProcessMenuRoute:
     @travel_recovery.setter
     def travel_recovery(self,value):
         self._travel_recovery=value
+        self.owner._travel_recovery=value
+        self.owner._travel_origin=getattr(self.owner.context,'signature',None)
         service=self._service()
         if service is not None:service.travel_recovery=value
     @property
@@ -44,14 +46,32 @@ class ProcessMenuRoute:
     def prepare(self):pass # Host owns the unique warmup.
     def poll(self):pass # Host owns the unique native UI tick.
     def open(self,*,view_factory=None):
+        from contextlib import nullcontext
+        from ._reader import active_reader
         service=self._service(required=True)
-        if self.kind=='title' and view_factory is None:
-            # The entry journals title input restoration when the menu closes.
-            return self.owner.open()
-        return service.open(view_factory=view_factory)
+        operation=getattr(self.owner,'_read_operation',None)
+        # Mod-owned routes can open outside the host UI tick. Borrow its warmed
+        # reader for view paint/schema reads, without starting one on each call.
+        with operation() if callable(operation) and active_reader() is None else nullcontext():
+            if self.kind=='title' and view_factory is None:
+                return self.owner.open()
+            return service.open(view_factory=view_factory)
     def close_menu(self):
         service=self._service()
         if service is not None:return service.close_menu()
+    def refresh(self):
+        from contextlib import nullcontext
+        from ._reader import active_reader
+        service=self._service(required=True)
+        operation=getattr(self.owner,'_read_operation',None)
+        with operation() if callable(operation) and active_reader() is None else nullcontext():
+            return service.refresh()
+    def prepare_travel(self):
+        """ACK borrowed input/entry teardown, retaining the GI-owned shell."""
+        self._service(required=True)
+        if not self.owner.quiesce():
+            raise ManagementError('Menu input cleanup is still pending')
+        return True
     def dispose_menu(self):
         service=self._service()
         if service is not None:

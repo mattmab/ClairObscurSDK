@@ -100,6 +100,38 @@ class StableLeaseTests(unittest.TestCase):
         self.assertIs(current,tree);self.assertIs(selected,full);self.assertEqual(merges,[root])
         with self.assertRaises(Exception):stable.rediscover_owned_tree(1,lambda:static,parent,tree,owner.index,capture=lambda *a:root,read_reference=lambda *a,**k:(obj(2,1002),full))
 
+    def test_owned_metadata_refresh_recaptures_only_selected_identities_and_validates_context(self):
+        parent=obj(1,10,'CommonActivatableWidget',0);tree=obj(2,1001);owner=obj(3,11,'Class',0)
+        old=Catalog(owner);fresh=Catalog(owner);root=Catalog(parent,owner);full=Catalog(parent,tree,owner)
+        old.with_observations=lambda *a:self.fail('old metadata must never be merged')
+        fresh.with_observations=lambda observed:Catalog(parent,owner) if observed is root else self.fail('unexpected merge')
+        queries=[];checks=[]
+        def capture(pid,identities):
+            queries.append(identities)
+            if identities==((owner.index,owner.serial,owner.address),):return fresh
+            if identities==((parent.index,parent.serial,parent.address),):return root
+            self.fail('unexpected discovery or identity')
+        def reference(catalog,target,cls,*a,**kwargs):
+            self.assertIs(catalog.resolve(target),parent);self.assertIs(cls,owner);return tree,full
+        catalog,current,selected=stable.refresh_discovery_owned_tree(1,old,parent,tree,owner.index,
+            validate_context=lambda:checks.append(True),capture=capture,read_reference=reference)
+        self.assertIs(current,tree);self.assertIs(selected,full);self.assertIsNot(catalog,old)
+        self.assertEqual(len(checks),3);self.assertEqual(len(queries),2)
+
+    def test_owned_metadata_refresh_fails_closed_on_changed_context_or_identity(self):
+        parent=obj(1,10,'CommonActivatableWidget',0);tree=obj(2,1001);owner=obj(3,11,'Class',0)
+        old=Catalog(owner);checks=[]
+        def changed():
+            checks.append(True)
+            if len(checks)==2:raise RuntimeError('world changed')
+        with self.assertRaisesRegex(RuntimeError,'world changed'):
+            stable.refresh_discovery_owned_tree(1,old,parent,tree,owner.index,validate_context=changed,
+                capture=lambda *args:Catalog(owner))
+        self.assertEqual(len(checks),2)
+        def stale(*args):raise RuntimeError('metadata identity changed')
+        with self.assertRaisesRegex(RuntimeError,'metadata identity changed'):
+            stable.refresh_discovery_owned_tree(1,old,parent,tree,owner.index,validate_context=lambda:None,capture=stale)
+
     def test_refresh_entry_catalog_captures_stable_child_and_keeps_other_authority(self):
         parent=obj(1,10,'WBP_BaseButton_C',0);oldtree=obj(2,0);tree=obj(2,1001);owner=obj(3,11,'Class',0);title=obj(4,22,'WBP_MM_TitleScreen_C',0)
         old=Catalog(parent,oldtree,owner,title);fresh=Catalog(parent,tree,owner,title);queries=[]
@@ -177,6 +209,41 @@ class StableLeaseTests(unittest.TestCase):
             self.assertEqual(ids,((overlay.index,1041,overlay.address),));return Catalog(stable_overlay)
         lease,fresh=stable.acquire_stable(scope,overlay,capture=capture)
         self.assertIs(lease.object,stable_overlay);self.assertIn(lease,session._leases)
+
+    def test_failed_observation_retains_acknowledged_identity_without_exposing_object(self):
+        session=Session();scope=Scope(session);overlay=obj(8,0,'Overlay',9)
+        calls=[]
+        session._transport.command=lambda command,sent:(calls.append(command) or {'lease_packet':ack(sent,serial=1041)})
+        def fail(*args):raise RuntimeError('read failed after acquisition')
+        with self.assertRaisesRegex(RuntimeError,'read failed'):
+            stable.acquire_stable(scope,overlay,capture=fail)
+        self.assertEqual(calls,['stable-lease-acquire']);self.assertEqual(len(scope._leases),1)
+        lease=scope._leases[0]
+        self.assertTrue(lease.active);self.assertIsNone(lease.object)
+        self.assertEqual(lease._pending_identity,(1,8,1041,overlay.address))
+        self.assertIn(lease,session._leases);self.assertFalse(session.aborted)
+
+    def test_mismatched_observation_never_publishes_the_wrong_object(self):
+        session=Session();scope=Scope(session);overlay=obj(8,0,'Overlay',9)
+        session._transport.command=lambda command,sent:{'lease_packet':ack(sent,serial=1041)}
+        wrong=obj(8,1042,'Overlay',9)
+        with self.assertRaisesRegex(Exception,'identity changed'):
+            stable.acquire_stable(scope,overlay,capture=lambda *a:Catalog(wrong))
+        lease=scope._leases[0]
+        self.assertTrue(lease.active);self.assertIsNone(lease.object)
+        self.assertEqual(lease._pending_identity,(1,8,1041,overlay.address))
+
+    def test_owned_tree_recheck_does_not_overwrite_original_leased_identity(self):
+        from unittest.mock import patch
+        session,scope,parent,tree,owner,old,_=self.setup_case()
+        held=obj(2,1001);wrong=obj(2,1002)
+        lease=ObjectLease(session,19,held);session._leases.add(lease);scope._leases.append(lease)
+        changed=Catalog(parent,wrong,owner)
+        with patch.object(stable,'acquire_stable',return_value=(lease,changed)):
+            with self.assertRaisesRegex(Exception,'tree identity changed'):
+                stable.stabilize_owned_tree(scope,old,parent,tree,owner,
+                    read_reference=lambda *a,**k:(tree,old))
+        self.assertIs(lease.object,held);self.assertTrue(lease.active)
 
     def test_borrowed_boundary_only_acquires_zero_targets_and_discards_old_catalog(self):
         from unittest.mock import Mock,patch

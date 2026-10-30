@@ -1,4 +1,5 @@
 import copy,hashlib,importlib.util,json,math,struct,tempfile,unittest
+from unittest.mock import Mock
 from pathlib import Path
 from types import SimpleNamespace
 ROOT=Path(__file__).resolve().parents[1]
@@ -86,10 +87,12 @@ class SceneTests(unittest.TestCase):
         view=SimpleNamespace(closed=False,picker='audio',query='piano')
         view.close=lambda:setattr(view,'closed',True)
         panel=SimpleNamespace(state='open',widget=object(),visible=0,invisible=4)
+        panel.restore_child_focus=Mock()
         panel.hide=lambda:(setattr(panel,'state','built') or True)
         panel._render_call=lambda *a,**k:calls.append((a[1:],k))
         menu.panel=panel;menu.view=view;menu.passive=False;menu.mirror=None;menu.actions={'old':object()};menu._accept_input=True
         menu._set_cursor(False)
+        panel.restore_child_focus.assert_called_once()
         self.assertFalse(menu._accept_input);self.assertFalse(menu.actions);self.assertTrue(menu.passive)
         self.assertFalse(view.closed);self.assertEqual(view.query,'piano');self.assertEqual(view.picker,'audio')
         menu.open=lambda:(setattr(panel,'state','open'),setattr(menu,'_accept_input',True))

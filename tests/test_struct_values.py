@@ -84,6 +84,38 @@ class StructValueTests(unittest.TestCase):
         result = self.base.read()
         self.assertEqual(len(result.values[2, 'Dynamic'].items), 185)
         self.assertNotIn((2, 'Dynamic'), result.truncated)
+    def test_large_cinematic_cast_array_keeps_nested_identity_fields(self):
+        guid=self.struct([dict(name=k,type='IntProperty',value=i) for i,k in enumerate('ABCD',1)])
+        value=self.struct([dict(name='Name',type='StrProperty',value='Cinematic actor'),
+                          dict(name='Guid',type='StructProperty',value=guid)]+
+                         [dict(name='Flag'+str(i),type='BoolProperty',value=False) for i in range(40)])
+        self.base.array('StructProperty',101,[value]*101)
+        self.base.rows[-1]['truncated']=False
+        self.base.rows[-2].update(inner_struct_index=self.reference['index'],
+            inner_struct_serial=self.reference['serial'],inner_struct_name=self.reference['name'])
+        result=self.base.read();actors=result.values[2,'Dynamic']
+        self.assertEqual((actors.length,len(actors.items)),(101,101))
+        self.assertEqual(dict(actors.items[-1].fields['Guid'].fields),dict(zip('ABCD',range(1,5))))
+        self.assertNotIn((2,'Dynamic'),result.truncated)
+
+    def test_complete_755_binding_observation_and_partial_4096_prefix(self):
+        from unittest.mock import patch
+        for length, copied in ((755, 755), (5000, 4096)):
+            self.setUp()
+            guid=self.struct([dict(name=k,type='IntProperty',value=i) for i,k in enumerate('ABCD',1)])
+            value=self.struct([dict(name='ObjectGuid',type='StructProperty',value=guid)])
+            self.base.array('StructProperty',length,[value]*copied)
+            for row in self.base.rows[-2:]:row['name']='ObjectBindings'
+            self.base.rows[-1]['truncated']=length>copied
+            self.base.rows[-2].update(inner_struct_index=self.reference['index'],
+                inner_struct_serial=self.reference['serial'],inner_struct_name=self.reference['name'])
+            paths={2:'/Script/MovieScene.MovieScene',3:'/Script/MovieScene.MovieSceneBinding'}
+            with patch.object(type(self.base.catalog),'path_name',lambda _,obj:paths[obj.index]):
+                result=self.base.read()
+            bindings=result.values[2,'ObjectBindings']
+            self.assertEqual((bindings.length,len(bindings.items)),(length,copied))
+            self.assertEqual(bindings.items[-1].fields['ObjectGuid'].fields['D'],4)
+            self.assertEqual((2,'ObjectBindings') in result.truncated,length>copied)
 
     def test_class_members_accept_null_and_verified_class_identity(self):
         cls = self.base.catalog.by_index[next(iter(self.base.catalog.classes))]

@@ -11,6 +11,12 @@ public:
     uint32_t state() const { return state_; }
     bool active() const { return state_!=0; }
     const ObjectAssignment& restore() const { return restore_; }
+    bool abandon_retired_owner() {
+        // Only a containing exact-profile retirement owner may call this after
+        // proving the captured World replaced. Never erase an unknown write.
+        if(state_==2)return false;
+        state_=0;restore_={};return true;
+    }
     template<class Ops>
     ObjectAssignmentResult open(Ops& ops,const ObjectAssignment& request) {
         if(active() || !valid_object_assignment(request) ||

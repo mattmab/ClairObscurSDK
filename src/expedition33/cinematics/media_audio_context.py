@@ -67,3 +67,12 @@ class MediaAudioContext:
         if self.audio is not None and not self.audio.close():return False
         self.scope.close();self.closed=True
         return True
+
+    def retire_world(self):
+        if self.closed:return True
+        from .retirement import retire_owner_tracking
+        if self.audio is not None and not self.audio.retire_world():return False
+        if not retire_owner_tracking(self.scope,(self.audio,)):return False
+        if self.planner is not None:self.planner.close()
+        self.closed=True
+        return True

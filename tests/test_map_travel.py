@@ -3,6 +3,7 @@ import importlib.util
 from pathlib import Path
 import sys
 import unittest
+from types import SimpleNamespace
 from unittest.mock import Mock, patch
 
 ROOT = Path(__file__).resolve().parents[1]
@@ -14,6 +15,28 @@ spec.loader.exec_module(mod)
 
 
 class MapTravelTests(unittest.TestCase):
+    def test_world_reactivation_does_not_keep_departing_travel_message(self):
+        for state,expected in (('arrived','Arrived: Destination'),('traveling','Ready')):
+            with self.subTest(state=state):
+                model=mod.Mod();model._retirement_result='ack';model.message='Traveling to Destination'
+                model.request=SimpleNamespace(state=state,destination={'title':'Destination'})
+                session=Mock();session._session._transport.zone_travel_protocol=2
+                model._activation_maps=Mock(return_value=[]);model._loading_routes=()
+                model._new_pause_entry=Mock()
+                with patch.object(mod,'attach_routes'):model.enable(session)
+                self.assertEqual(model.message,expected);self.assertIsNone(model.request)
+
+    def test_arrival_does_not_attach_destination_button_to_retiring_scope(self):
+        model=mod.Mod()
+        model.native=Mock()
+        model.request=SimpleNamespace(state='arrived',destination={'title':'Destination'},error=None)
+        model.native.parent.travel_recovery=model.request
+        model._new_pause_entry=Mock()
+        model._finish()
+        model._new_pause_entry.assert_not_called()
+        self.assertIsNone(model.pause)
+        self.assertIsNone(model.native.parent.travel_recovery)
+
     def test_pause_entry_uses_copied_host_readiness_and_keeps_legacy_default(self):
         from types import SimpleNamespace
         model=mod.Mod();model.native=object()
@@ -39,6 +62,17 @@ class MapTravelTests(unittest.TestCase):
         self.assertIn('entrance route rejected', model.message)
         self.assertIsNone(model.request)
 
+
+    def test_process_shell_travel_detaches_without_destroying_reusable_widgets(self):
+        from types import SimpleNamespace as N
+        model=mod.Mod();request=Mock(state='new')
+        parent=N(travel_recovery_pending=False,menu=Mock(),prepare_travel=Mock(),dispose_menu=Mock())
+        model.native=N(parent=parent);model.session=object();model.pause=Mock()
+        model.maps=[dict(package='test',title='Test',normal_route={'level_id':'Test'})]
+        with patch.object(mod,'travel_to_entrance'),patch.object(mod,'Travel',return_value=request):model.travel('test')
+        parent.prepare_travel.assert_called_once();parent.dispose_menu.assert_not_called()
+        parent.menu.panel.close_owned_tree.assert_not_called();request.start.assert_called_once()
+        self.assertIs(parent.travel_recovery,request)
 
     def test_catalog_excludes_streaming_and_non_gameplay_maps(self):
         rows = mod.installed_maps([
@@ -90,6 +124,34 @@ class MapTravelTests(unittest.TestCase):
             self.poll(request)
             travel.assert_called_once_with(request.session, request.destination['normal_route'])
             request.session.console.execute.assert_not_called()
+
+    def test_arrival_observation_uses_process_owner_after_mod_scope_retirement(self):
+        from types import SimpleNamespace as N
+        root=N(pid=7);scope=N(pid=7,_session=root)
+        request=mod.Travel(scope,dict(world_path='destination'))
+        request.state='traveling';request.deadline=float('inf');request.before={'controller':1}
+        with patch.object(mod,'ReadBatch',side_effect=lambda *a,**k:contextlib.nullcontext()), \
+             patch.object(mod,'controller_context',return_value=self.context(2,'destination')) as observe, \
+             patch.object(mod,'ready_history') as history:
+            request.poll()
+        self.assertEqual(request.state,'arrived');history.assert_called_once_with(root)
+        self.assertTrue(all(call.args==(root,) for call in observe.call_args_list))
+
+    def test_arrival_poll_borrows_host_read_operation_instead_of_nesting_owner(self):
+        request=self.request();request.state='traveling';request.deadline=float('inf');request.before={'controller':1}
+        with patch.object(mod,'active_reader',return_value=object()), \
+             patch.object(mod,'ReadBatch',side_effect=lambda *a,**k:contextlib.nullcontext()) as batches, \
+             patch.object(mod,'controller_context',return_value=self.context(1)):
+            request.poll()
+        self.assertFalse(batches.call_args.kwargs['share']);self.assertEqual(request.state,'traveling')
+
+    def test_loading_descriptor_race_keeps_arrival_pending_without_redispatch(self):
+        request=self.request();request.state='traveling';request.deadline=float('inf')
+        with patch.object(mod,'ReadBatch',side_effect=lambda *a,**k:contextlib.nullcontext()), \
+             patch.object(mod,'controller_context',side_effect=mod.RuntimeQueryError('DESCRIPTOR_IDENTITY_CHANGED')), \
+             patch.object(mod,'travel_to_entrance') as dispatch:
+            request.poll()
+        self.assertEqual(request.state,'traveling');dispatch.assert_not_called()
 
     def test_unknown_dispatch_is_never_retried(self):
         request = self.request()

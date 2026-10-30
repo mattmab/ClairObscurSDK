@@ -1,8 +1,29 @@
 """Identity-checked stored property observations; no getters, writes or GC pinning."""
 from dataclasses import dataclass
 from types import MappingProxyType
+import re
+import time
 
 from . import RuntimeQueryError, _query
+
+# Matches the native reader's per-value allowance for large cinematic casts.
+# Depth, array length, field extent and identity validation remain independent.
+_STRUCT_NODE_BUDGET = 32768
+
+
+def _array_prefix_limits(catalog, owner_index, field, element_type, struct_type):
+    limits = (64, 256)
+    cast_types = {'Spawnables': 'MovieSceneSpawnable',
+                  'Possessables': 'MovieScenePossessable',
+                  'ObjectBindings': 'MovieSceneBinding'}
+    expected = cast_types.get(field)
+    owner = catalog.by_index.get(owner_index)
+    if (expected and element_type == 'StructProperty' and owner is not None and
+            struct_type is not None and
+            catalog.path_name(owner) == '/Script/MovieScene.MovieScene' and
+            catalog.path_name(struct_type) == '/Script/MovieScene.' + expected):
+        return limits + (4096,)
+    return limits
 
 
 @dataclass(frozen=True)
@@ -44,6 +65,27 @@ class StoredStruct:
     errors: object
     types: object
     truncated: bool
+    native: object = None
+
+
+@dataclass(frozen=True)
+class StoredFrameRange:
+    """Build-qualified pointer-free endpoints; open bounds have no value."""
+    lower_kind: str
+    lower: int | None
+    upper_kind: str
+    upper: int | None
+
+    def __post_init__(self):
+        for kind,value in ((self.lower_kind,self.lower),(self.upper_kind,self.upper)):
+            if kind not in ('exclusive','inclusive','open') or (value is not None if kind=='open' else
+                    type(value) is not int or not -(1<<31)<=value<(1<<31)):
+                raise ValueError('Invalid frame range endpoint')
+
+    @property
+    def start(self):return None if self.lower is None else self.lower+int(self.lower_kind=='exclusive')
+    @property
+    def end(self):return None if self.upper is None else self.upper+int(self.upper_kind=='inclusive')
 
 
 @dataclass(frozen=True)
@@ -56,6 +98,45 @@ class StoredMap:
 class StoredMapEntries:
     """Copied pairs for reflected struct keys, which are not Python hash keys."""
     entries: tuple
+
+
+@dataclass(frozen=True)
+class StoredSoftObjectPath:
+    """Copied stored soft path; no resolution, loading, weak cache or ownership."""
+    package: str | None
+    asset: str | None
+    subpath: str
+
+    def __post_init__(self):
+        if type(self.subpath) is not str or len(self.subpath)>4096 or '\0' in self.subpath:
+            raise ValueError('Invalid stored soft object subpath')
+        try:
+            encoded=self.subpath.encode('utf-16-le')
+        except UnicodeError:
+            raise ValueError('Invalid stored soft object UTF16') from None
+        if len(encoded)>8192:
+            raise ValueError('Stored soft object subpath exceeds UTF16 limit')
+        if self.package is None or self.asset is None:
+            if self.package is not None or self.asset is not None or self.subpath:
+                raise ValueError('Null soft object path requires no package, asset or subpath')
+        elif (type(self.package) is not str or type(self.asset) is not str or
+              len(self.package)>1024 or len(self.asset)>1024 or
+              re.fullmatch(r'/[A-Za-z0-9_]+(?:/[A-Za-z0-9_]+)*',self.package) is None or
+              re.fullmatch(r'[A-Za-z0-9_]+',self.asset) is None):
+            raise ValueError('Invalid stored soft object package or asset')
+
+    @property
+    def path(self):
+        return None if self.package is None else self.package+'.'+self.asset+(':'+self.subpath if self.subpath else '')
+
+
+def _soft_object_path(value):
+    if type(value) is not dict or set(value)!={'$soft_object_path'}:
+        raise ValueError('Missing stored soft object path tag')
+    payload=value['$soft_object_path']
+    if type(payload) is not dict or set(payload)!={'package','asset','subpath'}:
+        raise ValueError('Invalid stored soft object path fields')
+    return StoredSoftObjectPath(**payload)
 
 
 def _map_value(metadata, value, catalog=None):
@@ -78,7 +159,7 @@ def _map_value(metadata, value, catalog=None):
     if type(length) is not int or not 0 <= length <= 4096 or type(items) is not list or len(items) != length:
         raise ValueError('Invalid map extent')
     result, pairs, seen = {}, [], set()
-    budget = [4096]
+    budget = [_STRUCT_NODE_BUDGET]
     for pair in items:
         if type(pair) is not list or len(pair) != 2:
             raise ValueError('Invalid or duplicate map entry')
@@ -153,14 +234,14 @@ def _struct_type(catalog, metadata, prefix):
 
 
 def _struct_value(catalog, value, depth=0, budget=None):
-    budget = [4096] if budget is None else budget
+    budget = [_STRUCT_NODE_BUDGET] if budget is None else budget
     budget[0] -= 1
     if depth >= 4 or budget[0] < 0:
         raise ValueError('Struct depth or node limit')
     if type(value) is not dict or set(value) != {'$struct'}:
         raise ValueError('Missing struct tag')
     payload = value['$struct']
-    if type(payload) is not dict or set(payload) != {'type', 'fields', 'truncated'}:
+    if type(payload) is not dict or set(payload) not in ({'type', 'fields', 'truncated'}, {'type', 'fields', 'truncated', 'native'}):
         raise ValueError('Unexpected struct fields')
     def reference(raw):
         if type(raw) is not dict or set(raw) != {'index', 'serial', 'address', 'name'}:
@@ -177,7 +258,7 @@ def _struct_value(catalog, value, depth=0, budget=None):
     fields, errors, types = {}, {}, {}
     for row in rows:
         budget[0] -= 1
-        if budget[0] < 0 or type(row) is not dict or set(row) not in ({'name', 'type', 'value'}, {'name', 'type', 'error'}, {'name', 'type', 'value', 'map_key_type', 'map_value_type'}):
+        if budget[0] < 0 or type(row) is not dict or set(row) not in ({'name', 'type', 'value'}, {'name', 'type', 'error'}, {'name', 'type', 'value', 'inner_type'}, {'name', 'type', 'value', 'inner_type', 'inner_struct'}, {'name', 'type', 'value', 'map_key_type', 'map_value_type'}):
             raise ValueError('Invalid struct member')
         name, kind = row['name'], row['type']
         if type(name) is not str or not name or len(name) > 1024 or name in types or type(kind) is not str:
@@ -189,7 +270,51 @@ def _struct_value(catalog, value, depth=0, budget=None):
             errors[name] = row['error']
             continue
         item = row['value']
-        if kind == 'MapProperty':
+        if kind == 'ArrayProperty':
+            element_kind=row.get('inner_type')
+            expected_fields={'name','type','value','inner_type'}|({'inner_struct'} if element_kind=='StructProperty' else set())
+            if set(row)!=expected_fields or element_kind not in ('ObjectProperty','ClassProperty','StructProperty',
+                    'BoolProperty','FloatProperty','DoubleProperty','IntProperty','UInt16Property','ByteProperty','NameProperty'):
+                raise ValueError('Unsupported nested array schema')
+            expected=None
+            if element_kind=='StructProperty':
+                if type(row['inner_struct']) is not dict or set(row['inner_struct'])!={'$reference'}:
+                    raise ValueError('Invalid nested array struct identity')
+                expected=reference(row['inner_struct']['$reference'])
+                if expected.class_name!='ScriptStruct':raise ValueError('Nested array type is not a ScriptStruct')
+            if type(item) is not dict or set(item)!={'$array'}:raise ValueError('Missing nested array tag')
+            array=item['$array']
+            if (type(array) is not dict or set(array)!={'length','items'} or type(array['length']) is not int
+                    or not 0<=array['length']<=1048576 or type(array['items']) is not list
+                    or len(array['items'])!=min(array['length'],64)):
+                raise ValueError('Invalid nested array extent')
+            entries=[]
+            budget[0]-=len(array['items'])
+            if budget[0]<0:raise ValueError('Struct node limit')
+            for entry in array['items']:
+                if element_kind=='StructProperty':
+                    entry=_struct_value(catalog,entry,depth+1,budget)
+                    if entry.type_object!=expected:raise ValueError('Nested array struct type mismatch')
+                elif element_kind in ('ObjectProperty','ClassProperty'):
+                    if entry is not None:
+                        if type(entry) is not dict or set(entry)!={'$reference'}:raise ValueError('Invalid nested array reference')
+                        entry=reference(entry['$reference'])
+                        if element_kind=='ClassProperty' and entry.index not in catalog.classes:
+                            raise ValueError('Nested class array reference is not a reflected class')
+                elif element_kind=='BoolProperty':
+                    if type(entry) is not bool:raise ValueError('Invalid nested array bool')
+                elif element_kind in ('FloatProperty','DoubleProperty'):
+                    if type(entry) not in (int,float) and not (type(entry) is dict and set(entry)=={'$float'} and entry['$float'] in ('nan','inf','-inf')):
+                        raise ValueError('Invalid nested array float')
+                    entry=float(entry['$float']) if isinstance(entry,dict) else float(entry)
+                elif element_kind=='NameProperty':
+                    if type(entry) is not str:raise ValueError('Invalid nested array name')
+                else:
+                    low,high={'ByteProperty':(0,255),'UInt16Property':(0,65535),'IntProperty':(-2147483648,2147483647)}[element_kind]
+                    if type(entry) is not int or not low<=entry<=high:raise ValueError('Invalid nested array integer')
+                entries.append(entry)
+            item=StoredArray(tuple(entries),array['length'])
+        elif kind == 'MapProperty':
             if set(row) != {'name', 'type', 'value', 'map_key_type', 'map_value_type'} or (row['map_key_type'],row['map_value_type']) != ('NameProperty','ByteProperty'):
                 raise ValueError('Unsupported nested map schema')
             item = _map_value(row,item,catalog)
@@ -197,6 +322,8 @@ def _struct_value(catalog, value, depth=0, budget=None):
             if budget[0] < 0:raise ValueError('Struct node limit')
         elif kind == 'StructProperty':
             item = _struct_value(catalog, item, depth + 1, budget)
+        elif kind == 'SoftObjectProperty':
+            item = _soft_object_path(item)
         elif kind in ('ObjectProperty', 'ClassProperty'):
             if item is not None:
                 if type(item) is not dict or set(item) != {'$reference'}:
@@ -221,8 +348,19 @@ def _struct_value(catalog, value, depth=0, budget=None):
         else:
             raise ValueError('Unsupported struct member value')
         fields[name] = item
+    native=None
+    if 'native' in payload:
+        if (catalog.path_name(type_object)!='/Script/MovieScene.MovieSceneFrameRange' or
+                type_object.class_name!='ScriptStruct' or fields or errors or payload['truncated'] or
+                type(payload['native']) is not dict or set(payload['native'])!={'frame_range'}):
+            raise ValueError('Unsupported native struct observation')
+        bounds=payload['native']['frame_range']
+        if type(bounds) is not dict or set(bounds)!={'lower','upper'}:raise ValueError('Invalid frame range observation')
+        for bound in bounds.values():
+            if type(bound) is not dict or set(bound)!={'kind','value'}:raise ValueError('Invalid frame range bound')
+        native=StoredFrameRange(bounds['lower']['kind'],bounds['lower']['value'],bounds['upper']['kind'],bounds['upper']['value'])
     return StoredStruct(type_object, MappingProxyType(fields), MappingProxyType(errors),
-                        MappingProxyType(types), payload['truncated'])
+                        MappingProxyType(types), payload['truncated'],native)
 
 
 def read_values(catalog, observed):
@@ -293,6 +431,131 @@ def read_values_many(catalog, observed, *, fields=None):
     return {index: _decode_values(catalog, requested[index], start, group) for index, group in groups.items()}
 
 
+def capture_selected_values(pid,identities,*,fields,references=False):
+    """Fresh class/outer closures and projected values in one read-only request.
+
+    Two callers' observations are never combined. A v1 worker uses the existing
+    two-query path; v2 emits both parts in one bounded framed response.
+    """
+    from .catalog import capture_selected,_decode_catalog
+    from ._reader import active_reader
+    identities=tuple(identities);fields=tuple(fields)
+    reader=active_reader()
+    if reader is None or getattr(reader,'supports_catalog_values',False) is not True:
+        catalog=capture_selected(pid,identities)
+        if references:
+            result={}
+            for row in identities:
+                result[row[0]],catalog=read_values_with_references(catalog,catalog.by_index[row[0]],fields=fields)
+            return catalog,result
+        return catalog,read_values_many(catalog,tuple(catalog.by_index[row[0]] for row in identities),fields=fields)
+    if type(pid) is not int or not 0<pid<=0xffffffff or not 1<=len(identities)<=1023:
+        raise ValueError('Expected bounded selected-value identities')
+    requested={}
+    for row in identities:
+        if (type(row) is not tuple or len(row)!=3 or any(type(v) is not int for v in row)
+                or not 0<=row[0]<100000000 or not -0x80000000<=row[1]<=0x7fffffff
+                or not 0x10000<=row[2]<=0x7fffffffffff or row[0] in requested):
+            raise ValueError('Invalid selected-value identity')
+        requested[row[0]]=row
+    if (not 1<=len(fields)<=64 or len(set(fields))!=len(fields) or any(
+            type(n) is not str or not 1<=len(n)<=256 or any(ch in n for ch in ';|\r\n\t\0') for n in fields)):
+        raise ValueError('Invalid selected-value projection')
+    selectors=','.join(f'{i}:{serial}:{address:x}' for i,serial,address in identities)+';'+'|'.join(fields)
+    start,rows=_query(['--catalog-values',str(pid),selectors])
+    if start['pid']!=pid:raise RuntimeQueryError('Selected-value process changed')
+    catalog=_decode_catalog(start,[row for row in rows if row['event'] in ('object','class_relation')])
+    if len(catalog.objects)>16384:raise RuntimeQueryError('Selected-value dependency limit exceeded')
+    groups={};current=None
+    for row in rows:
+        if row['event']=='object':
+            current=row['index']
+            if current in requested:
+                if current in groups:raise RuntimeQueryError('Duplicate selected-value target')
+                groups[current]=[]
+        if row['event'] not in ('object','class_relation') and current not in requested:
+            raise RuntimeQueryError('Selected values outside a requested target')
+        if current in requested and row['event']!='class_relation':groups[current].append(row)
+    if set(groups)!=set(requested):raise RuntimeQueryError('Incomplete selected-value targets')
+    result={}
+    for index,(i,serial,address) in requested.items():
+        obj=catalog.by_index.get(index)
+        if obj is None or (obj.serial,obj.address)!=(serial,address):
+            raise RuntimeQueryError('Selected-value identity changed')
+        result[index]=_decode_values(catalog,obj,start,groups[index])
+    if references:
+        missing=_missing_references(catalog,rows)
+        if missing:
+            catalog=_extend_reference_catalog(catalog,tuple(requested.values()),missing)
+            result={index:_decode_values(catalog,catalog.by_index[index],start,groups[index]) for index in requested}
+    return catalog,result
+
+
+SOURCE_VALUE_BATCH_LIMIT=256
+
+
+def read_values_many_with_references(catalog,observed,*,fields=None,metrics=None):
+    """Read siblings in one request, then validate their missing reference closure."""
+    from .catalog import capture_selected
+    objects=tuple(catalog.resolve(obj) for obj in observed)
+    if not objects:return {},catalog
+    # Decode reference identities from the same observation, rather than reread
+    # values after extending the catalog (which could mix two graph states).
+    selector=','.join(f'{o.index}:{o.serial}:{o.address:x}' for o in objects)
+    if len(objects)>SOURCE_VALUE_BATCH_LIMIT or len({o.index for o in objects})!=len(objects):raise ValueError('Bounded unique source batch required')
+    if fields is not None:
+        fields=tuple(fields)
+        if not 1<=len(fields)<=64 or len(set(fields))!=len(fields) or any(type(n) is not str or not n or any(c in n for c in ';|\r\n\t\0') for n in fields):raise ValueError('Invalid stored-value field projection')
+        selector+=';'+'|'.join(fields)
+    started=time.perf_counter() if metrics is not None else None
+    start,rows=_query(['--read-values',str(catalog.pid),selector])
+    if metrics is not None:
+        metrics['source_values_query_ms']=metrics.get('source_values_query_ms',0.)+(time.perf_counter()-started)*1000
+        started=time.perf_counter()
+    requested={o.index:o for o in objects};groups={};current=None
+    for row in rows:
+        if row['event']=='object':
+            current=row['index']
+            if current not in requested or current in groups:raise RuntimeQueryError('Unexpected source batch identity')
+            groups[current]=[]
+        if current is not None:groups[current].append(row)
+    if set(groups)!=set(requested):raise RuntimeQueryError('Incomplete source batch')
+    result={i:_decode_values(catalog,requested[i],start,group) for i,group in groups.items()}
+    if metrics is not None:
+        metrics['source_values_decode_ms']=metrics.get('source_values_decode_ms',0.)+(time.perf_counter()-started)*1000
+        started=time.perf_counter()
+    affected=set()
+    missing=_missing_references(catalog,rows,affected=affected)
+    if metrics is not None:
+        metrics['source_reference_scan_ms']=metrics.get('source_reference_scan_ms',0.)+(time.perf_counter()-started)*1000
+    if missing:
+        old_catalog=catalog
+        started=time.perf_counter() if metrics is not None else None
+        catalog=_extend_reference_catalog(catalog,tuple((o.index,o.serial,o.address) for o in objects),missing)
+        if metrics is not None:
+            metrics['source_reference_capture_ms']=metrics.get('source_reference_capture_ms',0.)+(time.perf_counter()-started)*1000
+            started=time.perf_counter()
+        # An extended observation can update an existing outer, flags or class
+        # relation. In that case every group must be decoded against the new
+        # catalog as before. Otherwise only groups with previously missing
+        # references need a second decode; untouched groups were already fully
+        # validated from the same read-only response.
+        stable=(old_catalog.classes==catalog.classes and all(
+            catalog.by_index.get(index)==obj for index,obj in old_catalog.by_index.items()))
+        if stable and None not in affected:
+            for i,group in groups.items():
+                if i in affected:
+                    result[i]=_decode_values(catalog,catalog.by_index[i],start,group)
+                else:
+                    prior=result[i]
+                    result[i]=StoredValues(catalog.by_index[i],prior.values,prior.errors,prior.types,prior.truncated)
+        else:
+            result={i:_decode_values(catalog,catalog.by_index[i],start,group) for i,group in groups.items()}
+        if metrics is not None:
+            metrics['source_values_decode_ms']=metrics.get('source_values_decode_ms',0.)+(time.perf_counter()-started)*1000
+    return result,catalog
+
+
 def read_values_with_references(catalog, observed, *, fields=None):
     """Read stored values and capture missing structured reference closures.
 
@@ -312,7 +575,35 @@ def read_values_with_references(catalog, observed, *, fields=None):
         selector += ';' + '|'.join(fields)
     start, rows = _query(['--read-values', str(catalog.pid), selector])
     result = _decode_values(catalog, obj, start, rows)
+    missing=_missing_references(catalog,rows)
+    if missing:
+        catalog = _extend_reference_catalog(catalog,((obj.index,obj.serial,obj.address),),missing)
+        result = _decode_values(catalog, catalog.resolve(obj), start, rows)
+    return result, catalog
+
+
+def _extend_reference_catalog(catalog,targets,missing):
+    """Validate large closures in bounded selected reads, never reread values."""
+    from .catalog import capture_selected
+    missing=tuple(sorted(missing));targets=tuple(targets)
+    if not 1<=len(targets)<=1023 or len(missing)>16384:
+        raise RuntimeQueryError('Stored reference closure limit')
+    room=1023-len(targets)
+    if room:
+        for start in range(0,len(missing),room):
+            catalog=catalog.with_observations(capture_selected(catalog.pid,targets+missing[start:start+room]))
+    else:
+        for start in range(0,len(missing),1023):
+            catalog=catalog.with_observations(capture_selected(catalog.pid,missing[start:start+1023]))
+        catalog=catalog.with_observations(capture_selected(catalog.pid,targets))
+    return catalog
+
+
+def _missing_references(catalog,rows,*,affected=None):
     missing = set()
+    # Large cooked cinematic batches can contain over 268,000 values even
+    # at modest depth. Bound total work independently from wrapper depth.
+    walk_budget=[1048576]
     def reference(raw):
         if type(raw) is not dict or set(raw) != {'index', 'serial', 'address', 'name'}:
             raise RuntimeQueryError('Invalid nested stored reference')
@@ -320,11 +611,17 @@ def read_values_with_references(catalog, observed, *, fields=None):
         current = catalog.by_index.get(raw['index'])
         if current is None or (current.index, current.serial, current.address) != identity:
             missing.add(identity)
-        if len(missing) > 1023:
+            if affected is not None:affected.add(target)
+        if len(missing) > 16384:
             raise RuntimeQueryError('Nested stored reference limit')
     def walk(value, depth=0):
-        if depth > 16:
+        walk_budget[0]-=1
+        # Four typed struct levels can contain array/map/tag wrappers. Count
+        # JSON wrapper depth separately from the decoder's typed depth bound.
+        if depth > 32:
             raise RuntimeQueryError('Nested stored reference depth')
+        if walk_budget[0]<0:
+            raise RuntimeQueryError('Nested stored reference traversal limit')
         if isinstance(value, dict):
             if '$reference' in value:
                 reference(value['$reference'])
@@ -333,13 +630,19 @@ def read_values_with_references(catalog, observed, *, fields=None):
             for child in value.values(): walk(child, depth + 1)
         elif isinstance(value, list):
             for child in value: walk(child, depth + 1)
+    target=None
     for row in rows:
+        if row.get('event')=='object':target=row['index']
         if row.get('event') == 'stored_value': walk(row.get('value'))
-    if missing:
-        fresh = capture_selected(catalog.pid, ((obj.index, obj.serial, obj.address), *sorted(missing)))
-        catalog = catalog.with_observations(fresh)
-        result = _decode_values(catalog, catalog.resolve(obj), start, rows)
-    return result, catalog
+        elif row.get('event') == 'property_metadata':
+            # Empty containers have no nested $struct value from which to
+            # discover their type. Their descriptor still requires that exact
+            # observed struct closure before the same response can be decoded.
+            for prefix in ('struct','inner_struct','map_key_struct','map_value_struct'):
+                if all(prefix+'_'+key in row for key in ('index','serial','address','name')):
+                    reference({key:row[prefix+'_'+key] for key in ('index','serial','address','name')})
+    if len(missing)>16384:raise RuntimeQueryError('Nested stored reference limit')
+    return missing
 
 
 def read_object_reference(catalog, observed, owner, name, *, project=False):
@@ -426,6 +729,34 @@ def _decode_values(catalog, obj, start, rows):
             value = row['value']
             if row.get('truncated') is True:
                 truncated.add(key)
+            if metadata[key]['type'] in ('SoftObjectProperty', 'SoftClassProperty'):
+                meta = metadata[key]
+                expected_vtable = '0x6e12cb8' if meta['type'] == 'SoftClassProperty' else '0x6e128d8'
+                try:
+                    if (type(meta.get('element_size')) is not int or meta['element_size'] != 40 or
+                            meta.get('vtable_rva') != expected_vtable or row.get('truncated', False)):
+                        raise ValueError('Invalid soft property layout')
+                    if meta['type'] == 'SoftClassProperty' and (
+                            type(meta.get('meta_class_name')) is not str or not meta['meta_class_name'] or
+                            type(meta.get('meta_class_index')) is not int or meta['meta_class_index'] < 0 or
+                            type(meta.get('meta_class_serial')) is not int or meta['meta_class_serial'] < 0):
+                        raise ValueError('Invalid soft class constraint')
+                    value = _soft_object_path(value)
+                except (KeyError, TypeError, ValueError) as error:
+                    raise RuntimeQueryError(f'Invalid soft property observation: {error}') from error
+            if metadata[key]['type'] == 'EnumProperty':
+                meta = metadata[key]
+                kind = meta.get('inner_type')
+                widths = {'ByteProperty': 1, 'IntProperty': 4}
+                bounds = {'ByteProperty': (0, 255), 'IntProperty': (-(1 << 31), (1 << 31) - 1)}
+                if (kind not in widths or type(meta.get('element_size')) is not int or
+                        meta['element_size'] != widths[kind] or type(meta.get('inner_element_size')) is not int or
+                        meta['inner_element_size'] != widths[kind] or
+                        type(meta.get('enum_name')) is not str or not meta['enum_name'] or
+                        type(meta.get('enum_index')) is not int or meta['enum_index'] < 0 or
+                        type(meta.get('enum_serial')) is not int or meta['enum_serial'] < 0 or
+                        type(value) is not int or not bounds[kind][0] <= value <= bounds[kind][1]):
+                    raise RuntimeQueryError('Invalid stored enum observation')
             if metadata[key]['type'] == 'MapProperty':
                 try:
                     if row.get('truncated', False):
@@ -443,17 +774,18 @@ def _decode_values(catalog, obj, start, rows):
                     if set(array) != {'length', 'items'}:
                         raise ValueError('Unexpected array fields')
                     length, items = array['length'], array['items']
+                    element_type = metadata[key]['inner_type']
+                    struct_type = _struct_type(catalog, metadata[key], 'inner_struct') if element_type == 'StructProperty' else None
+                    prefix_limits = _array_prefix_limits(catalog, key[0], key[1], element_type, struct_type)
                     if (type(length) is not int or not 0 <= length <= 1048576 or type(items) is not list
-                            or len(items) not in (min(length, 64), min(length, 256))
+                            or len(items) not in tuple(min(length, limit) for limit in prefix_limits)
                             or row.get('truncated') is not (length > len(items))):
                         raise ValueError('Invalid array extent or truncation')
-                    element_type = metadata[key]['inner_type']
                     if element_type not in ('ObjectProperty', 'ClassProperty', 'FloatProperty', 'DoubleProperty',
                                             'NameProperty', 'IntProperty', 'UInt16Property', 'ByteProperty', 'StructProperty'):
                         raise ValueError('Unsupported array element type')
-                    struct_type = _struct_type(catalog, metadata[key], 'inner_struct') if element_type == 'StructProperty' else None
                     decoded = []
-                    struct_budget = [4096]
+                    struct_budget = [_STRUCT_NODE_BUDGET]
                     for item in items:
                         if element_type == 'StructProperty':
                             item = _struct_value(catalog, item, budget=struct_budget)

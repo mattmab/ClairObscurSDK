@@ -28,22 +28,100 @@ class ProcessUiTests(unittest.TestCase):
             def __init__(self,session,service,ctx):
                 self.ready=True;self.kind=ctx.kind;outer.entries.append(self);outer.events.append('entry.create.'+ctx.kind)
             def poll(self):outer.events.append('entry.poll.'+self.kind)
+            def prepare(self):outer.events.append('entry.prepare.'+self.kind);return True
             def close(self):
                 self.ready=False;outer.events.append('entry.restore.ack' if outer.entry_ack else 'entry.restore.pending');return outer.entry_ack
-        self.session=N(_check=Mock());self.registry=object()
-        self.router=m.ProcessUI(self.session,self.registry,shell_factory=Shell,entry_factory=Entry)
+        self.session=N(pid=7,_check=Mock());self.registry=object()
+        self.reader=N(_closed=False,bind=lambda:__import__('contextlib').nullcontext(),close=Mock())
+        self.router=m.ProcessUI(self.session,self.registry,shell_factory=Shell,entry_factory=Entry,reader_factory=lambda pid:self.reader)
         self.title=context();self.world=context('world',world=5,pc=6)
 
-    def test_verified_pre_title_context_warms_shell_without_entry_or_input(self):
+    def test_travel_blocks_stale_world_and_unready_destination_reconstruction(self):
+        self.router.poll(self.world);self.router.quiesce();self.events.clear()
+        self.router._travel_recovery=N(state='traveling',poll=Mock())
+        self.router._travel_origin=self.world.signature
+        self.router._rebuild_requested=True
+        self.assertFalse(self.router.observe(N(ui_context=self.world,menu_ready=True)))
+        self.assertEqual(self.router.phase,'travel_pending');self.assertEqual(self.events,[])
+        destination=context('world',world=50,pc=60)
+        self.assertFalse(self.router.observe(N(ui_context=None,prewarm_context=destination,menu_ready=False)))
+        self.assertEqual(self.events,[])
+        self.assertTrue(self.router.observe(N(ui_context=destination,menu_ready=True,admission=N(activation_ready=True))))
+        self.assertEqual(self.router.context,destination)
+
+    def test_travel_arrival_poll_survives_originating_mod_retirement(self):
+        self.router.poll(self.world);self.router.quiesce()
+        request=N(state='traveling',poll=Mock())
+        request.poll.side_effect=lambda:setattr(request,'state','arrived')
+        self.router._travel_recovery=request;self.router._travel_origin=self.world.signature
+        destination=context('world',world=50,pc=60)
+        self.assertTrue(self.router.observe(N(ui_context=destination,menu_ready=True,admission=N(activation_ready=True))))
+        request.poll.assert_called_once();self.assertEqual(request.state,'arrived')
+
+    def test_detached_pause_owner_is_adopted_once_with_current_controller(self):
+        self.router.shell=N(service=object())
+        source=object();self.session._pause_button_source=source
+        owner=N(entry=N(prepare_detached=Mock()))
+        self.router._entry_factory=Mock(return_value=owner)
+        self.router._prepare_pause_contents(self.title)
+        owner.entry.prepare_detached.assert_called_once_with(source)
+        self.router._prepare_pause_contents(self.title)
+        self.assertEqual(self.router._entry_factory.call_count,1)
+        self.assertIs(self.router._new_entry(self.world),owner)
+        self.assertEqual(owner.entry._expected_controller,self.world.controller)
+        self.assertIsNone(self.router._prepared_pause)
+        self.router._new_entry(self.world)
+        self.assertEqual(self.router._entry_factory.call_count,2)
+
+    def test_detached_title_owner_is_adopted_once_without_scope_transfer(self):
+        self.router.shell=N(service=object())
+        owner=N(entry=object(),close=Mock(return_value=True))
+        self.router._prepared_title=owner;self.router._prepared_title_key=self.title.persistent_key
+        self.assertIs(self.router._new_entry(self.title),owner)
+        self.assertIsNone(self.router._prepared_title)
+        self.assertIsNot(self.router._new_entry(self.title),owner)
+
+    def test_detached_title_cleanup_ack_precedes_shell_release(self):
+        owner=N(close=Mock(return_value=False))
+        self.router._prepared_title=owner
+        self.assertFalse(self.router.close())
+        self.assertIs(self.router._prepared_title,owner)
+        owner.close.return_value=True
+        self.assertTrue(self.router.close())
+        self.assertIsNone(self.router._prepared_title)
+
+    def test_shutdown_keeps_detached_pause_owner_until_release_ack(self):
+        self.router._prepared_pause=N(close=Mock(return_value=False))
+        owner=self.router._prepared_pause
+        self.assertFalse(self.router.close())
+        self.assertIs(self.router._prepared_pause,owner)
+        owner.close.return_value=True
+        self.assertTrue(self.router.close())
+        self.assertIsNone(self.router._prepared_pause)
+
+    def test_verified_pre_title_context_stages_entry_without_polling_input(self):
         packet=N(ui_context=None,prewarm_context=self.title,title_ready=False)
         self.assertFalse(self.router.observe(packet))
-        self.assertEqual(self.router.phase,'prewarmed');self.assertEqual(len(self.entries),0)
+        self.assertEqual(self.router.phase,'prewarmed');self.assertEqual(len(self.entries),1)
+        self.assertIsNone(self.entries[0].ready)
+        self.assertNotIn('entry.poll.title',self.events)
+        self.assertIn('entry.prepare.title',self.events)
         self.assertEqual(self.events.count('shell.build_and_prove'),1)
         self.assertFalse(self.router.observe(packet))
         self.assertEqual(self.events.count('shell.build_and_prove'),1)
         self.assertTrue(self.router.observe(N(ui_context=self.title,title_ready=True)))
         self.assertEqual(len(self.entries),1)
         self.assertEqual(self.events.count('shell.build_and_prove'),1)
+
+    def test_bootstrap_shell_rebinds_to_title_even_before_first_entry(self):
+        boot=context('world',world=10,pc=11)
+        self.assertFalse(self.router.observe(N(ui_context=None,prewarm_context=boot,
+            menu_ready=False,admission=N(activation_ready=False))))
+        self.assertIsNone(self.router.context)
+        self.assertTrue(self.router.observe(N(ui_context=self.title,title_ready=True)))
+        self.assertEqual(self.events.count('shell.build_and_prove'),1)
+        self.assertEqual(self.events.count('set_owner.title'),1)
+        self.assertEqual(self.shells[0].context,self.title)
 
     def test_loading_world_rebinds_detached_shell_without_entry_or_repeating_proof(self):
         self.router.observe(N(ui_context=self.title,title_ready=True))
@@ -63,10 +141,42 @@ class ProcessUiTests(unittest.TestCase):
         self.shell_ack=False
         changed=context(gi=9)
         self.assertFalse(self.router.observe(N(ui_context=None,prewarm_context=changed,title_ready=False)))
-        self.assertEqual(len(self.shells),1);self.assertEqual(len(self.entries),0)
+        self.assertEqual(len(self.shells),1);self.assertEqual(len(self.entries),1)
         self.shell_ack=True
         self.router.observe(N(ui_context=None,prewarm_context=changed,title_ready=False))
-        self.assertEqual(len(self.shells),2);self.assertEqual(len(self.entries),0)
+        self.assertEqual(len(self.shells),2);self.assertEqual(len(self.entries),2)
+
+    def test_loading_pause_attachment_never_polls_clicks_before_admission(self):
+        self.router.observe(N(ui_context=self.title,title_ready=True))
+        self.events.clear()
+        packet=N(ui_context=self.world,prewarm_context=self.world,menu_ready=True,
+            admission=N(activation_ready=False))
+        self.assertFalse(self.router.observe(packet))
+        staged=self.router.entry
+        self.assertEqual(self.router.phase,'prewarmed')
+        self.assertIsNone(staged.ready)
+        self.assertIsNone(self.router.shell.ready)
+        self.assertNotIn('entry.poll.world',self.events)
+        self.assertFalse(self.router.gameplay_ui_ready)
+        self.assertFalse(self.router.observe(packet))
+        self.assertIs(self.router.entry,staged)
+        self.assertEqual(self.events.count('entry.create.world'),1)
+        self.assertEqual(self.events.count('set_owner.world'),1)
+        self.assertNotIn('entry.poll.world',self.events)
+        self.assertTrue(self.router.observe(N(ui_context=self.world,menu_ready=True,
+            admission=N(activation_ready=True))))
+        self.assertIs(self.router.entry,staged)
+        self.assertTrue(self.router.shell.ready)
+        self.assertIn('entry.poll.world',self.events)
+
+    def test_first_verified_loading_world_builds_only_detached_shell(self):
+        self.assertFalse(self.router.observe(N(ui_context=None,prewarm_context=self.world,
+            menu_ready=True,admission=N(activation_ready=False))))
+        self.assertIsNotNone(self.router.shell)
+        self.assertEqual(self.entries,[])
+        self.assertEqual(self.router.phase,'prewarmed')
+        self.assertFalse(self.router.gameplay_ui_ready)
+
 
     def test_title_world_title_share_exact_tree_and_new_entries(self):
         self.assertTrue(self.router.poll(self.title));tree=self.router.shell.widgets
@@ -119,7 +229,7 @@ class ProcessUiTests(unittest.TestCase):
     def test_combat_with_same_ui_context_does_not_retire_or_rebuild(self):
         self.router.poll(self.world);before=len(self.events)
         self.router.poll(self.world)
-        self.assertEqual(self.events[before:],['entry.poll.world','shell.poll'])
+        self.assertEqual(self.events[before:],['shell.poll','entry.poll.world'])
         self.assertEqual(len(self.shells),1)
 
     def test_binding_growth_rebuild_is_detached_acknowledged_and_never_exposed_early(self):
@@ -254,7 +364,7 @@ class InitialPreparedPlanTests(unittest.TestCase):
         from expedition33 import _reader
         events=[];session=N(_menu_plan_cache=object())
         shell=m.CachedProcessShell.__new__(m.CachedProcessShell)
-        shell.scope=N(pid=7);shell.context=None;shell.needs_capacity_rebuild=Mock()
+        shell.scope=N(pid=7,_session=N(_pause_entry_metadata_selectors=((1,2,3),)));shell.context=None;shell.needs_capacity_rebuild=Mock()
         shell._factory=lambda kind:object
         panel=N(state='built',catalog=N(objects=()),_planner=N(_catalog=N(objects=())))
         def verify(*args):
@@ -282,7 +392,7 @@ class InitialPreparedPlanTests(unittest.TestCase):
         from expedition33 import _reader
         events=[]
         shell=m.CachedProcessShell.__new__(m.CachedProcessShell)
-        shell.scope=N(pid=7);shell.context=None;shell.needs_capacity_rebuild=Mock()
+        shell.scope=N(pid=7,_session=N(_pause_entry_metadata_selectors=((1,2,3),)));shell.context=None;shell.needs_capacity_rebuild=Mock()
         shell._factory=lambda kind:object
         def verify(*args):
             with _reader.ReadBatch(7):events.append('proof')
@@ -304,7 +414,7 @@ class InitialPreparedPlanTests(unittest.TestCase):
         from contextlib import nullcontext
         from expedition33 import _reader
         shell=m.CachedProcessShell.__new__(m.CachedProcessShell)
-        shell.scope=N(pid=7);shell.context=None;shell.needs_capacity_rebuild=Mock()
+        shell.scope=N(pid=7,_session=N(_pause_entry_metadata_selectors=((1,2,3),)));shell.context=None;shell.needs_capacity_rebuild=Mock()
         shell._factory=lambda kind:object;shell.proof=N(verify=Mock())
         panel=N(state='built',prime_menu_plan=Mock(side_effect=RuntimeError('plan failed')),catalog=N(objects=()),_planner=N(_catalog=N(objects=())))
         shell.service=N(_view_options={},_failure=None,menu=N(panel=panel),prepare=Mock())
@@ -466,6 +576,18 @@ class ProofGetterTests(unittest.TestCase):
         self.assertEqual(p.pending_results,[])
 
 
+class DisposedShellRecoveryTests(unittest.TestCase):
+    def test_acknowledged_disposal_requests_shell_replacement(self):
+        shell=object.__new__(m.CachedProcessShell)
+        shell.service=N(menu=None,_failure=None)
+        with self.assertRaises(m.UiCapacityRebuild):shell._rebind(context('world'))
+
+    def test_failed_or_undetached_shell_does_not_authorize_replacement(self):
+        shell=object.__new__(m.CachedProcessShell)
+        for menu,failure in ((None,'unknown cleanup'),(N(panel=N(state='open',menu=object())),None)):
+            shell.service=N(menu=menu,_failure=failure)
+            with self.assertRaises(proof.UiProofPending):shell._rebind(context('world'))
+
 class RebindPreparedFrameTests(unittest.TestCase):
     def setUp(self):
         from contextlib import contextmanager
@@ -554,6 +676,22 @@ class GraphProofTests(unittest.TestCase):
 
     def test_exact_owned_scroll_tree_outer_gi_and_property_readbacks(self):
         self.assertIs(self.graph(),self.catalog)
+
+    def test_retained_exact_local_player_anchor_is_not_mistaken_for_child_widget(self):
+        local=obj(3,'CurrentLocalPlayer','LocalPlayer')
+        self.rows[local.index]=local
+        self.scope._leases.append(N(active=True,object=local))
+        self.assertIs(self.graph(),self.catalog)
+
+    def test_external_player_or_wrong_anchor_class_remains_rejected(self):
+        for local in (obj(5,'OtherLocalPlayer','LocalPlayer'),obj(3,'NotLocalPlayer','Widget')):
+            with self.subTest(kind=local.class_name,index=local.index):
+                self.rows[local.index]=local
+                self.scope._leases.append(N(active=True,object=local))
+                try:
+                    with self.assertRaisesRegex(proof.UiProofPreflightRejected,'escaped'):
+                        self.graph()
+                finally:self.scope._leases.pop()
 
     def test_large_production_tree_has_complete_bounded_two_pass_coverage(self):
         extras=[obj(200+i,'Child'+str(i),'CanvasPanelSlot',21) for i in range(1300)]
@@ -645,11 +783,18 @@ class TypedReadbackTests(unittest.TestCase):
         self.p._invoke=Mock(side_effect=(self.pc,self.local,obj(8,'OldPC','PlayerController')))
         with self.assertRaisesRegex(proof.UiProofMismatch,'world readback'):self.verify()
 
+    def test_loading_module_snapshot_race_defers_pure_proof(self):
+        self.p._invoke=Mock()
+        self.p._current.side_effect=proof.RuntimeQueryError('MODULE_SNAPSHOT_FAILED')
+        with self.assertRaises(proof.UiProofPending):self.verify()
+        self.p._invoke.assert_not_called()
+
     def test_setter_not_replayed_after_known_getter_lease_deferral(self):
-        calls=[];first=[True]
+        calls=[];first=[True];setters=[]
         def invoke(cat,target,owner,name,**args):
             calls.append((name,args))
-            if name=='SetOwningPlayer':return None
+            if name=='SetOwningPlayer':setters.append(args);return None
+            if not setters:return None
             if name=='GetOwningPlayer' and first[0]:
                 first[0]=False;raise proof.UiProofPending('getter release pending')
             return self.local if name=='GetOwningLocalPlayer' else self.pc
@@ -657,21 +802,27 @@ class TypedReadbackTests(unittest.TestCase):
         with self.assertRaises(proof.UiProofPending):self.verify(rebind=True)
         self.assertTrue(self.verify(rebind=True))
         self.assertEqual(sum(name=='SetOwningPlayer' for name,args in calls),1)
-        self.assertEqual(calls[0][1],dict(LocalPlayerController=self.pc))
+        self.assertEqual(setters,[dict(LocalPlayerController=self.pc)])
         self.assertIsNone(self.scope._session._menu_plan_cache)
         self.panel.prime_menu_plan.assert_called_once_with()
 
     def test_loading_argument_rejection_holds_old_context_without_dispatch_replay(self):
         from expedition33.invocation import InvocationError
-        self.p._invoke=Mock(side_effect=InvocationError('retired argument',outcome='not_dispatched',native_error=218))
+        self.p._invoke=Mock(side_effect=(None,None,None,InvocationError('retired argument',outcome='not_dispatched',native_error=218)))
         with self.assertRaises(proof.UiProofPending):self.verify(rebind=True,preparing=True)
         with self.assertRaises(proof.UiProofPending):self.verify(rebind=True,preparing=True)
-        self.assertEqual(self.p._invoke.call_count,1)
+        self.assertEqual(self.p._invoke.call_count,4)
         self.ctx=context('world',world=9,pc=8);current=obj(8,'PC','PlayerController')
         self.catalog.by_index[current.index]=current;self.p._current.return_value=(self.catalog,current)
-        self.p._invoke.side_effect=(None,current,self.local,current)
+        self.p._invoke.side_effect=(current,self.local,current)
         self.assertTrue(self.verify(rebind=True,preparing=True))
-        self.assertEqual(self.p._invoke.call_count,5)
+        self.assertEqual(self.p._invoke.call_count,7)
+
+    def test_already_current_typed_readbacks_skip_unnecessary_setter(self):
+        self.p._invoke=Mock(side_effect=(self.pc,self.local,self.pc))
+        self.assertTrue(self.verify(rebind=True))
+        self.assertNotIn('SetOwningPlayer',[call.args[3] for call in self.p._invoke.call_args_list])
+        self.assertIsNone(self.scope._session._menu_plan_cache)
 
     def test_unknown_dispatch_outcome_is_never_treated_as_loading_deferral(self):
         from expedition33.invocation import InvocationError
@@ -679,3 +830,130 @@ class TypedReadbackTests(unittest.TestCase):
         with self.assertRaises(InvocationError):self.verify(rebind=True)
 
 if __name__=='__main__':unittest.main()
+
+class PanelMetadataFilteringTests(unittest.TestCase):
+    def test_unrelated_discovery_classes_are_not_rebind_planner_inputs(self):
+        native=obj(40,'Widget','Class');unrelated=obj(41,'OtherPluginWidget','Class')
+        pod=obj(42,'ReadOnlyLayoutEnum','Enum');foreign_fn=obj(43,'SetText','Function')
+        unrelated.serial=0
+        catalog=N(objects=(native,unrelated,pod,foreign_fn))
+        def admitted(catalog,value):
+            if value is not native:raise ValueError('outside UI Script whitelist')
+            return value
+        with patch('expedition33._metadata_stabilization.script_function',side_effect=admitted):
+            result=proof.panel_metadata(catalog)
+        self.assertEqual(result,(native,pod))
+        with patch.object(proof,'capture_matching') as discovery:
+            self.assertEqual(proof.refresh_panel_metadata(7,result),result)
+        discovery.assert_not_called()
+
+
+class LoadingContextBatchTests(unittest.TestCase):
+    def setUp(self):
+        from expedition33.values import StoredArray
+        kinds=('GameEngine','GameViewportClient','World','BP_jRPG_GI_Custom_C','LocalPlayer','PlayerController')
+        self.objects=tuple(N(pid=7,index=i+1,serial=3,address=0x10000+(i+1)*8,class_index=100+i,
+            class_name=kind,object_flags=0) for i,kind in enumerate(kinds))
+        self.rows={o.index:N(types={},values={},errors={},truncated=set()) for o in self.objects}
+        e,v,w,g,l,c=self.objects
+        def field(obj,name,kind,value):
+            row=self.rows[obj.index];key=(obj.class_index,name);row.types[key]=kind;row.values[key]=value
+        for obj,name,target in ((e,'GameViewport',v),(v,'World',w),(w,'OwningGameInstance',g),(l,'PlayerController',c),(c,'Player',l)):
+            field(obj,name,'ObjectProperty',target)
+        field(g,'LocalPlayers','ArrayProperty',StoredArray((l,),1))
+        self.catalog=N(by_index={o.index:o for o in self.objects},
+            find_class=lambda kind:N(index=100+kinds.index(kind)),ancestors=lambda i:(i,),
+            outer_chain=lambda obj:(w,))
+        self.ctx=context('world',world=w.index,gi=g.index,local=l.index,pc=c.index)
+        self.owner=proof.OwnedUiProof(N(pid=7));self.owner._engine=identity(e.index)[1:];self.owner._viewport=identity(v.index)[1:]
+    def read(self):
+        with patch.object(proof,'capture_selected_values',return_value=(self.catalog,self.rows)) as query,patch.object(proof,'anchor',side_effect=AssertionError('no full fallback')):
+            result=self.owner._current(self.ctx,preparing=True)
+        query.assert_called_once()
+        return result
+    def test_all_current_links_are_checked_in_one_read_without_getters_or_dispatch(self):
+        self.assertEqual(self.read(),(self.catalog,self.objects[-1]))
+    def test_changed_controller_backlink_withholds_and_retires_only_cached_anchor(self):
+        pc=self.objects[-1];row=self.rows[pc.index];row.values[pc.class_index,'Player']=self.objects[0]
+        with self.assertRaises(proof.UiProofPending):self.read()
+        self.assertIsNone(self.owner._viewport)
+    def test_field_provenance_is_checked_before_using_the_value(self):
+        row=self.rows[1];row.types={(999,'GameViewport'):'ObjectProperty'}
+        from expedition33 import RuntimeQueryError
+        with self.assertRaises(RuntimeQueryError):self.read()
+        self.assertIsNone(self.owner._viewport)
+    def test_changed_native_selector_is_not_retried_in_same_proof(self):
+        from expedition33 import RuntimeQueryError
+        with patch.object(proof,'capture_selected_values',side_effect=RuntimeQueryError('SELECTED_DEPENDENCY_CHANGED')) as query,patch.object(proof,'anchor') as fallback:
+            with self.assertRaises(proof.UiProofPending):self.owner._current(self.ctx,preparing=True)
+        query.assert_called_once();fallback.assert_not_called();self.assertIsNone(self.owner._viewport)
+
+
+class GameplayContextBatchTests(LoadingContextBatchTests):
+    def setUp(self):
+        super().setUp()
+        self.manager=N(pid=7,index=7,serial=3,address=0x10000+7*8,class_index=107)
+        e,v,w,g,l,c=self.objects
+        self.catalog.by_index[7]=self.manager
+        self.catalog.with_observations=lambda other:self.catalog
+        def field(row,obj,name,kind,value):
+            row.types[obj.class_index,name]=kind;row.values[obj.class_index,name]=value
+        field(self.rows[g.index],g,'SaveLoaded','BoolProperty',True)
+        field(self.rows[g.index],g,'IsChangingMap','BoolProperty',False)
+        field(self.rows[g.index],g,'SaveManager','ObjectProperty',self.manager)
+        field(self.rows[c.index],c,'Pawn','ObjectProperty',N(class_name=next(iter(proof.EXPLORATION_PAWNS))))
+        self.manager_rows={o.index:N(types={},values={},errors={},truncated=set()) for o in (g,self.manager)}
+        field(self.manager_rows[g.index],g,'SaveManager','ObjectProperty',self.manager)
+        field(self.manager_rows[7],self.manager,'GameInstanceReference','ObjectProperty',g)
+        field(self.manager_rows[7],self.manager,'LoadIsInProgress','BoolProperty',False)
+    def gameplay(self):
+        with patch.object(proof,'capture_selected_values',side_effect=((self.catalog,self.rows),(self.catalog,self.manager_rows))) as query:
+            result=self.owner._current(self.ctx)
+        self.assertEqual(query.call_count,2)
+        return result
+    def test_gameplay_checks_save_flags_and_fresh_reciprocal_manager(self):
+        self.assertEqual(self.gameplay(),(self.catalog,self.objects[-1]))
+    def test_manager_loading_or_changed_backlink_rejects(self):
+        row=self.manager_rows[7];row.values[107,'LoadIsInProgress']=True
+        with self.assertRaises(proof.UiProofPending):self.gameplay()
+        self.assertIsNone(self.owner._viewport)
+    def test_manager_reference_switch_between_reads_rejects(self):
+        g=self.objects[3];self.manager_rows[g.index].values[g.class_index,'SaveManager']=None
+        with self.assertRaises(proof.UiProofPending):self.gameplay()
+    def test_save_loading_rejects_before_second_query(self):
+        g=self.objects[3];self.rows[g.index].values[g.class_index,'SaveLoaded']=False
+        with patch.object(proof,'capture_selected_values',return_value=(self.catalog,self.rows)) as query:
+            with self.assertRaises(proof.UiProofPending):self.owner._current(self.ctx)
+        query.assert_called_once()
+
+
+class UiReaderOwnershipTests(unittest.TestCase):
+    def router(self):
+        from contextlib import nullcontext
+        reader=N(_closed=False,bind=lambda:nullcontext(),close=Mock())
+        factory=Mock(return_value=reader)
+        router=m.ProcessUI(N(pid=7,_check=Mock()),N(),reader_factory=factory)
+        return router,reader,factory
+    def test_prepare_and_later_operations_reuse_owned_reader_without_observations(self):
+        router,reader,factory=self.router()
+        router.prepare_queries();router.prepare_queries()
+        with router._read_operation():pass
+        factory.assert_called_once_with(7)
+        reader.close.assert_not_called()
+        self.assertIsNone(router.context)
+        self.assertIsNone(router.shell)
+        self.assertTrue(router.close());reader.close.assert_called_once()
+    def test_failed_read_discards_only_reader_and_does_not_repeat_operation(self):
+        from expedition33 import RuntimeQueryError
+        router,reader,factory=self.router();calls=[]
+        with self.assertRaises(RuntimeQueryError):
+            with router._read_operation():
+                calls.append('one operation');reader._closed=True
+                raise RuntimeQueryError('failed read')
+        self.assertEqual(calls,['one operation']);factory.assert_called_once()
+        reader.close.assert_called_once();self.assertIsNone(router._read_worker)
+    def test_pending_ui_owners_do_not_prevent_read_only_child_cleanup(self):
+        router,reader,_=self.router();router.prepare_queries()
+        router.shell=N(detach=Mock(return_value=False))
+        self.assertFalse(router.close())
+        reader.close.assert_called_once();self.assertIsNotNone(router.shell)

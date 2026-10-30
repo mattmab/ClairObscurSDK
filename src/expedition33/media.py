@@ -60,7 +60,7 @@ class OwnedVideoWidget:
         self.catalog = capture_matching(self.scope.pid, names=('CommonVideoPlayer','FileMediaSource',
             'MediaPlayer','GameplayStatics','Default__GameplayStatics','SpawnObject','SetFilePath',
             'SetVideo','Play','Pause','PlayFromStart','Close','IsReady','IsClosed','IsPlaying','IsPaused',
-            'SetRate','SetAnchors','Anchors','GetTime','GetDuration','Timespan','AddChildToCanvas','SetPosition','SetSize','RemoveFromParent','Vector2D'))
+            'SetRate','Seek','Widget','SetVisibility','ESlateVisibility','SetZOrder','SetAnchors','Anchors','GetTime','GetDuration','Timespan','AddChildToCanvas','SetPosition','SetSize','RemoveFromParent','Vector2D'))
         self.catalog = self.catalog.with_observations(capture_selected(self.scope.pid,
             tuple((o.index,o.serial,o.address) for o in (panel.tree,panel.canvas))))
         self.planner = self.scope.invocation_planner(selected_results=True,catalog=self.catalog)
@@ -108,6 +108,7 @@ class OwnedVideoWidget:
         self._call(slot,'CanvasPanelSlot','SetPosition',InPosition={'X':0.,'Y':0.})
         self._call(slot,'CanvasPanelSlot','SetSize',InSize={'X':0.,'Y':0.})
         self._call(slot,'CanvasPanelSlot','SetAnchors',InAnchors={'Minimum':{'X':0.,'Y':0.},'Maximum':{'X':1.,'Y':1.}})
+        return slot
 
     def media_time(self):
         """Two bounded typed native getters; invalid/sentinel times are not clocks."""
@@ -172,6 +173,20 @@ class OwnedVideoWidget:
     def resume(self):
         return self._call(self.player,'MediaPlayer','Play')
 
+    def seek(self, seconds):
+        """Seek an opened owned player using a copied finite Timespan value."""
+        import math
+        from ._pod_values import TimespanValue
+        if type(seconds) not in (int,float) or not math.isfinite(seconds) or not 0<=seconds<=86400:
+            raise ValueError('Media seek requires finite seconds between zero and one day')
+        transport=self.scope._session._transport
+        if type(getattr(transport,'timespan_values_protocol',0)) is not int or transport.timespan_values_protocol!=1:
+            raise RuntimeError('Verified media Timespan input support is required')
+        cap=getattr(transport,'media_seek_protocol',0)
+        if type(cap) is not int or cap!=1:raise RuntimeError('Verified media Seek support is required')
+        if self.state!='opened' or self.uncertain:raise RuntimeError('Known opened media required for seeking')
+        return self._call(self.player,'MediaPlayer','Seek',Time=TimespanValue(round(seconds*10_000_000)))
+
     def restart(self):
         self._call(self.widget,'CommonVideoPlayer','PlayFromStart')
 
@@ -182,6 +197,9 @@ class OwnedVideoWidget:
 
     def close(self):
         if self.state == 'closed': return
+        if getattr(getattr(self,'native_owner',None),'_retiring',False) is True:
+            if not self.retire_world():raise RuntimeError('Native media retirement deferred; preserve owner')
+            return
         if self.uncertain:
             raise RuntimeError('Unknown media dispatch; preserve resources for session recovery')
         owner = getattr(self,'native_owner',None)
@@ -200,3 +218,18 @@ class OwnedVideoWidget:
         self.scope.close()
         self.state = 'closed'
         self.parent = None
+
+    def retire_world(self):
+        """Release old owned media holds without calling the old widget."""
+        if self.state=='closed':return True
+        if self.uncertain:raise RuntimeError('Unknown media mutation cannot be retired')
+        if self.native_owner is None:
+            raise RuntimeError('Native media ownership is required for retirement')
+        if not self.native_owner.retire_world():return False
+        self.attached=False
+        if self.planner is not None:self.planner.close()
+        if self._read_planner is not None:self._read_planner.close()
+        from ._retired_tracking import close_lease_only_scope
+        if not close_lease_only_scope(self.scope):return False
+        self.state='closed';self.parent=None
+        return True

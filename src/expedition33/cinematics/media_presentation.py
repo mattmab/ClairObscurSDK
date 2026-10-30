@@ -46,3 +46,58 @@ class MenuChildrenPresentation(MenuPresentation):
     def _invoke(calls):
         for call in calls:
             with call.invoke():pass
+
+class FullscreenOverlayPresentation:
+    """Gate menu callbacks behind an owned opaque overlay, without child I/O.
+
+    The fullscreen owner creates backdrop, video and Stop above existing menu
+    children. It alone acknowledges their closure before revealing the menu.
+    """
+    def __init__(self,menu,stop_playback):
+        if not callable(stop_playback):raise TypeError('Playback stop callback required')
+        self.menu,self.panel=menu,menu.panel
+        self.stop_playback=stop_playback
+        self.state='new';self.planner=None;self._overlay_closed=False
+
+    def _context(self):
+        if self.menu.panel is not self.panel or self.panel.state!='open' or self.panel.uncertain:
+            raise RuntimeError('Fullscreen presentation context changed')
+
+    def prepare(self):
+        if self.state!='new':raise RuntimeError('Fullscreen presentation already prepared')
+        self._context()
+        if getattr(self.menu,'_presentation_owner',None) is not None:
+            raise RuntimeError('Menu presentation already has an owner')
+        self.state='prepared'
+        return self
+
+    def suspend(self):
+        if self.state!='prepared':raise RuntimeError('Fullscreen presentation is not prepared')
+        self._context()
+        if getattr(self.menu,'_presentation_owner',None) is not None:
+            raise RuntimeError('Menu presentation already has an owner')
+        self.menu._presentation_owner=self
+        self.menu._presentation_suspended=True
+        self.state='suspended'
+
+    def acknowledge_overlay_closed(self):
+        self._overlay_closed=True
+
+    def restore(self):
+        if self.state=='restored':return
+        if not self._overlay_closed:
+            raise RuntimeError('Fullscreen overlay cleanup is not acknowledged')
+        if self.menu.panel is not self.panel:
+            raise RuntimeError('Fullscreen presentation panel changed')
+        if self.state=='suspended':
+            if getattr(self.menu,'_presentation_owner',None) is not self:
+                raise RuntimeError('Fullscreen presentation owner changed')
+            self._context()
+            # Existing paint machinery decides whether a dirty frame needs work.
+            # Leave callbacks gated until the current frame is restored.
+            self.menu._restore_presentation_frame()
+            self.menu._presentation_owner=None
+            self.menu._presentation_suspended=False
+        self.state='restored'
+
+    close=restore

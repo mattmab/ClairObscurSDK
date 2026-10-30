@@ -7,6 +7,27 @@ ROOT=Path(__file__).resolve().parents[1]
 spec=importlib.util.spec_from_file_location('native_retirement_scene_tests',ROOT/'mods/SceneEditor/mod.py',submodule_search_locations=[str(ROOT/'mods/SceneEditor')])
 SCENE=importlib.util.module_from_spec(spec);sys.modules[spec.name]=SCENE;spec.loader.exec_module(SCENE)
 class Tests(unittest.TestCase):
+ def test_persistent_tree_detaches_without_destroying_and_waits_for_input_ack(self):
+     from expedition33.widgets import OwnedMenuPanel
+     panel=OwnedMenuPanel.__new__(OwnedMenuPanel)
+     panel.state='open';panel.uncertain=False;panel.assigned=True
+     panel.menu=Mock();owner=panel.menu;owner.retire_world.side_effect=(False,True)
+     panel._render_call=Mock();panel.scope=Mock()
+     self.assertEqual(panel.detach_retired_world(),'pending');self.assertIs(panel.menu,owner)
+     self.assertEqual(panel.detach_retired_world(),'ack');self.assertIsNone(panel.menu)
+     self.assertEqual(panel.state,'built');self.assertTrue(panel.assigned)
+     owner.close.assert_not_called();panel.scope.close.assert_not_called();panel._render_call.assert_not_called()
+
+ def test_persistent_overlay_needs_domain_ack_and_detaches_only_once(self):
+     from expedition33.widgets import OwnedMenuPanel
+     panel=OwnedMenuPanel.__new__(OwnedMenuPanel)
+     panel.state='open';panel.uncertain=False;panel.assigned=True;panel.menu=None;panel.widget=object()
+     panel._render_call=Mock()
+     self.assertEqual(panel.detach_retired_world(),'unknown');panel._render_call.assert_not_called()
+     self.assertEqual(panel.detach_retired_world(native_retirement_ack=True),'ack')
+     self.assertEqual(panel.detach_retired_world(native_retirement_ack=True),'ack')
+     panel._render_call.assert_called_once_with(panel.widget,'Widget','RemoveFromParent')
+
  def test_pause_wire_is_explicit_capability_only_and_empty(self):
   packet=PAUSE.HEADER.pack(1,8,123,0,0,0)+bytes(PAUSE.call.SIZE)
   with self.assertRaises(ValueError):PAUSE.validate_request(packet)
@@ -43,15 +64,27 @@ class Tests(unittest.TestCase):
   owner=MENU.NativeMenu(real,());real._menus.add(owner);owner._state='focused'
   self.assertTrue(owner.retire_world());self.assertEqual(owner._state,'closed');self.assertNotIn(owner,real._menus)
  def panel(self,state='open',menu=None):
+  from expedition33._scope import SessionScope
   panel=WIDGETS.OwnedMenuPanel.__new__(WIDGETS.OwnedMenuPanel);panel.state=state;panel.uncertain=False;panel.menu=menu
-  panel.scope=Mock();panel._planner=Mock();panel.children=[object()];panel.assigned=True;panel._render_call=Mock();panel.widget=object();return panel
+  panel.scope=SessionScope(N(_check=Mock(),console=Mock()))
+  panel.scope.close=Mock(side_effect=AssertionError('broad scope close must not restore retired domains'))
+  panel.test_lease=Mock();panel.test_lease.release.return_value=True;panel.scope._leases.append(panel.test_lease)
+  panel._planner=Mock();panel.children=[object()];panel.assigned=True;panel._render_call=Mock();panel.widget=object();return panel
  def test_panel_pending_native_retirement_retains_tree(self):
   owner=Mock();owner.retire_world.return_value=False;p=self.panel(menu=owner)
-  self.assertEqual(p.retire_world(),'pending');p.scope.close.assert_not_called();p._render_call.assert_not_called();self.assertEqual(len(p.children),1)
+  self.assertEqual(p.retire_world(),'pending');p.scope.close.assert_not_called();p.test_lease.release.assert_not_called();p._render_call.assert_not_called();self.assertEqual(len(p.children),1)
   owner.retire_world.return_value=True;self.assertEqual(p.retire_world(),'ack');p._render_call.assert_not_called();self.assertEqual(p.children,[])
+  p.test_lease.release.assert_called_once_with();p.scope.close.assert_not_called();self.assertTrue(p.scope._closed)
  def test_noninteractive_root_needs_preceding_native_domain_ack(self):
   p=self.panel();self.assertEqual(p.retire_world(),'unknown');p._render_call.assert_not_called()
   self.assertEqual(p.retire_world(native_retirement_ack=True),'ack');p._render_call.assert_called_once_with(p.widget,'Widget','RemoveFromParent')
+  p.test_lease.release.assert_called_once_with();p.scope.close.assert_not_called();self.assertTrue(p.scope._closed)
+ def test_noninteractive_detach_is_not_replayed_after_lease_deferral(self):
+  p=self.panel();p.test_lease.release.side_effect=[False,True]
+  self.assertEqual(p.retire_world(native_retirement_ack=True),'pending')
+  self.assertEqual(p.retire_world(),'ack')
+  p._render_call.assert_called_once_with(p.widget,'Widget','RemoveFromParent')
+  self.assertEqual(p.test_lease.release.call_count,2)
  def test_pause_entry_never_restores_borrowed_panel_or_focus(self):
   p=PAUSEMENU.PauseMenuEntry.__new__(PAUSEMENU.PauseMenuEntry);p.state='attached';p._return_focus=True
   p._world_reader=Mock();p.observer=Mock();p.attachment=Mock();p.attachment.retire_world.side_effect=[False,True];p.scope=Mock()

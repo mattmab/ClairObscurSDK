@@ -8,30 +8,39 @@ from expedition33.cinematics.original_game_action import controller_context
 from .scene import SceneStore,sample,blank,validate,number,capture_camera,ACTOR_TEMPLATES,ROLES,CLIPS,MAX_ACTORS
 from .runtime import Runtime
 from .palette import CHARACTERS
+from .authored import AuthoredWorkspace
 
 class Mod:
     def __init__(self):
+        self._disable_preparing=False
         self.session=self.shared=self.native=None
         self.saved_menu=None;self.want_saved=False;self.next_screen=None;self.want_photo=False;self.photo_transfer=None
         self.hud=self.timeline=None;self.want_timeline=self.want_author=self.want_stop=False;self.next_hud=0.
         self.runtime=Runtime();self.document=None;self.key=None;self.dirty=False
+        self.authored=AuthoredWorkspace(background_import=True);self.pending_authored=None;self.pending_timeline_source=None;self.timeline_return=None
+        self.authored_preview=None;self.pending_authored_preview=False;self.pending_authored_edited=False
+        self._scene_loading=None
         self.pending_clip=None;self.photo_author=False;self.want_visibility=False;self.timeline_shown=True
         self.audio_paths=None;self.want_audio_library=False;self.pending_audio_preview=None
         self.pending_edit=None;self.timeline_selection=None;self.cursor_pinned=False
         self.want_open=self.want_play=False;self.reopen=False;self.message='Create a new scene, open a saved scene, or load the sample.'
         self.store=SceneStore(Path(__file__).resolve().parents[2]/'settings/SceneEditor/scenes')
     def management(self):
-        return ModDefinition('e33.scene-editor','Scene Editor',version='0.12.0-photo-timeline',
-            description='Edit the verified sample actors and event timestamps, preview, save and reload your scene. Experimental v12 recoil is preserved.',
+        return ModDefinition('e33.scene-editor','Scene Editor',version='0.17.0-authored-cast-pool',
+            description='Edit scene timelines, browse game-authored sequence sources and inspect their nested tracks and bindings.',
             actions=(Action('open','Open Scene Editor',self.open),Action('stop','Stop scene safely',self.stop)),
             keybinds=(Keybind('open','Open Scene Editor / return from preview','Insert',self.open),Keybind('stop','Stop scene preview','End',self.stop),Keybind('timeline','Pin / release timeline cursor','Home',self.toggle_timeline),Keybind('timeline_visibility','Show / hide timeline','Backspace',self.toggle_timeline_visibility),Keybind('audition','Preview selected animation','PageDown',self.preview_selected),Keybind('snap_camera','Snap flight to frame camera','PageUp',self.snap_camera),Keybind('capture_camera','Place camera at current view','.',self.capture_camera)))
     def prepare_startup(self,context):
         self._prepare_static()
+    def prepare_loading_ui(self,session):
+        from .loading import LoadingPreview
+        return LoadingPreview(self,session)
     def _prepare_static(self):
         if getattr(self,'_scene_view',None) is None:
             from .view import SceneView
             self._scene_view=SceneView
     def enable(self,session):
+        self._disable_preparing=False
         if getattr(session._session._transport,'runtime_scene_protocol',0)!=7:raise RuntimeError('Scene Editor requires its v27 or newer isolated native candidate backend')
         self.shared=getattr(session._session,'_native_menu_service',None)
         if self.shared is None:raise RuntimeError('Enable SDK Management before Scene Editor')
@@ -208,15 +217,73 @@ class Mod:
             if self.timeline is not None:self.timeline.close();self.timeline=None
         finally:
             if self.hud is not None:self.hud.close();self.hud=None
-    def open(self,_=None):self.want_open=True;return 'Opening Scene Editor'
+    def open(self,_=None):
+        self.timeline_return=None
+        if self.authored_preview is not None:self.authored_preview.queue('close')
+        self.want_open=True;return 'Opening Scene Editor'
     def load_sample(self):
         self._editable();self.document=sample(controller_context(self.session)['world_path']);self.key=None;self.dirty=False
         self.message='Sample loaded without playback. Save creates a separate user scene.'
+    def open_sequence_library(self):
+        # Defer ownership changes to poll, rather than tearing down the panel
+        # from inside its own input callback. _stop synchronizes the scene first.
+        self.next_screen='scene_authored';self.want_open=True
+        if self.runtime.scope is not None:self.want_stop=True
+        if self.authored_preview is not None:self.authored_preview.queue('close')
+    def load_timeline_source(self,path,*,editing_only=False):
+        if path not in {row['path'] for row in self.authored.catalog}:raise ValueError('Choose a game sequence from the library')
+        if self.pending_timeline_source is not None or self.pending_authored is not None or self.authored.loading is not None:raise ValueError('Source loading is already queued')
+        if self.runtime.authoring:
+            self.timeline_return=dict(photo=self.runtime.photo_mode,at=self.runtime.last.get('playhead',0),selected=self.runtime.last.get('selected',0))
+        self.pending_timeline_editing_only=editing_only
+        self.pending_timeline_source=path
+        if self.authored_preview is not None:self.authored_preview.queue('close')
+    def _finish_authored_preview(self,error):
+        self.authored_preview=None
+        self.message='Authored preview failed: '+error if error else 'Source preview closed; gameplay camera and input restored.'
+        if not error and self.pending_timeline_source is not None:
+            self.want_open=self.want_author=False;return
+        if not error and self.timeline_return is not None:
+            self.photo_author=self.timeline_return['photo'];self.want_author=True;self.want_open=False
+        else:
+            self.timeline_return=None;self.want_open=True;self.next_screen=getattr(self,'authored_return_screen',None) or 'scene_authored_timeline';self.authored_return_screen=None
     def new_scene(self):
         self._editable();self.document=blank(controller_context(self.session)['world_path']);self.key=None;self.dirty=True
         self.next_screen='scene_setup';self.message='New scene: choose its length and add actors, then enter Flight or Photo timeline.'
     def _editable(self):
-        if self.runtime.scope is not None or self.want_play:raise ValueError('Stop playback before editing or loading')
+        if self.runtime.scope is not None or self.want_play or self.authored_preview is not None or self.pending_authored_preview or self.authored.loading is not None:
+            raise ValueError('Stop playback before editing or loading')
+    def queue_authored_preview(self,*,edited=False,editing_only=False):
+        self._editable()
+        if type(edited) is not bool:raise ValueError('Boolean edited preview mode required')
+        from .authored_preview import preview_supported
+        if not editing_only and not preview_supported(self.authored.document):raise ValueError('This source does not yet have a reviewed owned preview adapter')
+        if edited and not editing_only:
+            from expedition33.cinematics.authored_copy import require_key_edit_support
+            require_key_edit_support(self.authored.document,self.session._session._transport if self.session is not None else None)
+            from expedition33._timeline_actor_channel import validate_count
+            validate_count(self.authored.document.get('cast_edits',[])+self.authored.document.get('npc_tracks',[]),self.session._session._transport if self.session is not None else None)
+        self.pending_authored_editing_only=editing_only;self.pending_authored_edited=edited;self.pending_authored_preview=True
+        self.message='Preparing private edited timeline.' if edited else 'Preparing original source preview; saved edits are not applied.'
+    def queue_authored(self,path):
+        self._editable()
+        if self.pending_authored is not None or self.pending_timeline_source is not None:raise ValueError('Source loading is already queued')
+        if path not in {row['path'] for row in self.authored.catalog}:raise ValueError('Choose a game sequence from the library')
+        if self.authored.source==path and self.authored.graph is not None and self.authored.document is not None:
+            self.message='Source already loaded; current edits retained.';return
+        self.pending_authored=path;self.message='Reading game sequence tracks and bindings...'
+    def unload_authored(self):
+        self._editable()
+        if not self.authored.close():raise RuntimeError('Source release is pending')
+        self.message='Game sequence source released.'
+    def edit_authored_range(self,path,field,value):
+        if field not in ('start','end'):raise ValueError('Invalid section range field')
+        from expedition33.cinematics.authored_timeline import source_range
+        start,end=source_range(self.authored.document,path)
+        previous=self.authored.document['section_edits'].get(path)
+        if previous:start,end=previous['start'],previous['end']
+        self.authored.retime(path,value if field=='start' else start,value if field=='end' else end)
+        self.message='Timeline range edited. Save keeps changes; owned preview support is in development.'
     def _change(self,edit):
         self._editable()
         if self.document is None:raise ValueError('Load a scene first')
@@ -319,6 +386,18 @@ class Mod:
         if self.runtime.scope is not None:self.stop()
         self.want_play=True;self.message='Preparing scene preview... End stops; Insert returns to editor.'
     def stop(self,_=None):
+        if self.authored.loading is not None:
+            self.pending_authored=self.pending_timeline_source=None;self.timeline_return=None
+            if not self.authored.close():
+                self.want_open=True;self.next_screen='scene_authored_timeline'
+                self.message='Cancelling source import; existing draft preserved.'
+                return self.message
+            self.want_open=True;self.next_screen='scene_authored_timeline'
+            self.message='Source import cancelled; existing draft preserved.'
+            return self.message
+        self.pending_authored_preview=False
+        if self.authored_preview is not None:
+            self.authored_preview.queue('close');return 'Closing authored preview'
         reader=active_reader()
         with ReadBatch(self.session.pid) if self.session is not None and reader is None else nullcontext():
             return self._stop(_)
@@ -363,6 +442,69 @@ class Mod:
         self.message='Photo timeline ready at the same frame. Backspace toggles timeline; Home pins cursor.'
     def poll(self):
         if self.session is None:return
+        # A loader shutdown barrier may wait across polls for read-only work to
+        # exit.  Do not create another job while shutdown is being prepared.
+        if self._disable_preparing:return
+        if self.authored.cleanup_pending:
+            if not self.authored.close():return
+            if self.message=='Cancelling source import; existing draft preserved.':
+                self.message='Source import cancelled; existing draft preserved.'
+        if self.pending_timeline_source is not None and self.authored_preview is None:
+            if self.runtime.scope is not None:
+                self.stop()
+                if self.runtime.scope is not None:return
+            path=self.pending_timeline_source
+            try:
+                if self.authored.loading is None:
+                    self._editable();self.authored.begin_load(self.session,path)
+                    self.message='Reading game sequence tracks and bindings...';return
+                if not self.authored.poll_load(self.session):
+                    self.message=f'Reading game sequence: {self.authored.loaded_nodes} objects';return
+                self.pending_timeline_source=None
+                self.queue_authored_preview(edited=True,editing_only=getattr(self,'pending_timeline_editing_only',False))
+                self.want_open=False
+            except Exception as error:
+                self.pending_timeline_source=None;self.timeline_return=None;self.message='Sequence timeline: '+str(error);self.want_open=True;self.next_screen='scene_authored_timeline'
+        if self.pending_authored_preview:
+            self.pending_authored_preview=False
+            from .authored_preview import AuthoredPreview
+            try:
+                self._editable()
+                if self.shared.menu is not None and self.shared.menu.panel.state=='open':self.shared.close_menu()
+                loading=getattr(self,'_scene_loading',None)
+                dependencies=loading.available(self.session) if loading is not None else None
+                self.authored_preview=AuthoredPreview(self.session,self.authored.document,edited=self.pending_authored_edited,
+                    workspace=self.authored,owner=self,editing_only=getattr(self,'pending_authored_editing_only',False),dependencies=dependencies)
+                self.authored_preview.return_to_scene=self.timeline_return is not None
+                self.authored_preview.prepare()
+            except Exception as error:
+                logging.getLogger(__name__).exception('Authored preview preparation failed')
+                self.message='Authored preview failed: '+str(error)
+                if self.authored_preview is not None:
+                    self.authored_preview.error=str(error);self.authored_preview.queue('close')
+                else:self.want_open=True
+        if self.authored_preview is not None:
+            try:
+                if self.authored_preview.poll():
+                    error=self.authored_preview.error
+                    self._finish_authored_preview(error)
+                else:return
+            except Exception as error:
+                self.message='Authored preview: '+str(error);self.authored_preview.error=str(error);self.authored_preview.queue('close');return
+        if self.pending_authored is not None:
+            path=self.pending_authored
+            try:
+                if self.authored.loading is None:
+                    self._editable();self.authored.begin_load(self.session,path);return
+                if not self.authored.poll_load(self.session):
+                    self.message=f'Reading game sequence: {self.authored.loaded_nodes} objects';return
+                self.pending_authored=None
+                self.message='Game sequence source loaded.'
+            except Exception as error:self.pending_authored=None;self.message='Source import failed: '+str(error)
+            menu=self.native.menu if self.native is not None else None
+            if menu is not None and menu.panel.state=='open':
+                if self.authored.graph is not None and menu.view.screen!='scene_authored':menu.view.screen='scene_authored_nodes';menu.view.page=0;menu.view.query=''
+                menu.view.status=self.message;self.shared.refresh()
         if self.want_photo:
             self.want_photo=False
             try:self.transfer_to_photo()
@@ -439,13 +581,29 @@ class Mod:
         if was_active and self.runtime.scope is None and self.reopen:
             self.reopen=False;self.want_open=True;self.message='Preview ended; gameplay camera and input restored.'
         if self.want_open:
+            # Process UI can temporarily revoke admission while the cinematic
+            # releases camera/input ownership. Preserve the request until its
+            # shared shell is ready; do not fail the SDK poll or replay open.
+            if not getattr(self.shared,'ui_ready',True):return
             self.want_open=False
             if self.runtime.scope is not None:self.stop();self.reopen=False
             if self.shared.menu is not None and self.shared.menu.panel.state=='open':self.shared.close_menu()
+            menu=self.native.menu
+            if menu is not None:
+                # The shared shell retains this presenter while playback owns
+                # input. Recreate navigation only for an explicit destination;
+                # otherwise preserve the user's page and refresh its status.
+                if self.next_screen is not None:menu.view.closed=True
+                else:menu.view.status=self.message
             self.native.open()
         if self.want_author:
             self.want_author=False
-            try:self.start_authoring()
+            resume=self.timeline_return;self.timeline_return=None
+            try:
+                self.start_authoring()
+                if resume is not None:
+                    self.runtime.seek(resume['at'])
+                    if self.document['actors']:self.runtime.editor_control(4,min(resume['selected'],len(self.document['actors'])-1))
             except Exception as error:self.message='Live editing failed: '+str(error);self.want_open=self.runtime.scope is None
         if self.want_play:
             self.want_play=False
@@ -463,16 +621,32 @@ class Mod:
         self.want_visibility=self.want_audio_library=False
         self.photo_transfer=self.next_screen=self.pending_clip=None
         self.pending_audio_preview=self.pending_edit=None
+        self.pending_authored=self.pending_timeline_source=None
+        self.timeline_return=None
+        self.pending_authored_preview=False
+        if self.authored_preview is not None:self.authored_preview.pending=None
         self.timeline_selection=None;self.cursor_pinned=False;self.photo_author=False
 
     def revoke_world(self,context):
-        self._revoke_world_intents();self._retirement_token=context.previous_token
+        self._revoke_world_intents();self.authored.cancel_load();self._retirement_token=context.previous_token
 
     def begin_world_retirement(self,context):
         return self.poll_world_retirement(context)
 
     def poll_world_retirement(self,context):
         if getattr(self,'_retirement_token',None)!=context.previous_token:return 'unknown'
+        if self.authored_preview is not None:
+            result=self.authored_preview.retire_world()
+            # Preview owners use "deferred" internally; the lifecycle
+            # coordinator accepts "pending" for a known retryable wait.
+            if result!='ack':return 'pending' if result=='deferred' else result
+            self.authored_preview=None
+        loading=getattr(self,'_scene_loading',None)
+        if loading is not None:
+            from expedition33.ui_shell_proof import UiProofPending
+            try:loading.release()
+            except UiProofPending:return 'pending'
+        if not self.authored.close():return 'pending'
         if any(getattr(self.runtime,name,None) is not None for name in ('scope','preview_scope','audio_load_scope')):
             result=self.runtime.retire_world()
             if result!='ack':return result
@@ -500,8 +674,36 @@ class Mod:
         self.session=None;self.runtime.session=None
         return 'ack'
 
+    def prepare_disable(self):
+        """Settle retryable consumers before the one-shot domain disable."""
+        self._disable_preparing=True
+        job=self.authored.load_job
+        if job is not None:
+            self.authored.cancel_load()
+            # Keep the import's lease-only scope until disable executes.
+            if not job.close():return False
+        if self.authored_preview is not None:
+            if not self.authored_preview.close():return False
+            self.authored_preview=None
+        loading=getattr(self,'_scene_loading',None)
+        if loading is not None:
+            from expedition33.ui_shell_proof import UiProofPending
+            try:loading.release()
+            except UiProofPending:return False
+        return True
+
+    def cancel_disable_preparation(self):
+        """Honor a new Enable choice while read-only cancellation finishes."""
+        self._disable_preparing=False
+
     def disable(self):
+        if getattr(self,'_scene_loading',None) is not None:
+            raise RuntimeError('Scene Editor disable preparation is incomplete')
         self._revoke_world_intents()
+        if self.authored_preview is not None:
+            if not self.authored_preview.close():raise RuntimeError('Authored preview cleanup is pending')
+            self.authored_preview=None
+        if not self.authored.close():raise RuntimeError('Authored source release is pending')
         self._close_author_ui()
         if self.saved_menu is not None:self.saved_menu.close();self.saved_menu=None
         self.runtime.disable()

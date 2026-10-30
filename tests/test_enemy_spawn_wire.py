@@ -24,6 +24,7 @@ class EnemySpawnWireTests(unittest.TestCase):
         t._owner=threading.get_ident();t._closed=False;t.mesh_protocol=3;t.enemy_spawn_protocol=capability;t.enemy_pose_protocol=1;t.enemy_arena_protocol=1;t.enemy_arena_binding_protocol=1;t.enemy_clearance_protocol=1;t.enemy_grounded_spawn_protocol=2;t.enemy_extra_spots_protocol=1
         t._process=SimpleNamespace(stdin=io.StringIO())
         t.enemy_combat_placement_protocol=1
+        t.timeline_blueprint_protocol=1
         t.enemy_helper_lookup_research_protocol=1;t.enemy_geometry_placement_research_protocol=1;t.enemy_authored_encounter_research_protocol=7
         t._read=lambda:dict(event='session_response',command='mesh',closed=False)
         return t
@@ -33,6 +34,12 @@ class EnemySpawnWireTests(unittest.TestCase):
             with self.subTest(operation=op):
                 t=self.transport();t._command('mesh',packet(op))
                 self.assertEqual(t._process.stdin.getvalue(),'mesh '+packet(op).hex()+'\n')
+
+    def test_timeline_reveal_requires_exact_capability_before_transport_write(self):
+        for capability in (0,True,2):
+            t=self.transport();t.timeline_blueprint_protocol=capability
+            with self.assertRaisesRegex(ValueError,'Timeline Blueprint'):t._command('mesh',packet(221))
+            self.assertEqual(t._process.stdin.getvalue(),'')
 
     def test_combat_placement_requires_its_negotiated_capability(self):
         for capability in (0,True,2):

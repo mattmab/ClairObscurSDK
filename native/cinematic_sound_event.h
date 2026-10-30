@@ -173,6 +173,18 @@ class CinematicSoundEvent {
     }
 public:
     bool active() const { return state_!=0; }
+#ifdef E33_CINEMATIC_EPOCH_RETIRE_SESSION
+    uint32_t retire(uint64_t base,const e33_retired_world::Snapshot& epoch,const CallIdentity& player) {
+        if(!active())return 0;
+        if(state_!=1||!e33_retired_world::same(player_,player))return 1503;
+        e33_retired_world::TargetOps current{base};
+        const auto proof=e33_retired_world::double_observe(current,epoch.world);
+        if(proof!=e33_retired_world::Result::Retired)return proof==e33_retired_world::Result::Pending?407:1503;
+        // Only undo our exact pinned function-slot exchange; close invokes no
+        // old-world player, AudioComponent, or director callback.
+        return close(base);
+    }
+#endif
     bool protects(uint64_t token) const { return active() && token==function_token_; }
     uint32_t close(uint64_t base) {
         if(!active()) return 0;

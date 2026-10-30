@@ -60,6 +60,7 @@ class NativeManagementMenu:
         self.failure = None
         self._frontend_rejection = None
         self._accept_input = False
+        self._feedback_binding_frame = None
         self._presentation_suspended = False
         self._presentation_dirty = False
         self._logged_detail = None
@@ -123,6 +124,7 @@ class NativeManagementMenu:
     def _revoke(self):
         # Stop dispatch first; do not rebind while any removal is deferred.
         self._accept_input = False
+        self._feedback_binding_frame = None
         if self.actions:
             if not self.panel.menu.remove_controls(self.actions):
                 raise RuntimeError('Control removal deferred; close this native menu')
@@ -177,8 +179,10 @@ class NativeManagementMenu:
                 # Invisible controls must consume clicks without invoking mods.
                 if self._presentation_suspended:
                     return
-                if not self._accept_input or self.frame is not frame:
+                if not self._accept_input or (self.frame is not frame and self._feedback_binding_frame is not frame):
                     raise ManagementError('Native menu input is revoked or stale')
+                current=next((c for c in self.frame.controls if c.token==control.token),None)
+                if current is None or not current.enabled:return
                 editor = control.editor
                 if editor is None or editor.kind == 'json':
                     self.submit(frame.revision, control.token)
@@ -195,6 +199,24 @@ class NativeManagementMenu:
             bindings.append((self.panel.buttons[index], click))
         self.actions.extend(self.panel.menu.bind_controls(bindings))
         self._accept_input = True
+
+    def update_control_feedback(self, controls):
+        """Paint labels/disable controls without invalidating captured pointer input.
+
+        Navigation and new actions still require refresh/rebinding. Feedback may
+        only keep or disable existing actions, with the same tokens and editors.
+        """
+        from dataclasses import replace
+        controls=tuple(controls);previous=self.frame
+        if len(controls)!=len(previous.controls) or any(
+                a.token!=b.token or a.editor!=b.editor or (b.enabled and not a.enabled)
+                for a,b in zip(previous.controls,controls)):
+            raise ManagementError('Feedback cannot add or enable menu actions')
+        if self._feedback_binding_frame is None:self._feedback_binding_frame=previous
+        for index,(a,b) in enumerate(zip(previous.controls,controls)):
+            if a.label!=b.label:self.panel.set_text(self.panel.labels[index],b.label)
+            if a.enabled!=b.enabled:self.panel.set_enabled(index,b.enabled)
+        self.frame=replace(previous,controls=controls)
 
     def submit(self, revision, token, **value):
         if self.failure:

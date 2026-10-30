@@ -24,6 +24,25 @@ class Lease:
         self.object=N(pid=7,index=token,serial=3,address=0x10000+token*8)
 
 class PartialControlTests(unittest.TestCase):
+    def test_unresolved_different_lease_keeps_ownership_and_does_not_block_controls(self):
+        self.session.pid=7;self.fail_at=None
+        pending=Lease(99);pending._pending_identity=(7,99,3,0x10318);pending.object=None
+        self.session._leases.add(pending)
+        result=self.owner.bind_many(self.bindings)
+        self.assertEqual(len(result),4);self.assertEqual(self.calls,1)
+        self.assertIn(pending,self.session._leases);self.assertTrue(pending.active)
+
+    def test_unresolved_alias_or_unknown_identity_blocks_before_dispatch(self):
+        self.session.pid=7
+        pending=Lease(99);target=self.leases[2].object
+        pending._pending_identity=(target.pid,target.index,target.serial,target.address);pending.object=None
+        self.session._leases.add(pending)
+        with self.assertRaises(ValueError):self.owner.bind_many(self.bindings)
+        self.assertEqual(self.calls,0);self.assertEqual(self.owner.controls,[])
+        del pending._pending_identity
+        with self.assertRaisesRegex(ValueError,'unresolved lease'):self.owner.bind_many(self.bindings)
+        self.assertEqual(self.calls,0)
+
     def test_alias_identity_still_rejected_before_native_acquisition(self):
         alias=Lease(99)
         alias.object=self.leases[2].object

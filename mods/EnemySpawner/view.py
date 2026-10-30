@@ -77,7 +77,7 @@ class EnemyView(ScrollWorkspaceView):
                 'Original attacks, defeat, retry, level / health / difficulty and explicit cleanup passed live testing. '
                 'This new menu workflow still needs a live preflight.\n\n'
                 'A hidden, temporary Gault encounter anchor is held outside combat; only Alpha Simon enters the battle. '
-                'An original exploration Simon is not staged. Normal Simon and phase 2 belong to one separate, unresolved two-battle route.\n'
+                'An original exploration Simon is not staged. Normal Simon has separate original direct-fight choices for both combat stages; automatic cinematic handoff is not implemented.\n'
                 'Choose an arena, set difficulty, then start. Use Remove owned encounter after returning to exploration.')
             issue=unavailable_reason(model)
             if issue:description+='\nUnavailable: '+issue
@@ -205,11 +205,13 @@ class EnemyView(ScrollWorkspaceView):
             description = '\n'.join([entry['validation'], entry['class_path'], *entry['limitations'],
                 'Mode: '+mode, warning])
             if entry['id'] in ('e7e263f066d33733','ab11b529310fbd73'):
-                description+='\nNormal Simon uses an intro, first battle, phase-transition cinematic, second battle and outro. Phase 2 is an internal stage, not a standalone original encounter. The original exploration presentation and return path are not yet available.'
+                description+='\nNormal Simon has separate original direct-fight choices for the first and second battles. Both combat stages were tested through return to exploration. Automatic intro, cinematic handoff between battles, and outro orchestration are not implemented; starting a stage does not run the complete campaign sequence.'
             elif entry['id']=='25a4bf79865ca4fb':
                 description+='\nThis world Blueprint defaults to YellowForest_Gault. Its original Mirror Renoir encounter link is unresolved; the Monolith cinematic source does not establish that link.'
             elif entry['id']=='e02190410f616184':
-                description+='\nThe Monolith Mirror Renoir battle source and intro bindings are identified. Its direct fight and original exploration presentation have not been qualified. Verified Curator / Renoir is a different encounter.'
+                description+='\nThe Monolith Mirror Renoir original direct fight was tested through return to exploration. Original exploration presentation and outer campaign intro are not staged. Verified Curator / Renoir is a different encounter.'
+            elif entry['id']=='d6ec611a700522e6':
+                description+='\nThe paired Duolliste fight reached phase 2 and returned normally in testing. Its phase cutscene was not visible at a foliage-obstructed placement. Ground and party clearance do not verify camera visibility; choose open ground. Original cinematic relocation remains unqualified.'
             if entry.get('verification',{}).get('native_default_preparation')=='verified':
                 description+='\nOriginal default preparation and cleanup verified. Individual combat, victory and framing remain untested.'
             if issue:description+='\nEncounter route unresolved: '+issue

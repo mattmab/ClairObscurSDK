@@ -130,6 +130,10 @@ class Construction:
                 values = panel._mutate(invoke_group, panel.scope, panel._planner, plans)
                 for (pending, *_), value in zip(group, values):
                     self.results[pending.number] = value
+                # All returned leases and local dependencies are adopted before
+                # servicing the independent title frontend; never yield mid-ACK.
+                from .loading_preparation import service_loading_io
+                service_loading_io(getattr(panel.scope,'_session',None))
             remaining = later
         # Includes text-bound dictionary keys and row/slot collections. Local
         # temporary references are not used after the explicit flush boundary.

@@ -106,6 +106,17 @@ class AdmissionTests(unittest.TestCase):
 
 
 class WarmObserverTests(unittest.TestCase):
+    def test_loading_retirement_confirmation_requires_two_fresh_matching_root_links(self):
+        world=N(pid=7,index=1,serial=2,address=0x10000)
+        gi=N(pid=7,index=2,serial=3,address=0x20000)
+        provider=m.WarmAdmissionObserver(7)
+        reader=N(bind=lambda:nullcontext(),close=lambda:None)
+        expected=(m.identity(world),m.identity(gi))
+        with patch.object(m,'ReadBatch',return_value=reader),patch.object(provider,'engine_catalog'),patch.object(m,'anchor',side_effect=(([None,None,world,gi],None),([None,None,world,gi],None))) as observe:
+            self.assertTrue(provider.confirms_loading_world(*expected));self.assertEqual(observe.call_count,2)
+        with patch.object(provider,'engine_catalog'),patch.object(m,'anchor',return_value=([None,None,gi,world],None)):
+            self.assertFalse(provider.confirms_loading_world(*expected))
+
     def test_engine_discovery_once_but_selected_fresh_every_time(self):
         engine=obj(1,'GameEngine')
         catalog=N(select=lambda name:(engine,))

@@ -59,6 +59,18 @@ static bool validate_target_enum(uint64_t base,uint64_t property,const CallIdent
 static StrongLeasePool<> session_leases;
 static uint64_t lease_session=0;
 #endif
+#ifdef E33_SEQUENCER_ARRAY_SESSION
+#include "target_sequencer_array.h"
+static e33_sequencer_array::Frame session_sequencer_array;
+#endif
+#ifdef E33_AUTHORED_CURVE_SESSION
+#include "target_authored_curve_patch.h"
+static e33_curve_patch::Frame session_curve_patch;
+#endif
+#ifdef E33_SEQUENCE_BINDING_VALUE_SESSION
+#include "target_portable_binding.h"
+static e33_portable_binding::Frame session_portable_binding;
+#endif
 
 static SchedulePacket target{};
 static ObserverBuffer session_events{};
@@ -83,6 +95,12 @@ static e33_builder::Owner session_builder;
 static e33_mesh::Owner session_mesh;
 #include "map_runtime_owner.h"
 static e33_map_runtime::Owner session_map_runtime;
+#ifdef E33_MAP_LOAD_GATE_SESSION
+#include "map_load_gate.h"
+static e33_map_load_gate::Owner session_map_load_gate;
+#include "map_asset_preparation.h"
+static e33_map_asset_preparation::Owner session_map_assets;
+#endif
 #ifdef E33_ENEMY_SPAWN_SESSION
 #include "enemy_spawn_owner.h"
 #include "npc_original_admission.h"
@@ -92,6 +110,17 @@ static e33_map_runtime::Owner session_map_runtime;
 static e33_npc_presentation::ResearchService session_npc_research;
 #endif
 static e33_enemy_spawn::Owner session_enemy_spawn;
+#ifdef E33_TIMELINE_ACTOR_POOL_SESSION
+#include "timeline_actor_channel.h"
+struct TimelineActorOwner: e33_enemy_spawn::Owner {TimelineActorOwner():Owner(false,true){}};
+static TimelineActorOwner session_timeline_actors[e33_timeline_actor::capacity];
+static e33_timeline_actor::Slots session_timeline_slots;
+static bool timeline_viewport_camera_proof(uint64_t b,const CallIdentity& player,const CallIdentity& camera){
+    for(auto& actor:session_timeline_actors)
+        if(actor.proves_viewport_camera(b,player,camera,lease_session,session_leases))return true;
+    return false;
+}
+#endif
 #if E33_RUNTIME_CINEMATIC_VERSION>=186
 #include "encounter_tuning_owner.h"
 static e33_encounter_tuning::Owner session_encounter_tuning;
@@ -211,6 +240,19 @@ static MenuResult close_menu_actions() {
 #endif
     return MenuResult::Ok;
 }
+#ifdef E33_CINEMATIC_EPOCH_RETIRE_SESSION
+static uint32_t retire_cinematic_menu_actions(const e33_retired_world::Snapshot& source) {
+    if(!session_menu.menu.active())return 0;
+    if(!e33_retired_world::same(session_menu.epoch.world(),source.world))return 1403;
+    TargetMenuOps<StrongLeasePool<>> proof{session_menu,session_leases};
+    const auto ready=proof.context();
+    if(ready!=MenuContext::Ready)return ready==MenuContext::Deferred?407:1403;
+    if(!session_menu.epoch_cleanup)return 1404;
+    session_menu.menu.stop_actions();
+    const auto removed=close_menu_actions();
+    return removed==MenuResult::Ok?0:removed==MenuResult::Deferred?407:1403;
+}
+#endif
 #include "menu_open_pipeline.h"
 static MenuResult menu_command(MenuPacket& wire) {
     auto& s=session_menu;
@@ -552,6 +594,12 @@ static bool lifetime_valid() {
         fixed_slot(runtime_base, target.function_index, target.function_serial) == target_function;
 }
 uint32_t backend_open(SessionPacket* packet) {
+#ifdef E33_AUTHORED_CURVE_SESSION
+    if(session_curve_patch.quarantined())return 3783;
+#endif
+#ifdef E33_SEQUENCER_ARRAY_SESSION
+    if(session_sequencer_array.quarantined())return 3743;
+#endif
 #ifdef E33_SEQUENCE_PLAYER_SESSION
     if(session_sequence.active()) return 1473;
 #endif
@@ -608,6 +656,12 @@ static uint32_t guarded_pause_close(bool terminal) {
 #endif
 #ifdef E33_LEASE_SESSION
 static bool lease_release_protected(uint64_t token){
+#ifdef E33_AUTHORED_CURVE_SESSION
+    if(session_curve_patch.protects(token))return true;
+#endif
+#ifdef E33_BATTLE_COMPLETION_RECEIPT_SESSION
+    if(session_parameter_research.protects(token))return true;
+#endif
 #ifdef E33_PAUSE_MENU_SESSION
     if(pause_attachment.protects(token))return true;
 #endif
@@ -641,6 +695,7 @@ static bool lease_release_protected(uint64_t token){
 #endif
 #if defined(E33_RETIRED_WORLD_SESSION) && defined(E33_MESH_SESSION)
     if(session_map_runtime.protects(token))return true;
+    if(session_map_assets.protects(token))return true;
 #endif
     return false;
 }
@@ -685,6 +740,35 @@ uint32_t backend_command(SessionPacket* packet) {
 #ifdef E33_MESH_SESSION
     case SessionMesh: {
         auto& p=*reinterpret_cast<MeshPacket*>(packet->console_text);
+#ifdef E33_AUTHORED_CURVE_SESSION
+        if(p.operation==e33_curve_patch::operation){
+            auto& edit=*reinterpret_cast<e33_curve_patch::Packet*>(&p);
+            __try{authored_curve_patch_command(runtime_base,lease_session,session_leases,edit,session_curve_patch,!session_sequence.active());}
+            __except(EXCEPTION_EXECUTE_HANDLER){edit.error=session_curve_patch.quarantined()?3783:3780;
+                if(session_curve_patch.quarantined())edit.state=edit.outcome=2;}
+            return 0;
+        }
+#endif
+#ifdef E33_SEQUENCE_BINDING_VALUE_SESSION
+        if(p.operation==e33_portable_binding::operation){
+            auto& query=*reinterpret_cast<e33_portable_binding::Packet*>(&p);
+            __try{portable_binding_command(runtime_base,lease_session,session_leases,query,session_portable_binding);}
+            __except(EXCEPTION_EXECUTE_HANDLER){query.error=session_portable_binding.quarantined()?3763:3760;
+                if(session_portable_binding.quarantined())query.state=query.outcome=2;}
+            return 0;
+        }
+#endif
+#ifdef E33_SEQUENCER_ARRAY_SESSION
+        if(p.operation==e33_sequencer_array::operation) {
+            auto& query=*reinterpret_cast<e33_sequencer_array::Packet*>(&p);
+            __try {sequencer_array_command(runtime_base,lease_session,session_leases,query,session_sequencer_array);}
+            __except(EXCEPTION_EXECUTE_HANDLER) {
+                query.error=session_sequencer_array.quarantined() ? 3743 : 3741;
+                if(session_sequencer_array.quarantined())query.state=query.outcome=2;
+            }
+            return 0;
+        }
+#endif
 #if E33_RUNTIME_CINEMATIC_VERSION>=186
         if(p.operation>=157&&p.operation<=159){
             __try {session_encounter_tuning.command(runtime_base,lease_session,session_leases,p,session_enemy_spawn,session_npc_research);}
@@ -721,6 +805,7 @@ uint32_t backend_command(SessionPacket* packet) {
 #endif
             if(!session_owned_battle_arena.token_matches(p.owner)){p.error=3601;return 0;}
             const auto operation=p.operation;
+            if(operation==e33_timeline_actor::construct&&session_timeline_slots.find(p.owner)>=0){p.error=3773;return 0;}
             __try {
                 if(operation==e33_owned_arena::qualify_helper){
 #if E33_RUNTIME_CINEMATIC_VERSION>=181
@@ -793,7 +878,7 @@ uint32_t backend_command(SessionPacket* packet) {
 #endif
 #ifdef E33_ENEMY_SPAWN_SESSION
 #ifdef E33_BATTLE_PARAMETER_FRAME_RESEARCH
-        if(p.operation>=124 && p.operation<=130) {
+        if((p.operation>=124 && p.operation<=130)||p.operation==160) {
             __try {
                 e33_enemy_spawn::ParameterInstanceAuthority<StrongLeasePool<>> authority{};
 #ifdef E33_NPC_PRESENTATION_RESEARCH
@@ -910,7 +995,23 @@ uint32_t backend_command(SessionPacket* packet) {
             const uint32_t yes=1;std::memcpy(raw+4096,&yes,4);p.state=1;return 0;
         }
 #endif
-        if((p.operation>=110 && p.operation<=123)||p.operation==131||p.operation==132||p.operation==133) {
+#ifdef E33_TIMELINE_ACTOR_POOL_SESSION
+        if(p.operation>=e33_timeline_actor::construct&&p.operation<=e33_timeline_actor::retire){
+            if((p.error=e33_timeline_actor::validate(p)))return 0;
+            const auto operation=p.operation;
+            const int slot=operation==e33_timeline_actor::construct?session_timeline_slots.reserve(p.owner):session_timeline_slots.find(p.owner);
+            if(slot<0){p.error=operation==e33_timeline_actor::construct?3769:3770;return 0;}
+            auto& actor=session_timeline_actors[slot];
+            p.operation=operation==e33_timeline_actor::construct?120:operation==e33_timeline_actor::reveal?221:111;
+            __try{actor.command(runtime_base,lease_session,session_leases,p);}
+            __except(EXCEPTION_EXECUTE_HANDLER){p.error=3772;}
+            p.operation=operation;
+            if(operation==e33_timeline_actor::retire&&!p.error&&
+               !session_timeline_slots.retired(static_cast<unsigned>(slot),p.error,actor.has_work()))p.error=3771;
+            return 0;
+        }
+#endif
+        if((p.operation>=110 && p.operation<=123)||p.operation==131||p.operation==132||p.operation==133||p.operation==221) {
 #ifdef E33_BATTLE_PARAMETER_FRAME_RESEARCH
             // A failed private frame retains the trigger it was authorized by.
             // Normal shutdown already closes parameters before enemies/arenas.
@@ -925,9 +1026,21 @@ uint32_t backend_command(SessionPacket* packet) {
             return 0;
         }
 #endif
+#ifdef E33_MAP_LOAD_GATE_SESSION
+        if(p.operation>=104&&p.operation<=106){
+            __try{session_map_assets.command(runtime_base,lease_session,session_leases,p);}
+            __except(EXCEPTION_EXECUTE_HANDLER){session_map_assets.quarantine();p.error=2169;}
+            return 0;
+        }
+        if(p.operation>=99&&p.operation<=103){
+            __try{session_map_load_gate.command(runtime_base,p);}
+            __except(EXCEPTION_EXECUTE_HANDLER){session_map_load_gate.quarantine();p.error=2142;}
+            return 0;
+        }
+#endif
         if(p.operation>=93 && (p.operation<=97
 #ifdef E33_RETIRED_WORLD_SESSION
-            ||(p.version==3 && p.operation==98)
+            ||(p.version==3 && (p.operation==98||p.operation==107))
 #endif
             )) {
             __try {session_map_runtime.command(runtime_base,lease_session,session_leases,p);}
@@ -1005,8 +1118,15 @@ uint32_t backend_command(SessionPacket* packet) {
 #ifdef E33_MUSIC_AUDIO_SESSION
     case SessionMusicAudioOwner: {
         auto& wire=*reinterpret_cast<MusicAudioOwnerPacket*>(packet->console_text);
+#ifdef E33_CINEMATIC_EPOCH_RETIRE_SESSION
+        if(wire.operation==5) {
+            session_music_audio.retire_command(runtime_base,lease_session,session_leases,session_override,wire);
+            return 0;
+        }
+#endif
         if(wire.operation==2 && session_sequence.active()) { wire.error=1491; return 0; }
-        session_music_audio.command(runtime_base,lease_session,session_leases,session_menu.menu.active(),wire);
+        session_music_audio.command(runtime_base,lease_session,session_leases,session_menu.menu.active(),wire,
+            &session_menu.player,session_menu.owner);
         return 0;
     }
 #endif
@@ -1048,7 +1168,39 @@ uint32_t backend_command(SessionPacket* packet) {
 #ifdef E33_SEQUENCE_PLAYER_SESSION
     case SessionSequenceOwner: {
         auto& wire=*reinterpret_cast<SequenceOwnerPacket*>(packet->console_text);
-        session_sequence.command(runtime_base,session_menu,wire);
+#ifdef E33_SEQUENCE_AUTHORED_BINDING_SESSION
+        if(wire.operation==16 || wire.operation==17) {
+            __try {session_sequence.authored_command(runtime_base,lease_session,session_leases,session_menu,wire);}
+            __except(EXCEPTION_EXECUTE_HANDLER) {session_sequence.authored_fault(wire);}
+            return 0;
+        }
+#endif
+#ifdef E33_SEQUENCE_RETIREMENT_SESSION
+        if(wire.operation==7) {
+            __try {
+#ifdef E33_CINEMATIC_EPOCH_RETIRE_SESSION
+                if(!session_sequence.valid_retirement_request(wire)) {wire.error=1471;wire.state=session_sequence.current_state();return 0;}
+                e33_retired_world::Snapshot source{};CallIdentity player{};
+                auto error=session_sequence.retirement_authority(runtime_base,lease_session,session_leases,wire.owner,source,player);
+                if(!error)error=retire_cinematic_menu_actions(source);
+#ifdef E33_CINEMATIC_WIDGET_SESSION
+                if(!error)error=session_widget_hook.retire(runtime_base,source,player);
+#endif
+#ifdef E33_CINEMATIC_SOUND_EVENT_SESSION
+                if(!error)error=session_sound_event.retire(runtime_base,source,player);
+#endif
+#ifdef E33_MUSIC_AUDIO_SESSION
+                if(!error)error=session_music_audio.retire_world(runtime_base,lease_session,session_leases,source,session_override,session_sequence.captured_menu_owner());
+#endif
+                if(error) {wire.error=error;wire.state=session_sequence.current_state();return 0;}
+#endif
+                session_sequence.retire(runtime_base,lease_session,session_leases,wire);
+            }
+            __except(EXCEPTION_EXECUTE_HANDLER) {wire.error=1596;wire.state=2;}
+            return 0;
+        }
+#endif
+        session_sequence.command(runtime_base,session_menu,wire,session_pod_validation);
 #ifdef E33_CINEMATIC_WIDGET_SESSION
         if(wire.operation==2 && !wire.error && !wire.state) {
             // Use the common sequence-stopped cleanup, including independent
@@ -1072,6 +1224,18 @@ uint32_t backend_command(SessionPacket* packet) {
 #endif
 #ifdef E33_MEDIA_SESSION
     case SessionMediaOwner:
+#ifdef E33_CINEMATIC_EPOCH_RETIRE_SESSION
+        {
+            auto& wire=*reinterpret_cast<MediaOwnerPacket*>(packet->console_text);
+            if(wire.operation==4) {
+                e33_retired_world::Snapshot source{};
+                auto error=session_media.retirement_authority(runtime_base,lease_session,session_leases,wire,source);
+                if(!error)error=retire_cinematic_menu_actions(source);
+                if(!error)error=session_music_audio.retire_world(runtime_base,lease_session,session_leases,source,session_override,session_media.captured_menu_owner());
+                if(error) {wire.error=error;wire.state=session_media.current_state();return 0;}
+            }
+        }
+#endif
         session_media.command(runtime_base,lease_session,session_leases,session_menu,
             *reinterpret_cast<MediaOwnerPacket*>(packet->console_text));
         return 0;
@@ -1180,6 +1344,9 @@ uint32_t backend_command(SessionPacket* packet) {
         CallRetention retention{&retained,retain_preflight,retain_output};
 #ifdef E33_SEQUENCE_PLAYER_SESSION
         if(retained.call.version==kSequenceCallVersion) {
+#ifdef E33_AUTHORED_CURVE_SESSION
+            if(session_curve_patch.quarantined()){retained.call.error=3783;return 0;}
+#endif
             retained.call.error=session_sequence.create(runtime_base,lease_session,session_leases,session_menu,
                 retained,&retention,session_pod_validation,E33_TRACE_ENTRY_VALIDATION);
             return 0;
@@ -1360,6 +1527,16 @@ static uint32_t guarded_mesh_close() {
     __try {const auto e=session_npc_research.close(runtime_base,lease_session,session_leases);if(e)return e;}
     __except(EXCEPTION_EXECUTE_HANDLER){return 3453;}
 #endif
+#ifdef E33_TIMELINE_ACTOR_POOL_SESSION
+    for(unsigned slot=e33_timeline_actor::capacity;slot-->0;){
+        if(!session_timeline_slots.reserved(slot))continue;
+        __try{
+            auto& actor=session_timeline_actors[slot];
+            const auto error=actor.close(runtime_base,lease_session,session_leases);if(error)return error;
+            if(!session_timeline_slots.retired(slot,error,actor.has_work()))return 3771;
+        }__except(EXCEPTION_EXECUTE_HANDLER){return 3772;}
+    }
+#endif
     __try {const auto e=session_enemy_spawn.close(runtime_base,lease_session,session_leases);if(e)return e;}
     __except(EXCEPTION_EXECUTE_HANDLER) {return 2910;}
 #if E33_RUNTIME_CINEMATIC_VERSION>=177
@@ -1377,8 +1554,16 @@ static uint32_t guarded_mesh_close() {
 #endif
 #endif
 #endif
+#ifdef E33_MAP_LOAD_GATE_SESSION
+    __try {const auto e=session_map_load_gate.close(runtime_base);if(e)return e;}
+    __except(EXCEPTION_EXECUTE_HANDLER) {return 2142;}
+#endif
     __try {const auto e=session_map_runtime.close(runtime_base,lease_session,session_leases);if(e)return e;}
     __except(EXCEPTION_EXECUTE_HANDLER) {return 2109;}
+#ifdef E33_MAP_LOAD_GATE_SESSION
+    __try {const auto e=session_map_assets.close(runtime_base,lease_session,session_leases);if(e)return e;}
+    __except(EXCEPTION_EXECUTE_HANDLER) {return 2169;}
+#endif
 #ifdef E33_RUNTIME_CINEMATIC_SESSION
     __try {const auto e=session_runtime_cinematic.close(1);if(e)return e;}
     __except(EXCEPTION_EXECUTE_HANDLER) {return 2015;}
@@ -1417,23 +1602,29 @@ uint32_t backend_close() {
     if(!backend_shutting_down() && !qa_mime_restore(runtime_base))return kSessionCloseDeferred;
 #endif
     uint32_t lease_cleanup_error=0;
+#ifdef E33_AUTHORED_CURVE_SESSION
+    if(session_curve_patch.quarantined())lease_cleanup_error=3783;
+#endif
+#ifdef E33_SEQUENCER_ARRAY_SESSION
+    if(session_sequencer_array.quarantined())lease_cleanup_error=3743;
+#endif
 #ifdef E33_TRACE_SESSION
     const auto trace_result = session_traces.close(backend_shutting_down());
     if (trace_result == 934) return kSessionCloseDeferred;
     if (trace_result) trace_cleanup_error = trace_result;
-    lease_cleanup_error = trace_cleanup_error;
+    if(!lease_cleanup_error) lease_cleanup_error = trace_cleanup_error;
 #endif
 #ifdef E33_PAUSE_MENU_SESSION
     const auto pause_cleanup=guarded_pause_close(backend_shutting_down());
     if(pause_cleanup==kSessionCloseDeferred && !backend_shutting_down()) return kSessionCloseDeferred;
-    if(pause_cleanup) lease_cleanup_error=pause_cleanup;
+    if(pause_cleanup && !lease_cleanup_error) lease_cleanup_error=pause_cleanup;
 #endif
 #ifdef E33_TEXT_SESSION
     const auto text_cleanup=guarded_text_cleanup();
     if(text_cleanup==TextFrameResult::CleanupDeferred && !backend_shutting_down())
         return kSessionCloseDeferred;
     if(text_cleanup==TextFrameResult::Ok) session_text.frame.reset();
-    else if(!backend_shutting_down()) lease_cleanup_error=TargetTextCall::error(text_cleanup);
+    else if(!backend_shutting_down() && !lease_cleanup_error) lease_cleanup_error=TargetTextCall::error(text_cleanup);
     // On terminal teardown or uncertain ownership, the pinned module retains
     // the bounded frame. It is not unloaded, reset, or reused by a new session.
 #endif
@@ -1446,12 +1637,25 @@ uint32_t backend_close() {
     // An unresolved menu pins the pool. Continue detaching console/observer
     // hooks, but never release its widgets or adopt them in another session.
     if(lease_session && menu_released
+#ifdef E33_AUTHORED_CURVE_SESSION
+       && !session_curve_patch.quarantined()
+#endif
+#ifdef E33_SEQUENCER_ARRAY_SESSION
+       && !session_sequencer_array.quarantined()
+#endif
 #ifdef E33_PAUSE_MENU_SESSION
        && !pause_cleanup
 #endif
        ) {
 #else
-    if(lease_session) {
+    if(lease_session
+#ifdef E33_AUTHORED_CURVE_SESSION
+       && !session_curve_patch.quarantined()
+#endif
+#ifdef E33_SEQUENCER_ARRAY_SESSION
+       && !session_sequencer_array.quarantined()
+#endif
+       ) {
 #endif
         auto result=guarded_lease_close();
         // A normal GC interval may defer release. Keep the GT cleanup hook and
@@ -1477,12 +1681,24 @@ uint32_t backend_close() {
 }
 #ifdef E33_MESH_SESSION
 bool backend_mesh_wake_needed(){return session_mesh.animating() || session_builder.active()
+#ifdef E33_MAP_LOAD_GATE_SESSION
+    || session_map_load_gate.active()
+#endif
 #ifdef E33_RUNTIME_CINEMATIC_SESSION
     || session_runtime_cinematic.active()
+#endif
+#ifdef E33_SEQUENCE_FLIGHT_SESSION
+    // Authored timelines also sample held input on the game thread. Keep the
+    // bounded watcher awake even when no mouse or controller RPC arrives.
+    || session_sequence.active()
 #endif
     ;}
 #endif
 void backend_message(MSG* message) {
+#ifdef E33_MAP_LOAD_GATE_SESSION
+    __try{session_map_load_gate.poll(runtime_base,lease_session,session_leases);}
+    __except(EXCEPTION_EXECUTE_HANDLER){session_map_load_gate.quarantine();}
+#endif
 #if E33_RUNTIME_CINEMATIC_VERSION>=186
     __try {session_encounter_tuning.poll(runtime_base,lease_session,session_leases);}
     __except(EXCEPTION_EXECUTE_HANDLER) {} // owner remains available for cleanup
@@ -1517,6 +1733,10 @@ void backend_message(MSG* message) {
     if(session_picto_batch.active())session_picto_batch.tick(runtime_base,lifetime_valid() && !session_sequence.active());
 #endif
 #ifdef E33_SEQUENCE_PLAYER_SESSION
+#ifdef E33_SEQUENCE_FLIGHT_SESSION
+    __try {session_sequence.editor_tick(runtime_base,session_menu,session_pod_validation,lifetime_valid() && attachment_valid(runtime_base) && local_read<uint64_t>(attached_console+0xd8)==0);}
+    __except(EXCEPTION_EXECUTE_HANDLER){session_sequence.editor_fault();}
+#endif
     if(session_sequence.active()
 #ifdef E33_AUDIO_ISOLATION_SESSION
        || session_override.active()

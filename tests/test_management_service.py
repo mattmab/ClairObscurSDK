@@ -103,6 +103,25 @@ class NativeServiceTests(unittest.TestCase):
         self.assertIsNone(service.menu)
         self.assertFalse(service.status()['available'])
 
+    def test_returned_inactive_focus_rejection_keeps_service_retryable(self):
+        from expedition33.menu import MenuError
+        service=self.service();service.prepare();menu=service.menu
+        menu.panel.uncertain=False
+        for code in (901,90220):
+            error=MenuError('focus unavailable',outcome='returned',native_error=code,active=False)
+            with patch.object(menu,'open',side_effect=error):
+                self.assertIn('viewport focus',service.open())
+        self.assertIsNone(service._failure);self.assertIsNone(service._frontend_rejection)
+        self.assertIsNone(menu._frontend_rejection)
+        self.assertIn('opened',service.open())
+
+    def test_focus_rejection_without_inactive_ack_is_not_suppressed(self):
+        from expedition33.menu import MenuError
+        from expedition33.frontend_rejection import known_rejection
+        for outcome,active in (('unknown',False),('returned',True),('returned',None)):
+            error=MenuError('focus failure',outcome=outcome,native_error=90220,active=active)
+            self.assertIsNone(known_rejection(error))
+
     def test_routes_share_widgets_and_restore_default_presenter(self):
         from expedition33.management_view import ManagementView
         service = self.service()
@@ -124,6 +143,17 @@ class NativeServiceTests(unittest.TestCase):
         self.assertEqual(original.panel.operations.count('build'), 1)
         route.close()  # An inactive route cannot close the default view.
         self.assertEqual(original.panel.state, 'open')
+
+    def test_absent_controller_during_pure_discovery_defers_without_failure(self):
+        from expedition33.cinematics.original_game_action import NotReady
+        service=self.service()
+        panel=SimpleNamespace(widget=None,_planner=None,children=[],assigned=[],uncertain=[])
+        menu=SimpleNamespace(panel=panel,prepare=Mock(side_effect=NotReady('Player controller is not available yet')),
+            _read_operation=lambda:nullcontext(),close=Mock(return_value=True))
+        service._menu_factory=Mock(return_value=menu)
+        service.prepare()
+        menu.close.assert_called_once();self.assertIsNone(service.menu)
+        self.assertIsNone(service._failure);self.assertFalse(service._warmup_attempted)
 
     def test_unchanged_warmed_first_open_skips_paint_but_attaches_and_binds(self):
         service=self.service();service.prepare();menu=service.menu

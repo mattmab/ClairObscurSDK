@@ -81,6 +81,22 @@ class StartupInfoTests(unittest.TestCase):
 
     def text(self):return ''.join(call.args[0] for call in self.console.write.call_args_list)
 
+    def test_burst_records_timings_immediately_but_prints_completed_lines_once(self):
+        self.console._enabled=True
+        self.info.activation('First',True,1.,defer=True)
+        self.info.activation('Second',False,2.,defer=True)
+        self.console.write.assert_not_called()
+        self.assertEqual(self.info._enable_total_ms,3.)
+        self.info.flush_activations();self.info.flush_activations()
+        self.console.write.assert_called_once()
+        self.assertEqual(self.text(),'[OK] First: activated\n[ERROR] Second: activation failed\n')
+
+    def test_uncertain_batched_console_write_is_not_replayed(self):
+        self.console._enabled=True;self.info.activation('First',True,defer=True)
+        self.console.write.side_effect=RuntimeQueryError('uncertain console print')
+        with self.assertRaises(RuntimeQueryError):self.info.flush_activations()
+        self.info.flush_activations();self.console.write.assert_called_once()
+
     def test_title_block_actual_counts_once_and_no_unattached_output(self):
         self.info.poll(title_ready=True);self.console.write.assert_not_called()
         self.console._enabled=True

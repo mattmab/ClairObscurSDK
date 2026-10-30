@@ -30,6 +30,15 @@ class WidgetRejectionRecoveryTests(unittest.TestCase):
    with self.assertRaises(InvocationError):p._mutate(fail)
    with self.assertRaisesRegex(RuntimeError,'unknown'):p.close_owned_tree()
    self.assertTrue(p.uncertain);self.assertEqual(self.calls,[])
+ def test_inactive_focus_precondition_rejection_leaves_tree_closeable(self):
+  from expedition33.menu import MenuError
+  for active in (False,True,None):
+   p=self.panel();p.widget=object();p.buttons=[object()];p.player=object()
+   p.scope.prepare_menu=lambda *a,**k:(_ for _ in ()).throw(
+       MenuError('focus',outcome='returned',native_error=90220,active=active))
+   with self.assertRaises(MenuError):p.open()
+   self.assertEqual(p.uncertain,active is not False)
+   self.assertIsNone(p.menu);self.assertEqual(p.state,'built')
  def test_diagnostic_is_bounded_read_only_and_cannot_mask_original(self):
   p=self.panel();p.scope.pid=1
   target=SimpleNamespace(index=2,serial=3,address=4);fn=SimpleNamespace(index=5,serial=6,address=7)

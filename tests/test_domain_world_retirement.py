@@ -39,11 +39,30 @@ class DomainRetirementTests(TestCase):
         self.assertIs(model.spawner,spawner);self.assertTrue(spawner.original_fight._world_replaced)
         self.assertEqual(model.poll_world_retirement(CONTEXT),'ack');npc.close.assert_called_once_with();self.assertEqual(spawner.close.call_count,2)
     def test_cinematics_active_playback_and_pause_restore_are_held(self):
-        model=CINEMATIC.Mod();model.title_replay=N(sequence=object(),adapters=None,presentation=None)
+        from cinematics_v2_fixtures import Backend
+        model=CINEMATIC.Mod();backend=Backend();backend.close.return_value=False
+        model.controller.queue('title',lambda:backend,'old');model.controller.poll('old')
         model.stop=Mock(side_effect=AssertionError('old camera/music/presentation restore'));model.revoke_world(CONTEXT)
-        self.assertEqual(model.begin_world_retirement(CONTEXT),'unknown');model.stop.assert_not_called()
-        model.title_replay=None;model.pause=N(state='attached',close=Mock(),retire_world=Mock(return_value='unknown'))
+        self.assertEqual(model.begin_world_retirement(CONTEXT),'pending');model.stop.assert_not_called()
+        backend.stop.assert_not_called();self.assertTrue(model.controller.status().busy)
+        self.assertFalse(backend.close.call_args.args[0].epoch_valid)
+        backend.close.return_value=True
+        model.pause=N(state='attached',close=Mock(),retire_world=Mock(return_value='unknown'))
         self.assertEqual(model.poll_world_retirement(CONTEXT),'unknown');model.pause.close.assert_not_called();model.pause.retire_world.assert_called_once_with()
+    def test_cinematic_pending_cleanup_keeps_world_coordinator_retryable(self):
+        from cinematics_v2_fixtures import Backend
+        from expedition33.world_lifecycle import WorldLifecycle,Binding
+        model=CINEMATIC.Mod();backend=Backend();backend.close.return_value=False
+        model.controller.queue('title',lambda:backend,'old');model.controller.poll('old')
+        scope=N(_children=(),_leases=())
+        loader=N(_loaded={'Cinematics':[None,model,scope]},registry=N(changed=Mock()))
+        coordinator=WorldLifecycle(loader)
+        row=Binding(CONTEXT.previous_token,model,scope,state='retiring',context=CONTEXT)
+        coordinator.bindings['Cinematics']=row
+        coordinator.poll_cleanup();coordinator.poll_cleanup()
+        self.assertEqual(row.state,'retiring');self.assertIsNone(row.error)
+        self.assertFalse(row.domain_ack);self.assertEqual(backend.close.call_count,2)
+        backend.stop.assert_not_called()
     def picto_editor(self):
         editor=PICTO.StockEditor.__new__(PICTO.StockEditor)
         editor.restore_queue=['old'];editor.catalog_request='old';editor.lumina_ui_pending=True

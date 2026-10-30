@@ -119,6 +119,7 @@ class SessionScope:
     """
     def __init__(self, session, *, lease_owner=None):
         self._world_callback_readiness=getattr(session,'_world_callback_readiness',None)
+        self._world_binding_token=getattr(session,'_world_binding_token',None)
         self._parent = None
         self._children = []
         inherited_owner=None
@@ -144,6 +145,7 @@ class SessionScope:
         self._audio_owners = []
         self._enemy_spawn_owners = []
         self._native_owners = []
+        self._close_first = []
         self.console = ScopedConsole(self)
         self.actions = None
 
@@ -168,6 +170,12 @@ class SessionScope:
             if parent is None or parent._closed:
                 raise RuntimeError('Parent resource scope is closed')
         self._session._check()
+
+    @property
+    def capabilities(self):
+        """Read negotiated protocol diagnostics without exposing transport."""
+        self._check()
+        return self._session.capabilities
 
     def _register_native_owner(self, owner):
         """Register cleanup for a same-scope native service, without granting authority."""
@@ -264,6 +272,11 @@ class SessionScope:
     def supports_frame_time_values(self):
         self._check()
         return self._session.supports_frame_time_values
+
+    @property
+    def supports_sequencer_frame_values(self):
+        self._check()
+        return self._session.supports_sequencer_frame_values
 
     @property
     def supports_pod_values(self):
@@ -369,6 +382,12 @@ class SessionScope:
         self._check()
         return self._session.supports_menu_ownership
 
+    def _close_before_descendants(self,owner):
+        """Retire a consumer before child scopes can destroy its inputs."""
+        self._check()
+        if not callable(getattr(owner,'close',None)):raise ValueError('Cleanup consumer must expose close')
+        if not any(item is owner for item in self._close_first):self._close_first.append(owner)
+
     def close(self):
         if threading.get_ident() != self._owner:
             raise RuntimeError('Mod cleanup requires the owning Python thread')
@@ -377,6 +396,15 @@ class SessionScope:
         # Revoke callback access before any transport operation can fail.
         self._closed = True
         errors = []
+        dependencies_closed=True
+        dependency_attempts={id(owner) for owner in self._close_first}
+        for owner in reversed(tuple(self._close_first)):
+            try:
+                if owner.close() is not True:
+                    dependencies_closed=False;errors.append('consumer cleanup deferred')
+            except BaseException as error:
+                dependencies_closed=False;errors.append('consumer cleanup: '+type(error).__name__)
+        self._close_first.clear()
         if self.actions is not None:
             try:
                 self.actions._close()
@@ -405,7 +433,7 @@ class SessionScope:
                 self._session._transport._abort()
             except BaseException as error:
                 errors.append('trace controller cleanup: ' + type(error).__name__)
-        menus_closed = True
+        menus_closed = dependencies_closed
         for model in reversed(tuple(getattr(self, '_mesh_models', ()))):
             try:
                 model.close()
@@ -433,6 +461,7 @@ class SessionScope:
                 errors.append('enemy cleanup: ' + type(error).__name__)
         self._enemy_spawn_owners.clear()
         for owner in reversed(self._sequence_owners):
+            if id(owner) in dependency_attempts:continue
             try:
                 if not owner.close():
                     menus_closed = False

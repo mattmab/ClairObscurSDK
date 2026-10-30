@@ -19,12 +19,13 @@ bool pod_package(Ops& ops,uint64_t object,const char* name) {
 }
 // Exact finite hierarchy from evidence/v53-frame-time-schema.json. No client
 // layouts, arbitrary recursion, owned storage, pointers, or engine mutation.
+template<class Ops> bool validate_pod_schema(Ops& ops,PodValueKind kind,const CallIdentity& identity);
 template<class Ops>
 bool validate_frame_time_schema(Ops& ops,PodValueKind kind,const CallIdentity& identity) {
     if(!ops.context() || !ops.identity(identity)) return false;
-    const char* name=nullptr; const char* fields[2]{};
-    PodValueKind children[2]{}; uint32_t widths[2]{},offsets[2]{};
-    uint64_t flags[2]{},tables[2]{}; const char* types[2]{}; unsigned count=0;
+    const char* name=nullptr; const char* fields[3]{};
+    PodValueKind children[3]{}; uint32_t widths[3]{},offsets[3]{};
+    uint64_t flags[3]{},tables[3]{}; const char* types[3]{}; unsigned count=0;
     switch(kind) {
     case PodValueKind::Timespan: name="Timespan"; count=0; break;
     case PodValueKind::FrameNumber:
@@ -45,11 +46,17 @@ bool validate_frame_time_schema(Ops& ops,PodValueKind kind,const CallIdentity& i
         children[0]=PodValueKind::FrameTime; children[1]=PodValueKind::FrameRate;
         flags[0]=6755468160532484ULL; flags[1]=6755469234274820ULL;
         tables[0]=tables[1]=0x6e136a0; types[0]=types[1]="StructProperty"; break;
+    case PodValueKind::BindingID:
+        name="MovieSceneObjectBindingID";count=3;fields[0]="Guid";fields[1]="SequenceID";fields[2]="ResolveParentIndex";
+        widths[0]=16;widths[1]=widths[2]=4;offsets[1]=16;offsets[2]=20;children[0]=PodValueKind::Guid;
+        flags[0]=20266268116386305ULL;flags[1]=flags[2]=20266268116386304ULL;
+        tables[0]=0x6e136a0;tables[1]=tables[2]=0x6e10a98;
+        types[0]="StructProperty";types[1]=types[2]="IntProperty";break;
     default: return false;
     }
     const auto object=identity.address;
     if(!pod_registered(ops,object) || !ops.name(object+0x18,name) ||
-       !pod_package(ops,ops.template read<uint64_t>(object+0x20),"/Script/CoreUObject") ||
+       !pod_package(ops,ops.template read<uint64_t>(object+0x20),kind==PodValueKind::BindingID?"/Script/MovieScene":"/Script/CoreUObject") ||
        ops.template read<uint64_t>(object+0x40) ||
        ops.template read<uint32_t>(object+0x58)!=pod_value_width(kind)) return false;
     const auto cls=ops.template read<uint64_t>(object+0x10);
@@ -66,7 +73,7 @@ bool validate_frame_time_schema(Ops& ops,PodValueKind kind,const CallIdentity& i
            ops.template read<uint32_t>(field+0x44)!=offsets[i]) return false;
         if(static_cast<uint32_t>(children[i])) {
             const auto child=ops.template read<uint64_t>(field+0x70);
-            if(!validate_frame_time_schema(ops,children[i],ops.capture(child))) return false;
+            if(!validate_pod_schema(ops,children[i],ops.capture(child))) return false;
         }
         field=ops.template read<uint64_t>(field+0x18);
     }
@@ -75,7 +82,8 @@ bool validate_frame_time_schema(Ops& ops,PodValueKind kind,const CallIdentity& i
 
 template<class Ops>
 bool validate_pod_schema(Ops& ops,PodValueKind kind,const CallIdentity& identity) {
-    if(kind==PodValueKind::QualifiedFrameTime || kind==PodValueKind::Timespan) return validate_frame_time_schema(ops,kind,identity);
+    if(kind==PodValueKind::FrameNumber || kind==PodValueKind::FrameTime || kind==PodValueKind::FrameRate ||
+       kind==PodValueKind::QualifiedFrameTime || kind==PodValueKind::Timespan || kind==PodValueKind::BindingID) return validate_frame_time_schema(ops,kind,identity);
     const auto width=pod_value_width(kind);
     if(!width || !ops.context() || !ops.identity(identity)) return false;
     const auto object=identity.address;
@@ -94,6 +102,10 @@ bool validate_pod_schema(Ops& ops,PodValueKind kind,const CallIdentity& identity
         struct_name="Vector"; package="/Script/CoreUObject";
         fields[0]="X"; fields[1]="Y"; fields[2]="Z"; count=3; component=8;
         table=0x6e11788; flags=6755469251052037ULL; field_type="DoubleProperty"; break;
+    case PodValueKind::Rotator:
+        struct_name="Rotator"; package="/Script/CoreUObject";
+        fields[0]="Pitch";fields[1]="Yaw";fields[2]="Roll";count=3;component=8;
+        table=0x6e11788;flags=6755469251052037ULL;field_type="DoubleProperty";break;
     case PodValueKind::Vector2D:
         struct_name="Vector2D"; package="/Script/CoreUObject";
         fields[0]="X"; fields[1]="Y"; count=2; component=8;

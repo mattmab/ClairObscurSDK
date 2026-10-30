@@ -5,6 +5,31 @@ from . import _multi_button_wire as wire
 from .menu import MenuError
 
 
+def _active_lease_index(session):
+    """Index observed leases and acknowledged, not-yet-observed identities.
+
+    An unresolved lease must still count as a duplicate, but it cannot itself
+    authorize a control binding. Without its exact identity, no other lease
+    can be proved unique and the caller must wait for owner cleanup.
+    """
+    result = {}
+    for lease in session._leases:
+        if not lease.active:
+            continue
+        obj = lease.object
+        if obj is None:
+            identity = getattr(lease, '_pending_identity', None)
+            if (type(identity) is not tuple or len(identity) != 4 or
+                    any(type(value) is not int for value in identity) or
+                    identity[0] != session.pid or identity[1] < 0 or
+                    identity[2] <= 0 or identity[3] <= 0):
+                raise ValueError('An unresolved lease has no acknowledged identity; retain its owner')
+        else:
+            identity = (obj.pid, obj.index, obj.serial, obj.address)
+        result.setdefault(identity, []).append(lease)
+    return result
+
+
 class ControlBindBatchRejected(MenuError):
     """Known stopped bind batch; its menu still owns the dispatched prefix."""
     def __init__(self,completed,error):
@@ -94,10 +119,9 @@ class MenuControls:
         if not session.supports_multi_controls or self.menu._state not in ('attached', 'focused'):
             raise MenuError('Controls require an attached v17 menu', outcome='not_started')
         if not callable(callback): raise TypeError('Control callback must be callable')
-        leases = [lease for lease in session._leases if lease.active and
-                  (lease.object.pid, lease.object.index, lease.object.serial, lease.object.address) ==
-                  (child.pid, child.index, child.serial, child.address)]
-        if len(leases) != 1: raise ValueError('Control requires exactly one owned child lease')
+        leases = _active_lease_index(session).get((child.pid, child.index, child.serial, child.address), ())
+        if len(leases) != 1 or leases[0].object is None:
+            raise ValueError('Control requires exactly one observed owned child lease')
         lease = leases[0]
         if self.protects(lease) or len(self.controls) >= 64:
             raise MenuError('Control already bound or menu capacity reached', outcome='not_started')
@@ -134,18 +158,13 @@ class MenuControls:
         controls, requests = [], []
         # Snapshot once before any native acquisition. Large retained shells
         # otherwise rescan every lease for each visible control.
-        by_identity = {}
-        for lease in session._leases:
-            if lease.active:
-                obj = lease.object
-                identity = (obj.pid, obj.index, obj.serial, obj.address)
-                by_identity.setdefault(identity, []).append(lease)
+        by_identity = _active_lease_index(session)
         protected = {id(c._lease) for c in self.controls if c._state != 'closed'}
         selected = set()
         for child, callback in bindings:
             if not callable(callback): raise TypeError('Button callback must be callable')
             leases = by_identity.get((child.pid, child.index, child.serial, child.address), ())
-            if len(leases) != 1 or id(leases[0]) in protected or id(leases[0]) in selected:
+            if len(leases) != 1 or leases[0].object is None or id(leases[0]) in protected or id(leases[0]) in selected:
                 raise ValueError('Control requires one unbound owned lease')
             selected.add(id(leases[0]))
             control = ControlAction(self, leases[0], callback)

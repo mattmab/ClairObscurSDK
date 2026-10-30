@@ -29,7 +29,7 @@ def validate_request(data):
     if type(data) is not bytes or len(data) != SIZE:
         raise ValueError('Invalid media owner size')
     version, op, owner, lease, error, state = HEADER.unpack_from(data)
-    if version != 1 or op not in (1,2,3) or not owner or error or state:
+    if version != 1 or op not in (1,2,3,4) or not owner or error or state:
         raise ValueError('Invalid media owner header')
     if op == 1 and not lease or op != 1 and (lease or any(data[HEADER.size:])):
         raise ValueError('Invalid media owner payload')
@@ -37,6 +37,9 @@ def validate_request(data):
 class NativeMediaOwner:
     def __init__(self, scope):
         self.scope, self.owner, self.state = scope, secrets.randbits(64) or 1, 'new'
+        self._retiring=False
+        self._retirement_ack=False
+        self.retirement_error=None
 
     def _send(self, op, lease=0, plans=()):
         session = self.scope._session
@@ -52,6 +55,11 @@ class NativeMediaOwner:
             if len(data)!=SIZE or data[:24]!=sent[:24] or data[32:]!=sent[32:]:
                 raise ValueError('Media acknowledgement mismatch')
             error, state = HEADER.unpack_from(data)[4:]
+            if op==4:
+                if error in (407,1404) and state==1:
+                    self.retirement_error=error;self.state='armed';return False
+                if error or state!=0:raise RuntimeError(f'Native media retirement rejected ({error}, {state})')
+                self._retirement_ack=True
             if error == 407 and state == 1:
                 self.state = 'armed'
                 return False
@@ -59,6 +67,9 @@ class NativeMediaOwner:
             self.state = 'armed' if state else 'closed'
             return True
         except BaseException:
+            if op==4:
+                self.state='unknown'
+                raise
             logging.getLogger(__name__).exception('Media ownership operation %s failed', op)
             session._abort_ownership()
             raise
@@ -83,4 +94,13 @@ class NativeMediaOwner:
 
     def close(self):
         if self.state in ('new','closed'): return True
+        if self._retiring:return self.retire_world()
         return self._send(2)
+
+    def retire_world(self):
+        if self.state in ('new','closed'):return True
+        capability=getattr(self.scope._session._transport,'media_retirement_protocol',0)
+        if type(capability) is not int or capability!=1:
+            raise RuntimeError('Verified native media retirement capability required')
+        self._retiring=True
+        return self._send(4)

@@ -50,6 +50,25 @@ class WorldLifecycleTests(unittest.TestCase):
   self.tmp.cleanup()
  def enable(self):
   self.coordinator.observe(ready());self.loader.enable('World');self.mod.events.clear()
+ def test_confirmed_destination_retires_while_loading_without_granting_activation(self):
+  self.enable();old=self.coordinator.current_token
+  self.coordinator.observe_loading_world(token(9)[0],token(9)[1])
+  self.assertFalse(self.coordinator.ready);self.assertEqual(self.coordinator.current_token,old)
+  self.assertEqual(self.coordinator.bindings['World'].state,'retiring')
+  self.coordinator.poll_cleanup()
+  self.assertEqual(self.coordinator.bindings['World'].state,'retired')
+  with self.assertRaises(ModError):self.loader.enable('World')
+  self.coordinator.observe(ready(9));self.loader.enable('World')
+  self.assertEqual(self.coordinator.bindings['World'].token,token(9))
+ def test_scope_and_children_keep_their_admitted_world_during_handoff(self):
+  from expedition33._scope import SessionScope
+  self.enable();scope=self.mod.scope;child=SessionScope(scope)
+  self.assertEqual(scope._world_binding_token,token(1))
+  self.assertEqual(child._world_binding_token,token(1))
+  self.coordinator.observe(ready(9))
+  self.assertEqual(scope._world_binding_token,token(1))
+  self.assertEqual(child._world_binding_token,token(1))
+  self.assertEqual(self.coordinator.current_token,token(9))
  def test_explicit_disable_barrier_pending_retains_scope_without_unknown_or_mutation(self):
   self.enable();scope=self.mod.scope
   self.mod.prepare_disable=Mock(side_effect=(False,True))

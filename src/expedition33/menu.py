@@ -14,8 +14,9 @@ from .invocation import prepare_call
 
 
 class MenuError(RuntimeQueryError):
-    def __init__(self, message, *, outcome, native_error=None):
+    def __init__(self, message, *, outcome, native_error=None, active=None):
         self.outcome, self.native_error = outcome, native_error
+        self.active = active
         super().__init__(f'{message} (outcome={outcome}, native_error={native_error})')
 
 
@@ -87,7 +88,7 @@ class NativeMenu:
         if reply.error == 813:
             return False
         if reply.error:
-            raise MenuError('Native menu request rejected', outcome=reply.outcome, native_error=reply.error)
+            raise MenuError('Native menu request rejected', outcome=reply.outcome, native_error=reply.error, active=reply.active)
         if reply.active != (operation not in ('close','retire')):
             self._state = 'unknown'
             session._abort_ownership()

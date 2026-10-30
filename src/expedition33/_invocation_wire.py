@@ -16,6 +16,11 @@ KINDS = ('BoolProperty', 'ByteProperty', 'UInt16Property', 'IntProperty',
          'FloatProperty', 'DoubleProperty', 'ObjectProperty', 'ClassProperty')
 POD_KINDS = ('/Script/CoreUObject.Vector2D', '/Script/CoreUObject.LinearColor',
              '/Script/SlateCore.Margin', '/Script/Slate.Anchors')
+FRAME_KINDS={'/Script/CoreUObject.FrameNumber':23,'/Script/CoreUObject.FrameTime':24,
+             '/Script/CoreUObject.FrameRate':25}
+NAMED_POD_KINDS={**FRAME_KINDS,'/Script/CoreUObject.Guid':22,'/Script/CoreUObject.Timespan':20,
+                 '/Script/CoreUObject.QualifiedFrameTime':19,'/Script/CoreUObject.Vector':15,
+                 '/Script/MovieScene.MovieSceneObjectBindingID':26,'/Script/CoreUObject.Rotator':27}
 
 
 def _identity(value):
@@ -43,7 +48,7 @@ def encode_plan(plan):
     IDENTITY.pack_into(packet, HEADER.size + IDENTITY.size, *_identity(plan.function))
     for number, parameter in enumerate(plan.parameters):
         try:
-            kind = ((22 if parameter.pod_profile == '/Script/CoreUObject.Guid' else 20 if parameter.pod_profile == '/Script/CoreUObject.Timespan' else 19 if parameter.pod_profile == '/Script/CoreUObject.QualifiedFrameTime' else 15 if parameter.pod_profile == '/Script/CoreUObject.Vector' else 9 + POD_KINDS.index(parameter.pod_profile))
+            kind = ((NAMED_POD_KINDS[parameter.pod_profile] if parameter.pod_profile in NAMED_POD_KINDS else 9 + POD_KINDS.index(parameter.pod_profile))
                     if parameter.kind == 'StructProperty' and plan.wire_version == 2
                     else KINDS.index(parameter.kind) + 1)
             name = parameter.name.encode('ascii')

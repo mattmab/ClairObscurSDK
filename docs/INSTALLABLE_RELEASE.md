@@ -1,6 +1,6 @@
 # Expedition 33 SDK — installable release candidate
 
-This package is SDK **0.1.0-rc18**. See `docs/RELEASE_0.1.0_RC18.md` in the
+The current package is SDK **0.1.0-rc23**. See `docs/RELEASE_0.1.0_RC23.md` in the
 source repository for release notes.
 
 This candidate supports the verified Windows Steam executable with SHA-256

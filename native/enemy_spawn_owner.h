@@ -32,6 +32,10 @@
 #include "trigger_anchor_profile.h"
 #include "retired_owned_actor.h"
 #include "npc_listener_observation.h"
+#include "timeline_blueprint_reveal.h"
+#ifdef E33_TIMELINE_BLUEPRINT_SESSION
+#include "timeline_blueprint_profiles.h"
+#endif
 #pragma warning(push)
 #pragma warning(disable:4324)
 // Owned enemy adapter for the current Cinematics candidate. Reuses native profiles;
@@ -43,7 +47,18 @@ using namespace e33_mesh;
 #include "enemy_visual_recipes.inl"
 #endif
 class Owner {
-    bool arena_staging_=false;
+    e33_timeline_blueprint::RevealJournal timeline_reveal_{};
+    bool timeline_class(uint64_t b)const{
+#ifdef E33_TIMELINE_BLUEPRINT_SESSION
+        if(!ids_[4].address||!call_identity(b,ids_[4])||!call_is_class(b,ids_[4].address))return false;
+        for(const auto& row:e33_timeline_blueprint::profiles)
+            if(named(b,ids_[4].address,row.name,row.package))return true;
+#else
+        (void)b;
+#endif
+        return false;
+    }
+    bool arena_staging_=false,timeline_only_=false;
     void* trigger_arena_pool_=nullptr;uint64_t trigger_arena_session_=0;
     bool trigger_arena_cleanup_pending_=false;
     bool trigger_anchor_=false,trigger_capture_attempted_=false,trigger_components_complete_=false;
@@ -76,6 +91,7 @@ class Owner {
     }
 #include "enemy_grounded_placement.inl"
     bool visual_class(uint64_t b)const{
+        if(timeline_class(b))return true;
         if(arena_staging_){
             for(auto cls=ids_[4].address,walked=uint64_t(0);cls&&walked<64;++walked,cls=local_read<uint64_t>(cls+0x40)){
                 if(!call_identity(b,call_capture(b,cls))||!call_is_class(b,cls))return false;
@@ -101,6 +117,7 @@ class Owner {
         for(const auto& row:enemy_visual_recipes)if(named(b,ids_[4].address,row[0],row[1])){recipe=true;break;}
         #endif
         if(arena_staging_)recipe=visual_class(b);
+        if(timeline_class(b))recipe=true;
         if(trigger_anchor_)recipe=!arena_staging_&&e33_trigger_anchor::exact_class(b,ids_[4].address);
         if(!world_path_allowed(named(b,ids_[2].address,"Map_BattleTesting","/Game/QA/Map_BattleTesting"),owner_&&attempted_&&preparing_world_,prepare_or_read_only)||
            !named(b,local_read<uint64_t>(ids_[2].address+16),"World","/Script/Engine")||
@@ -133,7 +150,16 @@ class Owner {
 #include "enemy_authored_encounter.inl"
 #include "enemy_trigger_anchor.inl"
 public:
-    explicit Owner(bool arena_staging=false):arena_staging_(arena_staging){}
+    explicit Owner(bool arena_staging=false,bool timeline_only=false):arena_staging_(arena_staging),timeline_only_(timeline_only){}
+    template<class Pool> bool proves_viewport_camera(uint64_t b,const CallIdentity& player,const CallIdentity& camera,uint64_t session,Pool& pool)const{
+        if(!timeline_only_ || !owner_ || !lease_ || construction_.phase!=e33_owned_actor::ConstructionPhase::Complete || !call_identity(b,player) ||
+           std::memcmp(&camera,&actor_,sizeof(camera)) || !call_identity(b,camera) ||
+           !named(b,ids_[4].address,"CameraActor","/Script/Engine") || local_read<uint64_t>(camera.address+16)!=ids_[4].address ||
+           !pool.owns_object(session,lease_,camera.address) || !call_identity(b,ids_[2]))return false;
+        auto outer=player.address;
+        for(unsigned i=0;outer && i<32;++i,outer=local_read<uint64_t>(outer+32))if(outer==ids_[2].address)return true;
+        return false;
+    }
     bool has_work()const{return owner_||lease_;}
     bool is_trigger_anchor()const{return trigger_anchor_;}
     CallIdentity staged_actor()const{return actor_;}
@@ -279,7 +305,7 @@ public:
     template<class Pool> uint32_t close(uint64_t b,uint64_t session,Pool& pool){
         if(trigger_anchor_)return close_trigger(b,session,pool);
         if(!TargetStrongReferenceOps{b,{-1,0,0}}.can_release())return 407;
-        if(arena_staging_&&e33_owned_actor::allocation_unresolved(construction_,actor_.address!=0))return 3643;
+        if((arena_staging_||timeline_only_)&&e33_owned_actor::allocation_unresolved(construction_,actor_.address!=0))return 3643;
         const bool already_retired=arena_staging_&&externally_retired_owned_actor(b,session,pool);
         const bool actor_valid=!already_retired&&actor_.address&&call_identity(b,actor_);
         struct HelperRetirementOps{
@@ -325,15 +351,38 @@ public:
         arena_ground_attempted_=arena_grounded_=false;arena_ground_journal_={};
         arena_ground_frame_function_={};arena_ground_rotation_function_={};
         for(auto& placement:combat_placements_)placement={};
-        owner_=0;attempted_=false;initialized_=false;placement_attempted_=false;arena_binding_state_={};arena_binding_={};extra_spots_={};preparing_world_=false;grounded_=false;movement_={};movement_function_={};helper_entry_={};encounter_override_={};encounter_table_={};construction_={};return 0;
+        owner_=0;attempted_=false;initialized_=false;placement_attempted_=false;arena_binding_state_={};arena_binding_={};extra_spots_={};preparing_world_=false;grounded_=false;movement_={};movement_function_={};helper_entry_={};encounter_override_={};encounter_table_={};construction_={};timeline_reveal_={};return 0;
     }
     template<class Pool> void command(uint64_t b,uint64_t session,Pool& pool,MeshPacket& p){
         auto* raw=reinterpret_cast<uint8_t*>(&p);
+        if(timeline_only_&&p.operation!=120&&p.operation!=221&&p.operation!=111){p.error=3768;return;}
         if(arena_staging_&&p.operation!=120&&p.operation!=111){p.error=3600;return;}
         if(trigger_anchor_&&p.operation!=120&&p.operation!=111&&p.operation!=118){p.error=3650;return;}
-        if(p.version!=3||p.error||p.state||!p.owner||((p.operation<110||p.operation>123)&&p.operation!=131&&p.operation!=132&&p.operation!=133)){p.error=2900;return;}
+        if(p.version!=3||p.error||p.state||!p.owner||((p.operation<110||p.operation>123)&&p.operation!=131&&p.operation!=132&&p.operation!=133&&p.operation!=221)){p.error=2900;return;}
         if(owner_&&owner_!=p.owner){p.error=2901;return;}
         if(p.operation==111){p.error=close(b,session,pool);return;}
+        // Timeline classes cannot enter enemy initialization, arena binding,
+        // overlap activation or helper research routes.
+        if(owner_&&timeline_class(b)&&p.operation!=221){p.error=3750;return;}
+        if(p.operation==221){
+#ifdef E33_TIMELINE_BLUEPRINT_SESSION
+            for(size_t i=24;i<sizeof(p);++i)if(raw[i]){p.error=3750;return;}
+            const auto result=e33_timeline_blueprint::reveal(timeline_reveal_,[&](){
+                return owner_&&preparing_world_&&timeline_class(b)&&
+                    construction_.phase==e33_owned_actor::ConstructionPhase::Complete&&
+                    current(b)&&call_identity(b,actor_)&&pool.owns_object(session,lease_,actor_.address);
+            },[&](){std::memset(args_,0,sizeof(args_));return call(b,47,ids_[9],actor_);
+            },[&](){std::memset(args_,0,sizeof(args_));args_[0]=1;return call(b,58,ids_[10],actor_);
+            },[&](){std::memset(args_,0,sizeof(args_));return call(b,100,ids_[11],actor_);
+            },[&](){return current(b)&&call_identity(b,actor_);});
+            if(result!=e33_timeline_blueprint::RevealResult::Complete){
+                p.error=result==e33_timeline_blueprint::RevealResult::Rejected?3750:3751;return;
+            }
+            p.state=1;return;
+#else
+            p.error=3750;return;
+#endif
+        }
         if(p.operation==131){
             if(!owner_||!lease_||!visual_class(b)||!entry_source_current(b,true)||!call_identity(b,actor_)||
                !pool.owns_object(session,lease_,actor_.address)){p.error=2993;return;}
@@ -664,6 +713,9 @@ public:
         }
         if(attempted_){p.error=2902;return;}
         std::memcpy(ids_,raw+88,sizeof(ids_));
+        if(timeline_only_&&!timeline_class(b)){p.error=3750;return;}
+        if(timeline_class(b)&&(p.operation!=120||arena_staging_||trigger_anchor_||
+           !timeline_world_allowed(named(b,ids_[2].address,"Map_BattleTesting","/Game/QA/Map_BattleTesting"),timeline_current_world_enabled))){p.error=3750;return;}
         if(e33_trigger_anchor::exact_class(b,ids_[4].address)){
             if(arena_staging_||p.operation!=120){p.error=3650;return;}
             trigger_anchor_=true;

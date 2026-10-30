@@ -5,8 +5,6 @@ separate audit. Missing name-pool entries fail closed without adding names.
 """
 import re
 import struct
-import json
-import subprocess
 from .catalog import capture_matching
 from .reflection import describe
 from .invocation import CallPlan, Parameter, UnsupportedInvocation
@@ -25,16 +23,10 @@ def load_class(scope,path):
         raise UnsupportedInvocation('Verified asset loading requires the sequence candidate runtime')
     if type(path) is not str or not re.fullmatch(r'/Game/(?:[A-Za-z0-9_]+/)*([A-Za-z0-9_]+)\.(?i:\1)_C',path):
         raise ValueError('Expected a canonical top-level /Game/Package.Asset path')
-    query=subprocess.run([str(session._transport._executable),'--resolve-asset-names',str(scope.pid),path],
-        capture_output=True,text=True,encoding='utf8',timeout=30,creationflags=subprocess.CREATE_NO_WINDOW)
-    if query.returncode: raise ValueError('Asset name resolution failed: '+query.stderr.strip())
-    records=[json.loads(line) for line in query.stdout.splitlines()]
-    if len(records)!=3 or records[0].get('event')!='snapshot_start' or records[-1]!={'event':'snapshot_end','emitted':1}:
-        raise ValueError('Incomplete asset name observation')
-    start,rows=records[0],records[1:-1]
-    names=[r for r in rows if r['event']=='asset_names']
-    if start['pid']!=scope.pid or len(names)!=1 or names[0]['package']+'.'+names[0]['asset']!=path:
-        raise ValueError('Asset-name observation changed')
+    from ._asset_names import resolve
+    names=[resolve(scope,path)]
+    if any(names[0].get(key+'_number',0) for key in ('package','asset')):
+        raise UnsupportedInvocation('Numbered class asset names are not supported by this loader')
     c=capture_matching(scope.pid,names=('KismetSystemLibrary','Default__KismetSystemLibrary','LoadClassAsset_Blocking'))
     def one(values):
         values=tuple(values)

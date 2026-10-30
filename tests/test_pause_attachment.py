@@ -39,6 +39,22 @@ class PauseAttachmentTests(unittest.TestCase):
         self.assertEqual(session._transport.command.call_count,1)
         session._abort_ownership.assert_called_once_with()
 
+    def test_arm_accepts_changed_gc_flags_but_rejects_changed_identity(self):
+        fields=dict(pid=7,index=8,serial=9,address=0x10000,name='button',
+            class_index=10,outer_index=11,outer_serial=12)
+        original=SimpleNamespace(**fields,object_flags=0,item_flags=0)
+        lease=SimpleNamespace(active=True,object=original,_token=4)
+        for changed,accepted in (({'item_flags':0x40000000},True),({'serial':10},False),
+                ({'class_index':13},False),({'outer_index':14},False)):
+            current=dict(vars(original));current.update(changed)
+            owner,_=self.owner(None);owner.state='empty';owner.scope._leases=[lease]
+            owner._send=Mock(return_value=True)
+            plan=SimpleNamespace(target=SimpleNamespace(**current))
+            if accepted:self.assertTrue(owner.arm(lease,plan));owner._send.assert_called_once()
+            else:
+                with self.assertRaises(ValueError):owner.arm(lease,plan)
+                owner._send.assert_not_called()
+
     def test_invalid_wire_never_accepted(self):
         data=HEADER.pack(1,2,8,0,0,0)+bytes(SIZE-HEADER.size)
         validate_request(data)

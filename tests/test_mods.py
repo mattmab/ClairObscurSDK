@@ -116,6 +116,32 @@ class ModTests(unittest.TestCase):
                 loader.poll('Specimen')
         self.assertTrue(FakeSession.instances[0].closed)
 
+    def test_pending_intent_runs_first_once_after_shared_delivery(self):
+        self.source('class Mod:\n def enable(self, session): pass\n def poll(self): pass\n def disable(self): pass\n')
+        other=self.root/'Other';other.mkdir()
+        (other/'mod.py').write_text((self.root/'Specimen/mod.py').read_text())
+        with ModLoader(self.root) as loader:
+            for name in ('Specimen','Other'):loader.load(name);loader.enable(name)
+            calls=[];shared=FakeSession.instances[0]
+            shared.console.poll=lambda:calls.append('console')
+            def delivery():
+                calls.append('shared');return 0
+            shared.poll=delivery
+            for name in ('Specimen','Other'):
+                loader._loaded[name][1].poll=lambda name=name:calls.append(name)
+            loader._loaded['Other'][1].poll_urgent=True
+            loader.poll()
+            self.assertEqual(calls,['console','shared','Other','Specimen'])
+            calls.clear();loader.poll()
+            self.assertEqual(calls,['console','shared','Specimen','Other'])
+            loader._loaded['Other'][1].poll_urgent=True
+            loader.world_lifecycle=SimpleNamespace(poll_cleanup=lambda:None,ever_admitted=False,
+                                                   allows=lambda name:name!='Other')
+            calls.clear();loader.poll()
+            self.assertEqual(calls,['console','shared','Specimen'])
+            self.assertTrue(loader._loaded['Other'][1].poll_urgent)
+            del loader.world_lifecycle
+
     def test_two_mods_share_session_and_cleanup_owned_commands(self):
         self.source('class Mod:\n def enable(self, session):\n  self.session=session\n  session.console.register("first", lambda _: "one", owner=self)\n def disable(self): pass\n')
         other = self.root / 'Other'; other.mkdir()

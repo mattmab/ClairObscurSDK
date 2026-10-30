@@ -108,9 +108,12 @@ def main():
         from expedition33.settings import SettingsStore
         original_transport = sdk.SessionTransport
         def release_transport(*, _executable=None):
-            transport = original_transport(_executable=ROOT / 'build/research-probe-cinematic-v210-lease-batch/research_probe.exe')
-            required = ('retired_world_cleanup_protocol', 'menu_open_focus_protocol', 'metadata_stabilization_protocol', 'stable_lease_protocol', 'console_color_status_protocol', 'lease_release_batch_protocol', 'original_game_action_protocol', 'blueprint_trace_protocol', 'picto_edit_protocol', 'picto_progression_protocol', 'picto_class_load_protocol', 'picto_cost_protocol')
-            required = (*required,'builder_world_retirement_protocol')
+            transport = original_transport(_executable=ROOT / 'build/research-probe-cinematic-v251-retirement/research_probe.exe')
+            required = ('map_load_gate_protocol', 'retired_world_cleanup_protocol', 'menu_open_focus_protocol', 'metadata_stabilization_protocol', 'stable_lease_protocol', 'console_color_status_protocol', 'lease_release_batch_protocol', 'original_game_action_protocol', 'blueprint_trace_protocol', 'picto_edit_protocol', 'picto_progression_protocol', 'picto_class_load_protocol', 'picto_cost_protocol')
+            required = (*required,'builder_world_retirement_protocol','sequence_retirement_protocol','media_retirement_protocol','music_audio_retirement_protocol')
+            required = (*required,'sequence_seek_protocol','sequencer_frame_values_protocol','sequencer_object_array_protocol')
+            required = (*required,'timeline_blueprint_protocol','sequence_binding_values_protocol','sequence_portable_binding_protocol','timeline_actor_pool_protocol','timeline_current_world_protocol')
+            required = (*required,'rotator_values_protocol','sequence_origin_update_protocol','command_wait_protocol','sequence_flight_protocol','sequence_flight_keyboard_protocol','sequence_flight_playback_protocol','sequence_placement_input_protocol','media_seek_protocol')
             if transport.zone_travel_protocol != 2 or any(getattr(transport, name, 0) != 1 for name in required) or transport.mesh_protocol != 3:
                 transport.close()
                 raise RuntimeError('Combined release runtime is missing capabilities')
@@ -127,6 +130,7 @@ def main():
             if args.early_init:
                 from expedition33.process_ui import ProcessUI
                 process_ui = ProcessUI(session,loader.registry)
+                process_ui.prepare_queries()
                 session._process_ui = process_ui
                 from expedition33.loading_preparation import LoadingPreparation
                 loading_preparation=LoadingPreparation(session,loader)
@@ -258,6 +262,20 @@ def main():
                 admission_monitor = ReadOnlyAdmissionMonitor(lambda pid=session.pid:UiAdmissionObserver(pid))
                 title_ui = process_ui
                 console_readiness = ConsoleReadiness(session.pid)
+            def service_title_loading():
+                sample=admission_monitor.snapshot()
+                packet=sample.admission if sample is not None else None
+                if packet is not None and getattr(packet,'bootstrap_ready',False) is True:
+                    session.console.poll();session.poll()
+                elif packet is not None and getattr(packet,'title_ready',False) is True:
+                    process_ui.observe(packet)
+                    session.console.poll()
+                    session.poll()
+                elif packet is not None:
+                    context=getattr(packet,'ui_context',None) or getattr(packet,'prewarm_context',None)
+                    if context is not None and context.kind=='world':process_ui.quiesce()
+                if loader.stop_requested:raise RuntimeError('Loading interrupted by SDK shutdown')
+
             def fresh_world_admission():
                 # Read-only gate before EVERY cycle/core/optional enable. A
                 # different fresh token schedules retirement but never enables
@@ -294,11 +312,22 @@ def main():
                             # owners. Repeated old mailbox slots cannot overwrite
                             # a newer token already observed at an enable gate.
                             sampled = packet.admission
+                            destination=getattr(packet,'prewarm_context',None) or getattr(packet,'ui_context',None)
+                            if (destination is not None and destination.kind=='world'
+                                    and world_lifecycle.current_token is not None
+                                    and (destination.world,destination.gi)!=world_lifecycle.current_token[:2]
+                                    and admission_observer.confirms_loading_world(destination.world,destination.gi)):
+                                world_lifecycle.observe_loading_world(destination.world,destination.gi)
                             if (sampled.state == 'world_ready' and world_lifecycle.current_token is not None
                                     and sampled.token != world_lifecycle.current_token):
                                 fresh_world_admission()
                             else:
                                 world_lifecycle.observe(sampled,title=packet.title_ready is True)
+                    if args.early_init and not world_lifecycle.cleanup_ready:
+                        # Domain cleanup can progress behind the game's loading
+                        # screen instead of starting after exploration appears.
+                        session.poll()
+                        world_lifecycle.poll_cleanup()
                     if server:
                         server.poll()
                     if args.early_init:
@@ -321,7 +350,13 @@ def main():
                         if not runtime_polling_started:
                             session.poll() # No generic mod/key polling before first admission.
                         process_ui.observe(observation.admission if observation is not None else None)
-                        loading_ui_ready=loading_preparation.observe(observation.admission if observation is not None else None)
+                        loading_packet=observation.admission if observation is not None else None
+                        loading_context=(getattr(loading_packet,'ui_context',None) or getattr(loading_packet,'prewarm_context',None))
+                        if loading_context is not None:
+                            with process_ui._read_operation():
+                                loading_ui_ready=loading_preparation.observe(loading_packet,pump=service_title_loading)
+                        else:
+                            loading_ui_ready=loading_preparation.observe(loading_packet,pump=service_title_loading)
                         if not loading_ui_ready:activation_candidate=False
                         if title_readiness is True:
                             process_console.title_active()
@@ -367,6 +402,9 @@ def main():
                                 loader.registry._startup_activation_started = {}
                                 loader.registry._startup_enable_timings = {}
                                 console_info.begin_world_cycle()
+                                # Publish the world transition before queued
+                                # activation messages from this restoration.
+                                console_info.poll(world_active=True,title_ready=False)
                             else:
                                 activation_candidate = False
                         if (ui_ready and activation_candidate and late_core_pending and
@@ -385,6 +423,7 @@ def main():
                             not (args.early_init and activation_candidate and restoration is not None
                                  and not startup_gate.pending(time.monotonic()))):
                         loader.poll()
+                    restore_service_at=time.monotonic()+.1
                     while restoration is not None and not loader.stop_requested and time.monotonic() >= next_restore and (not args.early_init or activation_candidate) and not startup_gate.pending(time.monotonic()):
                         management = loader._loaded['SDKManagement'][1]
                         # Restore saved mods even while Pause/Mods is open.
@@ -428,7 +467,7 @@ def main():
                                         console_info.activation(view.get('name') or folder or startup_pending_result[0],
                                             not startup_pending_result[1] and actual is not None and actual.enabled,
                                             getattr(loader.registry,'_startup_enable_timings',{}).get(startup_pending_result[0]),
-                                            getattr(loader,'_startup_preparation_timings',{}).get(folder))
+                                            getattr(loader,'_startup_preparation_timings',{}).get(folder),defer=True)
                                     startup_pending_result = None
                                 if not startup_counts_refreshed:
                                     # Title staging may change the desired set
@@ -457,9 +496,17 @@ def main():
                         # same detached menu or polling every earlier mod after
                         # each enable. Fresh admission still gates EVERY enable;
                         # asynchronous readiness yields to the ordinary loop.
-                        # Console commands can change pending preferences.
-                        session.console.poll()
-                        session.poll()
+                        # Bound console/input servicing latency to this burst
+                        # budget rather than draining two native transports after
+                        # every synchronous enable. Each enable still gets its
+                        # own fresh world check; preferences are sampled again
+                        # after every serviced console command.
+                        if (time.monotonic()>=restore_service_at or busy or
+                                not gameplay_confirmed or restoration is None):
+                            if args.early_init:console_info.flush_activations()
+                            session.console.poll()
+                            session.poll()
+                            restore_service_at=time.monotonic()+.1
                         if busy or not gameplay_confirmed:break
                         next_restore = time.monotonic()
                     if args.early_init:
@@ -507,11 +554,14 @@ def main():
                                 admission_observer.close()
                         finally:
                             try:
-                                if console_readiness is not None:
-                                    console_readiness.close()
+                                if args.early_init:process_ui.close_queries()
                             finally:
-                                if server:
-                                    server.close()
+                                try:
+                                    if console_readiness is not None:
+                                        console_readiness.close()
+                                finally:
+                                    if server:
+                                        server.close()
     finally:
         try:
             lock.close()
@@ -528,3 +578,5 @@ if __name__ == '__main__':
         with (ROOT / 'logs/startup-error.log').open('a', encoding='utf8') as stream:
             traceback.print_exc(file=stream)
         raise
+
+

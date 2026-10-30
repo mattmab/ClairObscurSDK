@@ -3,6 +3,7 @@ import secrets
 import struct
 from dataclasses import replace
 from . import _invocation_wire as call
+from ._menu_latency import measure_method
 
 HEADER=struct.Struct('<IIQQIIII')
 RESOURCE_NAMES=('getter','native_getter','library','component','graph','track_class',
@@ -54,6 +55,7 @@ class NativeCinematicWidgets:
         except BaseException:
             session._abort_ownership();raise
 
+    @measure_method('widgets.prepare')
     def prepare(self,resources,player,remove):
         self.scope._check()
         if self.state!='new': raise RuntimeError('Cinematic widget owner already used')
@@ -63,13 +65,15 @@ class NativeCinematicWidgets:
         ordered=[resources[name] for name in RESOURCE_NAMES]
         if any(obj.pid!=self.scope.pid for obj in ordered+[player]):
             raise ValueError('Cinematic widget identity session mismatch')
-        leases=[self.scope.retain(obj) for obj in ordered]
+        with self.latency.measure('widgets.retain_inputs'):
+            leases=[self.scope.retain(obj) for obj in ordered]
         # Serialize the identity associated with each acknowledged scoped lease.
         ordered=[lease.object for lease in leases]
         payload=b''.join(struct.pack('<iiQ',obj.index,obj.serial,obj.address) for obj in ordered+[player])
         payload+=struct.pack('<11Q',*(lease._token for lease in leases))
         payload+=call.encode_plan(replace(remove,wire_version=1))
-        return self._send(1,payload)
+        with self.latency.measure('widgets.native_arm'):
+            return self._send(1,payload)
 
     def status(self):
         self._send(3)

@@ -73,6 +73,9 @@ class CatalogMenu(OwnedMenuPanel):
             raise
     def _call(self,obj,owner,name,**arguments):
         if self.state=='building' and (owner=='EditableTextBox' or (owner=='Widget' and name=='SetCursor')):
+            if self._construction is not None:
+                self._deferred_setup.append((obj,owner,name,arguments))
+                return
             with self._construction_call(obj,self._function(owner,name),**arguments):pass
             return
         return super()._call(obj,owner,name,**arguments)
@@ -83,7 +86,6 @@ class CatalogMenu(OwnedMenuPanel):
         return label
     def button(self,x,y,w,h):
         button=self._spawn('Button');self._place(button,x,y,w,h);self.buttons.append(button)
-        self._call(button,'Widget','SetCursor',InCursor=self.arrow_cursor)
         self._call(button,'Button','SetBackgroundColor',InBackgroundColor={'R':.07,'G':.14,'B':.18,'A':1.})
         label=self.label(x+10,y+8,w-20,h-16);self.labels.append(label)
         i=len(self.buttons)-1;self._visible[i]=True;self._enabled[i]=True
@@ -112,6 +114,9 @@ class CatalogMenu(OwnedMenuPanel):
         self._planner=self.scope.invocation_planner(selected_results=True,catalog=self.catalog);self._layout_queue=[]
         self.widget=self._construction_call(self._default('WidgetBlueprintLibrary'),self._function('WidgetBlueprintLibrary','Create'),WorldContextObject=self.player,WidgetType=self._class('CommonActivatableWidget'),OwningPlayer=self.player).return_value
         self.tree,c=read_object_reference(self._planner._catalog,self.widget,self._class('UserWidget'),'WidgetTree');self._planner.refresh_from(c)
+        from expedition33 import _ui_construction
+        self._deferred_setup=[]
+        if _ui_construction.available(self.scope._session):self._construction=_ui_construction.Construction()
         self.canvas=self._spawn('CanvasPanel')
         # Explicit widget cursor overrides the game's hidden viewport cursor.
         # Owned widgets discard this override with the panel; no global cursor state is changed.
@@ -160,6 +165,9 @@ class CatalogMenu(OwnedMenuPanel):
             self._call(widget,'EditableTextBox','SetForegroundColor',Color={'R':.015,'G':.02,'B':.03,'A':1.})
         self.image=self._spawn('Image');self._place(self.image,1385,355,480,360);self._call(self.image,'Widget','SetVisibility',InVisibility=self.collapsed)
         self._flush_layout()
+        setup,self._deferred_setup=self._deferred_setup,[]
+        for obj,owner,name,arguments in setup:
+            with self._construction_call(obj,self._function(owner,name),**arguments):pass
         self._mutate(self.scope.assign_object,self.tree,self._class('WidgetTree'),'RootWidget',self.canvas,expected=None,allow_mutation=True,catalog=self._planner._catalog)
         self.assigned=True;self.state='built';return self
     def _place(self,child,*args):

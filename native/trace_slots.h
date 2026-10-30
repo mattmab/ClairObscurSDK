@@ -23,6 +23,7 @@ class TraceSlots {
         Post post = nullptr;
         void* context = nullptr;
         bool before = false;
+        bool observation_only = false;
     };
     inline static std::array<Slot, Capacity> slots_{};
     inline static SRWLOCK lock_ = SRWLOCK_INIT;
@@ -52,11 +53,32 @@ class TraceSlots {
         return std::array<Entry, Capacity>{&invoke<I>...};
     }
     inline static constexpr auto entries_ = entries(std::make_index_sequence<Capacity>{});
+    static bool guarded_post(Post post,void* context,void* object,void* frame,void* result) {
+        __try {post(context,object,frame,result);return true;}
+        __except(EXCEPTION_EXECUTE_HANDLER) {return false;}
+    }
 public:
+    // Capture the permanent slot generation before original execution. A new
+    // registration at the same UFunction during that execution cannot receive
+    // an older call's receipt after the old context was detached.
+    static size_t post_observation(void* volatile* address) {
+        Guard guard;
+        for(size_t i=0;i<used_;++i)
+            if(slots_[i].address==address && slots_[i].post && !slots_[i].before && slots_[i].observation_only) return i+1;
+        return 0;
+    }
+    static void observe_post(size_t handle,void* volatile* address,void* object,void* frame,void* result) {
+        Guard guard;
+        if(!handle || handle>used_) return;
+        auto& slot=slots_[handle-1];
+        if(slot.address!=address || !slot.post || slot.before || !slot.observation_only) return;
+        if(!guarded_post(slot.post,slot.context,object,frame,result)) {slot.post=nullptr;slot.context=nullptr;}
+    }
     static bool observes_entry(void* volatile* address) {
         Guard guard;
         for (size_t i=0;i<used_;++i)
-            if (slots_[i].address == address && slots_[i].post && slots_[i].before) return true;
+            if (slots_[i].address == address && slots_[i].post &&
+                (slots_[i].before || slots_[i].observation_only)) return true;
         return false;
     }
     static void observe_entry(void* volatile* address, void* object, void* frame, void* result) {
@@ -68,12 +90,11 @@ public:
             }
         }
     }
-    // An observation-only PRE registration is dispatched by the shared
+    // An observation-only PRE/POST registration is dispatched by the shared
     // Blueprint opcode route. It leaves UFunction::Func unchanged, so typed
     // SDK calls keep their ordinary entry/schema validation and dispatch.
     static size_t install(void* volatile* address, Entry expected, Post post, void* context, bool before = false, bool replace_entry = true) {
         if (!address || !expected || !post || (reinterpret_cast<uintptr_t>(address) & 7)) return 0;
-        if (!replace_entry && !before) return 0;
         Guard guard;
         if (terminal_) return 0;
         size_t active = 0;
@@ -92,6 +113,7 @@ public:
                                reinterpret_cast<LPCWSTR>(entries_[index]), &pinned)) return 0;
         slot.original.store(expected, std::memory_order_release);
         slot.address = address; slot.post = post; slot.context = context; slot.before = before;
+        slot.observation_only=!replace_entry;
         if (InterlockedCompareExchangePointer(address, replace_entry ? reinterpret_cast<void*>(entries_[index]) : reinterpret_cast<void*>(expected),
                 reinterpret_cast<void*>(expected)) != reinterpret_cast<void*>(expected)) {
             slot.post = nullptr; slot.context = nullptr;

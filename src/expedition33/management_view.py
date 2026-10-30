@@ -114,7 +114,7 @@ class ManagementView:
                 if self.query not in ' '.join(str(view[k]) for k in
                         ('id', 'name', 'description', 'author')).casefold():
                     continue
-                state = 'enabled' if view['enabled'] else 'disabled'
+                state = 'disabling' if view.get('disable_pending') else 'enabled' if view['enabled'] else 'disabled'
                 rows.append((f"{view['name']} [{state}]", 'select',
                              Selection(view['id'], view['generation']), True, None))
             return 'SDK Mods', 'Select a mod to inspect settings and actions.', rows
@@ -126,8 +126,9 @@ class ManagementView:
         detail = '\n'.join(filter(None, (view['description'],
             ' '.join(filter(None, (view['author'], view['version']))), view['error'])))
         if self.screen == 'details':
-            rows = [('Disable' if view['enabled'] else 'Enable', 'enable',
-                     not view['enabled'], not (view['enabled'] and view['protected']), None),
+            desired=view['desired_enabled'] if view.get('disable_pending') else view['enabled']
+            rows = [('Disable' if desired else 'Enable', 'enable',
+                     not desired, not (desired and view['protected']), None),
                     ('Settings', 'screen', 'options', bool(view['options']), None),
                     ('Actions', 'screen', 'actions', bool(view['actions']), None),
                     ('Keybinds', 'screen', 'keybinds', bool(view['keybinds']), None),
@@ -226,6 +227,8 @@ class ManagementView:
                 self.screen, self.page = argument, 0
             elif operation == 'enable':
                 self.selection = self.registry.set_enabled(self.selection, argument)
+                if self.registry.view(self.selection).get('disable_pending'):
+                    self.status='Disabling; waiting for background work to stop.'
             elif operation == 'startup':
                 position=self.registry.move_startup(self.selection,argument)
                 self.status=f'Saved startup position {position}; applies next launch.'

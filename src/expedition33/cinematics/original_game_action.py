@@ -131,11 +131,15 @@ def prepare(session,scene,profile=None):
         loaded=load_asset(scope,profile['action_path']);asset=loaded.return_value
         if asset is None or asset.class_name!='BP_GameAction_CinematicWithLightingScenario_C':
             raise RuntimeError('Original cinematic action class changed')
+        phase='retain_original_sequence'
+        sequence_hold=load_asset(scope,profile['sequence']);sequence=sequence_hold.return_value
+        if sequence is None or sequence.class_name!='LevelSequence':
+            raise RuntimeError('Original cinematic sequence class changed')
         phase='observe_loaded_asset'
         # Asset retention can assign a serial to a previously serial-zero object.
         # Observe a wholly new closure after retention, keeping every required
         # exact identity; merging into the pre-retention catalog is invalid.
-        required=(asset,executor,component,function)
+        required=(asset,executor,component,function,sequence)
         catalog=capture_selected(session.pid,tuple((o.index,o.serial,o.address) for o in required))
         # The Blueprint function has reflected local/parameter class constraints
         # beyond the four selected objects. Observe those after retention too;
@@ -147,6 +151,7 @@ def prepare(session,scene,profile=None):
             if observed is None or (observed.pid,observed.index,observed.serial,observed.address)!=(expected.pid,expected.index,expected.serial,expected.address):
                 raise RuntimeError('Post-retention action observation identity changed')
         if catalog.path_name(asset)!=profile['action_path']:raise RuntimeError('Original action asset identity changed')
+        if catalog.path_name(sequence)!=profile['sequence']:raise RuntimeError('Original sequence asset identity changed')
     except BaseException as error:
         error.add_note('original_action phase: '+phase)
         scope.close();raise
@@ -160,6 +165,17 @@ def prepare(session,scene,profile=None):
         scope.close();raise
     result=PreparedScavenger(planner,call,executor,component,current_context)
     result.scope=scope
+    result.asset=asset
+    result.sequence=sequence
+    result.asset_holds=(loaded,sequence_hold)
+    def validate_dispatch():
+        _,latest_executor,latest_component,latest_function,latest_context=_read_action_preflight(session,profile)
+        def key(obj):return obj.pid,obj.index,obj.serial,obj.address
+        if (latest_context!=current_context or
+                tuple(map(key,(latest_executor,latest_component,latest_function)))!=
+                tuple(map(key,(executor,component,function)))):
+            raise NotReady('Original cinematic context changed during preparation')
+    result.validate_dispatch=validate_dispatch
     return result
 
 class PreparedScavenger:
@@ -169,6 +185,8 @@ class PreparedScavenger:
         self.dispatched=False
     def play(self):
         if self.dispatched:raise RuntimeError('Original game action cannot be retried')
+        validator=getattr(self,'validate_dispatch',None)
+        if validator is not None:validator()
         self.dispatched=True # Unknown outcome must never dispatch again.
         with self.call.invoke():pass
     def close(self):
@@ -230,7 +248,11 @@ def recover_spawn(session):
     finally:planner.close()
 
 class OriginalActionReplay:
-    """Single pending original action; fresh actors are reacquired after travel."""
+    """Legacy low-level travel replay; not used by the Cinematics browser.
+
+    Callers must separately authorize original story/save effects. New browser
+    playback uses an explicit original-map setting and in-place action adapter.
+    """
     def __init__(self,session,scene,profile):
         if not available(session._session._transport) or not profile_matches(profile,scene):raise RuntimeError('Original action mapping/runtime unavailable')
         self.session,self.scene,self.profile=session,scene,profile
@@ -239,8 +261,8 @@ class OriginalActionReplay:
     def start(self):
         if self.state!='new':raise RuntimeError('Original action request already started')
         self.before_transition=controller_context(self.session)
-        # Latest user scope makes history informational for these original routes.
-        # Preserve a readable slot, but absent history is not a playback gate.
+        # This legacy route treats history as informational. It is not an
+        # authorization policy for browser playback or another SDK caller.
         try:self.slot=read_current_history(self.session)['selected_slot']
         except (RuntimeError,ValueError,KeyError):self.slot=None
         self.deadline=time.monotonic()+120

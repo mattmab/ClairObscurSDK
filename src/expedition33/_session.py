@@ -4,6 +4,7 @@ from pathlib import Path
 import queue
 import subprocess
 import threading
+import time
 
 from . import RuntimeQueryError, TargetExitedError
 
@@ -70,6 +71,7 @@ class SessionTransport:
             self.enemy_trigger_entry_research_protocol = ready.get('enemy_trigger_entry_research_protocol', 0)
             self.enemy_combat_placement_protocol = ready.get('enemy_combat_placement_protocol', 0)
             self.battle_parameter_frame_research_protocol = ready.get('battle_parameter_frame_research_protocol', 0)
+            self.battle_completion_receipt_protocol = ready.get('battle_completion_receipt_protocol', 0)
             self.battle_entry_preflight_research_protocol = ready.get('battle_entry_preflight_research_protocol', 0)
             self.battle_entry_arena_research_protocol = ready.get('battle_entry_arena_research_protocol', 0)
             self.battle_entry_dispatch_research_protocol = ready.get('battle_entry_dispatch_research_protocol', 0)
@@ -81,6 +83,13 @@ class SessionTransport:
             self.enemy_clearance_protocol = ready.get('enemy_clearance_protocol', 0)
             self.enemy_grounded_spawn_protocol = ready.get('enemy_grounded_spawn_protocol', 0)
             self.enemy_visual_staging_research_protocol = ready.get('enemy_visual_staging_research_protocol', 0)
+            self.timeline_blueprint_protocol = ready.get('timeline_blueprint_protocol', 0)
+            self.timeline_extended_characters_protocol = ready.get('timeline_extended_characters_protocol', 0)
+            self.timeline_actor_pool_protocol = ready.get('timeline_actor_pool_protocol', 0)
+            self.timeline_current_world_protocol = ready.get('timeline_current_world_protocol', 0)
+            self.sequence_binding_values_protocol = ready.get('sequence_binding_values_protocol', 0)
+            self.rotator_values_protocol = ready.get('rotator_values_protocol',0)
+            self.sequence_portable_binding_protocol = ready.get('sequence_portable_binding_protocol', 0)
             self.enemy_visual_arena_research_protocol = ready.get('enemy_visual_arena_research_protocol', 0)
             self.enemy_helper_lookup_research_protocol = ready.get('enemy_helper_lookup_research_protocol', 0)
             self.enemy_geometry_placement_research_protocol = ready.get('enemy_geometry_placement_research_protocol', 0)
@@ -102,6 +111,10 @@ class SessionTransport:
             self.enemy_current_world_staging_protocol = ready.get('enemy_current_world_staging_protocol', 0)
             self.enemy_extra_spots_protocol = ready.get('enemy_extra_spots_protocol', 0)
             self.map_runtime_protocol = ready.get('map_runtime_protocol', 0)
+            self.map_load_gate_protocol = ready.get('map_load_gate_protocol', 0)
+            self.map_loading_presentation_protocol = ready.get('map_loading_presentation_protocol', 0)
+            self.map_asset_preparation_protocol = ready.get('map_asset_preparation_protocol', 0)
+            self.map_readiness_protocol = ready.get('map_readiness_protocol', 0)
             self.retired_world_cleanup_protocol = ready.get('retired_world_cleanup_protocol', 0)
             self.builder_world_retirement_protocol = ready.get('builder_world_retirement_protocol', 0)
             self.runtime_cinematic_protocol = ready.get('runtime_cinematic_protocol', 0)
@@ -134,6 +147,7 @@ class SessionTransport:
             self.sequence_player_protocol = ready.get('sequence_player_protocol', 0)
             self.scoped_assignment_protocol = ready.get('scoped_assignment_protocol', 0)
             self.music_audio_protocol = ready.get('music_audio_protocol', 0)
+            self.music_audio_retirement_protocol = ready.get('music_audio_retirement_protocol', 0)
             self.owned_sound_protocol = ready.get('owned_sound_protocol', 0)
             self.owned_sound_capacity = ready.get('owned_sound_capacity', 16)
             self.owned_sound_volume_max = ready.get('owned_sound_volume_max', 1)
@@ -146,6 +160,7 @@ class SessionTransport:
             self.owned_audio_cleanup_protocol = ready.get('owned_audio_cleanup_protocol', 0)
             self.original_audio_pause_protocol = ready.get('original_audio_pause_protocol', 0)
             self.asset_load_protocol = ready.get('asset_load_protocol', 0)
+            self.asset_name_number_protocol = ready.get('asset_name_number_protocol', 0)
             self.generated_world_asset_load_protocol = ready.get('generated_world_asset_load_protocol', 0)
             self.owned_battle_arena_staging_protocol = ready.get('owned_battle_arena_staging_protocol', 0)
             self.owned_battle_arena_capacity = ready.get('owned_battle_arena_capacity', 1)
@@ -168,10 +183,29 @@ class SessionTransport:
             self.ui_construction_protocol = ready.get('ui_construction_protocol', 0)
             self.layout_batch_protocol = ready.get('layout_batch_protocol', 0)
             self.timespan_values_protocol = ready.get('timespan_values_protocol', 0)
+            self.media_seek_protocol = ready.get('media_seek_protocol', 0)
             self.frame_time_values_protocol = ready.get('frame_time_values_protocol', 0)
+            self.sequencer_frame_values_protocol = ready.get('sequencer_frame_values_protocol', 0)
+            self.sequencer_object_array_protocol = ready.get('sequencer_object_array_protocol', 0)
+            self.authored_curve_patch_protocol = ready.get('authored_curve_patch_protocol', 0)
             self.cinematic_empty_title_protocol = ready.get('cinematic_empty_title_protocol', 0)
             self.sequence_camera_protocol = ready.get('sequence_camera_protocol', 0)
+            self.sequence_origin_protocol = ready.get('sequence_origin_protocol', 0)
+            self.sequence_origin_update_protocol = ready.get('sequence_origin_update_protocol', 0)
+            self.sequence_origin_transform_protocol = ready.get('sequence_origin_transform_protocol', 0)
+            self.command_wait_protocol = ready.get('command_wait_protocol', 0)
+            self._native_command_sequence = ready.get('command_wait_sequence', 0)
+            if self.command_wait_protocol==1 and (type(self._native_command_sequence) is not int or self._native_command_sequence!=1):
+                raise RuntimeQueryError('Invalid native wait handshake')
+            self.sequence_flight_protocol = ready.get('sequence_flight_protocol', 0)
+            self.sequence_flight_keyboard_protocol = ready.get('sequence_flight_keyboard_protocol', 0)
+            self.sequence_flight_playback_protocol = ready.get('sequence_flight_playback_protocol', 0)
+            self.sequence_placement_input_protocol = ready.get('sequence_placement_input_protocol', 0)
+            self.sequence_seek_protocol = ready.get('sequence_seek_protocol', 0)
+            self.sequence_retirement_protocol = ready.get('sequence_retirement_protocol', 0)
+            self.media_retirement_protocol = ready.get('media_retirement_protocol', 0)
             self.sequence_binding_query_protocol = ready.get('sequence_binding_query_protocol', 0)
+            self.sequence_authored_binding_diagnostic_protocol = ready.get('sequence_authored_binding_diagnostic_protocol', 0)
             self.original_game_action_protocol = ready.get('original_game_action_protocol', 0)
             self.zone_travel_protocol = ready.get('zone_travel_protocol', 0)
             profiles = ready.get('cinematic_title_profiles', [])
@@ -210,7 +244,7 @@ class SessionTransport:
         if threading.get_ident() != self._owner:
             raise RuntimeError('Native sessions must be used on their owning Python thread')
 
-    def _read(self):
+    def _read_line(self):
         try:
             line = self._lines.get(timeout=15)
         except queue.Empty as error:
@@ -236,6 +270,26 @@ class SessionTransport:
         if value.get('event') == 'error':
             raise RuntimeQueryError(value.get('message', 'Native session failed'))
         return value
+
+    def _read(self):
+        deadline=time.monotonic()+70.
+        elapsed=-1
+        while True:
+            if time.monotonic()>=deadline:raise RuntimeQueryError('Native command wait deadline exceeded')
+            value=self._read_line()
+            if value.get('event')!='session_pending':return value
+            expected=getattr(self,'_awaiting_command_sequence',None)
+            fields=('event','version','sequence','elapsed_ms','state')
+            if (getattr(self,'command_wait_protocol',0)!=1 or expected is None or set(value)!=set(fields) or
+                type(value['version']) is not int or value['version']!=1 or
+                type(value['sequence']) is not int or value['sequence']!=expected or
+                type(value['elapsed_ms']) is not int or not max(5000,elapsed+1)<=value['elapsed_ms']<60000 or
+                type(value['state']) is not int or value['state'] not in (1,2)):
+                raise RuntimeQueryError('Invalid pending native command acknowledgement')
+            if elapsed<0:
+                import logging
+                logging.getLogger(__name__).info('Game thread busy; retaining original native command %s without replay',expected)
+            elapsed=value['elapsed_ms']
 
     def command(self, command, payload=None):
         telemetry = getattr(self, '_workflow_telemetry', None)
@@ -377,8 +431,12 @@ class SessionTransport:
                 raise ValueError('Picto mastery batch capability unavailable')
             suffix = ' ' + payload.hex()
         elif mesh:
-            parameter_mesh=(type(payload) is bytes and len(payload)>=8 and 124<=int.from_bytes(payload[4:8],'little')<=130)
-            enemy_mesh=(type(payload) is bytes and len(payload)>=8 and (110<=int.from_bytes(payload[4:8],'little')<=123 or int.from_bytes(payload[4:8],'little') in (131,132,133)))
+            curve_patch=(type(payload) is bytes and len(payload)>=8 and int.from_bytes(payload[4:8],'little')==226)
+            sequencer_array=(type(payload) is bytes and len(payload)>=8 and int.from_bytes(payload[4:8],'little')==220)
+            parameter_mesh=(type(payload) is bytes and len(payload)>=8 and (124<=int.from_bytes(payload[4:8],'little')<=130 or int.from_bytes(payload[4:8],'little')==160))
+            portable_binding=(type(payload) is bytes and len(payload)>=8 and int.from_bytes(payload[4:8],'little')==222)
+            timeline_actors=(type(payload) is bytes and len(payload)>=8 and 223<=int.from_bytes(payload[4:8],'little')<=225)
+            enemy_mesh=(type(payload) is bytes and len(payload)>=8 and (110<=int.from_bytes(payload[4:8],'little')<=123 or int.from_bytes(payload[4:8],'little') in (131,132,133,221)))
             map_mesh=(type(payload) is bytes and len(payload)>=8 and (93<=int.from_bytes(payload[4:8],'little')<=97 or
                     int.from_bytes(payload[:4],'little')==3 and int.from_bytes(payload[4:8],'little')==98))
             scene_mesh=(not map_mesh and type(payload) is bytes and len(payload)>=8 and getattr(self,'runtime_scene_protocol',0) in (1,2,3,4,5,6,7) and
@@ -389,7 +447,19 @@ class SessionTransport:
             visual_staging=(type(payload) is bytes and len(payload)>=8 and int.from_bytes(payload[4:8],'little') in (148,149,150))
             arena_staging=(type(payload) is bytes and len(payload)>=8 and int.from_bytes(payload[4:8],'little') in (151,152,153,154,155,156))
             tuning=(type(payload) is bytes and len(payload)>=8 and 157<=int.from_bytes(payload[4:8],'little')<=159)
-            if tuning:
+            if curve_patch:
+                cap=getattr(self,'authored_curve_patch_protocol',0)
+                if type(cap) is not int or cap!=1:raise ValueError('Authored curve editing capability unavailable')
+                from ._authored_curve_patch import validate_request
+            elif sequencer_array:
+                cap=getattr(self,'sequencer_object_array_protocol',0)
+                if type(cap) is not int or cap!=1:raise ValueError('Sequencer object-array capability unavailable')
+                from ._sequencer_object_array import validate_request
+            elif timeline_actors:
+                cap=getattr(self,'timeline_actor_pool_protocol',0)
+                if type(cap) is not int or cap!=1:raise ValueError('Timeline actor pool capability unavailable')
+                from ._timeline_actor_channel import validate_request
+            elif tuning:
                 if getattr(self,'encounter_tuning_protocol',0)!=1:raise ValueError('Encounter tuning unavailable')
                 from .encounter_tuning import validate_request
             elif arena_staging:
@@ -461,15 +531,15 @@ class SessionTransport:
                 capability=getattr(self,'battle_parameter_frame_research_protocol',0)
                 if type(capability) is not int or capability!=1:
                     raise ValueError('Native session does not support original parameter research')
-                if int.from_bytes(payload[4:8],'little')>=127:
+                if 127<=int.from_bytes(payload[4:8],'little')<=130:
                     policy_capability=getattr(self,'battle_parameter_policy_research_protocol',0)
                     if type(policy_capability) is not int or policy_capability!=1:
                         raise ValueError('Native session does not support owned policy research')
-                if int.from_bytes(payload[4:8],'little')>=128:
+                if 128<=int.from_bytes(payload[4:8],'little')<=130:
                     entry_capability=getattr(self,'battle_entry_preflight_research_protocol',0)
                     if type(entry_capability) is not int or entry_capability!=1:
                         raise ValueError('Native session does not support owned entry preflight research')
-                if int.from_bytes(payload[4:8],'little')>=129:
+                if 129<=int.from_bytes(payload[4:8],'little')<=130:
                     arena_capability=getattr(self,'battle_entry_arena_research_protocol',0)
                     if type(arena_capability) is not int or arena_capability!=2:
                         raise ValueError('Native session does not support owned parameter arena research')
@@ -477,10 +547,20 @@ class SessionTransport:
                     dispatch_capability=getattr(self,'battle_entry_dispatch_research_protocol',0)
                     if type(dispatch_capability) is not int or dispatch_capability!=1:
                         raise ValueError('Native session does not support owned battle entry research')
+                operation=int.from_bytes(payload[4:8],'little')
+                if operation==160 or (operation==130 and any(payload[48:52])):
+                    capability=getattr(self,'battle_completion_receipt_protocol',0)
+                    if type(capability) is not int or capability!=1:raise ValueError('Native completion receipts unavailable')
                 from ._battle_parameter_wire import validate_request
+            elif portable_binding:
+                capability=getattr(self,'sequence_portable_binding_protocol',0)
+                if type(capability) is not int or capability!=1:raise ValueError('Native portable binding query required')
+                from ._portable_binding import validate_request
             elif enemy_mesh:
                 capability=getattr(self,'enemy_spawn_protocol',0)
                 operation=int.from_bytes(payload[4:8],'little')
+                if operation==221 and (type(getattr(self,'timeline_blueprint_protocol',0)) is not int or self.timeline_blueprint_protocol!=1):
+                    raise ValueError('Timeline Blueprint actor capability required')
                 pose_capability=getattr(self,'enemy_pose_protocol',0)
                 authored_capability=getattr(self,'enemy_authored_encounter_research_protocol',0)
                 if operation==133 and (type(authored_capability) is not int or authored_capability not in (2,3,4,5,6,7) or (int.from_bytes(payload[32:36],'little')==2 and authored_capability<3) or (int.from_bytes(payload[32:36],'little')>=3 and authored_capability<4) or (int.from_bytes(payload[32:36],'little')>=7 and authored_capability<5) or (int.from_bytes(payload[32:36],'little')>=8 and authored_capability<6) or (int.from_bytes(payload[32:36],'little')>=12 and authored_capability<7)):
@@ -494,6 +574,16 @@ class SessionTransport:
                 if type(capability) is not int or capability not in (1,2,3) or operation==114 and capability<2 or operation==115 and capability<3 or operation==116 and (type(pose_capability) is not int or pose_capability!=1) or operation==117 and (type(getattr(self,'enemy_arena_protocol',0)) is not int or getattr(self,'enemy_arena_protocol',0)!=1) or operation==118 and (type(getattr(self,'enemy_arena_binding_protocol',0)) is not int or getattr(self,'enemy_arena_binding_protocol',0)!=1) or operation==119 and (type(getattr(self,'enemy_clearance_protocol',0)) is not int or getattr(self,'enemy_clearance_protocol',0)!=1) or operation in (120,121) and (type(getattr(self,'enemy_grounded_spawn_protocol',0)) is not int or getattr(self,'enemy_grounded_spawn_protocol',0)!=2) or operation==122 and (type(getattr(self,'enemy_extra_spots_protocol',0)) is not int or getattr(self,'enemy_extra_spots_protocol',0)!=1):
                     raise ValueError('Native session does not support this owned enemy operation')
                 from ._enemy_spawn_wire import validate_request
+            elif type(payload) is bytes and len(payload)>=8 and 104<=int.from_bytes(payload[4:8],'little')<=106:
+                if getattr(self,'map_asset_preparation_protocol',0)!=1:raise ValueError('Map asset preparation unavailable')
+                from .map_asset_preparation import validate_request
+            elif type(payload) is bytes and len(payload)>=8 and int.from_bytes(payload[4:8],'little')==107:
+                if getattr(self,'map_readiness_protocol',0)!=1:raise ValueError('Map readiness unavailable')
+                from .map_readiness import validate_request
+            elif type(payload) is bytes and len(payload)>=8 and 99<=int.from_bytes(payload[4:8],'little')<=103:
+                if type(getattr(self,'map_load_gate_protocol',0)) is not int or self.map_load_gate_protocol!=1:
+                    raise ValueError('Native session does not support map-load movement protection')
+                from .map_load_gate import validate_request
             elif map_mesh:
                 if getattr(self,'map_runtime_protocol',0)!=1:
                     raise ValueError('Native session does not support independent map ownership')
@@ -546,10 +636,32 @@ class SessionTransport:
         elif sequence:
             from ._sequence_owner import validate_request
             validate_request(payload)
+            if int.from_bytes(payload[4:8],'little')==7 and getattr(self,'sequence_retirement_protocol',0)!=1:
+                raise ValueError('Native sequence retirement unavailable')
+            if int.from_bytes(payload[4:8],'little')==8 and getattr(self,'sequence_seek_protocol',0)!=1:
+                raise ValueError('Native owned sequence scrubbing unavailable')
+            if int.from_bytes(payload[4:8],'little')==9 and getattr(self,'sequence_origin_update_protocol',0)!=1:
+                raise ValueError('Native live sequence placement unavailable')
+            if int.from_bytes(payload[4:8],'little') in (14,15) and getattr(self,'sequence_origin_transform_protocol',0)!=1:
+                raise ValueError('Native sequence origin transform unavailable')
+            if int.from_bytes(payload[4:8],'little') in (10,11,12) and getattr(self,'sequence_flight_protocol',0)!=1:
+                raise ValueError('Native sequence flight unavailable')
+            if int.from_bytes(payload[4:8],'little')==19 and getattr(self,'sequence_flight_playback_protocol',0)!=1:
+                raise RuntimeError('Observer flight runtime required')
+            if int.from_bytes(payload[4:8],'little')==18 and getattr(self,'sequence_flight_keyboard_protocol',0)!=1:
+                raise RuntimeError('Keyboard flight runtime required')
+            if int.from_bytes(payload[4:8],'little')==13 and getattr(self,'sequence_placement_input_protocol',0)!=1:
+                raise ValueError('Native sequence placement input unavailable')
+            if int.from_bytes(payload[4:8],'little') in (16,17):
+                capability=getattr(self,'sequence_authored_binding_diagnostic_protocol',0)
+                if type(capability) is not int or capability!=1:
+                    raise ValueError('Native authored binding diagnostic unavailable')
             suffix = ' ' + payload.hex()
         elif media:
             from ._media_owner import validate_request
             validate_request(payload)
+            if int.from_bytes(payload[4:8],'little')==4 and getattr(self,'media_retirement_protocol',0)!=1:
+                raise ValueError('Native media retirement unavailable')
             suffix = ' ' + payload.hex()
         elif pause:
             from ._pause_attachment import validate_request
@@ -652,15 +764,37 @@ class SessionTransport:
                 cap = getattr(self, 'timespan_values_protocol', 0)
                 if type(cap) is not int or cap != 1:
                     raise ValueError('Native session does not support media Timespan returns')
+                if any(FIELD.unpack_from(payload,FIELDS_AT+i*FIELD.size)[0]==20 and not FIELD.unpack_from(payload,FIELDS_AT+i*FIELD.size)[4]&0x400 for i in range(count)):
+                    cap=getattr(self,'media_seek_protocol',0)
+                    if type(cap) is not int or cap!=1:raise ValueError('Native session does not support media seeking')
+        if (reflected or retained) and int.from_bytes(payload[:4], 'little') in (2,4):
+            from ._invocation_wire import FIELDS_AT, FIELD, MAX_FIELDS
+            frame_count=int.from_bytes(payload[24:28],'little')
+            if frame_count>MAX_FIELDS:raise ValueError('Invalid invocation field count')
+            if any(int.from_bytes(payload[FIELDS_AT+i*FIELD.size:FIELDS_AT+i*FIELD.size+4],'little')==27 for i in range(frame_count)) and getattr(self,'rotator_values_protocol',0)!=1:
+                raise ValueError('Native session does not support Rotator values')
+            if any(int.from_bytes(payload[FIELDS_AT+i*FIELD.size:FIELDS_AT+i*FIELD.size+4],'little')==26 for i in range(frame_count)):
+                cap=getattr(self,'sequence_binding_values_protocol',0)
+                if type(cap) is not int or cap!=1:raise ValueError('Native session does not support sequence binding ID values')
+            if any(23<=int.from_bytes(payload[FIELDS_AT+i*FIELD.size:FIELDS_AT+i*FIELD.size+4],'little')<=25 for i in range(frame_count)):
+                cap=getattr(self,'sequencer_frame_values_protocol',0)
+                if type(cap) is not int or cap!=1:raise ValueError('Native session does not support sequencer frame values')
         try:
             prefix=''
             if getattr(self,'lease_policy_protocol',0)==1:
                 owner=getattr(self,'_lease_owner',0)
                 if type(owner) is not int or not 0<=owner<2**64:raise ValueError('Invalid lease owner')
                 prefix=f'lease-owner {owner} '
+            if getattr(self,'command_wait_protocol',0)==1:
+                self._native_command_sequence+=1
+                self._awaiting_command_sequence=self._native_command_sequence
             self._process.stdin.write(prefix + command + suffix + '\n')
             self._process.stdin.flush()
             response = self._read()
+            if getattr(self,'command_wait_protocol',0)==1:
+                if type(response.get('command_sequence')) is not int or response['command_sequence']!=self._awaiting_command_sequence:
+                    raise RuntimeQueryError('Native command sequence mismatch')
+                self._awaiting_command_sequence=None
             if response.get('event') != 'session_response' or response.get('command') != command:
                 raise RuntimeQueryError('Native session response does not match its command')
             if command == 'close':
@@ -691,6 +825,9 @@ class SessionTransport:
     def _abort(self):
         # Only our controller subprocess. Its exit wakes the target-owned cleanup
         # watcher; never terminate or force-unload anything from the game here.
+        if not self._closed:
+            import logging
+            logging.getLogger(__name__).error('Native controller abort requested', stack_info=True)
         self._closed = True
         if self._process.poll() is None:
             if self.target_exit_code is not None:

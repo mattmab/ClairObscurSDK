@@ -15,6 +15,10 @@ class CinematicWidgetHook {
     CinematicWidgetOwner widgets_;
     uint32_t state_=0,observed_=0,failed_=0;
     e33_cinematic::WidgetDiagnostics diagnostics_{};
+#ifdef E33_SEQUENCE_RETIREMENT_SESSION
+    e33_retired_world::Snapshot epoch_{};
+    bool detached_for_retirement_=false;
+#endif
 
     bool frame(void* actor,void* stack,void* result,e33_cinematic::ComponentLookupFrame& out) const {
         TargetObjectAssignmentOps context{base_};
@@ -74,6 +78,33 @@ class CinematicWidgetHook {
         }
     }
 public:
+#ifdef E33_SEQUENCE_RETIREMENT_SESSION
+    uint32_t retire(uint64_t base,const e33_retired_world::Snapshot& epoch,const CallIdentity& player) {
+        if(!active()) return 0;
+        using e33_retired_world::same;
+        if(base!=base_ || (state_!=1 && state_!=3) || !same(player_,player) ||
+           !same(epoch_.engine,epoch.engine) || !same(epoch_.viewport,epoch.viewport) ||
+           !same(epoch_.world,epoch.world) || !widgets_.retirement_ready()) return 1513;
+        e33_retired_world::TargetOps proof{base};e33_retired_world::Snapshot a{},b{};
+        if(!proof.observe(a) || !proof.observe(b) || !e33_sequence_retirement::different_world(epoch_,a,b)) return 407;
+        if(!detached_for_retirement_) {
+            const auto fn=call_identity(base,resources_[WidgetNativeGetter]);
+            if(!fn) return 1513;
+            auto slot=reinterpret_cast<void* volatile*>(fn+0xd8);
+            auto original_entry=reinterpret_cast<void*>(base+0x333a230);
+            auto previous=InterlockedCompareExchangePointer(slot,original_entry,reinterpret_cast<void*>(&route));
+            if(previous!=original_entry && previous!=reinterpret_cast<void*>(&route)) return 1513;
+            // Game-thread admission plus original getter passthrough excludes
+            // any in-flight owner callback before private storage is released.
+            detached_for_retirement_=true;state_=3;current_=nullptr;
+        }
+        if(!proof.observe(a) || !proof.observe(b) || !e33_sequence_retirement::different_world(epoch_,a,b)) return 407;
+        const auto result=widgets_.retire();
+        if(result==e33_cinematic::WidgetStep::deferred) return 407;
+        if(result!=e33_cinematic::WidgetStep::ok) {state_=2;return 1513;}
+        state_=0;return 0;
+    }
+#endif
     bool active() const { return state_!=0; }
     bool protects(uint64_t token) const {
         if(!active()) return false;
@@ -83,6 +114,9 @@ public:
     // Caller has stopped sequence evaluation before detaching/unhooking.
     uint32_t close(uint64_t base) {
         if(!active()) return 0;
+#ifdef E33_SEQUENCE_RETIREMENT_SESSION
+        if(detached_for_retirement_) return 1513;
+#endif
         TargetObjectAssignmentOps context{base};
         if(!context.context()) return 407;
         const auto result=widgets_.close();
@@ -111,6 +145,13 @@ public:
             }
         } else {
             if(active() || !sequence.owns_player(p.player)) { p.error=1511;return; }
+#ifdef E33_SEQUENCE_RETIREMENT_SESSION
+            e33_retired_world::TargetOps proof{base};
+            const auto captured=sequence.captured_epoch();
+            if(!proof.current_binding(captured.engine,captured.viewport,captured.world) || captured.world.serial<=0) {
+                p.error=1511;return;
+            }
+#endif
             for(unsigned i=0;i<WidgetResourceCount;++i)
                 if(!call_identity(base,p.resources[i]) || !leases.owns_object(session,p.tokens[i],p.resources[i].address)) {
                     p.error=1511;return; }
@@ -128,6 +169,9 @@ public:
                     reinterpret_cast<LPCWSTR>(&route),&pinned) ||
                !widgets_.begin(base,session,r[WidgetTrackClass],r[WidgetUserClass],p.remove)) { p.error=1516;return; }
             base_=base;owner_=p.owner;script_=script;return_property_=return_property;player_=p.player;
+#ifdef E33_SEQUENCE_RETIREMENT_SESSION
+            epoch_=captured;detached_for_retirement_=false;
+#endif
             std::memcpy(resources_,p.resources,sizeof(resources_));std::memcpy(tokens_,p.tokens,sizeof(tokens_));
             observed_=failed_=0;diagnostics_={};state_=1;current_=this;
             auto slot=reinterpret_cast<void* volatile*>(r[WidgetNativeGetter].address+0xd8);

@@ -8,7 +8,7 @@ from dataclasses import dataclass
 from . import RuntimeQueryError
 from ._reader import ReadBatch
 from .catalog import capture_matching,capture_selected
-from .values import read_object_reference,read_values_many,read_values_with_references,StoredArray
+from .values import read_object_reference,read_values_many,read_values_with_references,StoredArray,capture_selected_values
 from .cinematics.history import anchor,field,identity
 from .world_admission import EXPLORATION_PAWNS
 
@@ -53,7 +53,7 @@ def prepare_panel_metadata(panel):
     # whitelist (for example /Script/Slate.Anchors). They are still required
     # to validate typed setters. Retain their exact observations without
     # granting metadata leases or admitting unrelated Blueprint functions.
-    retained.extend(o for o in catalog.objects if o.class_name in ('Class','ScriptStruct','Enum'))
+    retained.extend(o for o in catalog.objects if o.class_name in ('ScriptStruct','Enum'))
     retained.extend((panel.widget,panel.tree,panel.canvas,panel.player))
     retained.extend(o for o in catalog.objects if o.class_name=='GameEngine' and not o.object_flags&0x30)
     catalog=catalog.subset(retained)
@@ -152,6 +152,25 @@ def refresh_panel_metadata(pid,previous,*,observed=None):
     return tuple(rows)
 
 
+def panel_metadata(catalog):
+    """Only UI Script descriptors and copied POD/enum dependencies survive.
+
+    Name discovery can encounter unrelated functions with the same short name.
+    Their class closures are not UI planner inputs. Current engine/GI/controller
+    classes instead come from the independently fresh context proof.
+    """
+    from ._metadata_stabilization import script_function
+    result=[]
+    for obj in catalog.objects:
+        if obj.class_name not in ('Function','Class','ScriptStruct','Enum') and obj.name not in (
+                'Default__GameplayStatics','Default__WidgetBlueprintLibrary'):continue
+        try:script_function(catalog,obj)
+        except ValueError:
+            if obj.class_name not in ('ScriptStruct','Enum'):continue
+        result.append(obj)
+    return tuple(result)
+
+
 @dataclass(frozen=True)
 class UiContext:
     kind: str
@@ -189,7 +208,7 @@ class OwnedUiProof:
         try:return self._current_observation(context,preparing=preparing)
         except RuntimeQueryError as error:
             if any(reason in str(error) for reason in ('DESCRIPTOR_IDENTITY_CHANGED','READ_FAILED',
-                    'SELECTED_DEPENDENCY_CHANGED','Object identity changed or belongs to another process',
+                    'SELECTED_DEPENDENCY_CHANGED','MODULE_SNAPSHOT_FAILED','Object identity changed or belongs to another process',
                     'Object property reference changed during observation')):
                 raise UiProofPending('UI context changed during loading observation') from None
             raise
@@ -202,6 +221,11 @@ class OwnedUiProof:
     def _current_observation(self,context,*,preparing=False):
         if self.pending():raise UiProofPending('UI getter leases cleanup pending; retain proof owner')
         pid=self.scope.pid
+        if context.kind=='world' and getattr(self,'_viewport',None) is not None:
+            try:return self._loading_current(context,gameplay=not preparing)
+            except (RuntimeQueryError,UiProofPending):
+                self._viewport=None
+                raise # Next scheduled proof rediscovers; never replay this one.
         if self._engine is None:
             catalog=capture_matching(pid,classes=('GameEngine',))
             rows=[o for o in catalog.select('GameEngine') if not o.object_flags&0x30]
@@ -209,6 +233,7 @@ class OwnedUiProof:
             self._engine=identity(rows[0])[1:]
         catalog=capture_selected(pid,(self._engine,))
         chain,catalog=anchor(catalog,project=True);world,gi=chain[2:]
+        self._viewport=identity(chain[1])[1:]
         if (identity(world),identity(gi))!=(context.world,context.gi):
             raise UiProofPending('UI world or game instance changed before handoff')
         observed,catalog=read_values_with_references(catalog,gi,fields=('LocalPlayers',))
@@ -248,6 +273,61 @@ class OwnedUiProof:
                 raise UiProofPending('First gameplay UI handoff awaits exploration')
         return catalog,pc
 
+    def _loading_current(self,context,*,gameplay=False):
+        """One fresh read of the same detached-loading anchor/player links."""
+        fields=('GameViewport','World','OwningGameInstance','LocalPlayers','PlayerController','Player')
+        if gameplay:fields+=('SaveLoaded','IsChangingMap','SaveManager','Pawn')
+        selectors=(self._engine,self._viewport,context.world[1:],context.gi[1:],
+            context.local_player[1:],context.controller[1:])
+        catalog,rows=capture_selected_values(self.scope.pid,selectors,fields=fields,references=gameplay)
+        engine,viewport,world,gi,local,pc=(catalog.by_index[row[0]] for row in selectors)
+        for obj,kind in ((engine,'GameEngine'),(viewport,'GameViewportClient'),(world,'World'),
+                (gi,'BP_jRPG_GI_Custom_C'),(local,'LocalPlayer'),(pc,'PlayerController')):
+            if obj.object_flags&0x40000030 or catalog.find_class(kind).index not in catalog.ancestors(obj.class_index):
+                raise UiProofPending('Loading UI anchor lifetime or class changed')
+        def value(obj,name,kind):
+            row=rows[obj.index];keys=[key for key in row.types if key[1]==name]
+            if len(keys)!=1:raise RuntimeQueryError('Loading UI field missing or ambiguous')
+            key=keys[0]
+            if key[0] not in catalog.ancestors(obj.class_index) or row.types[key]!=kind:
+                raise RuntimeQueryError('Loading UI field provenance changed')
+            if key in row.errors or key in row.truncated or key not in row.values:
+                raise UiProofPending('Loading UI field unavailable')
+            return row.values[key]
+        for obj,name,target in ((engine,'GameViewport',viewport),(viewport,'World',world),
+                (world,'OwningGameInstance',gi),(local,'PlayerController',pc),(pc,'Player',local)):
+            if not same_identity(value(obj,name,'ObjectProperty'),target):
+                raise UiProofPending('Loading UI anchor/player link changed')
+        players=value(gi,'LocalPlayers','ArrayProperty')
+        if (not isinstance(players,StoredArray) or players.length!=1 or len(players.items)!=1
+                or not same_identity(players.items[0],local)):
+            raise UiProofPending('Loading UI LocalPlayer membership changed')
+        worlds=[obj for obj in catalog.outer_chain(pc) if obj.class_name=='World']
+        if len(worlds)!=1 or identity(worlds[0])!=context.world:
+            raise UiProofPending('Loading UI controller world changed')
+        if gameplay:
+            if (value(gi,'SaveLoaded','BoolProperty') is not True or
+                    value(gi,'IsChangingMap','BoolProperty') is not False):
+                raise UiProofPending('Gameplay UI save context is loading')
+            pawn=value(pc,'Pawn','ObjectProperty')
+            if pawn is None or pawn.class_name not in EXPLORATION_PAWNS:
+                raise UiProofPending('First gameplay UI handoff awaits exploration')
+            manager=value(gi,'SaveManager','ObjectProperty')
+            if manager is None:raise UiProofPending('Gameplay save manager unavailable')
+            # The manager is discovered by the first projection. Read its
+            # reciprocal/loading fields freshly together with GI's reference;
+            # no cached property values cross either boundary proof.
+            observed,manager_rows=capture_selected_values(self.scope.pid,
+                (identity(gi)[1:],identity(manager)[1:]),
+                fields=('SaveManager','GameInstanceReference','LoadIsInProgress'))
+            catalog=catalog.with_observations(observed)
+            rows=manager_rows
+            if (not same_identity(value(gi,'SaveManager','ObjectProperty'),manager) or
+                    not same_identity(value(manager,'GameInstanceReference','ObjectProperty'),gi) or
+                    value(manager,'LoadIsInProgress','BoolProperty') is not False):
+                raise UiProofPending('Gameplay save manager changed or loading')
+        return catalog,pc
+
     def _graph(self,panel,context,catalog):
         from .mods_workspace_scroll import ScrollWorkspacePanel
         if type(panel) is not getattr(self,'panel_type',ScrollWorkspacePanel):raise UiProofPreflightRejected('Panel type differs from the explicitly registered detached tree')
@@ -275,6 +355,12 @@ class OwnedUiProof:
         for obj in objects:
             fresh=current.resolve(obj)
             if fresh.object_flags&0x40000030:raise UiProofPreflightRejected('Owned UI object lifetime changed')
+            # Widget ownership getters can leave a retained LocalPlayer lease
+            # in the panel scope. It is an independently proved context anchor,
+            # not a child widget. Keep complete two-pass identity coverage and
+            # admit only this exact current LocalPlayer, never another player.
+            if fresh.class_name=='LocalPlayer' and identity(fresh)==context.local_player:
+                continue
             if fresh.index!=root.index and user_class in current.ancestors(fresh.class_index):
                 raise UiProofPreflightRejected('Nested UserWidgets require an independent context proof')
             if fresh.index!=root.index and root.index not in {o.index for o in current.outer_chain(fresh)}:
@@ -371,7 +457,7 @@ class OwnedUiProof:
         try:return self._verify_observation(panel,context,rebind=rebind,preparing=preparing)
         except RuntimeQueryError as error:
             if any(reason in str(error) for reason in ('DESCRIPTOR_IDENTITY_CHANGED','READ_FAILED',
-                    'SELECTED_DEPENDENCY_CHANGED','Object identity changed or belongs to another process',
+                    'SELECTED_DEPENDENCY_CHANGED','MODULE_SNAPSHOT_FAILED','Object identity changed or belongs to another process',
                     'Object property reference changed during observation')):
                 raise UiProofPending('UI closure changed during loading handoff') from None
             raise
@@ -384,7 +470,21 @@ class OwnedUiProof:
             catalog,pc=current()
             catalog=self._functions(self._graph(panel,context,catalog))
             root=catalog.resolve(panel.widget)
-            if rebind and self._setter_done!=context.signature:
+            libraries=[o for o in catalog.select('GameplayStatics') if o.name=='Default__GameplayStatics']
+            if len(libraries)!=1:raise UiProofMismatch('UI proof library unavailable')
+            def readback():
+                owning=self._invoke(catalog,root,'Widget','GetOwningPlayer')
+                local=self._invoke(catalog,root,'Widget','GetOwningLocalPlayer')
+                world_pc=self._invoke(catalog,libraries[0],'GameplayStatics','GetPlayerController',
+                    WorldContextObject=root,PlayerIndex=0)
+                return (owning is not None and local is not None and world_pc is not None and
+                    identity(owning)==context.controller and identity(local)==context.local_player and
+                    identity(world_pc)==context.controller)
+            # A GI-owned widget's LocalPlayer can already resolve the new
+            # controller/world. Prove that through all three shipping getters
+            # before issuing an unnecessary ownership mutation during loading.
+            matched=readback()
+            if not matched and rebind and self._setter_done!=context.signature:
                 # Reserve this single dispatch before invoking. A pending
                 # result-release ACK must never replay an already returned
                 # setter; unknown dispatch errors quarantine the router.
@@ -398,18 +498,8 @@ class OwnedUiProof:
                         self._rejected_setter_context=context.signature
                         raise UiProofPending('Loading controller retired before UI ownership dispatch') from None
                     raise
-            owning=self._invoke(catalog,root,'Widget','GetOwningPlayer')
-            local=self._invoke(catalog,root,'Widget','GetOwningLocalPlayer')
-            libraries=[o for o in catalog.select('GameplayStatics') if o.name=='Default__GameplayStatics']
-            if len(libraries)!=1:raise UiProofMismatch('UI proof library unavailable')
-            # The shipping getter calls root.GetWorld, and checks returnedWorld
-            # against GI's current world BEFORE using GI.LocalPlayers. Otherwise
-            # it enumerates controllers from that returned world's actor list.
-            world_pc=self._invoke(catalog,libraries[0],'GameplayStatics','GetPlayerController',
-                WorldContextObject=root,PlayerIndex=0)
-            if (owning is None or local is None or world_pc is None or
-                    identity(owning)!=context.controller or identity(local)!=context.local_player or
-                    identity(world_pc)!=context.controller):
+                matched=readback()
+            if not matched:
                 raise UiProofMismatch('Typed widget owning-player/local-player/world readback mismatch')
             current() # reject a generation switch during getter calls
             if rebind:
@@ -420,8 +510,7 @@ class OwnedUiProof:
                 panel._planner.close()
                 # Root, children, current context and unchanged metadata are
                 # selected anew; no old PC/world catalog is merged here.
-                metadata=[o for o in panel.catalog.objects if o.class_name in ('Function','Class','ScriptStruct','Enum')
-                    or o.name in ('Default__GameplayStatics','Default__WidgetBlueprintLibrary')]
+                metadata=panel_metadata(panel.catalog)
                 metadata=refresh_panel_metadata(self.scope.pid,metadata,observed=catalog)
                 # The complete leased hierarchy was already freshly read twice
                 # above. Add only the remaining planner metadata/current PC;

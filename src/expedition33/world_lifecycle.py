@@ -80,6 +80,21 @@ class WorldLifecycle:
             binding.context=RetirementContext(binding.token,next_token,reason)
             self.loader.registry.changed(name) # Revoke captured selections before hooks.
 
+    def observe_loading_world(self,world,gi):
+        """Fresh host-confirmed destination revokes old callbacks before save admission.
+
+        This grants no destination activation. Adapters must still acknowledge
+        their own native retirement before scopes or leases can be released.
+        """
+        self._check()
+        for value in (world,gi):
+            if type(value) is not tuple or len(value)!=4 or any(type(n) is not int for n in value):
+                raise ValueError('Expected copied destination identity')
+        if self.current_token is None or self.current_token[:2]==(world,gi):return
+        if world[0]!=self.current_token[0][0] or gi[0]!=world[0]:raise ValueError('Destination process mismatch')
+        self.ready=False
+        self._retire(None,'loading_world_changed')
+
     @property
     def cleanup_ready(self):
         return all(row.state in ('bound','retired') for row in self.bindings.values())
@@ -113,6 +128,9 @@ class WorldLifecycle:
         row=self.bindings.get(name)
         if row is not None and row.state!='retired':raise WorldLifecycleError('World owner already bound')
         self.bindings[name]=Binding(self.current_token,instance,scope)
+        # Preserve admission on the scope while the process moves to a new
+        # token. Fresh domain observations can then reject a cross-world race.
+        scope._world_binding_token=self.current_token
 
     def forget(self,name):
         self._check();self.bindings.pop(name,None)
@@ -192,6 +210,8 @@ class WorldLifecycle:
                     self.loader.registry.changed(name)
                 except BaseException as error:
                     row.state='unknown';row.error=type(error).__name__
+                    import logging
+                    logging.getLogger(__name__).exception('World owner retirement held: %s',name)
         finally:self._polling=False
 
     def status(self):

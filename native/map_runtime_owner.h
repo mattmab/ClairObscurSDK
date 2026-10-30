@@ -6,6 +6,9 @@
 #endif
 #include <chrono>
 #include "static_mesh_registry.h"
+#include "map_runtime_readiness.h"
+#include "validated_engine_profile_call.h"
+#include "npc_interaction_profiles.h"
 #pragma warning(push)
 #pragma warning(disable:4324)
 
@@ -60,6 +63,134 @@ class Owner {
         if(norm<.999||norm>1.001)return false;
         for(int i=8;i<11;++i)if(std::abs(v[i])<.001||std::abs(v[i])>10000)return false;
         return v[7]==0 && v[11]==0;
+    }
+    // Reflected, owner-checked scalar observations; no guessed component bits.
+    uint64_t readiness_field(uint64_t b,CallIdentity object,const char* owner,const char* name,const char* kind,int width){
+        if(!call_identity(b,object))return 0;
+        for(auto cls=local_read<uint64_t>(object.address+16);cls;cls=local_read<uint64_t>(cls+0x40)){
+            if(!named(b,cls,owner,"/Script/Engine"))continue;
+            auto field=local_read<uint64_t>(cls+0x50);
+            for(unsigned n=0;field&&n<512;++n,field=local_read<uint64_t>(field+24)){
+                if(!exact_name(b,field+32,name))continue;
+                const int at=local_read<int32_t>(field+0x44),extent=local_read<int32_t>(cls+0x58);
+                if(local_read<uint64_t>(field+16)!=(cls|1)||!exact_name(b,local_read<uint64_t>(field+8),kind)||
+                   local_read<int32_t>(field+0x30)!=1||local_read<int32_t>(field+0x34)!=width||at<0||at>extent-width)return 0;
+                return field;
+            }
+            return 0;
+        }
+        return 0;
+    }
+    bool readiness_bool(uint64_t b,CallIdentity object,const char* owner,const char* name,bool& value){
+        const auto field=readiness_field(b,object,owner,name,"BoolProperty",1);if(!field)return false;
+        const auto encoding=local_read<uint32_t>(field+0x70);const auto mask=uint8_t(encoding>>24);
+        if(uint8_t(encoding>>8)||!mask)return false;
+        value=(local_read<uint8_t>(object.address+local_read<int32_t>(field+0x44))&mask)!=0;return true;
+    }
+    bool readiness_save(uint64_t b,const uint8_t* raw){
+#ifdef E33_RETIRED_WORLD_SESSION
+        e33_retired_world::TargetOps proof{b};
+        if(!epoch_.established()||!proof.current_binding(epoch_.engine(),epoch_.viewport(),ids_[2])||
+           !proof.controller_world(ids_[0],ids_[2]))return false;
+#else
+        return false; // No verified active-viewport epoch on this native build.
+#endif
+        CallIdentity gi{},manager{};std::memcpy(&gi,raw+216,16);std::memcpy(&manager,raw+232,16);
+        uint32_t slot=0;std::memcpy(&slot,raw+2004,4);if(slot>0x7fffffffU)return false;
+        if(!call_identity(b,gi)||!call_identity(b,manager)||
+           !picto_class(b,gi.address,"BP_jRPG_GI_Custom_C","/Game/jRPGTemplate/Blueprints/Basics/BP_jRPG_GI_Custom")||
+           !picto_class(b,manager.address,"BP_SaveManager_C","/Game/Gameplay/Save/BP_SaveManager"))return false;
+        const auto world_gi=picto_field(b,ids_[2].address,"OwningGameInstance","ObjectProperty",472,8);
+        const auto gi_manager=picto_field(b,gi.address,"SaveManager","ObjectProperty",480,8);
+        const auto manager_gi=picto_field(b,manager.address,"GameInstanceReference","ObjectProperty",248,8);
+        uint64_t loaded_field=0,loading_field=0,slot_field=0;
+        const auto loaded=picto_field(b,gi.address,"SaveLoaded","BoolProperty",2680,1,&loaded_field);
+        const auto loading=picto_field(b,manager.address,"LoadIsInProgress","BoolProperty",169,1,&loading_field);
+        const auto selected=picto_field(b,manager.address,"SelectedSlot","IntProperty",288,4,&slot_field);
+        if(!world_gi||local_read<uint64_t>(world_gi)!=gi.address||!gi_manager||local_read<uint64_t>(gi_manager)!=manager.address||
+           !manager_gi||local_read<uint64_t>(manager_gi)!=gi.address||!loaded||!loading||!selected)return false;
+        const auto strict=[&](uint64_t field,uint64_t object,uint64_t table){return local_read<uint64_t>(field)==b+table&&
+            local_read<uint64_t>(field+16)==(local_read<uint64_t>(object+16)|1)&&local_read<uint64_t>(field+0x38)==0x8001040010205ULL;};
+        return strict(loaded_field,gi.address,0x6e119b0)&&strict(loading_field,manager.address,0x6e119b0)&&
+            strict(slot_field,manager.address,0x6e10a98)&&local_read<uint32_t>(loaded_field+0x70)==0xff010001U&&
+            local_read<uint32_t>(loading_field+0x70)==0xff010001U&&local_read<uint8_t>(loaded)==1&&
+            local_read<uint8_t>(loading)==0&&local_read<int32_t>(selected)==int32_t(slot);
+    }
+    bool readiness(uint64_t b,MeshPacket& packet){
+        auto* raw=reinterpret_cast<uint8_t*>(&packet);CallIdentity query[6]{},expected[2]{};
+        std::memcpy(query,raw+88,sizeof(query));std::memcpy(expected,raw+184,sizeof(expected));
+        const auto same=[](CallIdentity a,CallIdentity z){return a.index==z.index&&a.serial==z.serial&&a.address==z.address;};
+        uint32_t require_owned=0;std::memcpy(&require_owned,raw+2000,4);
+        if(require_owned>1||!same(expected[0],ids_[2])||!same(expected[1],ids_[1])||!current(b)||!readiness_save(b,raw)||
+           !call_identity(b,query[0])||!named(b,query[0].address,"Default__KismetSystemLibrary","/Script/Engine"))return false;
+        uint32_t report[13]={uint32_t(rows_.size()),0,0,0,0,0,0,1,0,0,0,0,0};
+        const auto rendered=[&](CallIdentity component,bool& value){
+            alignas(16) uint8_t frame[8]{};const float tolerance=.25f;std::memcpy(frame,&tolerance,4);
+            if(!e33_engine_profile_call::invoke(b,query[4],component,e33_map_readiness::rendered,frame)||frame[4]>1)return false;
+            value=frame[4]!=0;return true;
+        };
+        for(const auto& row:rows_){
+            if(row.destroyed||!call_identity(b,row.actor)||!call_identity(b,row.component)||local_read<uint64_t>(row.component.address+32)!=row.actor.address)return false;
+            const auto mesh_field=readiness_field(b,row.component,"StaticMeshComponent","StaticMesh","ObjectProperty",8);
+            if(!mesh_field)return false;
+            const auto mesh=call_capture(b,local_read<uint64_t>(row.component.address+local_read<int32_t>(mesh_field+0x44)));
+            if(!call_identity(b,mesh)||!call_derives(b,local_read<uint64_t>(mesh.address+16),ids_[5].address))return false;
+            ++report[1];
+            alignas(16) uint8_t frame[464]{};
+            if(!e33_engine_profile_call::invoke(b,query[3],row.component,e33_npc_interaction::GetCollisionEnabled,frame))return false;
+            if(frame[0]>3)return false;if(frame[0]==1||frame[0]==3)++report[2];
+            bool visible=false,hidden=true,actor_hidden=true;
+            if(!readiness_bool(b,row.component,"SceneComponent","bVisible",visible)||
+               !readiness_bool(b,row.component,"SceneComponent","bHiddenInGame",hidden)||
+               !readiness_bool(b,row.actor,"Actor","bHidden",actor_hidden))return false;
+            if(visible&&!hidden&&!actor_hidden)++report[3];
+            bool recently_rendered=false;if(!rendered(row.component,recently_rendered))return false;
+            if(recently_rendered)++report[8];
+        }
+        const auto streams=readiness_field(b,ids_[2],"World","StreamingLevels","ArrayProperty",16);
+        if(!streams||local_read<uint64_t>(streams)!=b+0x6e0de80||local_read<int32_t>(streams+0x44)!=136||
+           local_read<uint64_t>(streams+0x38)!=0x144000000002200ULL||(local_read<uint8_t>(streams+0x70)&1))return false;
+        const auto inner=local_read<uint64_t>(streams+0x78);
+        if(!inner||local_read<uint64_t>(inner+16)!=streams||!exact_name(b,local_read<uint64_t>(inner+8),"ObjectProperty")||
+           local_read<int32_t>(inner+0x30)!=1||local_read<int32_t>(inner+0x34)!=8||
+           !named(b,local_read<uint64_t>(inner+0x70),"LevelStreaming","/Script/Engine")||!call_is_class(b,local_read<uint64_t>(inner+0x70)))return false;
+        const auto array=ids_[2].address+136;const auto stream_data=local_read<uint64_t>(array);
+        const auto count=local_read<int32_t>(array+8),capacity=local_read<int32_t>(array+12);
+        if(count<0||count>4096||capacity<count||capacity>65536||(count&&(!stream_data||(stream_data&7))))return false;
+        for(int i=0;i<count;++i){
+            const auto level=call_capture(b,local_read<uint64_t>(stream_data+8*i));
+            if(!call_identity(b,level)||!call_derives(b,local_read<uint64_t>(level.address+16),local_read<uint64_t>(inner+0x70)))return false;
+            alignas(16) uint8_t frame[8]{};
+            if(!e33_engine_profile_call::invoke(b,query[5],level,e33_map_readiness::streaming,frame)||frame[0]>1)return false;
+            ++report[9];if(frame[0])++report[10];
+        }
+        clear();if(!call(b,4,ids_[1]))return false;const auto capsule=call_capture(b,pointer());
+        if(!call_identity(b,capsule)||local_read<uint64_t>(capsule.address+32)!=ids_[1].address)return false;
+        const auto h=readiness_field(b,capsule,"CapsuleComponent","CapsuleHalfHeight","FloatProperty",4);
+        const auto r=readiness_field(b,capsule,"CapsuleComponent","CapsuleRadius","FloatProperty",4);
+        if(!h||!r)return false;
+        clear();if(!call(b,5,capsule))return false;
+        double transform[12]{};std::memcpy(transform,args_,96);if(!valid_pose(args_))return false;
+        const double radius=local_read<float>(capsule.address+local_read<int32_t>(r+0x44))*std::max(std::abs(transform[8]),std::abs(transform[9]));
+        const double height=local_read<float>(capsule.address+local_read<int32_t>(h+0x44))*std::abs(transform[10]);
+        e33_map_readiness::Support support{};
+        const auto invoke=[&](unsigned stage,uint8_t* frame){return current(b)&&e33_engine_profile_call::invoke(b,query[stage+1],stage?ids_[3]:query[0],e33_engine_profiles::profiles[14+stage],frame);};
+        bool render_query_valid=true;
+        const auto owned=[&](uint64_t actor,uint64_t component){
+            const bool is_owned=std::any_of(rows_.begin(),rows_.end(),[&](const Row& row){return row.actor.address==actor&&row.component.address==component&&call_identity(b,row.actor)&&call_identity(b,row.component);});
+            const auto hit_component=call_capture(b,component);bool recent=false;
+            if(!call_identity(b,hit_component)||!rendered(hit_component,recent))render_query_valid=false;
+            if(recent){++report[11];if(is_owned)++report[12];}return is_owned;
+        };
+        if(!e33_map_readiness::support(invoke,owned,ids_[1].address,transform+4,radius,height,support)||!render_query_valid||!current(b)||!readiness_save(b,raw))return false;
+        report[4]=support.samples;report[5]=support.hits;report[6]=support.owned;
+        if(report[0]==report[1])report[7]|=2;
+        if(support.hits==5&&(!require_owned||support.owned==5))report[7]|=4;
+        if(report[0]==report[3])report[7]|=8;
+        // Vanilla floors may use invisible collision proxies. Require render
+        // evidence for our visible owned support, not for engine-only proxies.
+        if((report[7]&8)&&!report[10]&&report[12]==support.owned)report[7]|=16;
+        std::memcpy(raw+4096,report,sizeof(report));std::memcpy(raw+4152,support.heights,sizeof(support.heights));return true;
     }
     template<class Pool> bool spawn(uint64_t b,uint64_t session,Pool& pool,CallIdentity mesh,const uint8_t* pose,Row& result) {
         step_=1;
@@ -165,13 +296,13 @@ public:
     }
     template<class Pool> void command(uint64_t b,uint64_t session,Pool& pool,MeshPacket& p) {
         auto* raw=reinterpret_cast<uint8_t*>(&p);const auto op=p.operation;
-        if(p.version!=3 || p.error || p.state || !p.owner || op<93 || op>
+        if(p.version!=3 || p.error || p.state || !p.owner || (op!=107&&(op<93 || op>
 #ifdef E33_RETIRED_WORLD_SESSION
             98
 #else
             97
 #endif
-){p.error=2100;return;}
+))){p.error=2100;return;}
         if(quarantined_){p.error=2109;
 #ifdef E33_RETIRED_WORLD_SESSION
             if(op==98){p.state=owner_?1:0;const auto count=uint32_t(rows_.size());std::memcpy(raw+3564,&count,4);}
@@ -208,6 +339,11 @@ public:
         } else if(op==95) {
             p.error=close(b,session,pool);
         } else if(!owner_){p.error=2102;return;}
+        else if(op==107){
+            if(std::any_of(raw+24,raw+88,[](uint8_t c){return c!=0;})||
+               std::any_of(raw+248,raw+2000,[](uint8_t c){return c!=0;})||
+               std::any_of(raw+2008,raw+sizeof(p),[](uint8_t c){return c!=0;})||!readiness(b,p)){p.error=2115;return;}
+        }
         else if(op==97) {
             const auto* text=reinterpret_cast<const char*>(raw+2000);
             const auto length=strnlen_s(text,512);
