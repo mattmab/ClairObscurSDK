@@ -22,13 +22,13 @@ class TextInvocationTests(unittest.TestCase):
         mock = patch('expedition33.invocation.describe', return_value={7:self.descriptor})
         mock.start(); self.addCleanup(mock.stop)
 
-    def plan(self, value='Hello 🚀', enabled=True):
+    def plan(self, value='Hello \U0001F680', enabled=True):
         return prepare_call(self.p.catalog, self.p.target, self.p.function, {'Input':value}, text_values=enabled)
 
     def response(self, request):
         reply = bytearray(request)
         struct.pack_into('<II', reply, 32, 1, 0)
-        encoded = wire.encode_units('Returned 🚀')
+        encoded = wire.encode_units('Returned \U0001F680')
         at = wire.SLOTS_AT + wire.SLOT_SIZE
         wire.SLOT_HEADER.pack_into(reply, at, 1, len(encoded)//2)
         reply[at+8:at+8+len(encoded)] = encoded
@@ -38,7 +38,7 @@ class TextInvocationTests(unittest.TestCase):
         with self.assertRaises(UnsupportedInvocation): self.plan(enabled=False)
         plan = self.plan()
         self.assertEqual(plan.wire_version, 3)
-        self.assertEqual(plan.texts, (('Input','Hello 🚀'),))
+        self.assertEqual(plan.texts, (('Input','Hello \U0001F680'),))
         self.assertEqual(plan.data, bytes(32))
         self.assertEqual(call.HEADER.unpack_from(wire.encode_plan(plan, dict(plan.texts)))[0], 3)
         for value in (None, b'a', 123, 'x\0y', '\ud800', 'x'*4096):
@@ -53,7 +53,7 @@ class TextInvocationTests(unittest.TestCase):
         sent = wire.encode_plan(plan, dict(plan.texts))
         decoded = wire.decode_reply(sent, self.response(sent).hex())
         result = decode_result(plan, decoded.call, self.p.catalog, texts=decoded.texts)
-        self.assertEqual(result.return_value, 'Returned 🚀')
+        self.assertEqual(result.return_value, 'Returned \U0001F680')
         for texts in ((), ((1,'a'),), ((0,''),(1,'a'),(1,'b')), ((0,''),(1,'\ud800'))):
             with self.assertRaises(InvocationError):
                 decode_result(plan, decoded.call, self.p.catalog, texts=texts)
@@ -99,9 +99,9 @@ class TextInvocationTests(unittest.TestCase):
         self.assertTrue(scope.supports_text_values)
         with scope.invoke_retained(self.p.target,self.p.function,Input='') as result:
             copied = result.return_value
-            self.assertEqual(copied,'Returned 🚀')
+            self.assertEqual(copied,'Returned \U0001F680')
         self.assertEqual(transport.calls,['text-invoke'])
-        self.assertEqual(copied,'Returned 🚀')
+        self.assertEqual(copied,'Returned \U0001F680')
         self.assertFalse(session._leases)
         scope.close()
 
