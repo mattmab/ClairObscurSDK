@@ -4,7 +4,12 @@
 #include <cstring>
 namespace e33_timeline_actor {
 constexpr uint32_t construct=223,reveal=224,retire=225;
-constexpr unsigned capacity=32;
+// This is the shared process pool, not one Scene Editor preview's 32-actor
+// limit. Story NPCs retain separate interaction/visual actors and speaker
+// stand-ins alongside walls, portals, streaming sources and cinematic cast.
+// The full 11-placement port can require 66 cast slots, plus 21 world/scene
+// actors and a separate 32-actor preview. Keep an explicit bounded allowance.
+constexpr unsigned capacity=128;
 class Slots {
     uint64_t tokens_[capacity]{};
 public:

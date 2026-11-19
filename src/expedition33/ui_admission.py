@@ -3,8 +3,8 @@ from dataclasses import dataclass, replace
 from types import SimpleNamespace
 from . import RuntimeQueryError
 from .catalog import capture_selected
-from .values import read_values_many, read_object_reference
-from .world_admission import WarmAdmissionObserver
+from .values import read_object_reference, capture_selected_values
+from .world_admission import WarmAdmissionObserver, _projected_reference
 from .ui_shell_proof import UiContext
 
 
@@ -18,9 +18,23 @@ class UiAdmission:
     prewarm_context: UiContext | None = None
     activation_selectors: tuple | None = None
     bootstrap_ready: bool = False
+    layer_selectors: object | None = None
 
 
 class UiAdmissionObserver(WarmAdmissionObserver):
+    def __init__(self,pid,*,layer_preparation=None):
+        super().__init__(pid)
+        self._layer_preparation=layer_preparation;self._layer_observer=None;self._layer_selectors=None
+
+    def observe_anchored_world(self,catalog,chain):
+        requested=getattr(self,'_layer_preparation',None)
+        if requested is None or not requested.is_set():
+            self._layer_observer=None;self._layer_selectors=None;return
+        if self._layer_observer is None:
+            from .story_layers import LayerSelectorObserver
+            self._layer_observer=LayerSelectorObserver(self.pid)
+        self._layer_selectors=self._layer_observer.observe(catalog,chain)
+
     def controller(self, catalog, gi):
         current=super().controller(catalog,gi)
         self._ui_controller=tuple(current['controller'])
@@ -32,7 +46,7 @@ class UiAdmissionObserver(WarmAdmissionObserver):
         # rediscover the world. These selectors grant no admission: the owner
         # re-reads the entire binding twice before every activation.
         return replace(packet,activation_selectors=(getattr(self,'_observed_activation_selectors',None)
-            if packet.admission.activation_ready else None))
+            if packet.admission.activation_ready else None),layer_selectors=getattr(self,'_layer_selectors',None))
 
     def _observe(self):
         # A proven world binding keeps passive sampling on four fresh queries.
@@ -67,19 +81,12 @@ class UiAdmissionObserver(WarmAdmissionObserver):
                 # Exact controller selected from the successful fresh double
                 # admission, not another registry search. UI status is not
                 # authority to construct widgets or mutate engine state.
-                catalog=capture_selected(self.pid,(self._ui_controller[1:],))
-                controller=catalog.by_index[self._ui_controller[1]]
-                worlds=tuple(obj for obj in catalog.outer_chain(controller) if obj.class_name=='World')
-                if len(worlds)!=1 or (worlds[0].pid,worlds[0].index,worlds[0].serial,worlds[0].address)!=admission.token[0]:
-                    return UiAdmission(admission,None)
-                values=read_values_many(catalog,(controller,),fields=('PauseMenuWidget',))[controller.index]
-                owners=[key[0] for key in values.types if key[1]=='PauseMenuWidget']
+                pause=self._pause_menu(self._ui_controller,admission.token[0])
+                if pause is None:return UiAdmission(admission,None)
+                ready,field_present=pause
                 copied=UiContext('world',admission.token[0],admission.token[1],
                     tuple(self._ui_local_player),tuple(self._ui_controller))
-                if len(owners)!=1:return UiAdmission(admission,False,prewarm_context=copied)
-                pause,_=read_object_reference(catalog,controller,catalog.by_index[owners[0]],
-                    'PauseMenuWidget',project=True)
-                ready=pause is not None and pause.class_name=='WBP_PauseMenu_C'
+                if not field_present:return UiAdmission(admission,False,prewarm_context=copied)
                 return UiAdmission(admission,ready,ui_context=copied,
                     prewarm_context=copied if not ready or not admission.activation_ready else None,
                     activation_selectors=getattr(self,'_activation_binding',None))
@@ -93,6 +100,20 @@ class UiAdmissionObserver(WarmAdmissionObserver):
         except BaseException:
             self._discard()
             raise
+
+    def _pause_menu(self,controller_identity,world_identity):
+        # One fresh projection supplies both the controller's outer world and
+        # its widget reference. No second value read merely to learn its owner.
+        catalog,rows=capture_selected_values(self.pid,(tuple(controller_identity[1:]),),
+            fields=('PauseMenuWidget',),references=True)
+        controller=catalog.by_index[controller_identity[1]]
+        worlds=tuple(obj for obj in catalog.outer_chain(controller) if obj.class_name=='World')
+        if len(worlds)!=1 or (worlds[0].pid,worlds[0].index,worlds[0].serial,worlds[0].address)!=world_identity:
+            return None
+        observed=rows[controller.index]
+        if len([key for key in observed.types if key[1]=='PauseMenuWidget'])!=1:return False,False
+        pause=_projected_reference(catalog,observed,controller,'PauseMenuWidget')
+        return pause is not None and pause.class_name=='WBP_PauseMenu_C',True
 
     def _prewarm_packet(self,admission,context):
         # SaveLoaded may still be false after the new world/controller and its
@@ -108,17 +129,8 @@ class UiAdmissionObserver(WarmAdmissionObserver):
         ready=False
         if context is not None and getattr(context,'kind',None)=='world':
             with self._reader.bind():
-                catalog=capture_selected(self.pid,(context.controller[1:],))
-                controller=catalog.by_index[context.controller[1]]
-                worlds=tuple(o for o in catalog.outer_chain(controller) if o.class_name=='World')
-                if (len(worlds)==1 and
-                        (worlds[0].pid,worlds[0].index,worlds[0].serial,worlds[0].address)==context.world):
-                    observed=read_values_many(catalog,(controller,),fields=('PauseMenuWidget',))[controller.index]
-                    owners=[key[0] for key in observed.types if key[1]=='PauseMenuWidget']
-                    if len(owners)==1:
-                        pause,_=read_object_reference(catalog,controller,catalog.by_index[owners[0]],
-                            'PauseMenuWidget',project=True)
-                        ready=pause is not None and pause.class_name=='WBP_PauseMenu_C'
+                pause=self._pause_menu(context.controller,context.world)
+                if pause is not None:ready=pause[0]
         bootstrap=(context is not None and getattr(context,'kind',None)=='world' and
             context.world==getattr(self,'_bootstrap_world',None) and not admission.activation_ready)
         return UiAdmission(admission,ready,prewarm_context=context,bootstrap_ready=bootstrap)

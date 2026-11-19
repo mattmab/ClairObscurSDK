@@ -3,7 +3,7 @@ import struct,math
 SIZE=20984
 INPUT_COUNT=99
 ROLE_COUNT=484
-CLIP_COUNT=2689
+CLIP_COUNT=2690
 PLAN=struct.Struct('<II119d')
 AUTHOR_PLAN=struct.Struct('<II283d')
 MULTI_PLAN=struct.Struct('<II380d')
@@ -18,9 +18,22 @@ def validate_request(data,*,protocol=None,allow_retired=False):
         if error or state or not owner or any(data[28:]):raise ValueError('Retired-world scene request')
         if protocol is not None and protocol!=7:raise ValueError('Scene backend mismatch')
         return
-    if version not in (3,4,5,6,7) or op not in (*range(70,93),98) or error or state or not owner or any(data[24:88]):raise ValueError('Scene packet header')
+    if version not in (3,4,5,6,7) or op not in (*range(70,93),98,199,200,201,202,203) or error or state or not owner or any(data[24:88]):raise ValueError('Scene packet header')
     if protocol is not None and packet_version!=protocol:raise ValueError('Scene backend mismatch')
     if version==3 and op in range(75,80):raise ValueError('Authoring requires protocol four')
+    if op in (201,202,203):
+        from .scene_bones import validate_wire
+        if version!=7:raise ValueError('Bone timeline requires scene protocol seven')
+        validate_wire(data)
+        return
+    if op==200:
+        from .scene_visemes import validate_wire
+        if version!=7:raise ValueError('Facial timeline requires scene protocol seven')
+        validate_wire(data)
+        return
+    if op==199:
+        if version!=7 or struct.unpack_from('<I',data,88)[0]>=6 or any(data[92:]):raise ValueError('Owned face attachment request')
+        return
     if op==98:
         index,serial,address=struct.unpack_from('<iiQ',data,88);slot=struct.unpack_from('<I',data,104)[0]
         if packet_version!=7 or index<0 or serial<0 or not address or slot>=24 or any(data[108:112]) or any(data[112+EDIT_PLAN.size:]):raise ValueError('Live animation insertion payload')
@@ -160,10 +173,21 @@ def validate_request(data,*,protocol=None,allow_retired=False):
             for at in (88,104,120):
                 index,serial,address=struct.unpack_from('<iiQ',data,at)
                 if index<0 or serial<0 or not address:raise ValueError('Photo authoring identity')
+    elif op==71:
+        end=96;start=struct.unpack_from('<d',data,88)[0]
+        if not math.isfinite(start) or not 0<=start<120:raise ValueError('Scene playback start time')
+        if any(data[96:112]):
+            index,serial,address=struct.unpack_from('<iiQ',data,96)
+            if version!=7 or index<0 or serial<0 or not address:raise ValueError('Story audio pause identity')
+            end=112
     elif op in (77,78,79):
         end=104;a,b=struct.unpack_from('<2d',data,88)
         if not math.isfinite(a) or not math.isfinite(b):raise ValueError('Authoring command')
         if op==77 and (a!=int(a) or not 0<=a<6 or b not in (0,1)):raise ValueError('Audition command')
         if op==78 and (not 0<=a<=120 or b!=0):raise ValueError('Seek command')
-        if op==79 and (a!=int(a) or not 0<=a<=7 or a>=6 and b!=0 or b!=int(b) or not 0<=b<=5):raise ValueError('Editor control')
-    if any(data[end:]):raise ValueError('Unexpected scene payload')
+        if op==79 and (a!=int(a) or not 0<=a<=10 or a>=6 and b!=0 or b!=int(b) or not 0<=b<=5):raise ValueError('Editor control')
+    if op==74 and any(data[4096:]):
+        from .scene_cues import validate_wire,OFFSET,SIZE as CUE_SIZE
+        if any(data[end:OFFSET]) or any(data[OFFSET+CUE_SIZE:]):raise ValueError('Scene cues padding')
+        validate_wire(data[OFFSET:OFFSET+CUE_SIZE],values[0],int(values[1]),int(values[154]))
+    elif any(data[end:]):raise ValueError('Unexpected scene payload')

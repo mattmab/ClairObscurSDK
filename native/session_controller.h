@@ -3,6 +3,9 @@
 #include "target_process_exit.h"
 #include "session_wait.h"
 #include "session_command_wait_policy.h"
+#if E33_RUNTIME_CINEMATIC_VERSION>=314
+#include "session_handoff.h"
+#endif
 
 inline void decode_console_payload(const std::string& encoded,wchar_t (&out)[32769]) {
     require(encoded.size()%4==0 && encoded.size()/4<=32768,"CONSOLE_PAYLOAD_SIZE");
@@ -26,6 +29,9 @@ inline std::string console_utf8(const wchar_t* value) {
 
 struct RuntimeSessionController {
     SessionWait completion_wait;
+#if E33_RUNTIME_CINEMATIC_VERSION>=314
+    SessionHandoff handoff;
+#endif
     HANDLE mapping = nullptr;
     HANDLE target_process = nullptr;
     SessionPacket* packet = nullptr;
@@ -57,6 +63,9 @@ struct RuntimeSessionController {
             require_live_target(target_process);
             throw std::runtime_error("SESSION_POST_FAILED");
         }
+#if E33_RUNTIME_CINEMATIC_VERSION>=314
+        if(handoff.request)SetEvent(handoff.request);
+#endif
         ULONGLONG start = GetTickCount64();
 #if E33_RUNTIME_CINEMATIC_VERSION>=251
         e33_command_wait::Policy policy;
@@ -75,7 +84,15 @@ struct RuntimeSessionController {
                               << ",\"elapsed_ms\":" << elapsed << ",\"state\":" << state << "}" << std::endl;
             }
 #endif
+#if E33_RUNTIME_CINEMATIC_VERSION>=314
+            if(handoff.complete) {
+                HANDLE waits[]={handoff.complete,target_process};
+                const auto waited=WaitForMultipleObjects(2,waits,FALSE,1000);
+                require(waited!=WAIT_FAILED,"SESSION_HANDOFF_WAIT_FAILED");
+            } else completion_wait.wait();
+#else
             completion_wait.wait();
+#endif
         }
         require_live_target(target_process);
         require(InterlockedCompareExchange(&packet->request.state, 0, 0) == kComplete, "SESSION_COMMAND_TIMEOUT");
@@ -91,6 +108,9 @@ inline void run_runtime_session(DWORD pid, DWORD thread, int32_t object_index, i
     require(connection.target_process != nullptr, "SESSION_TARGET_HANDLE_FAILED");
     require(BCryptGenRandom(nullptr, reinterpret_cast<PUCHAR>(&connection.nonce), sizeof(connection.nonce), BCRYPT_USE_SYSTEM_PREFERRED_RNG) >= 0,
             "SESSION_RANDOM_FAILED");
+#if E33_RUNTIME_CINEMATIC_VERSION>=314
+    require(connection.handoff.connect(connection.controller,connection.nonce,true),"SESSION_HANDOFF_CREATE_FAILED");
+#endif
     wchar_t name[96]; session_mapping_name(name, connection.controller, connection.nonce);
     connection.mapping = CreateFileMappingW(INVALID_HANDLE_VALUE, nullptr, PAGE_READWRITE, 0, sizeof(SessionPacket), name);
     require(connection.mapping && GetLastError() != ERROR_ALREADY_EXISTS, "SESSION_MAPPING_FAILED");
@@ -250,9 +270,24 @@ inline void run_runtime_session(DWORD pid, DWORD thread, int32_t object_index, i
 #endif
 #ifdef E33_MESH_SESSION
               << ",\"mesh_protocol\":3"
-              << ",\"map_runtime_protocol\":1"
+              << ",\"map_runtime_protocol\":1" << ",\"map_runtime_owner_slots\":4"
+#if E33_RUNTIME_CINEMATIC_VERSION>=312 && defined(E33_RETIRED_WORLD_SESSION)
+              << ",\"map_visibility_batch_protocol\":1"
+#endif
+#if E33_RUNTIME_CINEMATIC_VERSION>=313
+              << ",\"story_layer_batch_protocol\":1"
+#endif
+#if E33_RUNTIME_CINEMATIC_VERSION>=314
+              << ",\"story_npc_finalize_protocol\":1,\"story_world_configure_protocol\":1,\"loading_handoff_protocol\":1"
+#endif
+#if E33_RUNTIME_CINEMATIC_VERSION>=316
+              << ",\"loading_dispatch_reentrancy_protocol\":1"
+#endif
 #ifdef E33_MAP_LOAD_GATE_SESSION
               << ",\"map_load_gate_protocol\":1"
+#if E33_RUNTIME_CINEMATIC_VERSION>=316
+              << ",\"map_loading_priority_protocol\":1"
+#endif
               << ",\"map_loading_presentation_protocol\":1"
               << ",\"map_asset_preparation_protocol\":1"
               << ",\"map_readiness_protocol\":1"
@@ -297,9 +332,96 @@ inline void run_runtime_session(DWORD pid, DWORD thread, int32_t object_index, i
 #if E33_RUNTIME_CINEMATIC_VERSION >= 236
               << ",\"timeline_extended_characters_protocol\":1"
 #endif
+#if E33_RUNTIME_CINEMATIC_VERSION >= 266
+              << ",\"story_blueprint_characters_protocol\":1"
+#if E33_RUNTIME_CINEMATIC_VERSION>=284
+              << ",\"opera_story_characters_protocol\":1"
+              << ",\"zone_spawn_travel_protocol\":1"
+#if E33_RUNTIME_CINEMATIC_VERSION>=285
+                << ",\"story_inworld_dialogue_protocol\":1"
+#if E33_RUNTIME_CINEMATIC_VERSION>=286
+                << ",\"story_action_completion_protocol\":1"
+#if E33_RUNTIME_CINEMATIC_VERSION>=289
+                << ",\"new_game_story_start_protocol\":1"
+                << ",\"new_game_story_direction_protocol\":1"
+                << ",\"story_cinematic_routes_protocol\":2"
+#if E33_RUNTIME_CINEMATIC_VERSION>=291
+                << ",\"story_original_narrative_protocol\":1"
+#if E33_RUNTIME_CINEMATIC_VERSION>=292
+                << ",\"asset_path_name_protocol\":1"
+#if E33_RUNTIME_CINEMATIC_VERSION>=293
+                << ",\"map_load_timing_protocol\":1"
+#if E33_RUNTIME_CINEMATIC_VERSION>=294
+                << ",\"story_portal_handoff_protocol\":1"
+#if E33_RUNTIME_CINEMATIC_VERSION>=295
+                << ",\"dialogue_slot_protocol\":1"
+#if E33_RUNTIME_CINEMATIC_VERSION>=296
+                << ",\"story_local_transfer_protocol\":1"
+#if E33_RUNTIME_CINEMATIC_VERSION>=297
+                << ",\"story_direct_portal_protocol\":1"
+#if E33_RUNTIME_CINEMATIC_VERSION>=300
+                << ",\"save_list_entry_protocol\":1"
+                << ",\"story_enemy_loot_protocol\":2"
+                << ",\"story_scene_cues_protocol\":1" << ",\"story_scene_clip_offsets_protocol\":1" << ",\"scene_facial_attachment_protocol\":1" << ",\"story_scene_controls_protocol\":1"
+#if E33_RUNTIME_CINEMATIC_VERSION>=311
+                << ",\"story_sequence_range_protocol\":2"
+#else
+                << ",\"story_sequence_range_protocol\":1"
+#endif
+                << ",\"inventory_reward_protocol\":2"
+#endif
+#endif
+#endif
+#endif
+#endif
+#endif
+#endif
+#endif
+#endif
+#endif
+#if E33_RUNTIME_CINEMATIC_VERSION>=287
+                << ",\"story_collision_wall_protocol\":1"
+#endif
+#endif
+#endif
+#if E33_RUNTIME_CINEMATIC_VERSION >= 267
+              << ",\"native_dialogue_text_protocol\":1"
+#if E33_RUNTIME_CINEMATIC_VERSION >= 268
+#if E33_RUNTIME_CINEMATIC_VERSION>=274
+              << ",\"story_dialogue_participants_protocol\":1"
+#endif
+#if E33_RUNTIME_CINEMATIC_VERSION>=275
+#if E33_RUNTIME_CINEMATIC_VERSION>=279
+              << ",\"story_dialogue_camera_protocol\":4"
+#elif E33_RUNTIME_CINEMATIC_VERSION>=278
+              << ",\"story_dialogue_camera_protocol\":3"
+#elif E33_RUNTIME_CINEMATIC_VERSION>=277
+              << ",\"story_dialogue_camera_protocol\":2"
+#else
+              << ",\"story_dialogue_camera_protocol\":1"
+#endif
+#endif
+#if E33_RUNTIME_CINEMATIC_VERSION>=273
+              << ",\"story_speaker_name_protocol\":1"
+#endif
+              << ",\"story_npc_blueprint_protocol\":1"
+              << ",\"native_dialogue_end_protocol\":1"
+#if E33_RUNTIME_CINEMATIC_VERSION >= 269
+#if E33_RUNTIME_CINEMATIC_VERSION >= 270
+              << ",\"story_save_identity_protocol\":2"
+#else
+              << ",\"story_save_identity_protocol\":1"
+#endif
+#endif
+#endif
+#endif
+#endif
 #endif
 #ifdef E33_TIMELINE_ACTOR_POOL_SESSION
               << ",\"timeline_actor_pool_protocol\":1"
+#if E33_RUNTIME_CINEMATIC_VERSION>=312
+              << ",\"story_streaming_radius_protocol\":1"
+#endif
 #if E33_RUNTIME_CINEMATIC_VERSION >= 226
               << ",\"timeline_current_world_protocol\":1"
 #endif
@@ -417,7 +539,11 @@ inline void run_runtime_session(DWORD pid, DWORD thread, int32_t object_index, i
               << ",\"ui_construction_protocol\":1"
 #endif
 #ifdef E33_LAYOUT_BATCH_SESSION
+#if E33_RUNTIME_CINEMATIC_VERSION>=282
+              << ",\"layout_batch_protocol\":4"
+#else
               << ",\"layout_batch_protocol\":3"
+#endif
 #endif
 #endif
 #ifdef E33_VECTOR_SESSION
@@ -425,12 +551,51 @@ inline void run_runtime_session(DWORD pid, DWORD thread, int32_t object_index, i
 #endif
 #ifdef E33_PAUSE_MENU_SESSION
               << ",\"pause_attachment_protocol\":2,\"trace_renew_protocol\":1"
+#if E33_RUNTIME_CINEMATIC_VERSION>=252
+              << ",\"pause_battle_controls_protocol\":1"
+#if E33_RUNTIME_CINEMATIC_VERSION>=255
+              << ",\"defeat_delay_override_protocol\":1"
+#endif
+#if E33_RUNTIME_CINEMATIC_VERSION>=263
+              << ",\"free_aim_region_query_protocol\":1"
+#endif
+#if E33_RUNTIME_CINEMATIC_VERSION>=253
+        << ",\"string_timer_protocol\":1"
+#endif
+#endif
 #ifdef E33_RETIRED_WORLD_SESSION
               << ",\"retired_world_cleanup_protocol\":1,\"builder_world_retirement_protocol\":1"
 #endif
 #endif
 #ifdef E33_MEDIA_SESSION
               << ",\"media_owner_protocol\":1"
+#endif
+#if defined(E33_RUNTIME_CINEMATIC_VERSION) && E33_RUNTIME_CINEMATIC_VERSION>=305
+              << ",\"story_trial_encounter_protocol\":1"
+#if E33_RUNTIME_CINEMATIC_VERSION>=307
+              << ",\"story_trial_tables_protocol\":2"
+#if E33_RUNTIME_CINEMATIC_VERSION>=308
+              << ",\"owned_sdk_spawn_tuning_protocol\":1"
+#if E33_RUNTIME_CINEMATIC_VERSION>=310
+              << ",\"story_character_tables_protocol\":2"
+#if E33_RUNTIME_CINEMATIC_VERSION>=311
+              << ",\"story_party_join_data_protocol\":2"
+              << ",\"story_trial_data_protocol\":2"
+              << ",\"character_skills_protocol\":3"
+#if E33_RUNTIME_CINEMATIC_VERSION>=317
+              << ",\"story_wardrobe_protocol\":2"
+#endif
+#if E33_RUNTIME_CINEMATIC_VERSION>=312
+              << ",\"character_restore_protocol\":5"
+#endif
+              << ",\"battle_qte_protocol\":3"
+#else
+              << ",\"battle_qte_protocol\":1"
+#endif
+              << ",\"initial_encounter_roster_protocol\":1"
+#endif
+#endif
+#endif
 #endif
 #ifdef E33_SEQUENCE_SESSION
               << ",\"asset_load_protocol\":1"
@@ -539,6 +704,17 @@ inline void run_runtime_session(DWORD pid, DWORD thread, int32_t object_index, i
               << ",\"sequence_flight_keyboard_protocol\":1"
 #if E33_RUNTIME_CINEMATIC_VERSION>=249
               << ",\"sequence_flight_playback_protocol\":1"
+#if E33_RUNTIME_CINEMATIC_VERSION>=257
+              << ",\"sequence_drag_scrub_protocol\":1"
+#if E33_RUNTIME_CINEMATIC_VERSION>=258
+              << ",\"sequence_timeline_viewport_protocol\":"
+#if E33_RUNTIME_CINEMATIC_VERSION>=259
+              << 2
+#else
+              << 1
+#endif
+#endif
+#endif
 #endif
 #endif
               << ",\"sequence_placement_input_protocol\":1"
@@ -571,6 +747,9 @@ inline void run_runtime_session(DWORD pid, DWORD thread, int32_t object_index, i
 #endif
 #ifdef E33_SEQUENCER_VALUE_SESSION
               << ",\"sequencer_frame_values_protocol\":1"
+#endif
+#ifdef E33_TRANSFORM_SESSION
+              << ",\"transform_values_protocol\":1,\"scene_bone_timeline_protocol\":1"
 #endif
 #ifdef E33_ROTATOR_SESSION
               << ",\"rotator_values_protocol\":1"

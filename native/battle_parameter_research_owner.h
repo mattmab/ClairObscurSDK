@@ -41,6 +41,7 @@ class ParameterResearchOwner {
     CallIdentity entry_ids_[2]{};
     ParameterLease entry_leases_[2]{};
     std::array<uint8_t,344> original_{};
+    uint32_t source_offset_=48;bool source_default_=false;
     template<class Pool> TargetBattleParameterOwnerOps<Pool> operations(uint64_t b,uint64_t session,Pool& pool) {
         return {{b,session,pool,ids_[0],ids_[1],ids_[2],0,0,0,&proof_,TargetParameterSourceProof::allowed}};
     }
@@ -142,7 +143,8 @@ public:
         TargetBattleParameterOwnerOps<Pool> ops{{b,session,pool,query[0],query[1],query[2],0,0,0,&proof_,TargetParameterSourceProof::allowed}};
         if(!ops.admit()){packet.error=3053;return;}
         if(mode==2&&!e33_mesh::named(b,query[2].address,"DA_GA_SQT_ScielJoinsGroup_P2_Tutorial",
-            "/Game/Levels/GestralVillage/GameActions/DA_GA_SQT_ScielJoinsGroup_P2_Tutorial")){packet.error=3050;return;}
+            "/Game/Levels/GestralVillage/GameActions/DA_GA_SQT_ScielJoinsGroup_P2_Tutorial")&&
+            !story_trial_parameter_offset(b,query[2],query[1])){packet.error=3050;return;}
         uint64_t instance_name=0;
         if(policy_requested&&!(authority.owns?
             authority.owns(authority.owner,b,session,pool,anchor_owner,anchor,instance_name):
@@ -155,12 +157,13 @@ public:
         if(packet.operation==124){const uint32_t result[]={1,0,0};std::memcpy(bytes+4096,result,sizeof(result));packet.state=1;return;}
         owner_=packet.owner;
         std::memcpy(ids_,query,sizeof(ids_));
-        std::memcpy(original_.data(),reinterpret_cast<const void*>(query[1].address+48),original_.size());
+        source_offset_=ops.engine.parameter_offset();source_default_=story_trial_parameter_offset(b,query[2],query[1])!=0&&(local_read<uint32_t>(query[1].address+8)&0x10U)!=0;
+        std::memcpy(original_.data(),reinterpret_cast<const void*>(query[1].address+source_offset_),original_.size());
         frame_.emplace(); // persistent before the first lease/engine operation
         const bool copied=frame_->open(ops);
         ids_[0]=ops.engine.structure;ids_[1]=ops.engine.source;ids_[2]=ops.engine.root;
         if(!copied){packet.error=3054;return;}
-        if(!ops.engine.source_profile_ready()||std::memcmp(original_.data(),reinterpret_cast<const void*>(ids_[1].address+48),original_.size())){packet.error=3055;return;}
+        if(!ops.engine.source_profile_ready()||std::memcmp(original_.data(),reinterpret_cast<const void*>(ids_[1].address+source_offset_),original_.size())){packet.error=3055;return;}
         if(arena_requested){
             const ParameterLease held[]={frame_->lease(0),frame_->lease(1),frame_->lease(2)};
             TargetBattleParameterArenaOps<Pool,ProofOwner> arena_ops{ops.frame_ops(held),enemy,anchor_owner,anchor,arena_policy==1};
@@ -184,7 +187,7 @@ public:
                 {static_cast<ParameterPolicyMode>(mode),instance_name},&instance,InstanceProof::verify};
             if(!frame_->apply_policy(policy_ops)){packet.error=3058;return;}
             party_after=local_read<uint32_t>(reinterpret_cast<uint64_t>(frame_->copied_data())+208);
-            if(!ops.engine.source_profile_ready()||std::memcmp(original_.data(),reinterpret_cast<const void*>(ids_[1].address+48),original_.size())){packet.error=3055;return;}
+            if(!ops.engine.source_profile_ready()||std::memcmp(original_.data(),reinterpret_cast<const void*>(ids_[1].address+source_offset_),original_.size())){packet.error=3055;return;}
         }
         if(entry_requested){
             for(unsigned i=0;i<2;++i){
@@ -232,12 +235,13 @@ public:
                                 held.serial==p.anchor.serial&&held.address==p.anchor.address&&
                                 call_identity(p.base,p.anchor)&&call_identity(p.base,p.source)&&call_identity(p.base,p.arena)&&
                                 !(local_read<uint32_t>(p.anchor.address+8)&0x40018030U)&&
-                                !(local_read<uint32_t>(p.source.address+8)&0x40018030U)&&
+                                !(local_read<uint32_t>(p.source.address+8)&(p.parent->source_default_?0x40018000U:0x40018030U))&&
+                                (!p.parent->source_default_||(local_read<uint32_t>(p.source.address+8)&0x10U))&&
                                 !(local_read<uint32_t>(p.arena.address+8)&0x40018030U)&&
                                 local_read<uint64_t>(p.anchor.address+24)==p.name&&p.name==c.private_name&&
                                 e33_battle_completion::same(c.source,{p.source.index,p.source.serial,p.source.address})&&
                                 e33_battle_completion::same(c.arena,{p.arena.index,p.arena.serial,p.arena.address})&&
-                                !std::memcmp(p.parent->original_.data(),reinterpret_cast<const void*>(p.source.address+48),344);
+                                !std::memcmp(p.parent->original_.data(),reinterpret_cast<const void*>(p.source.address+p.parent->source_offset_),344);
                             if(!native_registration)return false;
                             // POST runs under TraceSlots lock. Never call the
                             // broader owned-entry helpers here: they may update
@@ -281,7 +285,7 @@ public:
         // duplicate copy request is rejected until explicit close operation126.
         packet.error=release_entry(ops);if(packet.error)return;
         if(!frame_->close(ops)){packet.error=frame_->quarantined()?408:407;return;}
-        if(!ops.engine.source_profile_ready()||std::memcmp(original_.data(),reinterpret_cast<const void*>(ids_[1].address+48),original_.size())){packet.error=3055;return;}
+        if(!ops.engine.source_profile_ready()||std::memcmp(original_.data(),reinterpret_cast<const void*>(ids_[1].address+source_offset_),original_.size())){packet.error=3055;return;}
         const uint32_t result[]={1,1,1};std::memcpy(bytes+4096,result,sizeof(result));
         if(policy_requested){const uint32_t policy_result[]={mode,party_before,party_after,1};std::memcpy(bytes+4108,policy_result,sizeof(policy_result));}
         if(entry_requested){const uint32_t entry_result[]={1,dispatch_requested?1U:0U,dispatch_requested?1U:0U};std::memcpy(bytes+4124,entry_result,sizeof(entry_result));}

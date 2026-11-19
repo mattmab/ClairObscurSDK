@@ -1,6 +1,6 @@
 import unittest
 from types import SimpleNamespace
-from unittest.mock import Mock
+from unittest.mock import Mock,patch
 from expedition33.media import OwnedVideoWidget
 from expedition33._media_owner import NativeMediaOwner
 from expedition33.invocation import CallPlan
@@ -8,6 +8,20 @@ from dataclasses import replace
 
 
 class OwnedMediaTests(unittest.TestCase):
+    def test_known_empty_native_admission_rejection_does_not_abort_sdk(self):
+        import struct
+        from expedition33._media_owner import HEADER,SIZE,MediaAdmissionRejected
+        session=Mock()
+        def reject(command,sent):
+            reply=bytearray(sent);struct.pack_into('<II',reply,24,1401,0)
+            return dict(media_owner_packet=reply.hex())
+        session._transport.command.side_effect=reject
+        owner=NativeMediaOwner(SimpleNamespace(_session=session))
+        plan=Mock()
+        with patch('expedition33._media_owner.call.encode_plan',return_value=bytes((SIZE-HEADER.size)//2)):
+            with self.assertRaises(MediaAdmissionRejected):owner._send(1,lease=7,plans=(plan,plan))
+        self.assertEqual(owner.state,'new');session._abort_ownership.assert_not_called()
+        self.assertTrue(owner.close())
     def test_cleanup_mismatch_reports_mutable_flags_without_relaxing_guard(self):
         from expedition33.catalog import CatalogObject
         target = CatalogObject(1,2,3,4096,'Video','CommonVideoPlayer','Class',7,-1,0,8,0)

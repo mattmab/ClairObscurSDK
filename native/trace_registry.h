@@ -37,6 +37,9 @@ public:
     void maintain() {
         if (!session_ || thread_ != GetCurrentThreadId()) return;
         const auto now = GetTickCount64();
+#ifdef E33_DAMAGE_AUDIT_SESSION
+        Ops::flush_damage_evidence();
+#endif
         for (auto& item : items_) if (item) {
             const auto storage = Ops::storage(item->context);
             if (storage != Storage::deferred)
@@ -78,7 +81,7 @@ public:
             item->owner = packet.owner; item->id = next_++;
             if (!item->registration.open(Ops::entry(item->context), Ops::expected(base_, schema),
                 {session_, item->id}, thread_, packet.duration_ms, packet.limit,
-                Ops::collect, &item->context, blueprint_damage_schema(schema))) { packet.error = 936; return; }
+                Ops::collect, &item->context, blueprint_observer_schema(schema))) { packet.error = 936; return; }
             packet.registration = item->id;
             report(*item, packet); items_[slot] = std::move(item); return;
         }

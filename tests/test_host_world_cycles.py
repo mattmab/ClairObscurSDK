@@ -129,6 +129,7 @@ class HostTests(unittest.TestCase):
             def __init__(self, *args, **kwargs):
                 Loader.last = self
                 self._loaded = {}
+                self._startup_preparations = {}
                 self.registry = Registry(self)
                 self.stop_requested = False
                 self.polls = 0

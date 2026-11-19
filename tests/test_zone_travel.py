@@ -12,7 +12,7 @@ class ZoneTests(unittest.TestCase):
         return bytes(p)
     def test_valid_packet(self):z.validate_request(self.packet())
     def test_invalid_inputs(self):
-        for at,data in ((0,b'\x02'),(4,b'\x02'),(8,b'\x01'),(16,b'\xff'*4),(112,b';quit'),(207,b'x')):
+        for at,data in ((0,b'\x03'),(4,b'\x02'),(8,b'\x01'),(16,b'\xff'*4),(112,b';quit'),(207,b'x')):
             p=bytearray(self.packet());p[at:at+len(data)]=data
             with self.assertRaises(ValueError):z.validate_request(bytes(p))
     def test_reply_correlation(self):
@@ -21,6 +21,11 @@ class ZoneTests(unittest.TestCase):
         p[112]=ord('X')
         with self.assertRaises(InvocationError) as e:z.decode_reply(sent,{'zone_packet':p.hex()})
         self.assertEqual(e.exception.outcome,'unknown')
+    def test_named_spawn_uses_distinct_version_and_keeps_reply_correlation(self):
+        sent=bytearray(self.packet());struct.pack_into('<I',sent,0,2)
+        z.validate_request(bytes(sent))
+        reply=bytearray(sent);struct.pack_into('<I',reply,8,1)
+        self.assertEqual(z.decode_reply(bytes(sent),{'zone_packet':reply.hex()})['outcome'],'dispatch_returned')
     def test_dispatch_outcome(self):
         for outcome,expected in ((0,'not_dispatched'),(2,'unknown')):
             p=bytearray(self.packet());struct.pack_into('<II',p,8,outcome,1810)

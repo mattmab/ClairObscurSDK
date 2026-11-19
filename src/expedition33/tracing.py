@@ -3,7 +3,7 @@
 Native registration must independently revalidate identities and every property,
 resolve out records by property identity, and verify the supported frame path.
 """
-from dataclasses import dataclass
+from dataclasses import dataclass, replace
 import struct
 from types import MappingProxyType
 
@@ -96,7 +96,7 @@ def decode_trace(plan, data, *, session=0):
     return TraceValues(MappingProxyType(arguments), returned)
 
 
-def prepare_trace(catalog, function, *, blueprint=False):
+def prepare_trace(catalog, function, *, blueprint=False, new_game=False, story_direction=False):
     """Plan copied scalar POST fields for any described native function.
 
 Object identities and owned-value codecs are not implemented for traces yet.
@@ -106,6 +106,21 @@ Their layouts must not silently fall back to copying pointer-bearing bytes.
     if catalog.find_class('Function').index not in catalog.ancestors(function.class_index):
         raise ValueError('Expected a reflected Function identity')
     descriptor = describe(catalog, (function,))[function.index]
+    direction_path='/Script/SFUIComponents.SFUIValueSelectorWidget:OnConstrainedNavigationTriggered'
+    nav=(story_direction and function.name=='OnConstrainedNavigationTriggered' and
+         catalog.path_name(function)==direction_path)
+    if nav:
+        fields=tuple(p for p in descriptor.properties if p['owner_index']==function.index and p['flags']&0x80)
+        if (len(fields)!=1 or fields[0]['name']!='UINavigation' or fields[0]['type']!='EnumProperty' or
+                fields[0].get('enum_name')!='EUINavigation' or fields[0].get('inner_type')!='ByteProperty' or
+                fields[0].get('inner_element_size')!=1 or fields[0]['flags']!=6755469234274944 or
+                descriptor.function['flags']!=263169 or int(descriptor.function['entry_rva'],16)!=0x5fc16c0):
+            raise ValueError('Story navigation parameter layout changed')
+        # Only the copied ordinal goes over the trace wire. The native gate
+        # checks the original enum type and identity before admitting it.
+        field=fields[0]
+        descriptor=replace(descriptor,properties=tuple(dict(p,type='ByteProperty') if p is field else p
+                                                        for p in descriptor.properties))
     size, extent, returned, parameters = _parameter_schema(catalog, function, descriptor)
     info = descriptor.function
     entry = int(info['entry_rva'], 16)
@@ -114,12 +129,15 @@ Their layouts must not silently fall back to copying pointer-bearing bytes.
         expected = (('TargetCharacter', 'ObjectProperty'), ('SourceCharacter', 'ObjectProperty'),
                     ('ReceivedDamages', 'DoubleProperty'), ('BattleDamages', 'ObjectProperty'))
         owner = catalog.by_index[function.outer_index]
-        if not (blueprint and function.name == 'OnCharacterReceivedDamages' and
+        menu=(new_game and function.name=='OnStartGameSettingsApplied' and owner.name=='WBP_MM_MainMenu_C' and
+              catalog.path_name(owner)=='/Game/UI/Widgets/MainMenu/WBP_MM_MainMenu.WBP_MM_MainMenu_C' and
+              info['flags']==0x0c000000 and entry==0x13937a0 and size==0 and returned==65535 and not parameters)
+        if not (menu or (blueprint and function.name == 'OnCharacterReceivedDamages' and
                 owner.name == 'BP_BattleSummaryStatsManager_C' and info['flags'] == 0x0c020000 and
                 entry == 0x13937a0 and size == 32 and returned == 65535 and
                 tuple((p.name, p.kind) for p in parameters) == expected and
                 all(p.offset == i*8 and p.width == 8 and p.dimension == 1 and not p.flags & (OUT | RETURN)
-                    for i, p in enumerate(parameters))):
+                    for i, p in enumerate(parameters)))):
             raise ValueError('Bytecode-originated trace schemas require separate frame validation')
     if not 0 < entry < 166776832 or size > 4096:
         raise ValueError('Trace entry or parameter size exceeds this build profile')

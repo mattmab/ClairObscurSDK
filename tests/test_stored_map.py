@@ -52,3 +52,13 @@ class StoredMapTests(TestCase):
         metadata['map_value_struct_serial'] += 1
         with self.assertRaisesRegex(ValueError, 'reference changed'):
             _map_value(metadata, {'$map':dict(length=1,items=[[1,value]])}, fixture.catalog)
+
+
+class ByteMapTests(TestCase):
+    def test_affinity_map_copies_values_and_rejects_invalid_bytes(self):
+        metadata = dict(map_key_type='ByteProperty',map_value_type='ByteProperty')
+        result = _map_value(metadata, {'$map':dict(length=2,items=[[2,3],[7,2]])})
+        self.assertEqual(dict(result.items),{2:3,7:2})
+        for pairs in ([[True,2]], [[2,True]], [[2,256]], [[-1,2]], [[2,1],[2,3]]):
+            with self.subTest(pairs=pairs), self.assertRaises(ValueError):
+                _map_value(metadata, {'$map':dict(length=len(pairs),items=pairs)})

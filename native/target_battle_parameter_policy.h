@@ -70,7 +70,7 @@ template<class Pool> struct TargetBattleParameterPolicyOps {
         if(local_read<uint64_t>(at+168)||local_read<uint64_t>(at+176)||local_read<uint64_t>(at+184)||!array_valid(destination))return false;
         if(requested.mode==ParameterPolicyMode::Isolated)return local_read<int32_t>(at+208)==0;
         if(requested.mode!=ParameterPolicyMode::AuthoredParty)return false;
-        const auto source_frame=frame.source.address+48;
+        const auto source_frame=frame.source_data();
         if(!array_valid(reinterpret_cast<const void*>(source_frame)))return false;
         const auto count=local_read<int32_t>(source_frame+208);
         if(count!=1||local_read<int32_t>(at+208)!=count)return false;

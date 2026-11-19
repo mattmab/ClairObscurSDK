@@ -12,8 +12,8 @@ import re
 import stat
 import zipfile
 
-MAX_ARCHIVE = 32 * 1024 * 1024
-MAX_EXPANDED = 64 * 1024 * 1024
+MAX_ARCHIVE = 512 * 1024 * 1024
+MAX_EXPANDED = 768 * 1024 * 1024
 MAX_FILE = 4 * 1024 * 1024
 MAX_ENTRIES = 512
 _DEVICE = re.compile(r'^(CON|CONIN\$|CONOUT\$|PRN|AUX|NUL|COM[1-9¹²³]|LPT[1-9¹²³])$', re.I)
@@ -60,7 +60,7 @@ def _parts(name):
 def inspect_bytes(data, expected_sha256):
     """Verify complete candidate before any installed mod is stopped or altered."""
     if type(data) is not bytes or len(data) > MAX_ARCHIVE:
-        raise ArchiveError('Archive must be immutable bytes, at most 32 MiB')
+        raise ArchiveError('Archive must be immutable bytes, at most 512 MiB')
     if (type(expected_sha256) is not str or len(expected_sha256) != 64 or
             any(c not in '0123456789abcdef' for c in expected_sha256)):
         raise ArchiveError('Supply a lowercase archive SHA256')

@@ -84,6 +84,10 @@ class EnemySpawner:
         """Start an admitted original fight with a persistently owned arena/trigger."""
         self._scope._check()
         if self._closed:raise RuntimeError('Enemy spawner is closed')
+        roster=getattr(self,'_initial_roster',None)
+        if roster is not None:
+            if not roster.close():raise RuntimeError('Initial roster cleanup pending')
+            self._initial_roster=None
         current=getattr(self,'original_fight',None)
         if current is not None and current.phase!='closed':
             raise RuntimeError('Retire the existing original fight first')
@@ -96,10 +100,18 @@ class EnemySpawner:
         return self.original_fight.start()
 
     def poll_original_fight(self):
+        roster=getattr(self,'_initial_roster',None)
+        if roster is not None:
+            if not roster.close():raise RuntimeError('Initial roster cleanup pending')
+            self._initial_roster=None
         current=getattr(self,'original_fight',None)
         return current.poll() if current is not None else None
 
     def _check_no_original_fight(self):
+        roster=getattr(self,'_initial_roster',None)
+        if roster is not None:
+            if not roster.close():raise RuntimeError('Initial roster cleanup pending')
+            self._initial_roster=None
         current=getattr(self,'original_fight',None)
         if current is not None and current.phase!='closed':
             raise RuntimeError('Retire the original direct fight before another operation')
@@ -239,6 +251,12 @@ class EnemySpawner:
         self._check_no_original_fight()
         from .enemy_combat_additions import add_combatant
         return add_combatant(self,recipe_id,definition_row=definition_row,experimental=experimental)
+
+    def add_combatants(self,members,*,experimental=False):
+        """Add a selected group with shared discovery and final roster proof."""
+        self._check_no_original_fight()
+        from .enemy_combat_additions import add_combatants
+        return add_combatants(self,members,experimental=experimental)
 
     def start_authored_encounter(self,recipe_id,*,experimental=False,dispatch=False):
         """Prepare or enter an original roster using this owner's held anchor.
@@ -450,6 +468,10 @@ class EnemySpawner:
                     spawn_support='QA only',read_only=True)
 
     def status(self):
+        roster=getattr(self,'_initial_roster',None)
+        if roster is not None:
+            if not roster.close():raise RuntimeError('Initial roster cleanup pending')
+            self._initial_roster=None
         current=getattr(self,'original_fight',None)
         return dict(self._record,native_phase=self._owner.phase,has_owned_enemy=self._owner.has_native_work,
                     actor_identity=self._owner.actor_identity,arena_identity=self._owner.arena_identity,supported_worlds=[QA_WORLD],
@@ -607,9 +629,24 @@ class EnemySpawner:
         self._record['stage']='active'
         return self.status()
 
+    def prepare_initial_roster(self,members):
+        from .initial_encounter_roster import InitialEncounterRoster
+        from .enemy_combat_additions import resolve_definition
+        if getattr(self,'_initial_roster',None) is not None:raise RuntimeError('Initial roster already owned; remove encounter first')
+        if self._owner.phase!='initialized' or self._record.get('stage')!='prepared':raise RuntimeError('Prepare the held encounter before its initial roster')
+        definitions=tuple(resolve_definition(self.catalog,*member)['definition_row'] for member in members)
+        self._initial_roster=InitialEncounterRoster(self._scope,self._owner)
+        self._initial_roster.prepare(definitions)
+        self._record['initial_roster']=list(definitions)
+        return self._initial_roster
+
     def remove(self):
         self._scope._check()
         if self._closed:raise RuntimeError('Enemy spawner is closed')
+        roster=getattr(self,'_initial_roster',None)
+        if roster is not None:
+            if not roster.close():raise RuntimeError('Initial roster cleanup pending')
+            self._initial_roster=None
         current=getattr(self,'original_fight',None)
         if current is not None and current.phase!='closed':
             if not current.close():raise RuntimeError('Original fight retirement deferred until battle completes')
@@ -623,6 +660,10 @@ class EnemySpawner:
 
     def close(self):
         if self._closed:return True
+        roster=getattr(self,'_initial_roster',None)
+        if roster is not None:
+            if not roster.close():raise RuntimeError('Initial roster cleanup pending')
+            self._initial_roster=None
         current=getattr(self,'original_fight',None)
         if current is not None and not current.close():return False
         if getattr(self,'_tuning',None) is not None:self._tuning.close();self._tuning=None

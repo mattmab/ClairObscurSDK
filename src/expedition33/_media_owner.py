@@ -8,6 +8,12 @@ from . import _invocation_wire as call
 HEADER = struct.Struct('<IIQQII')
 SIZE = HEADER.size + 2 * call.SIZE
 
+class MediaAdmissionRejected(RuntimeError):
+    outcome='not_dispatched'
+    def __init__(self,code):
+        self.native_error=code
+        super().__init__('Media lifetime admission rejected before dispatch ('+str(code)+')')
+
 
 def _target_difference(expected, actual):
     """Local diagnostics only; exact snapshot equality remains the admission gate."""
@@ -55,6 +61,12 @@ class NativeMediaOwner:
             if len(data)!=SIZE or data[:24]!=sent[:24] or data[32:]!=sent[32:]:
                 raise ValueError('Media acknowledgement mismatch')
             error, state = HEADER.unpack_from(data)[4:]
+            # Native arm validates context/plans before recording an owner or
+            # running cleanup. State zero plus these exact errors proves that
+            # no native media journal exists; keep this a local admission error.
+            if op==1 and state==0 and error in (1401,1402,1404):
+                self.state='new'
+                raise MediaAdmissionRejected(error)
             if op==4:
                 if error in (407,1404) and state==1:
                     self.retirement_error=error;self.state='armed';return False
@@ -66,6 +78,8 @@ class NativeMediaOwner:
             if error or state not in (0,1): raise RuntimeError(f'Native media rejected ({error}, {state})')
             self.state = 'armed' if state else 'closed'
             return True
+        except MediaAdmissionRejected:
+            raise
         except BaseException:
             if op==4:
                 self.state='unknown'

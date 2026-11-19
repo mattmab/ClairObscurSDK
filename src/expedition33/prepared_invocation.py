@@ -130,6 +130,29 @@ class InvocationPlanner:
         validate_function(plan.function_flags, plan.entry_rva, plan.function.name)
         return PreparedInvocation(self, replace(plan, wire_version=8))
 
+    def prepare_dialogue_slot(self,obj,function,**arguments):
+        session=self._check()
+        if getattr(session._transport,'dialogue_slot_protocol',0)!=1:
+            raise UnsupportedInvocation('Native dialogue-slot SDK hook unavailable')
+        from dataclasses import replace
+        from .invocation import prepare_call
+        from ._dialogue_slot_wire import validate
+        plan=prepare_call(self._catalog,obj,function,arguments,pod_values=True,name_values=True,_metadata=self._metadata)
+        validate(plan)
+        return PreparedInvocation(self,replace(plan,wire_version=12))
+
+    def prepare_control_rig(self,obj,function,**arguments):
+        session=self._check()
+        if getattr(session._transport,'transform_values_protocol',0)!=1:
+            raise UnsupportedInvocation('Native Control Rig transform hook unavailable')
+        if self._catalog.path_name(function)!='/Script/ControlRig.ControlRigComponent:SetBoneTransform':
+            raise UnsupportedInvocation('Only the verified Control Rig bone setter is supported')
+        from .invocation import prepare_call
+        plan=prepare_call(self._catalog,obj,function,arguments,pod_values=True,enum_values=True,name_values=True,_metadata=self._metadata)
+        from ._enum_wire import encode_plan
+        encode_plan(plan)
+        return PreparedInvocation(self,plan)
+
     def adopt_observations(self, catalog):
         """Merge a fresh selected closure while retaining checked metadata.
 
@@ -198,7 +221,7 @@ class PreparedInvocation:
         schema; these observations grant no authority. The original stays unchanged.
         """
         planner, _ = self._check()
-        prepare = planner.prepare_blueprint if self._plan.wire_version == 8 else planner.prepare
+        prepare = planner.prepare_control_rig if self._plan.wire_version==4 and self._plan.texts else planner.prepare_dialogue_slot if self._plan.wire_version==12 else planner.prepare_blueprint if self._plan.wire_version == 8 else planner.prepare
         return prepare(self._plan.target, self._plan.function, **arguments)
 
     def invoke(self, *, refresh_from_result=False, fresh_results=False):

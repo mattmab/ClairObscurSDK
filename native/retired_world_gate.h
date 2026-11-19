@@ -4,6 +4,9 @@ namespace e33_retired_world {
 enum class Result {SameWorld,Retired,Pending,Unknown};
 inline bool same(const CallIdentity&a,const CallIdentity&b){return a.index==b.index&&a.serial==b.serial&&a.address==b.address;}
 struct Snapshot {CallIdentity engine{},viewport{},world{};};
+template<class Ops>auto replacement_proven(Ops&ops,const CallIdentity&old,const CallIdentity&fresh,int)
+ ->decltype(ops.replaced_world(old,fresh),bool()){return ops.replaced_world(old,fresh);}
+template<class Ops>bool replacement_proven(Ops&,const CallIdentity&,const CallIdentity&,long){return false;}
 template<class Ops> Result double_observe(Ops&ops,const CallIdentity&old_world,Snapshot*out=nullptr){
  Snapshot a{},b{};
  if(!old_world.address||old_world.serial<=0)return Result::Unknown;
@@ -11,8 +14,9 @@ template<class Ops> Result double_observe(Ops&ops,const CallIdentity&old_world,S
  if(!same(a.engine,b.engine)||!same(a.viewport,b.viewport)||!same(a.world,b.world))return Result::Pending;
  if(out)*out=b;
  if(same(old_world,b.world))return Result::SameWorld;
- // A same-address/index serial change is not authority to retire a world.
- if(old_world.address==b.world.address)return Result::Unknown;
+ // Address reuse alone is not authority. A target may additionally prove
+ // the old weak generation expired and the new live World owns this address.
+ if(old_world.address==b.world.address)return replacement_proven(ops,old_world,b.world,0)?Result::Retired:Result::Unknown;
  return Result::Retired;
 }
 class Anchor {

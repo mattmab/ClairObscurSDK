@@ -105,7 +105,7 @@ def validate_source(root):
     return manifest
 
 
-def verify_archive(archive_path, reviewed_manifest):
+def verify_archive(archive_path, reviewed_manifest, *, runtime_hashes=None):
     """Verify the actual ZIP, including missing/extra entries and notice hashes."""
     _schema(reviewed_manifest)
     with zipfile.ZipFile(archive_path) as archive:
@@ -117,8 +117,9 @@ def verify_archive(archive_path, reviewed_manifest):
         embedded = json.loads(archive.read('SDK/' + MANIFEST))
         if embedded != reviewed_manifest:
             raise ValueError('Packaged manifest differs from reviewed input')
-        expected = {'SDK/runtime/' + name: digest
-                    for name, digest in embedded['runtime']['files'].items()}
+        runtime = embedded['runtime']['files'] if runtime_hashes is None else runtime_hashes
+        _hashes(runtime)
+        expected = {'SDK/runtime/' + name: digest for name, digest in runtime.items()}
         expected.update({'SDK/' + name: digest for name, digest in embedded['notices'].items()})
         actual = {name for name in names if name.startswith(('SDK/runtime/', 'SDK/licenses/'))}
         if actual != set(expected) | {'SDK/' + MANIFEST}:
@@ -127,5 +128,5 @@ def verify_archive(archive_path, reviewed_manifest):
             data = archive.read(name)
             if not data or _sha(data) != digest:
                 raise ValueError(f'Archive runtime/notice checksum mismatch: {name}')
-    return {'runtime_files': len(embedded['runtime']['files']),
+    return {'runtime_files': len(runtime),
             'notice_files': len(embedded['notices']), 'verified': True}

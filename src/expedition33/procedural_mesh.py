@@ -350,12 +350,18 @@ class Tetrahedron:
     def __exit__(self,*_):self.close()
 
 
-def capture_bones(scope, component_index, page=0):
+def capture_bones(scope, component_index, page=0, *, component_identity=None):
     """Read at most 50 bones through verified game-thread functions."""
     scope._check()
     if type(page) is not int or not 0<=page<41:raise ValueError('Bone page')
     names=('GetNumBones','GetBoneName','GetRefPoseTransform','GetBoneTransform','GetParentBone')
-    c=capture_matching(scope.pid,names=names,classes=('SkinnedMeshComponent',))
+    if component_identity is None:
+        c=capture_matching(scope.pid,names=names,classes=('SkinnedMeshComponent',))
+    else:
+        from .catalog import capture_selected
+        if (type(component_identity) not in (tuple,list) or len(component_identity)!=3 or
+                component_identity[0]!=component_index):raise ValueError('Exact bone component identity required')
+        c=capture_matching(scope.pid,names=names).with_observations(capture_selected(scope.pid,(tuple(component_identity),)))
     obj=c.by_index[component_index]
     if c.find_class('SkinnedMeshComponent').index not in c.ancestors(obj.class_index):raise ValueError('Expected skinned mesh component')
     cls=c.find_class('SkinnedMeshComponent');ids=[obj]

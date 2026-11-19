@@ -56,7 +56,7 @@ class MapLoadingOverlay(OwnedMenuPanel):
         from .enums import describe_enums
         from .values import read_object_reference
         from ._metadata_stabilization import prepare_discovery
-        from ._stable_lease import stabilize_owned_tree, rediscover_owned_tree
+        from ._stable_lease import stabilize_owned_tree, refresh_discovery_owned_tree
         if self.state != 'new':
             raise RuntimeError('Construct a loading cover once')
         self.state = 'building'
@@ -93,8 +93,13 @@ class MapLoadingOverlay(OwnedMenuPanel):
         if self.tree.serial == 0:
             stable, _ = stabilize_owned_tree(self.scope, current, self.widget,
                 self.tree, self._class('UserWidget'))
-            self.catalog, self.tree, current = rediscover_owned_tree(self.scope.pid,
-                discover, self.widget, stable, self._class('UserWidget').index)
+            # The static descriptors are already stabilized. A second name
+            # scan can encounter an unrelated dying object during title GC
+            # and poison the construction reader after Create succeeded.
+            # Recapture the known identities and verify the retained child.
+            self.catalog, self.tree, current = refresh_discovery_owned_tree(self.scope.pid,
+                self.catalog, self.widget, stable, self._class('UserWidget').index,
+                validate_context=self.scope._check)
             self._planner.refresh_from(self.catalog)
         self._planner.adopt_observations(current)
         if self._root() is not None:

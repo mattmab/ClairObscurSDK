@@ -16,7 +16,10 @@ inline bool zone_text(const char* p,size_t n) {
  return true;
 }
 inline bool zone_packet_valid(const ZoneTravelPacket& p) {
- if(p.version!=1 || p.operation>1 || p.outcome || p.error || !zone_text(p.level,96) || !zone_text(p.asset,96) || !zone_text(p.tag,128))return false;
+ if((p.version!=1 && p.version!=2) || p.operation>1 || p.outcome || p.error || !zone_text(p.level,96) || !zone_text(p.asset,96) || !zone_text(p.tag,128))return false;
+#if E33_RUNTIME_CINEMATIC_VERSION<284
+ if(p.version!=1)return false;
+#endif
  const CallIdentity* identities[]={&p.table,&p.function,&p.target,&p.gi,&p.player,&p.controller}; for(const auto* id:identities)if(id->index<0 || id->serial<0 || !id->address)return false;
  return true;
 }

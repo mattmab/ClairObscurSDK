@@ -9,6 +9,9 @@
 #endif
 #ifdef E33_SEQUENCE_SEEK_SESSION
 #include "target_sequence_seek.h"
+#if E33_RUNTIME_CINEMATIC_VERSION>=257
+#include "sequence_drag_scrub.h"
+#endif
 #if !defined(E33_RETIRED_WORLD_SESSION) || !defined(E33_SEQUENCE_ORIGIN_SESSION) || E33_RUNTIME_CINEMATIC_VERSION<217
 #error Sequence seek requires current-world and origin ownership contracts
 #endif
@@ -60,6 +63,9 @@ class SequenceOwner {
     uint32_t state_=0,step_=0;
 #ifdef E33_SEQUENCE_FLIGHT_SESSION
     SequenceFlightOwner flight_;
+#if E33_RUNTIME_CINEMATIC_VERSION>=257
+    SequenceDragScrub scrub_;
+#endif
 #endif
 #ifdef E33_SEQUENCE_RETIREMENT_SESSION
     e33_retired_world::Snapshot epoch_{};
@@ -306,6 +312,9 @@ public:
 #endif
 #ifdef E33_SEQUENCE_FLIGHT_SESSION
         flight_.reset();
+#if E33_RUNTIME_CINEMATIC_VERSION>=257
+        scrub_.reset();
+#endif
 #endif
         state_=p.state=0;step_=2;
     }
@@ -313,6 +322,9 @@ public:
     uint32_t close(uint64_t base) {
 #ifdef E33_SEQUENCE_FLIGHT_SESSION
         flight_.cancel();
+#if E33_RUNTIME_CINEMATIC_VERSION>=257
+        scrub_.reset();
+#endif
 #endif
 #ifdef E33_SEQUENCE_RETIREMENT_SESSION
         if(retiring_)return state_ ? 407 : 0;
@@ -340,6 +352,9 @@ public:
 #endif
 #ifdef E33_SEQUENCE_FLIGHT_SESSION
             flight_.reset();
+#if E33_RUNTIME_CINEMATIC_VERSION>=257
+        scrub_.reset();
+#endif
 #endif
             state_=0; return 0;
         }
@@ -369,6 +384,9 @@ public:
 #endif
 #ifdef E33_SEQUENCE_FLIGHT_SESSION
         flight_.reset();
+#if E33_RUNTIME_CINEMATIC_VERSION>=257
+        scrub_.reset();
+#endif
 #endif
         state_=0; return 0;
     }
@@ -377,7 +395,11 @@ public:
         (void)pod;
 #endif
         if(p.version!=1 || !p.owner || p.reserved || p.error || p.state || p.operation<1 || p.operation>
-#if defined(E33_SEQUENCE_FLIGHT_SESSION) && E33_RUNTIME_CINEMATIC_VERSION>=247
+#if defined(E33_SEQUENCE_FLIGHT_SESSION) && E33_RUNTIME_CINEMATIC_VERSION>=258
+            23
+#elif defined(E33_SEQUENCE_FLIGHT_SESSION) && E33_RUNTIME_CINEMATIC_VERSION>=257
+            22
+#elif defined(E33_SEQUENCE_FLIGHT_SESSION) && E33_RUNTIME_CINEMATIC_VERSION>=247
             19
 #elif defined(E33_SEQUENCE_ORIGIN_TRANSFORM_SESSION)
             15
@@ -398,6 +420,33 @@ public:
 #endif
             ) { p.error=1470; return; }
         p.state=state_;
+#if defined(E33_SEQUENCE_FLIGHT_SESSION) && E33_RUNTIME_CINEMATIC_VERSION>=257
+        if(p.operation>=20 && p.operation<=
+#if E33_RUNTIME_CINEMATIC_VERSION>=258
+           23
+#else
+           22
+#endif
+        ){
+            if(state_!=1 || p.owner!=owner_ || !menu.menu.active() || menu.owner!=epoch_menu_owner_ ||
+               std::memcmp(&menu.player,&origin_context_,sizeof(CallIdentity)) || !epoch_current(base)){p.error=1811;return;}
+            if(p.operation==20){
+                SequenceDragConfig config{};std::memcpy(&config,&p.destroy,sizeof(config));
+                if(!empty(reinterpret_cast<const uint8_t*>(&p.destroy)+64,sizeof(p.destroy)-64)){p.error=1811;return;}
+                p.error=scrub_.bind(base,menu.widget,plans_[0].target,plans_[1].target,p.stop,config);
+                if(p.error==1813)state_=2;
+            }else{
+                if(!empty(&p.stop,sizeof(p.stop)+sizeof(p.destroy))){p.error=1811;return;}
+                if(p.operation==22)scrub_.reset();
+                else if(!scrub_.active()){p.error=1811;return;}
+                #if E33_RUNTIME_CINEMATIC_VERSION>=258
+                else if(p.operation==23)std::memcpy(&p.stop,&scrub_.viewport(),sizeof(SequenceViewportStatus));
+#endif
+                else std::memcpy(&p.stop,&scrub_.status(),sizeof(SequenceDragStatus));
+            }
+            p.state=state_;return;
+        }
+#endif
 #ifdef E33_SEQUENCE_FLIGHT_SESSION
         if(p.operation==10 || p.operation==11 || p.operation==12 || p.operation==13
 #if E33_RUNTIME_CINEMATIC_VERSION>=247
@@ -683,12 +732,47 @@ public:
     void editor_tick(uint64_t base,const TargetMenuStorage& menu,const CallPodValidation* pod,bool input){
         if(state_!=1 || !flight_.due())return;
         if(state_!=1 || !menu.menu.active() || menu.owner!=epoch_menu_owner_ || !epoch_current(base) ||
-           std::memcmp(&menu.player,&origin_context_,sizeof(CallIdentity))){flight_.cancel();return;}
+           std::memcmp(&menu.player,&origin_context_,sizeof(CallIdentity))){flight_.cancel();
+#if E33_RUNTIME_CINEMATIC_VERSION>=257
+            scrub_.reset();
+#endif
+            return;}
+#if E33_RUNTIME_CINEMATIC_VERSION>=257
+        if(scrub_.active()){
+            SequenceSeekPacket seek{};uint32_t error{};
+            const bool evaluate=scrub_.candidate(base,input,seek,error);
+            if(error){flight_.cancel();scrub_.reset();state_=2;return;}
+            if(evaluate){
+                if(!origin_.before_evaluation()){flight_.cancel();scrub_.reset();state_=2;return;}
+                state_=2;
+                if(sequence_seek_execute(base,plans_[0].target,plans_[1].target,seek,scrub_.continuous()) ||
+                   seek.outcome!=CallDispatchReturned || !epoch_current(base)){flight_.cancel();scrub_.reset();return;}
+                state_=1;scrub_.applied(seek);
+            }
+        }
+#endif
         flight_.sample_input(input);
         if(!flight_.active())return;
-        if(flight_.tick(base,pod,input) ||
-           (input && flight_.external() && camera_.focus_owned_view())){flight_.cancel();state_=2;}
+        const auto flight_error=flight_.tick(base,pod,input);
+        if(flight_error){
+            // A stale source/focus query did not mutate ownership. Stop input,
+            // but leave the sequence closeable so Python can restore the view.
+            flight_.cancel();if(flight_error!=1791)state_=2;return;
+        }
+        if(input && flight_.external() && camera_.focus_owned_view()){flight_.cancel();state_=2;}
     }
-    void editor_fault(){flight_.cancel();state_=2;}
+#if E33_RUNTIME_CINEMATIC_VERSION>=258
+    void pointer_message(uint64_t base,const TargetMenuStorage& menu,MSG* message,bool eligible){
+        if(!message || (message->message!=WM_MOUSEWHEEL && message->message!=WM_MBUTTONDOWN &&
+            message->message!=WM_LBUTTONDOWN && message->message!=WM_LBUTTONUP && message->message!=WM_MOUSEMOVE))return;
+        if(state_==1 && scrub_.active() && menu.menu.active() && menu.owner==epoch_menu_owner_ &&
+           !std::memcmp(&menu.player,&origin_context_,sizeof(CallIdentity)) && epoch_current(base))scrub_.pointer_message(message,eligible);
+    }
+#endif
+    void editor_fault(){flight_.cancel();state_=2;
+#if E33_RUNTIME_CINEMATIC_VERSION>=257
+        scrub_.reset();
+#endif
+    }
 #endif
 };

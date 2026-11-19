@@ -21,10 +21,14 @@ def verify_install(*, check_mods=False):
             raise RuntimeError('Redirected release file: ' + name)
         if hashlib.sha256(path.read_bytes()).hexdigest() != expected:
             raise RuntimeError('Release file missing or modified: ' + name)
-    from expedition33.mod_archive import read_candidate
     if check_mods:
+        from expedition33.mod_archive import read_candidate
+        from expedition33.release_mods import read_bundled_candidate
         for row in document['mods']:
-            read_candidate(ROOT.parent / 'SDK_Mods' / row['archive'], row['sha256'])
+            if row.get('layout') == 'loose':
+                read_bundled_candidate(ROOT, row)
+            else:
+                read_candidate(ROOT.parent / 'SDK_Mods' / row['archive'], row['sha256'])
     return document
 
 
@@ -75,7 +79,8 @@ def main():
         (ROOT / 'settings').mkdir(exist_ok=True)
         logging.basicConfig(level=logging.INFO, format='%(asctime)s %(levelname)s %(name)s: %(message)s', handlers=[logging.FileHandler(ROOT / 'logs/controller.log', encoding='utf8')])
         from expedition33.release_mods import materialize
-        mod_root = materialize(ROOT.parent / 'SDK_Mods', ROOT)
+        bundled_rows = tuple(row for row in document.get('mods', ()) if row.get('layout') == 'loose')
+        mod_root = materialize(ROOT.parent / 'SDK_Mods', ROOT, bundled_rows=bundled_rows)
         from expedition33.release_startup import gameplay_ready, attachment_ready, menu_availability
         from expedition33.core_startup import core_bootstrap_ready
         deadline = time.monotonic() + 600
@@ -108,7 +113,7 @@ def main():
         from expedition33.settings import SettingsStore
         original_transport = sdk.SessionTransport
         def release_transport(*, _executable=None):
-            transport = original_transport(_executable=ROOT / 'build/research-probe-cinematic-v251-retirement/research_probe.exe')
+            transport = original_transport(_executable=ROOT / 'build/research-probe-cinematic-v318/research_probe.exe')
             required = ('map_load_gate_protocol', 'retired_world_cleanup_protocol', 'menu_open_focus_protocol', 'metadata_stabilization_protocol', 'stable_lease_protocol', 'console_color_status_protocol', 'lease_release_batch_protocol', 'original_game_action_protocol', 'blueprint_trace_protocol', 'picto_edit_protocol', 'picto_progression_protocol', 'picto_class_load_protocol', 'picto_cost_protocol')
             required = (*required,'builder_world_retirement_protocol','sequence_retirement_protocol','media_retirement_protocol','music_audio_retirement_protocol')
             required = (*required,'sequence_seek_protocol','sequencer_frame_values_protocol','sequencer_object_array_protocol')
@@ -123,6 +128,8 @@ def main():
         with sdk.Session(multiple_pause_entries=True) as session, ModLoader(mod_root, settings=settings, session=session, poll_diagnostics=args.poll_diagnostics) as loader:
             from expedition33.lease_policy import configure
             configure(session, hard_limit=8192, owner_quota=7000, cleanup_reserve=512)
+            from expedition33.python_control import enabled as python_control_enabled,install as install_python_control
+            if python_control_enabled(ROOT/'settings/python-control'):install_python_control(session)
             world_lifecycle = loader.install_world_lifecycle() if args.early_init else None
             ui_ready = not args.early_init
             runtime_polling_started = not args.early_init
@@ -174,6 +181,7 @@ def main():
                         # A failed optional preparation never replays its code
                         # or aborts unrelated core services.
                         logging.exception('Startup preparation failed for %s', name)
+            if args.early_init:loading_preparation.register_story_choices()
             from expedition33.startup_order import StartupGate
             startup_gate = StartupGate()
             loader.registry._startup_progress['phase'] = 'mods'
@@ -237,7 +245,17 @@ def main():
                     menu._scroll_poll=0
                     menu.poll_scroll()
                     return dict(screen=menu.view.screen,rows=menu.view.total_rows)
-                server = CommandServer({'mods.status': Command('inspect', loader.registry.views), 'sdk.ui_status': Command('inspect', ui_status), 'sdk.title_open': Command('ui', title_open), 'sdk.title_test_keys': Command('ui', title_test_keys), 'sdk.shutdown': Command('lifecycle', loader.request_stop),
+                def managed_load(folder):
+                    loader.registry.load(folder)
+                    return loader.registry.views()
+                def managed_enabled(mod_id, enabled):
+                    selection=loader.registry.set_enabled(loader.registry.select(mod_id),enabled)
+                    return loader.registry.view(selection)
+                def managed_action(mod_id, action_id, argument=None):
+                    from dataclasses import is_dataclass,asdict
+                    result=loader.registry.invoke(loader.registry.select(mod_id),action_id,argument)
+                    return asdict(result) if is_dataclass(result) else result
+                server = CommandServer({'mods.load':Command('ui',managed_load),'mods.set_enabled':Command('ui',managed_enabled),'mods.action':Command('ui',managed_action),'mods.status': Command('inspect', loader.registry.views), 'sdk.ui_status': Command('inspect', ui_status), 'sdk.title_open': Command('ui', title_open), 'sdk.title_test_keys': Command('ui', title_test_keys), 'sdk.shutdown': Command('lifecycle', loader.request_stop),
                     'catalog.replacement_preview':Command('models',lambda:catalog_model().replacement_preview()),
                     'catalog.replacement_material':Command('models',lambda profile:catalog_model().replacement_material(profile)),
                     'catalog.replacement_enable':Command('models',lambda:catalog_model().replacement_enable()),
@@ -259,7 +277,9 @@ def main():
                 from expedition33.console_startup import ConsoleReadiness
                 admission_observer = WarmAdmissionObserver(session.pid)
                 admission_observer.prepare()
-                admission_monitor = ReadOnlyAdmissionMonitor(lambda pid=session.pid:UiAdmissionObserver(pid))
+                layer_preparation=loading_preparation.layer_preparation_requested
+                admission_monitor = ReadOnlyAdmissionMonitor(
+                    lambda pid=session.pid, event=layer_preparation:UiAdmissionObserver(pid,layer_preparation=event))
                 title_ui = process_ui
                 console_readiness = ConsoleReadiness(session.pid)
             def service_title_loading():

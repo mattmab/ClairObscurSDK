@@ -18,6 +18,15 @@ def validate_request(data,*,allow_retired=False):
 class PauseCaptureDeferred(RuntimeError):
     """Native preparation is not ready; its temporary collector remains owned."""
 
+class PauseArmRejected(RuntimeError):
+    """Registration rejected before any journal or engine mutation was created."""
+
+def _same_binding(original, target):
+    # GC flags are observations, not immutable UObject identity.
+    keys=('pid','index','serial','address','name','class_index','outer_index','outer_serial')
+    return original == target or all(hasattr(original,key) and hasattr(target,key) and
+        getattr(original,key)==getattr(target,key) for key in keys)
+
 class PauseAttachment:
     def __init__(self, scope):
         self.scope = scope
@@ -37,6 +46,13 @@ class PauseAttachment:
             if len(data) != SIZE or data[:24] != sent[:24] or data[32:] != sent[32:]:
                 raise ValueError('Pause attachment acknowledgement mismatch')
             error, state = HEADER.unpack_from(data)[4:]
+            if op==1 and state==0 and error in (1305,1306):
+                self.state='empty'
+                raise PauseArmRejected('Pause registration not dispatched ('+str(error)+'); widget remains scope-owned')
+            if error==1304 and state==1 and op==8:
+                self.state='armed'
+                self.retirement_proof='pending_unknown_world'
+                return False
             if error==407 and state==2 and op in (1,2,8):
                 self.state='capture_pending'
                 if op==1:raise PauseCaptureDeferred('Pause preparation cleanup deferred; retain owner')
@@ -48,7 +64,7 @@ class PauseAttachment:
                 raise RuntimeError(f'Pause attachment rejected ({error}, state {state})')
             self.state = 'armed' if state else 'closed'
             return True
-        except PauseCaptureDeferred:
+        except (PauseCaptureDeferred,PauseArmRejected):
             raise
         except BaseException:
             session._abort_ownership()
@@ -57,14 +73,7 @@ class PauseAttachment:
     def arm(self, lease, plan):
         original=lease.object if lease.active else None
         target=plan.target
-        same=original==target
-        if not same:
-            # GC bookkeeping flags may change while a persistent widget remains
-            # leased. Require the complete immutable identity/outer binding;
-            # native admission still validates the live lease and call plan.
-            keys=('pid','index','serial','address','name','class_index','outer_index','outer_serial')
-            same=all(hasattr(original,key) and hasattr(target,key) and
-                getattr(original,key)==getattr(target,key) for key in keys)
+        same=_same_binding(original,target)
         if self.state!='empty' or not lease.active or lease not in self.scope._leases or not same:
             raise ValueError('Pause attachment needs its owned widget lease')
         return self._send(1,lease._token,plan)
@@ -86,7 +95,7 @@ class PauseAttachment:
         if self.state != 'armed' or not lease.active or lease not in self.scope._leases:
             raise ValueError('Pause restore requires its retained panel')
         for op,plan in ((3,opacity),(4,enabled)):
-            if plan.target != lease.object: raise ValueError('Restore target differs from lease')
+            if not _same_binding(plan.target, lease.object): raise ValueError('Restore target differs from lease')
             self._send(op,lease._token,plan)
 
     def conceal(self, opacity, enabled):

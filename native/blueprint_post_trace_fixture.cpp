@@ -52,5 +52,8 @@ int main() {
     replacement_address=entry;remove_during_original=handle;replace_during_original=true;
     run(function);assert(originals==7 && post_count==2); // New scope cannot inherit old call.
     run(function);assert(originals==8 && post_count==3);assert(Slots::remove(replacement_handle));
+    handle=Slots::install(entry,original,after,nullptr,false,true,true);assert(handle);
+    assert(*entry!=reinterpret_cast<void*>(&original));
+    run(function);assert(originals==9&&post_count==4);assert(Slots::remove(handle));
 }
 

@@ -32,6 +32,13 @@ class FlightTests(unittest.TestCase):
             with self.assertRaises(RuntimeError):flight.poll()
             self.assertEqual(flight.sequence.owner.state,'unknown')
             session._transport.command.assert_called_once();session._abort_ownership.assert_called_once()
+    def test_cancelled_external_flight_still_restores_camera_cuts(self):
+        flight,session=self.make();flight.active=False;flight._external_bound=True
+        flight.stop()
+        session._transport.command.assert_called_once()
+        self.assertFalse(flight._external_bound)
+        session._abort_ownership.assert_not_called()
+
     def test_invalid_requests_and_missing_capability_never_dispatch(self):
         flight,session=self.make();session._transport.sequence_flight_protocol=0
         with self.assertRaises(ValueError):flight.poll()

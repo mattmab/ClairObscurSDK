@@ -9,6 +9,31 @@ from test_authored_timeline import fixture,SECTION
 
 
 class SequencePropertiesTests(unittest.TestCase):
+    def test_cast_picker_applies_without_text_and_can_restore_original(self):
+        from test_authored_cast import fixture as cast_fixture
+        from expedition33.cinematics.authored_timeline import create
+        editor=SequenceProperties(create(cast_fixture(),'Cast'))
+        p=N(sequence_timeline=True,editor=editor,ready=True,playing=False,message='',queue=Mock(),
+            scope=N(_session=N(_transport=N(timeline_actor_pool_protocol=1,timeline_extended_characters_protocol=1))))
+        view=TimelineView(None,p);frame=view.render();frame=view.activate(frame.revision,14)
+        frame=view.activate(frame.revision,33)
+        self.assertFalse(next(c.enabled for c in frame.controls if c.token==27))
+        frame=view.activate(frame.revision,19)
+        frame=view.activate(frame.revision,35)
+        self.assertEqual(editor.document['cast_edits'][0]['profile'],'monoco')
+        p.queue.assert_called_with('apply')
+        self.assertIn('Monoco',next(c.label for c in frame.controls if c.token==35))
+        frame=view.activate(frame.revision,27)
+        self.assertEqual(editor.document['cast_edits'],[])
+
+    def test_cast_picker_rejects_unsupported_profile_without_mutating_draft(self):
+        from test_authored_cast import fixture as cast_fixture
+        from expedition33.cinematics.authored_timeline import create
+        editor=SequenceProperties(create(cast_fixture(),'Cast'));editor.category_changed('cast');editor.select(editor.rows()[0][0])
+        before=editor.document
+        with self.assertRaises(ValueError):editor.choose_replacement('monoco',None)
+        self.assertIs(editor.document,before)
+
     def test_scene_yaw_is_editable_and_bounded_in_existing_property_panel(self):
         editor=SequenceProperties(fixture());editor.category_changed('scene');editor.select('origin')
         editor.move_property(1);self.assertEqual(editor.field(),('scene yaw (degrees)','0.0'))

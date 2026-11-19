@@ -81,4 +81,44 @@ int main(){
         assert(!shortcuts.consume(key,false,true,false));
     }
 
+    e33_runtime_scene::StoryPlaybackControls controls;
+    controls.begin(true,false,true); // Held entry keys cannot pause or skip.
+    assert(controls.update(10.,true,true,false,true,false)==0);
+    assert(controls.update(14.,true,true,false,true,false)==0);
+    assert(controls.update(15.,true,false,false,false,false)==0);
+    assert(controls.update(16.,true,true,false,false,false)==1);
+    assert(controls.update(17.,true,true,false,false,true)==0); // F is not a toggle.
+    assert(controls.update(18.,true,false,true,false,true)==2);
+    assert(controls.update(19.,true,false,true,false,false)==0);
+    assert(controls.update(20.,true,false,false,true,false)==0);
+    assert(controls.update(22.99,true,false,false,true,false)==0);
+    assert(controls.update(23.,true,false,false,true,false)==3);
+    assert(controls.update(24.,true,false,false,true,false)==0); // Exactly once.
+    controls.begin(false,false,false);
+    assert(controls.update(25.,true,false,false,true,true)==0);
+    assert(controls.update(27.,true,false,false,false,true)==0); // Short hold resets.
+    assert(controls.update(28.,true,false,false,true,true)==0);
+    assert(controls.update(29.,false,false,false,true,true)==0); // Focus loss cancels.
+    assert(controls.update(35.,true,false,false,true,true)==0);
+    assert(controls.update(36.,true,false,false,false,true)==0);
+    assert(controls.update(37.,true,false,false,true,true)==0);
+    assert(controls.update(40.,true,false,false,true,true)==3); // Skip also works paused.
+    controls.begin(false,false,false);
+    assert(controls.key_message('F',true,false,false)==1); // A tap between polls is retained.
+    assert(controls.key_message('F',true,true,true)==0);
+    assert(controls.key_message('F',false,true,true)==0);
+    assert(controls.key_message('E',true,false,true)==2);
+    assert(controls.key_message('E',false,true,false)==0);
+    controls.begin(true,false,false);
+    assert(controls.key_message('F',true,true,false)==0); // Held before entry.
+    assert(controls.key_message('F',false,true,false)==0);
+    assert(controls.key_message('F',true,false,false)==1);
+    e33_runtime_scene::StoryInputFilter story_keys;
+    assert(story_keys.consume(27,true,false,true));
+    assert(story_keys.consume(27,false,true,false)); // No Escape leaks into gameplay.
+    assert(!story_keys.consume(27,false,true,false));
+    assert(story_keys.consume('W',true,false,true));
+    assert(story_keys.consume('W',false,true,false));
+    assert(!story_keys.consume('W',true,false,false));
+
 }

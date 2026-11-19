@@ -247,7 +247,7 @@ class SceneTests(unittest.TestCase):
         reference=next(e for e in doc['events'] if e['type']=='audio')
         for i,path in enumerate(('sound',*paths)):
             e=copy.deepcopy(reference);e.update(id=f'useraudio-{i:012x}',target='camera');e['params']['asset']=path;doc['events'].append(e)
-        r.registry=SimpleNamespace(audio_kind=lambda path:2,catalog=lambda kind:list(paths),load=lambda scope,path,kind:path,identity=lambda obj:bytes(16),command=lambda op,payload:calls.append((op,struct.unpack('<III',payload[1][1]))),release_loading=lambda:None)
+        r.registry=SimpleNamespace(audio_kind=lambda path:2,asset_index=lambda path,kind:paths.index(path),load=lambda scope,path,kind:path,identity=lambda obj:bytes(16),command=lambda op,payload:calls.append((op,struct.unpack('<III',payload[1][1]))),release_loading=lambda:None)
         from unittest.mock import patch
         with patch.object(sys.modules['scene_editor_tests.runtime'],'SessionScope',return_value=SimpleNamespace(close=lambda:None)):
             r.configure_audio(doc);r.configure_audio(doc)
@@ -438,7 +438,7 @@ class SceneTests(unittest.TestCase):
         self.assertEqual(next(e['at'] for e in d['events'] if e['id']=='anim-lune'),1)
         with tempfile.TemporaryDirectory() as tmp:
             store=SceneStore(tmp);self.assertEqual(store.read(store.save(synced)),synced)
-        for op,values in ((77,(6,1)),(77,(0,2)),(78,(-1,0)),(78,(1,1)),(79,(8,0)),(79,(6,1)),(79,(7,1))):
+        for op,values in ((77,(6,1)),(77,(0,2)),(78,(-1,0)),(78,(1,1)),(79,(11,0)),(79,(6,1)),(79,(7,1))):
             p=bytearray(20984);struct.pack_into('<4IQ',p,0,7,op,0,0,1);struct.pack_into('<2d',p,88,*values)
             with self.assertRaises(ValueError):validate_request(bytes(p),protocol=7)
 

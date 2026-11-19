@@ -1,7 +1,7 @@
 """Read-only enemy arena observations; these do not authorize spawning."""
 from .catalog import capture_matching, capture_selected
 from .cinematics.original_game_action import controller_context
-from ._reader import ReadBatch
+from ._reader import ReadBatch,active_reader
 
 ARENA_CLASS='/Game/Levels/Battle_Maps/BP_BattleMap.BP_BattleMap_C'
 _EXCLUDED_FLAGS=0x40018030
@@ -41,7 +41,7 @@ def observe_battle_arenas(session):
     operation must revalidate identities, world and arena state before mutation.
     Candidate order does not reproduce the engine's fallback enumeration order.
     """
-    with ReadBatch(session.pid,share=True,_executable=session._transport._executable):
+    with ReadBatch(session.pid,share=active_reader() is None,_executable=session._transport._executable):
         context=controller_context(session)
         catalog=capture_matching(session.pid,classes=('BP_BattleMap_C',))
         catalog=catalog.with_observations(capture_selected(session.pid,(context['world'][1:],)))

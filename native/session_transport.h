@@ -1,6 +1,11 @@
 #pragma once
 #include "session_protocol.h"
 #include <new>
+#if E33_RUNTIME_CINEMATIC_VERSION>=314
+#include "session_handoff.h"
+bool backend_loading_handoff_active();
+uint64_t backend_loading_handoff_frame();
+#endif
 
 // Backend functions execute only on the target message-pump thread.
 uint32_t backend_open(SessionPacket*);
@@ -33,6 +38,15 @@ static HHOOK owned_hook = nullptr;
 static Watch* watch = nullptr;
 static DWORD controller = 0, target_thread = 0;
 static uint64_t nonce = 0;
+#if E33_RUNTIME_CINEMATIC_VERSION>=314
+static SessionHandoff handoff;
+static SessionHandoffBudget handoff_budget;
+static uint64_t handoff_frame=0;
+static bool handoff_running=false;
+#if E33_RUNTIME_CINEMATIC_VERSION>=316
+static unsigned backend_depth=0;
+#endif
+#endif
 #ifdef E33_VIEWER_MENU_SESSION
 static uint64_t menu_frame=0,menu_started=0;
 static UINT_PTR menu_timer=0;
@@ -111,6 +125,11 @@ static void close(LONG reason) {
     closing->close_reason = reason;
     InterlockedExchange(&closing->closed, 1);
     InterlockedExchange(&closing->request.state, kComplete);
+#if E33_RUNTIME_CINEMATIC_VERSION>=314
+    if(handoff.complete)SetEvent(handoff.complete);
+    handoff.close();
+    handoff_frame=0;
+#endif
     InterlockedExchange(&last_close_reason, reason);
     InterlockedIncrement(&completed_closes);
     packet = nullptr; controller = target_thread = 0; nonce = 0;
@@ -118,16 +137,38 @@ static void close(LONG reason) {
     InterlockedExchange(&owner_tid, 0);
 }
 static uint32_t guarded_open(SessionPacket* value) {
-    __try { return backend_open(value); }
-    __except(EXCEPTION_EXECUTE_HANDLER) { return 87; }
+#if E33_RUNTIME_CINEMATIC_VERSION>=316
+    ++backend_depth;
+#endif
+    uint32_t result=0;
+    __try { result=backend_open(value); }
+    __except(EXCEPTION_EXECUTE_HANDLER) { result=87; }
+#if E33_RUNTIME_CINEMATIC_VERSION>=316
+    --backend_depth;
+#endif
+    return result;
 }
 static uint32_t guarded_command(SessionPacket* value) {
-    __try { return backend_command(value); }
-    __except(EXCEPTION_EXECUTE_HANDLER) { return 86; }
+#if E33_RUNTIME_CINEMATIC_VERSION>=316
+    ++backend_depth;
+#endif
+    uint32_t result=0;
+    __try { result=backend_command(value); }
+    __except(EXCEPTION_EXECUTE_HANDLER) { result=86; }
+#if E33_RUNTIME_CINEMATIC_VERSION>=316
+    --backend_depth;
+#endif
+    return result;
 }
 static void guarded_message(MSG* value) {
+#if E33_RUNTIME_CINEMATIC_VERSION>=316
+    ++backend_depth;
+#endif
     __try { backend_message(value); }
     __except(EXCEPTION_EXECUTE_HANDLER) { close(BackendFailure); }
+#if E33_RUNTIME_CINEMATIC_VERSION>=316
+    --backend_depth;
+#endif
 }
 static bool open(MSG* message) {
     wchar_t name[96];
@@ -149,6 +190,10 @@ static bool open(MSG* message) {
     }
     packet = candidate; mapping = candidate_mapping; controller = requested_controller;
     target_thread = GetCurrentThreadId(); nonce = message->wParam;
+#if E33_RUNTIME_CINEMATIC_VERSION>=314
+    // A legacy fixture/controller can omit wakeups and retain the normal path.
+    handoff.connect(controller,nonce,false);
+#endif
     request.observed_pid = GetCurrentProcessId(); request.observed_tid = target_thread;
     request.error = guarded_open(candidate);
     if (request.error) {
@@ -178,8 +223,54 @@ static bool open(MSG* message) {
     CloseHandle(worker);
     InterlockedIncrement(&request.callbacks);
     InterlockedExchange(&request.state, kComplete);
+#if E33_RUNTIME_CINEMATIC_VERSION>=314
+    if(handoff.complete)SetEvent(handoff.complete);
+#endif
     return true;
 }
+#if E33_RUNTIME_CINEMATIC_VERSION>=314
+static void loading_handoff() {
+    if(handoff_running||!packet||!watch||!handoff.request||!handoff.complete||!handoff.timer||!backend_loading_handoff_active())return;
+    const auto frame=backend_loading_handoff_frame();
+    if(!frame)return;
+    if(frame!=handoff_frame){handoff_frame=frame;handoff_budget=SessionHandoffBudget{};}
+    struct Running {Running(){handoff_running=true;}~Running(){handoff_running=false;}} running;
+    for(;;) {
+        const DWORD timeout=handoff_budget.wait_ms();
+        if(!timeout||!packet||!watch||!backend_loading_handoff_active()||backend_shutting_down())return;
+#ifdef E33_LEASE_SESSION
+        if(pending_close_reason)return;
+#endif
+#ifdef E33_VIEWER_MENU_SESSION
+        if(menu_timer)return;
+#endif
+        if(!handoff.deadline(timeout))return;
+        HANDLE waits[]={watch->owner,watch->stop,handoff.request,handoff.timer};
+        const auto wake=WaitForMultipleObjects(4,waits,FALSE,INFINITE);
+        if(wake!=WAIT_OBJECT_0+2)return;
+        if(!packet||!watch||WaitForSingleObject(watch->owner,0)!=WAIT_TIMEOUT)return;
+        if(!handoff_budget.wait_ms()||!backend_loading_handoff_active()||backend_shutting_down())return;
+        auto& request=packet->request;
+        if(request.magic!=kScheduleMagic||request.version!=1||request.nonce!=nonce||
+           packet->controller!=controller||request.target_pid!=GetCurrentProcessId()||
+           request.target_tid!=GetCurrentThreadId())return;
+        if(InterlockedCompareExchange(&request.state,0,0)!=kRequested)continue;
+        // Deferred-frame UI and shutdown are processed by their posted message.
+        if(request.action==SessionClose||request.action==SessionOpen)return;
+#ifdef E33_VIEWER_MENU_SESSION
+        if(request.action==SessionMenu)return;
+#endif
+        if(InterlockedCompareExchange(&request.state,kRunning,kRequested)!=kRequested)continue;
+        ++handoff_budget.count;
+        request.error=guarded_command(packet);
+        const bool failed=request.error!=0;
+        InterlockedIncrement(&request.callbacks);
+        InterlockedExchange(&request.state,kComplete);
+        SetEvent(handoff.complete);
+        if(failed)return;
+    }
+}
+#endif
 }
 
 extern "C" __declspec(dllexport) LRESULT CALLBACK SessionScheduleHook(int code, WPARAM removed, LPARAM data) {
@@ -191,6 +282,12 @@ extern "C" __declspec(dllexport) LRESULT CALLBACK SessionScheduleHook(int code, 
 #ifdef E33_MESH_SESSION
         if(watch && message->message==WM_NULL && message->wParam==watch->wake_nonce && !message->lParam)
             InterlockedExchange(&watch->wake_pending,0);
+#endif
+#if E33_RUNTIME_CINEMATIC_VERSION>=316
+        // An original engine callback may pump nested Windows messages while
+        // loading. Do not advance owners or tear down its packet underneath it.
+        // The wake hint above is consumed so the watcher can send a later wake.
+        if(backend_depth)return CallNextHookEx(nullptr,code,removed,data);
 #endif
         static const UINT request_message = RegisterWindowMessageW(kSessionMessage);
 #ifdef E33_LEASE_SESSION
@@ -214,6 +311,9 @@ extern "C" __declspec(dllexport) LRESULT CALLBACK SessionScheduleHook(int code, 
                 packet->request.error=valid ? guarded_command(packet):90;
                 InterlockedIncrement(&packet->request.callbacks);
                 InterlockedExchange(&packet->request.state,kComplete);
+#if E33_RUNTIME_CINEMATIC_VERSION>=314
+                if(handoff.complete)SetEvent(handoff.complete);
+#endif
             }
         }
 #endif
@@ -238,8 +338,15 @@ extern "C" __declspec(dllexport) LRESULT CALLBACK SessionScheduleHook(int code, 
                         if(!menu_timer) {
 #endif
                         request.error = guarded_command(packet);
+#if E33_RUNTIME_CINEMATIC_VERSION>=314
+                        const bool command_failed=request.error!=0;
+#endif
                         InterlockedIncrement(&request.callbacks);
                         InterlockedExchange(&request.state, kComplete);
+#if E33_RUNTIME_CINEMATIC_VERSION>=314
+                        if(handoff.complete)SetEvent(handoff.complete);
+                        if(!command_failed)loading_handoff();
+#endif
 #ifdef E33_VIEWER_MENU_SESSION
                         }
 #endif

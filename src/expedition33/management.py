@@ -419,7 +419,13 @@ class Registry:
             self._check()
             # Read current order/choices after every yield. A newly staged ID
             # can join pending startup; attempted mutations are never replayed.
-            mod_id = next((key for key in self.startup_order() if key not in attempted
+            order=self.startup_order()
+            def critical(key):
+                folder=self._settings.get(key).get('folder')
+                record=getattr(self._loader,'_loaded',{}).get(folder)
+                return record is not None and getattr(record[1],'startup_before_optional',False) is True
+            order.sort(key=lambda key:not critical(key))
+            mod_id = next((key for key in order if key not in attempted
                 and self._settings.get(key).get('enabled') is True), None)
             if mod_id is None:
                 return

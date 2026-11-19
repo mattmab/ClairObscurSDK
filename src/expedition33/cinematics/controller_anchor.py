@@ -16,6 +16,11 @@ class ControllerAnchor:
 
     def context(self):
         self.scope._check()
+        source=getattr(self,'_source',None)
+        if source is not None:
+            source.scope._check()
+            if source.scope._session is not self.scope._session:
+                raise RuntimeError('Borrowed controller selector belongs to another session')
         if self._held.active is not True:raise RuntimeError('Cinematic controller anchor lease is inactive')
         catalog,values=capture_selected_values(self.scope.pid,(self.identity,),fields=('PlayerController',),references=True)
         local=catalog.by_index[self.identity[0]];value=values[local.index]
@@ -38,7 +43,19 @@ class ControllerAnchor:
 def for_scope(scope):
     anchor=getattr(scope,'_cinematic_controller_anchor',None)
     if anchor is None:
-        anchor=ControllerAnchor(scope);scope._cinematic_controller_anchor=anchor
+        # Title preparation already holds the process LocalPlayer selector.
+        # Borrow that selector, never its mutable controller/world observation.
+        # Child scope teardown must not release the process owner's lease.
+        session=getattr(scope,'_session',None)
+        source=getattr(getattr(session,'_story_construction_resources',None),'anchor',None)
+        if type(source) is ControllerAnchor and source.scope is not scope:
+            scope._check();source.scope._check()
+            if source.scope._session is not session or source.scope.pid!=scope.pid or not source._held.active:
+                raise RuntimeError('Process controller selector is unavailable')
+            anchor=ControllerAnchor.__new__(ControllerAnchor)
+            anchor.scope=scope;anchor._source=source;anchor._held=source._held;anchor.identity=source.identity
+        else:anchor=ControllerAnchor(scope)
+        scope._cinematic_controller_anchor=anchor
     if type(anchor) is not ControllerAnchor or anchor.scope is not scope:raise ValueError('Unrelated cinematic controller anchor')
     return anchor
 

@@ -49,7 +49,7 @@ class TimespanTests(unittest.TestCase):
                 with self.assertRaises(UnsupportedInvocation):_parameter_schema(catalog,fn,bad,pod_values=True)
 
     def test_seek_schema_is_exact_and_rejects_layout_substitutions(self):
-        rows=json.loads((ROOT/'evidence/media-seek-schema.json').read_text())
+        rows=json.loads((ROOT/'tests/fixtures/media-seek-schema.json').read_text())
         fn=NS(index=16352);constraint=NS(index=5759)
         catalog=NS(path_name=lambda x:'/Script/MediaAssets.MediaPlayer:Seek')
         d=NS(function=rows['function'],owners=rows['owners'],properties=rows['properties'])

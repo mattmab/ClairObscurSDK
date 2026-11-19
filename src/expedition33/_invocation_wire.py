@@ -20,7 +20,8 @@ FRAME_KINDS={'/Script/CoreUObject.FrameNumber':23,'/Script/CoreUObject.FrameTime
              '/Script/CoreUObject.FrameRate':25}
 NAMED_POD_KINDS={**FRAME_KINDS,'/Script/CoreUObject.Guid':22,'/Script/CoreUObject.Timespan':20,
                  '/Script/CoreUObject.QualifiedFrameTime':19,'/Script/CoreUObject.Vector':15,
-                 '/Script/MovieScene.MovieSceneObjectBindingID':26,'/Script/CoreUObject.Rotator':27}
+                 '/Script/MovieScene.MovieSceneObjectBindingID':26,'/Script/CoreUObject.Rotator':27,
+                 '/Script/CoreUObject.Quat':28,'/Script/CoreUObject.Transform':29}
 
 
 def _identity(value):

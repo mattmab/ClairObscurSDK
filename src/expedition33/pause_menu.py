@@ -501,6 +501,11 @@ class PauseMenuEntry:
                 # required viewport baseline after that transition.
                 self._timed('open_viewport',self.invoke,self._viewport_focus)
                 self._timed('open_service',self.service.open)
+                if self.service.menu is None or self.service.menu.panel.state != 'open':
+                    if not self.attachment.restore():
+                        raise RuntimeError('Waiting-open pause restoration deferred')
+                    if self.invoke(self._active_call): self.invoke(self._button_focus)
+                    return
                 if not self._timed('open_hide',self.attachment.hide_busy,self._hide_opacity):
                     raise RuntimeError('Pause hide deferred')
             except BaseException:

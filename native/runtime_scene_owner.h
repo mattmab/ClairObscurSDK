@@ -6,6 +6,9 @@
 #include <chrono>
 #include <utility>
 #include "runtime_scene_plan.h"
+#include "runtime_scene_cues.h"
+#include "runtime_scene_facials.h"
+#include "runtime_scene_bones.h"
 #include "runtime_scene_input.h"
 #include "editor_flight_math.h"
 #include "runtime_scene_timeline.h"
@@ -31,6 +34,88 @@ class Owner {
     StrongLeasePool<8> preview_leases_;
     StrongLeasePool<4> cue_leases_[23];
     OriginalAudioPause music_pause_;
+    SceneCues scene_cues_{};
+    FaceTimeline face_timeline_{};CallIdentity face_morph_function_{},face_morphs_[6][24]{};float face_weights_[6][24]{};
+    BoneTimeline bone_timeline_;
+    CallIdentity bone_function_{},bone_component_{},bone_rig_{},bone_hierarchy_{},bone_tick_function_{};
+    bool bone_owned()const{
+        if(!bone_timeline_.configured)return false;
+        const auto slot=bone_timeline_.slot*6;
+        return valid(bone_component_) && valid(bone_rig_) && valid(bone_hierarchy_) && valid(characters_[slot]) &&
+            local_read<uint64_t>(bone_component_.address+32)==characters_[slot].address &&
+            local_read<uint64_t>(bone_rig_.address+32)==bone_component_.address &&
+            local_read<uint64_t>(bone_hierarchy_.address+32)==bone_rig_.address &&
+            named(base_,local_read<uint64_t>(bone_component_.address+16),"ControlRigComponent","/Script/ControlRig") &&
+            named(base_,local_read<uint64_t>(bone_rig_.address+16),"FKControlRig","/Script/ControlRig") &&
+            named(base_,local_read<uint64_t>(bone_hierarchy_.address+16),"RigHierarchy","/Script/ControlRig");
+    }
+    bool bone_schema()const{
+        static const MeshField f[]={
+            {"InElementIndex","IntProperty",0,4,6755469234274944ULL,0x6e10a98,"","",0,"",0,""},
+            {"InTransform","StructProperty",16,96,6755469234274432ULL,0x6e136a0,"Transform","",0,"",0,""},
+            {"bInitial","BoolProperty",112,1,6755469234274944ULL,0x6e119b0,"","",0,"",0xff010001,""},
+            {"bAffectChildren","BoolProperty",113,1,6755469234274944ULL,0x6e119b0,"","",0,"",0xff010001,""},
+            {"bSetupUndo","BoolProperty",114,1,6755469234274944ULL,0x6e119b0,"","",0,"",0xff010001,""},
+            {"bPrintPythonCommands","BoolProperty",115,1,6755469234274944ULL,0x6e119b0,"","",0,"",0xff010001,""}};
+        const auto fn=call_identity(base_,bone_function_);
+        return fn && named(base_,local_read<uint64_t>(fn+32),"RigHierarchy","/Script/ControlRig") &&
+            exact_name(base_,fn+24,"SetLocalTransformByIndex") && local_read<uint32_t>(fn+0xb0)==75629569 &&
+            local_read<uint16_t>(fn+0xb6)==116 && local_read<uint16_t>(fn+0xb8)==65535 &&
+            local_read<int32_t>(fn+0x58)==128 && local_read<uint64_t>(fn+0xd8)==base_+0x3fedc60 && fields(base_,fn,f,6);
+    }
+    bool bone_tick(bool enabled){
+        static const MeshField f[]={{"bEnabled","BoolProperty",0,1,6755469234274944ULL,0x6e119b0,"","",0,"",0xff010001,""}};
+        static const MeshFunction p={"ActorComponent","SetComponentTickEnabled",67240962,1,1,65535,0x353b0b0,f,1};
+        uint8_t argument=uint8_t(enabled);
+        if(!e33_engine_profile_call::invoke(base_,bone_tick_function_,bone_component_,p,&argument))return false;
+        bone_timeline_.ticking=enabled;return true;
+    }
+    bool bone_advance(double seconds){
+        if(!bone_timeline_.configured)return true;
+        if(!bone_owned() || !bone_schema())return false;
+        const bool active=bone_timeline_.active(seconds);
+        if(active!=bone_timeline_.ticking && !bone_tick(active))return false;
+        if(!active)return true;
+        const auto pe=local_read<uint64_t>(local_read<uint64_t>(bone_hierarchy_.address)+0x268);
+        if(pe!=base_+0x1393330 && pe!=base_+0x332bb90)return false;
+        for(unsigned i=0;i<bone_timeline_.bones;++i){float pose_data[10]{};bone_timeline_.sample(seconds,i,pose_data);
+            if(!bone_timeline_.changed(i,pose_data))continue;
+            alignas(16) uint8_t frame[128]{};
+            std::memcpy(frame,&bone_timeline_.indices[i],4);
+            double transform[12]{};
+            for(unsigned q=0;q<4;++q)transform[q]=pose_data[q];
+            for(unsigned axis=0;axis<3;++axis){transform[4+axis]=pose_data[4+axis];transform[8+axis]=pose_data[7+axis];}
+            std::memcpy(frame+16,transform,96);frame[112]=1;frame[113]=1;
+            reinterpret_cast<void(__fastcall*)(void*,void*,void*)>(pe)(reinterpret_cast<void*>(bone_hierarchy_.address),reinterpret_cast<void*>(bone_function_.address),frame);
+            std::copy(pose_data,pose_data+10,bone_timeline_.last.begin()+i*10);
+        }
+        bone_timeline_.has_last=true;return true;
+    }
+    bool face_advance(double seconds){
+        if(!face_timeline_.count)return true;
+        for(unsigned actor=0;actor<unsigned(plan_.count);++actor){float weights[24]{};face_timeline_.sample(actor,seconds,weights);
+            for(unsigned shape=0;shape<24;++shape){if(!face_morphs_[actor][shape].address || std::abs(weights[shape]-face_weights_[actor][shape])<.002f)continue;
+                if(!valid(face_morphs_[actor][shape]))return false;
+                clear();put(0,local_read<uint64_t>(face_morphs_[actor][shape].address+24));put(8,weights[shape]);args_[12]=1;
+                if(!call(components_[actor*6+1],42))return false;face_weights_[actor][shape]=weights[shape];
+            }
+        }return true;
+    }
+    bool scene_camera_pose(double seconds,double* result)const{return scene_cues_.magic?scene_cues_.camera(plan_,seconds,result):plan_.camera_pose(seconds,result);}
+    void scene_camera_world(double seconds,double* result)const{
+        if(!scene_cues_.magic){plan_.camera_world(seconds,result);return;}
+        double shot[7]{};if(!scene_camera_pose(seconds,shot)){plan_.camera_world(seconds,result);return;}
+        const double rad=plan_.anchor[3]*3.141592653589793/180.,c=std::cos(rad),s=std::sin(rad);
+        result[0]=plan_.anchor[0]+c*shot[0]-s*shot[1];result[1]=plan_.anchor[1]+s*shot[0]+c*shot[1];result[2]=plan_.anchor[2]+shot[2];
+        result[3]=shot[3];result[4]=std::remainder(plan_.anchor[3]+shot[4],360.);result[5]=shot[5];result[6]=shot[6];
+    }
+    bool scene_blocking(double seconds){
+        bool changed=false;
+        for(unsigned i=0;i<unsigned(plan_.count);++i){double value[9]{};
+            if(scene_cues_.sample(i,seconds,value) && std::memcmp(value,plan_.poses[i],sizeof(value))){std::memcpy(plan_.poses[i],value,sizeof(value));changed=true;}}
+        if(changed)placed_=false;
+        return changed;
+    }
 #ifdef E33_RETIRED_WORLD_SESSION
     e33_retired_world::Anchor retired_anchor_;
     bool retired_cleanup_=false;
@@ -82,6 +167,11 @@ class Owner {
     double origin_[3]{},yaw_=0,elapsed_=0,animation_at_=-1,audio_at_=-1;
     Timing timing_;
     std::chrono::steady_clock::time_point clock_;
+    StoryPlaybackControls story_controls_;
+    CallIdentity story_audio_pause_{};
+    bool story_input_=false,story_paused_=false,story_mesh_paused_[36]{};
+    double story_pause_at_=0.;
+    std::chrono::steady_clock::time_point cleanup_retry_;
     alignas(16) uint8_t args_[512]{};
     void clear(){std::memset(args_,0,sizeof(args_));}
     template<class T> void put(size_t at,const T& value){std::memcpy(args_+at,&value,sizeof(T));}
@@ -99,6 +189,12 @@ class Owner {
         static const MeshFunction enabled_profile={"ActorComponent","SetComponentTickEnabled",67240962,1,1,65535,0x353b0b0,enabled_fields,1};
         static const MeshField viewport_fields[]={{"ZOrder","IntProperty",0,4,6759867280786048ULL,0x6e10a98ULL,"","",0,"",0U,""}};
         static const MeshFunction viewport_profile={"UserWidget","AddToViewport",67240971,4,4,65535,0x31355b0,viewport_fields,1};
+        static const MeshField morph_fields[]={{"MorphTargetName","NameProperty",0,8,6755469234274944ULL,0x6e13040ULL,"","",0,"",0U,""},{"Value","FloatProperty",8,4,6755469234274944ULL,0x6e11560ULL,"","",0,"",0U,""},{"bRemoveZeroWeight","BoolProperty",12,1,6755469234274944ULL,0x6e119b0ULL,"","",0,"",0xff010001U,""}};
+        static const MeshFunction morph_profile={"SkeletalMeshComponent","SetMorphTarget",67240963,13,16,65535,0x35ffd10,morph_fields,3};
+        static const MeshField audio_pause_fields[]={{"bPause","BoolProperty",0,1,6755469234274944ULL,0x6e119b0ULL,"","",0,"",0xff010001U,""}};
+        static const MeshFunction audio_pause_profile={"AudioComponent","SetPaused",67240963,1,1,65535,0x353bae0,audio_pause_fields,1};
+        if(i==43)return audio_pause_profile;
+        if(i==42)return morph_profile;
         if(i==41)return viewport_profile;
         if(i==40)return enabled_profile;
         if(i==39)return paused_profile;
@@ -106,7 +202,7 @@ class Owner {
         if(i==37)return volume_profile;
         return i>=33?e33_engine_profiles::profiles[i==33?35:i==34?36:i==35?38:62]:i==32?e33_engine_profiles::profiles[46]:i==31?position_profile:i>=30?fx_functions[i-30]:i==29?mesh_functions[31]:i<15?e33_engine_profiles::profiles[reused[i]]:demo_functions[i-15];
     }
-    CallIdentity function_id(size_t i)const{return i==41?timeline_add_:i==40?photo_enable_tick_:i==39?photo_tick_:i==38?photo_rotation_:ids_[i==37?133:i>=33?105+i-33:i==32?103:i==31?99:i>=30?56+i-30:21+i];}
+    CallIdentity function_id(size_t i)const{return i==43?story_audio_pause_:i==42?face_morph_function_:i==41?timeline_add_:i==40?photo_enable_tick_:i==39?photo_tick_:i==38?photo_rotation_:ids_[i==37?133:i>=33?105+i-33:i==32?103:i==31?99:i>=30?56+i-30:21+i];}
     bool schema(size_t i)const{
         const auto fn=call_identity(base_,function_id(i));const auto& p=profile(i);
         if(!fn)return false;
@@ -158,6 +254,28 @@ class Owner {
             return 0;
         }
         return 0;
+    }
+    bool prepare_owned_pose_tick(unsigned i){
+        if(i>=36 || !valid(characters_[i]) || !valid(components_[i]) ||
+           local_read<uint64_t>(components_[i].address+32)!=characters_[i].address)return false;
+        constexpr FieldProof policy={"SkinnedMeshComponent","VisibilityBasedAnimTickOption","EnumProperty",1948,1,0x18041240004205ULL,0x6deeee8ULL,0U};
+        const auto value=field(components_[i],policy);if(!value)return false;
+        const auto cls=local_read<uint64_t>(components_[i].address+16);
+        uint64_t descriptor=0;
+        auto type=cls;
+        for(unsigned policy_depth=0;type&&!descriptor&&policy_depth<128;++policy_depth,type=local_read<uint64_t>(type+0x40)){
+            if(!named(base_,type,"SkinnedMeshComponent","/Script/Engine"))continue;
+            auto f=local_read<uint64_t>(type+0x50);
+            for(unsigned n=0;f&&n<512;++n,f=local_read<uint64_t>(f+24))
+                if(exact_name(base_,f+32,policy.name)){descriptor=f;break;}
+        }
+        if(!descriptor || !named(base_,local_read<uint64_t>(descriptor+0x78),"EVisibilityBasedAnimTickOption","/Script/Engine") ||
+           local_read<uint8_t>(value)>4)return false;
+        // Disposable scene components must evaluate a seek before entering the
+        // camera frustum. Never changes a player, source actor, asset or CDO.
+        const uint8_t always_tick_pose_and_refresh_bones=0;
+        std::memcpy(reinterpret_cast<void*>(value),&always_tick_pose_and_refresh_bones,1);
+        return local_read<uint8_t>(value)==0;
     }
     bool current(){
         const auto ref=field(ids_[0],player_controller);
@@ -277,6 +395,8 @@ class Owner {
         }return true;
     }
     bool advance(double seconds){
+        if(scene_blocking(seconds) && !editor_place())return false;
+        if(!face_advance(seconds))return false;
         const double rad=3.141592653589793/180.,u=std::clamp((seconds-plan_.camera[4])/(plan_.camera[5]-plan_.camera[4]),0.,1.);
         const double forward[]={std::cos(yaw_*rad),std::sin(yaw_*rad)};
         const double side[]={-forward[1],forward[0]};
@@ -298,7 +418,7 @@ class Owner {
         const double rotation[]={std::atan2(delta[2],std::hypot(delta[0],delta[1]))/rad,
             std::atan2(delta[1],delta[0])/rad,0.};
         double shot[7]{};
-        if(plan_.camera_pose(seconds,shot)){
+        if(scene_camera_pose(seconds,shot)){
             camera[0]=point[0]+forward[0]*shot[0]+side[0]*shot[1];camera[1]=point[1]+forward[1]*shot[0]+side[1]*shot[1];camera[2]=point[2]+shot[2];
             double angles[]={shot[3],yaw_+shot[4],shot[5]};
             if(!pose(camera_,camera,angles))return false;
@@ -307,11 +427,18 @@ class Owner {
         ++poses_;
         }
         for(unsigned i=0;i<unsigned(plan_.count);++i){
+            if(bone_timeline_.active(seconds) && bone_timeline_.slot==i)continue;
             const auto event=plan_.active_animation(i,seconds);
             if(!mask_animation_scale(i,event))return false;
             if(seconds<plan_.start(event) || active_animation_[i]==int(event))continue;
             clear();if(plan_.clip(event)<0.){if(!call(components_[i*6],18))return false;}
             else{put(0,animation_id(event).address);args_[8]=uint8_t(plan_.loop(event));if(!call(components_[i*6],17))return false;}
+            if(scene_cues_.source_offsets[event]>0.){
+                constexpr FieldProof length_field={"AnimSequenceBase","SequenceLength","FloatProperty",144,4,11268964466426389ULL,0x6e11560ULL,0U};
+                const auto length_at=field(animation_id(event),length_field);
+                if(!length_at || scene_cues_.source_offsets[event]>=local_read<float>(length_at))return false;
+                clear();put(0,float(scene_cues_.source_offsets[event]));if(!call(components_[i*6],31))return false;
+            }
             active_animation_[i]=int(event);animation_done_[i]=true;if(!timing_.animation)animation_at_=seconds;timing_.animation=true;
         }
         for(unsigned i=0;i<2;++i)if(plan_.trail[i]>=0. && !trail_done_[i] && seconds>=plan_.trail[i]){
@@ -345,7 +472,7 @@ class Owner {
             baseline[1]+forward[1]*28.*pulse+side[1]*direction*12.*pulse,baseline[2]+10.*pulse};
         const double reaction[]={target_pose[3]+12.*pulse,yaw_+target_pose[4],target_pose[5]+direction*9.*pulse};
         if(plan_.bindings[2]>=0. && !pose(characters_[target_slot*6],target_point,reaction))return false;
-        if(!expire_effects(seconds))return false;
+        if(!expire_effects(seconds) || !bone_advance(seconds))return false;
         return true;
     }
     bool stop_preview(){
@@ -395,9 +522,12 @@ class Owner {
     }
     bool editor_seek(double seconds,bool running=false){
         if(!std::isfinite(seconds) || seconds<0. || seconds>plan_.duration)return false;
+        if(scene_blocking(seconds) && !editor_place())return false;
+        if(!face_advance(seconds))return false;
         photo_audition_=-1;editor_time_=seconds;
         constexpr FieldProof length_field={"AnimSequenceBase","SequenceLength","FloatProperty",144,4,11268964466426389ULL,0x6e11560ULL,0U};
         for(unsigned i=0;i<unsigned(plan_.count);++i){
+            if(bone_timeline_.active(seconds) && bone_timeline_.slot==i)continue;
             const unsigned event=plan_.active_animation(i,seconds);
             if(!mask_animation_scale(i,event))return false;
             if(plan_.clip(event)<0.){clear();if(!call(components_[i*6],17))return false;clear();if(!call(components_[i*6],18))return false;continue;}
@@ -405,10 +535,12 @@ class Owner {
             const double length=local_read<float>(length_at);if(!std::isfinite(length) || length<=0.)return false;
             clear();put(0,animation_id(event).address);args_[8]=uint8_t(plan_.loop(event));if(!call(components_[i*6],17))return false;
             if(!running || seconds<plan_.start(event)){clear();if(!call(components_[i*6],18))return false;}
-            const double age=std::max(0.,seconds-plan_.start(event));clear();put(0,float(plan_.loop(event)?std::fmod(age,length):std::min(age,length))); // bFireNotifies remains false
+            const double offset=scene_cues_.source_offsets[event];if(offset>=length)return false;
+            const double age=std::max(0.,seconds-plan_.start(event))+offset;clear();put(0,float(plan_.loop(event)?std::fmod(age,length):std::min(age,length))); // bFireNotifies remains false
             if(!call(components_[i*6],31))return false;
             animation_done_[i]=seconds>=plan_.start(event);
         }
+        if(!bone_advance(seconds))return false;
         if(!running){for(unsigned i=0;i<32;++i)audio_done_[i]=plan_.audio[i]>=0. && plan_.audio[i]<seconds;for(auto& sound:sounds_)if(sound.address){clear();if(!call(sound,21))return false;}clear();return call(audio_,21);}return true;
     }
     bool editor_fov(double fov){
@@ -530,7 +662,7 @@ class Owner {
                 if(timeline_drag_.sample(plan_,selected_,true,double(timeline_press_point_.x)/timeline_press_area_.right,double(timeline_press_point_.y)/timeline_press_area_.bottom,double(timeline_press_area_.right),seconds)){state_=7;if(!editor_seek(seconds))return false;}
             }
             if(timeline_drag_.sample(plan_,selected_,timeline_message_down_,x,y,double(area.right),seconds)){state_=7;if(!editor_seek(seconds))return false;}
-            left_down_=false;mouse_valid_=false;return highlight(int(selected_)) && camera_guides();
+            left_down_=false;mouse_valid_=false;return highlight(snapped_view_?-1:int(selected_)) && camera_guides();
         }
         if(photo_mode_)return photo_read() && camera_guides();
         if(key(VK_RMENU)){left_down_=false;grab_depth_=0.;return camera_guides();}
@@ -571,9 +703,33 @@ class Owner {
             if(changed && !(camera_selected_?camera_guides():editor_place()))return false;
         }
         left_down_=left;if(!left)grab_depth_=0.;
-        return highlight(camera_selected_?-1:(dragging?int(selected_):(hovered_==6?-1:hovered_))) && camera_guides() && pose(camera_,c,c+3);
+        return highlight((camera_selected_ || snapped_view_)?-1:(dragging?int(selected_):(hovered_==6?-1:hovered_))) && camera_guides() && pose(camera_,c,c+3);
     }
 
+    static double story_now(){return std::chrono::duration<double>(std::chrono::steady_clock::now().time_since_epoch()).count();}
+    bool story_pause(bool paused){
+        if(!story_input_ || state_!=2 || !current())return false;
+        if(story_paused_==paused)return true;
+        // Only disposable scene meshes are touched. Preserve every preexisting
+        // animation-pause bit and revalidate ownership/schema before mutation.
+        constexpr FieldProof proof={"SkeletalMeshComponent","bPauseAnims","BoolProperty",2640,1,6759866207043589ULL,0x6e119b0ULL,0x10100001U};
+        uint64_t addresses[36]{};
+        for(unsigned i=0;i<36;++i)if(components_[i].address){
+            if(!valid(characters_[i]) || local_read<uint64_t>(components_[i].address+32)!=characters_[i].address || !(addresses[i]=field(components_[i],proof)))return false;
+        }
+        if(!schema(43))return false;
+        for(unsigned i=0;i<36;++i)if(addresses[i]){
+            auto value=local_read<uint8_t>(addresses[i]);
+            if(paused)story_mesh_paused_[i]=(value&1)!=0;
+            value=uint8_t((value&~1U)|uint8_t(paused || story_mesh_paused_[i]));
+            std::memcpy(reinterpret_cast<void*>(addresses[i]),&value,1);
+        }
+        if(audio_.address){clear();args_[0]=uint8_t(paused);if(!call(audio_,43))return false;}
+        for(auto& sound:sounds_)if(sound.address){clear();args_[0]=uint8_t(paused);if(!call(sound,43))return false;}
+        if(paused){story_pause_at_=elapsed_;}
+        else clock_=std::chrono::steady_clock::now()-std::chrono::duration_cast<std::chrono::steady_clock::duration>(std::chrono::duration<double>(story_pause_at_));
+        story_paused_=paused;return true;
+    }
 public:
 #include "runtime_scene_parameter_preflight.inl"
 #include "runtime_scene_grounding.inl"
@@ -588,10 +744,24 @@ public:
     bool owns_timeline(CallIdentity widget)const{return pool_ && (state_==7 || state_==8) && same(timeline_widget_,widget) && valid(timeline_widget_);}
     bool timeline_shortcuts(CallIdentity widget)const{return (timeline_flags_&2) && owns_timeline(widget);}
     bool blocks_gameplay_shortcuts()const{return pool_ && (state_==2 || state_==7 || state_==8);}
+    bool story_input_active()const{return pool_ && story_input_ && (state_==2 || state_==3);}
+    void story_key_message(const MSG* message){
+        if(!message || !story_input_active() || state_!=2 ||
+           (message->message!=WM_KEYDOWN && message->message!=WM_KEYUP))return;
+        if(!TargetPodSchemaOps{base_}.context())return;
+        DWORD pid=0;GetWindowThreadProcessId(GetForegroundWindow(),&pid);
+        if(pid!=GetCurrentProcessId())return;
+        const auto action=story_controls_.key_message(static_cast<unsigned>(message->wParam),
+            message->message==WM_KEYDOWN,(message->lParam&(1LL<<30))!=0,story_paused_);
+        if(action && !story_pause(action==1)){failed_step_=step_;error_=2008;const auto e=close(2);if(e)error_=e;}
+    }
     bool active()const{return pool_ || loading_;}
     bool visual_stage_active()const{return pool_ && visual_staging_;}
     void quarantine(){error_=2015;state_=3;}
     uint32_t close(uint32_t reason=0){
+        // Retain ownership while deferred, but stop playback and throttle
+        // retries. Never rescan the global object registry for every message.
+        if(pool_){state_=3;reason_=reason;cleanup_retry_=std::chrono::steady_clock::now()+std::chrono::milliseconds(100);}
 #ifdef E33_RETIRED_WORLD_SESSION
         if(pool_){
             e33_retired_world::TargetOps epoch{base_};
@@ -602,10 +772,11 @@ public:
                 if(anchor_error)return anchor_error;
                 TargetStrongReferenceOps refs{base_,{}};const auto result=leases_.close(refs,owner_);
                 if(result!=StrongLeaseResult::Ok)return result==StrongLeaseResult::Deferred?407:2014;
-                pool_=false;primary_lease_=0;retired_anchor_.reset();state_=5;return 0;
+                bone_timeline_.reset();pool_=false;primary_lease_=0;retired_anchor_.reset();state_=5;return 0;
             }
-            const auto proof=retired_anchor_.prove(epoch);
-            if(proof==e33_retired_world::Result::Pending)return 407;
+            const auto proof=epoch.current_binding(retired_anchor_.engine(),retired_anchor_.viewport(),retired_anchor_.world())?
+                e33_retired_world::Result::SameWorld:retired_anchor_.prove(epoch);
+            if(proof==e33_retired_world::Result::Pending){failed_step_=7091;return 407;}
             if(proof==e33_retired_world::Result::Unknown)return 2052;
             if(proof==e33_retired_world::Result::Retired){
                 retired_cleanup_=true;state_=3;reason_=reason;
@@ -627,11 +798,11 @@ public:
 #ifdef E33_RETIRED_WORLD_SESSION
             retired_cleanup_?music_pause_.retire_world(retired_anchor_):
 #endif
-            music_pause_.close();if(music_error)return music_error;}
+            music_pause_.close();if(music_error){failed_step_=709200+music_pause_.close_detail();return music_error;}}
         if(!stop_preview())return 2010;
         for(unsigned i=0;i<23;++i)if(!clear_cue(i))return 2010;
         for(auto& component:effects_){if(component.address && valid(component)){clear();put(0,component.address);if(!call(component,22))return 2010;}component={};}
-        if(!TargetPodSchemaOps{base_}.context())return 407;
+        if(!TargetPodSchemaOps{base_}.context()){failed_step_=7093;return 407;}
         state_=3;reason_=reason;
         if(audio_.address){if(valid(audio_)){clear();if(!call(audio_,21))return 2010;clear();put(0,audio_.address);if(!call(audio_,22))return 2010;}audio_={};}
 #ifdef E33_RETIRED_WORLD_SESSION
@@ -665,7 +836,7 @@ public:
         const auto result=leases_.close(ops,owner_);
         if(result==StrongLeaseResult::Deferred)return 407;
         if(result!=StrongLeaseResult::Ok)return 2014;
-        pool_=false;visual_staging_=false;primary_lease_=0;
+        bone_timeline_.reset();pool_=false;visual_staging_=false;primary_lease_=0;
 #ifdef E33_RETIRED_WORLD_SESSION
         retired_anchor_.reset();retired_cleanup_=false;
 #endif
@@ -674,11 +845,11 @@ public:
         std::memset(visual_ground_scale_,0,sizeof(visual_ground_scale_));
         visual_ground_candidates_=0;
         for(auto& id:visual_arena_ids_)id={};for(auto& lease:visual_arena_leases_)lease=0;
-        for(auto& id:components_)id={};state_=reason==0?4:reason==1?5:6;return 0;
+        for(auto& id:components_)id={};story_input_=story_paused_=false;story_controls_={};story_audio_pause_={};state_=reason==0?4:reason==1?5:6;return 0;
     }
     void poll(){
         if(!pool_)return;
-        if(state_==3){if(error_==407)error_=close(reason_);return;}
+        if(state_==3){if(error_==407 && std::chrono::steady_clock::now()>=cleanup_retry_)error_=close(reason_);return;}
         if(!TargetPodSchemaOps{base_}.context())return;
 #ifdef E33_RETIRED_WORLD_SESSION
         {e33_retired_world::TargetOps epoch{base_};
@@ -687,8 +858,15 @@ public:
             }
         }
 #endif
-        elapsed_=std::chrono::duration<double>(std::chrono::steady_clock::now()-clock_).count();
+        elapsed_=story_paused_?story_pause_at_:std::chrono::duration<double>(std::chrono::steady_clock::now()-clock_).count();
         if(!current()){error_=close(1);return;}
+        if(state_==2 && story_input_){
+            DWORD pid=0;GetWindowThreadProcessId(GetForegroundWindow(),&pid);
+            const auto action=story_controls_.update(story_now(),pid==GetCurrentProcessId(),(GetAsyncKeyState('F')&0x8000)!=0,(GetAsyncKeyState('E')&0x8000)!=0,(GetAsyncKeyState(VK_ESCAPE)&0x8000)!=0,story_paused_);
+            if(action==3){error_=close();return;}
+            if(action && !story_pause(action==1)){failed_step_=step_;error_=2008;const auto e=close(2);if(e)error_=e;return;}
+            if(story_paused_)return;
+        }
         if(preview_active_ && std::chrono::duration<double>(std::chrono::steady_clock::now()-preview_clock_).count()>=preview_limit_ && !stop_preview()){error_=2010;state_=3;return;}
         if(state_==1){if(elapsed_>60.)error_=close(1);return;}
         if(state_==7 || state_==8){
@@ -716,7 +894,7 @@ public:
             && op!=149
 #endif
 #if E33_RUNTIME_CINEMATIC_VERSION >= 174
-            && op!=150
+            && op!=150 && op!=199 && op!=200 && op!=201 && op!=202 && op!=203
 #endif
             ) || !packet.owner || packet.error || packet.state){packet.error=2000;return;}
         auto* raw=reinterpret_cast<uint8_t*>(&packet);
@@ -728,6 +906,114 @@ public:
             }
         }
 #endif
+        if(op==203){
+            uint32_t slot=0;std::memcpy(&slot,raw+184,4);
+            CallIdentity component{},rig{},hierarchy{},controller{},function{},skeleton{};
+            std::memcpy(&component,raw+88,16);std::memcpy(&rig,raw+104,16);std::memcpy(&hierarchy,raw+120,16);
+            std::memcpy(&controller,raw+136,16);std::memcpy(&function,raw+152,16);std::memcpy(&skeleton,raw+168,16);
+            if(!pool_ || owner_!=packet.owner || conflict || !current() || state_!=1 || bone_timeline_.configured || slot>=unsigned(plan_.count) ||
+               std::any_of(raw+24,raw+88,[](uint8_t c){return c!=0;}) || std::any_of(raw+188,raw+sizeof(packet),[](uint8_t c){return c!=0;}) ||
+               !valid(component) || !valid(rig) || !valid(hierarchy) || !valid(controller) || !valid(skeleton) || !valid(function) ||
+               local_read<uint64_t>(component.address+32)!=characters_[slot*6].address || local_read<uint64_t>(rig.address+32)!=component.address ||
+               local_read<uint64_t>(hierarchy.address+32)!=rig.address || local_read<uint64_t>(controller.address+32)!=hierarchy.address ||
+               !named(base_,local_read<uint64_t>(component.address+16),"ControlRigComponent","/Script/ControlRig") ||
+               !named(base_,local_read<uint64_t>(rig.address+16),"FKControlRig","/Script/ControlRig") ||
+               !named(base_,local_read<uint64_t>(hierarchy.address+16),"RigHierarchy","/Script/ControlRig") ||
+               !named(base_,local_read<uint64_t>(controller.address+16),"RigHierarchyController","/Script/ControlRig")) {packet.error=2058;return;}
+            constexpr FieldProof sk={"SkeletalMesh","Skeleton","ObjectProperty",240,8,79940061617062405ULL,0x6e11d38ULL,0U};
+            const auto mesh=ids_[57+slot*7];
+            const auto location=field(mesh,sk);
+            if(!location || local_read<uint64_t>(location)!=skeleton.address){packet.error=2058;return;}
+            static const MeshField f[]={
+                {"InSkeleton","ObjectProperty",0,8,6755468160533120ULL,0x6e11d38,"","",0,"",0,"Skeleton"},
+                {"InNameSpace","NameProperty",8,8,6755469234274944ULL,0x6e13040,"","",0,"",0,""},
+                {"bReplaceExistingBones","BoolProperty",16,1,6755469234274944ULL,0x6e119b0,"","",0,"",0xff010001,""},
+                {"bRemoveObsoleteBones","BoolProperty",17,1,6755469234274944ULL,0x6e119b0,"","",0,"",0xff010001,""},
+                {"bSelectBones","BoolProperty",18,1,6755469234274944ULL,0x6e119b0,"","",0,"",0xff010001,""},
+                {"bSetupUndo","BoolProperty",19,1,6755469234274944ULL,0x6e119b0,"","",0,"",0xff010001,""},
+                {"bPrintPythonCommand","BoolProperty",20,1,6755469234274944ULL,0x6e119b0,"","",0,"",0xff010001,""},
+                {"ReturnValue","ArrayProperty",24,16,4503599627372416ULL,0x6e0de80,"","StructProperty",12,"",0,""}};
+            const auto fn=call_identity(base_,function);
+            if(!fn || !named(base_,local_read<uint64_t>(fn+32),"RigHierarchyController","/Script/ControlRig") ||
+               !exact_name(base_,fn+24,"ImportBones") || local_read<uint32_t>(fn+0xb0)!=67240961 ||
+               local_read<uint16_t>(fn+0xb6)!=40 || local_read<uint16_t>(fn+0xb8)!=24 ||
+               local_read<int32_t>(fn+0x58)!=40 || local_read<uint64_t>(fn+0xd8)!=base_+0x41042a0 || !fields(base_,fn,f,8)){
+                packet.error=2059;return;
+            }
+            auto returned=local_read<uint64_t>(fn+0x50);for(unsigned i=0;i<7;++i)returned=local_read<uint64_t>(returned+24);
+            const auto inner=local_read<uint64_t>(returned+0x78),key=local_read<uint64_t>(inner+0x70);
+            if(!named(base_,key,"RigElementKey","/Script/ControlRig") || local_read<int32_t>(key+0x58)!=12){packet.error=2059;return;}
+            const auto pe=local_read<uint64_t>(local_read<uint64_t>(controller.address)+0x268);
+            if(pe!=base_+0x1393330 && pe!=base_+0x332bb90){packet.error=2059;return;}
+            for(auto* id:{&component,&rig,&hierarchy,&controller,&function,&skeleton})if(!hold(*id)){packet.error=2005;return;}
+            alignas(16) uint8_t frame[48]{};std::memcpy(frame,&skeleton.address,8);frame[16]=1;
+            reinterpret_cast<void(__fastcall*)(void*,void*,void*)>(pe)(reinterpret_cast<void*>(controller.address),reinterpret_cast<void*>(fn),frame);
+            uint64_t allocation=0;int32_t count=0,capacity=0;
+            std::memcpy(&allocation,frame+24,8);std::memcpy(&count,frame+32,4);std::memcpy(&capacity,frame+36,4);
+            if(count<0 || count>8192 || capacity<count || capacity>16384 || (!allocation && capacity)){packet.error=2058;return;}
+            // RigElementKey contains only FName and enum bytes; release its TArray storage with the target allocator.
+            if(allocation)reinterpret_cast<void(__fastcall*)(uint64_t)>(base_+0x107c7d0)(allocation);
+            packet.state=state_;return;
+        }
+        if(op==201){
+            uint32_t slot=0,frames=0,bones=0;double hold_at=0,end_at=0;float fps=0;
+            std::memcpy(&slot,raw+168,4);std::memcpy(&frames,raw+172,4);std::memcpy(&bones,raw+176,4);
+            std::memcpy(&hold_at,raw+184,8);std::memcpy(&end_at,raw+192,8);std::memcpy(&fps,raw+200,4);
+            if(!pool_ || owner_!=packet.owner || conflict || !current() || state_!=1 || slot>=unsigned(plan_.count) ||
+               bones>BoneTimeline::max_bones || std::any_of(raw+24,raw+88,[](uint8_t c){return c!=0;}) ||
+               std::any_of(raw+180,raw+184,[](uint8_t c){return c!=0;}) || std::any_of(raw+204,raw+208,[](uint8_t c){return c!=0;}) ||
+               std::any_of(raw+208+size_t(bones)*4,raw+sizeof(packet),[](uint8_t c){return c!=0;})){packet.error=2058;return;}
+            std::memcpy(&bone_function_,raw+88,16);std::memcpy(&bone_component_,raw+104,16);std::memcpy(&bone_rig_,raw+120,16);
+            std::memcpy(&bone_hierarchy_,raw+136,16);std::memcpy(&bone_tick_function_,raw+152,16);
+            uint32_t indices[BoneTimeline::max_bones]{};std::memcpy(indices,raw+208,size_t(bones)*4);
+            if(!bone_timeline_.configure(slot,bones,frames,hold_at,end_at,fps,indices) || !bone_owned() || !bone_schema()){
+                packet.error=2058;return;
+            }
+            for(auto* id:{&bone_function_,&bone_component_,&bone_rig_,&bone_hierarchy_,&bone_tick_function_})if(!hold(*id)){packet.error=2005;return;}
+            if(!bone_tick(false)){packet.error=2058;return;}
+            packet.state=state_;return;
+        }
+        if(op==202){
+            uint32_t slot=0,frame=0,bones=0;std::memcpy(&slot,raw+88,4);std::memcpy(&frame,raw+92,4);std::memcpy(&bones,raw+96,4);
+            if(!pool_ || owner_!=packet.owner || conflict || !current() || state_!=1 || !bone_owned() || slot!=bone_timeline_.slot ||
+               bones>BoneTimeline::max_bones || std::any_of(raw+24,raw+88,[](uint8_t c){return c!=0;}) ||
+               std::any_of(raw+100,raw+104,[](uint8_t c){return c!=0;}) || std::any_of(raw+104+size_t(bones)*40,raw+sizeof(packet),[](uint8_t c){return c!=0;})){
+                packet.error=2058;return;
+            }
+            std::vector<float> poses(size_t(bones)*10);std::memcpy(poses.data(),raw+104,poses.size()*4);
+            if(!bone_timeline_.append(frame,bones,poses.data())){packet.error=2058;return;}
+            packet.state=state_;return;
+        }
+        if(op==200){
+            if(!pool_ || owner_!=packet.owner || conflict || !current() || state_!=1 || std::any_of(raw+24,raw+88,[](uint8_t c){return c!=0;}) || std::any_of(raw+108,raw+112,[](uint8_t c){return c!=0;}) || std::any_of(raw+14704,raw+sizeof(packet),[](uint8_t c){return c!=0;})){packet.error=2055;return;}
+            FaceTimeline candidate{};std::memcpy(&candidate.count,raw+104,4);std::memcpy(candidate.keys,raw+2416,sizeof(candidate.keys));
+            if(!candidate.valid(plan_.duration,unsigned(plan_.count))){packet.error=2055;return;}
+            std::memcpy(&face_morph_function_,raw+88,16);if(!valid(face_morph_function_) || !schema(42)){packet.error=2055;return;}
+            CallIdentity morphs[6][24]{};std::memcpy(morphs,raw+112,sizeof(morphs));
+            for(unsigned actor=0;actor<6;++actor){bool active=false;for(unsigned k=0;k<candidate.count;++k)active=active||candidate.keys[k].actor==actor;
+                for(unsigned shape=0;shape<24;++shape){auto& morph=morphs[actor][shape];
+                    if(!active){if(morph.index||morph.serial||morph.address){packet.error=2055;return;}continue;}
+                    std::string expected="head_lod0_mesh__";expected+=face_shapes[shape];
+                    if(!valid(morph) || !exact_name(base_,morph.address+24,expected.c_str()) || !named(base_,local_read<uint64_t>(morph.address+16),"MorphTarget","/Script/Engine") || local_read<uint64_t>(morph.address+32)!=ids_[57+actor*7+1].address){packet.error=2055;return;}
+                }
+            }
+            if(!hold(face_morph_function_)){packet.error=2005;return;}
+            for(auto& actor:morphs)for(auto& morph:actor)if(morph.address && !hold(morph)){packet.error=2005;return;}
+            face_timeline_=candidate;std::memcpy(face_morphs_,morphs,sizeof(morphs));std::memset(face_weights_,0,sizeof(face_weights_));packet.state=state_;return;
+        }
+        if(op==199){
+            uint32_t slot=0;std::memcpy(&slot,raw+88,4);
+            if(!pool_ || owner_!=packet.owner || conflict || !current() || (state_!=1 && state_!=7) || slot>=unsigned(plan_.count) || std::any_of(raw+24,raw+88,[](uint8_t c){return c!=0;}) || std::any_of(raw+92,raw+sizeof(packet),[](uint8_t c){return c!=0;})){packet.error=2053;return;}
+            const auto first=slot*6;const auto role=unsigned(plan_.roles[slot]);
+            if(scene_parts[role][1].mode!=1 || !valid(components_[first]) || !valid(components_[first+1])){packet.error=2053;return;}
+            // Only this owner's generated face may leave leader-pose mode.
+            // Parent attachment lets the stock facial CopyPose node retain the body pose.
+            clear();args_[8]=1;args_[9]=1;
+            bool ok=call(components_[first+1],25) && attach(components_[first+1],components_[first],nullptr);
+            if(!ok){packet.error=2054;return;}
+            std::memcpy(raw+96,&components_[first],16);std::memcpy(raw+112,&components_[first+1],16);
+            packet.state=state_;return;
+        }
         if(op==98){
             CallIdentity animation{};std::memcpy(&animation,raw+88,16);uint32_t slot=0;std::memcpy(&slot,raw+104,4);
             Plan candidate{};std::memcpy(&candidate,raw+112,sizeof(candidate));
@@ -894,9 +1180,15 @@ public:
         if(op==74){
             if(pool_ || conflict){packet.error=2001;return;}
             Plan candidate{};std::memcpy(&candidate,raw+88,sizeof(candidate));
+            SceneCues cues{};std::memcpy(&cues,raw+4096,sizeof(cues));
+            const bool has_cues=cues.magic!=0;
             if(std::any_of(raw+24,raw+88,[](uint8_t c){return c!=0;}) ||
-               std::any_of(raw+88+sizeof(candidate),raw+sizeof(packet),[](uint8_t c){return c!=0;}) || !candidate.valid()){packet.error=2020;return;}
-            plan_=candidate;configured_=true;owner_=packet.owner;return;
+               std::any_of(raw+88+sizeof(candidate),raw+4096,[](uint8_t c){return c!=0;}) ||
+               (has_cues?!cues.valid(candidate.duration,unsigned(candidate.count),unsigned(candidate.key_count)):std::any_of(raw+4096,raw+4096+sizeof(cues),[](uint8_t c){return c!=0;})) ||
+               std::any_of(raw+4096+sizeof(cues),raw+sizeof(packet),[](uint8_t c){return c!=0;}) || !candidate.valid()){packet.error=2020;return;}
+            for(unsigned i=0;i<30;++i)if(cues.source_offsets[i] &&
+                (i<6?(i>=unsigned(candidate.count) || candidate.clips[i]<0.):(i-6>=unsigned(candidate.extra_count) || candidate.extra[i-6][2]<0.))){packet.error=2020;return;}
+            plan_=candidate;scene_cues_=cues;configured_=true;owner_=packet.owner;return;
         }
 
         if(op==76){
@@ -933,6 +1225,7 @@ public:
         }
 #endif
         const bool editor_values=op==77 || op==78 || op==79;
+        const bool playback_start=op==71 && E33_RUNTIME_CINEMATIC_VERSION>=300;
         if(std::any_of(raw+
 #ifdef E33_RETIRED_WORLD_SESSION
            (request_retired?28:24)
@@ -940,16 +1233,19 @@ public:
            24
 #endif
            ,raw+88,[](uint8_t c){return c!=0;}) ||
-           (op!=76 && std::any_of(raw+(op==70?88+16*inputs:editor_values?104:op==75?136:op==149?168:op==150?248:88),raw+sizeof(packet),[](uint8_t c){return c!=0;}))){packet.error=2000;return;}
+           (op!=76 && std::any_of(raw+(op==70?88+16*inputs:editor_values?104:playback_start?112:op==75?136:op==149?168:op==150?248:88),raw+sizeof(packet),[](uint8_t c){return c!=0;}))){packet.error=2000;return;}
         double value=0.,option=0.;if(editor_values){std::memcpy(&value,raw+88,8);std::memcpy(&option,raw+96,8);if(!std::isfinite(value) || !std::isfinite(option)){packet.error=2022;return;}}
-        if((op>=75 && op<=79) && (!pool_ || owner_!=packet.owner || conflict || !current() || (op==75?state_!=1:state_!=7 && state_!=8))){packet.error=2022;return;}
+        const bool story_control=op==79 && value>=8. && value<=10. && value==std::floor(value) && option==0.;
+        if((op>=75 && op<=79) && (!pool_ || owner_!=packet.owner || conflict || !current() || (op==75?state_!=1:story_control?state_!=2 || !story_input_:state_!=7 && state_!=8))){packet.error=2022;return;}
         if(pool_ && owner_!=packet.owner){packet.error=2001;return;}
         if(op==70){
             if(pool_ || conflict || !configured_ || owner_!=packet.owner){packet.error=2001;return;}
-            base_=base;owner_=packet.owner;error_=0;failed_step_=0;reason_=0;poses_=0;elapsed_=0;animation_at_=audio_at_=-1;timing_={};placed_=false;visual_staging_=false;
+            bone_timeline_.reset();bone_function_={};bone_component_={};bone_rig_={};bone_hierarchy_={};bone_tick_function_={};
+            face_timeline_.count=0;std::memset(face_morphs_,0,sizeof(face_morphs_));std::memset(face_weights_,0,sizeof(face_weights_));base_=base;owner_=packet.owner;error_=0;failed_step_=0;reason_=0;poses_=0;elapsed_=0;animation_at_=audio_at_=-1;timing_={};placed_=false;visual_staging_=false;
             std::fill(std::begin(active_animation_),std::end(active_animation_),-1);std::memset(animation_done_,0,sizeof(animation_done_));std::memset(audio_done_,0,sizeof(audio_done_));std::memset(impact_done_,0,sizeof(impact_done_));std::memset(recoil_done_,0,sizeof(recoil_done_));std::memset(trail_done_,0,sizeof(trail_done_));effect_count_=0;last_hit_=-10.;last_attacker_=0;
             std::memset(material_count_,0,sizeof(material_count_));std::memset(original_materials_,0,sizeof(original_materials_));glowing_=-1;hovered_=-1;snapped_view_=false;editor_fov_=90.;
             std::memcpy(ids_,raw+88,sizeof(ids_));photo_mode_=false;photo_rotation_={};photo_camera_={};photo_tick_={};photo_enable_tick_={};scene_cursor_owned_=false;photo_audition_=-1;
+            story_input_=story_paused_=false;story_audio_pause_={};story_controls_={};
             photo_mode_=named(base_,local_read<uint64_t>(ids_[1].address+16),"BP_PhotoModeController_C","/Game/Gameplay/PhotoMode/BP_PhotoModeController") &&
                 named(base_,local_read<uint64_t>(ids_[2].address+16),"BP_PhotoModePawn_C","/Game/Gameplay/PhotoMode/BP_PhotoModePawn");
             if(!TargetPodSchemaOps{base_}.context()){packet.error=407;return;}
@@ -996,6 +1292,7 @@ public:
                     const unsigned i=first+part;ok=spawn(ids_[5],characters_[i]);
                     if(ok){clear();put(0,ids_[6].address);ok=call(characters_[i],15);components_[i]=call_capture(base_,get<uint64_t>(8));ok=ok && hold(components_[i]);}
                     if(ok){clear();put(0,ids_[57+slot*7+part].address);ok=call(components_[i],16);}
+                    if(ok)ok=prepare_owned_pose_tick(i);
                     if(ok){clear();args_[0]=2;ok=call(components_[i],10);}
                     if(ok && (profile_part.mode==1 || profile_part.mode==4)){
                         clear();put(0,components_[first+(profile_part.mode==4?1:0)].address);args_[8]=1;ok=call(components_[i],25);
@@ -1053,11 +1350,22 @@ public:
             if(photo_mode_){packet.error=2022;return;}
             if(!pool_ || state_!=1 || !current() || conflict){packet.error=2007;return;}
             clear();put(0,ids_[1].address);if(!call(ids_[3],12) || args_[8]){packet.error=2007;return;}
-            bool ok=advance(0.);
+            double start=0.;if(playback_start)std::memcpy(&start,raw+88,8);
+            if(!std::isfinite(start) || start<0. || start>=plan_.duration){packet.error=2022;return;}
+            std::memcpy(&story_audio_pause_,raw+96,16);
+            if(story_audio_pause_.address){
+                if(!schema(43) || !hold(story_audio_pause_)){packet.error=2003;return;}
+                story_input_=true;story_controls_.begin((GetAsyncKeyState('F')&0x8000)!=0,(GetAsyncKeyState('E')&0x8000)!=0,(GetAsyncKeyState(VK_ESCAPE)&0x8000)!=0);
+            }else if(std::any_of(raw+96,raw+112,[](uint8_t c){return c!=0;})){packet.error=2022;return;}
+            bool ok=advance(start);
+            if(ok && start>0.){
+                ok=editor_seek(start,true);
+                for(unsigned i=0;i<32;++i)audio_done_[i]=plan_.audio[i]>=0. && plan_.audio[i]<start;
+            }
             if(ok){clear();args_[0]=1;ok=call(ids_[1],7);move_ignored_=ok;}
             if(ok){clear();args_[0]=1;ok=call(ids_[1],23);look_ignored_=ok;}
             if(ok){clear();put(0,camera_.address);view_armed_=true;ok=call(ids_[1],5);}
-            if(ok){state_=2;clock_=std::chrono::steady_clock::now();}
+            if(ok){state_=2;elapsed_=start;clock_=std::chrono::steady_clock::now()-std::chrono::duration_cast<std::chrono::steady_clock::duration>(std::chrono::duration<double>(start));}
             else{failed_step_=step_;error_=2008;const auto e=close(2);if(e)error_=e;}
         }else if(op==75){
             if(photo_mode_){
@@ -1091,6 +1399,10 @@ public:
             if(value<0. || value>plan_.duration || option!=0.){packet.error=2022;return;}
             state_=7;if(!editor_seek(value)){failed_step_=step_;error_=2008;const auto e=close(2);if(e)error_=e;}
         }else if(op==79){
+            if(story_control){
+                if(value==10.)error_=close();
+                else if(!story_pause(value==8.)){failed_step_=step_;error_=2008;const auto e=close(2);if(e)error_=e;}
+            }else{
             if(value!=std::floor(value) || value<0. || value>7. || option!=std::floor(option) || option<0. || option>5.){packet.error=2022;return;}
             bool ok=true;
             if(value==0.){state_=7;ok=editor_seek(editor_time_);}
@@ -1103,7 +1415,7 @@ public:
             else if(value==6. || value==7.){
                 if(option!=0.){packet.error=2022;return;}
                 state_=7;ok=editor_seek(editor_time_);mouse_valid_=left_down_=false;grab_depth_=0.;timeline_drag_.cancel();
-                if(ok && value==6.){double view[7]{};plan_.camera_world(editor_time_,view);std::copy(view,view+6,plan_.editor_camera);snapped_view_=true;ok=(photo_mode_?photo_snap(view):editor_fov(view[6]) && pose(camera_,view,view+3)) && highlight(-1) && camera_guides();}
+                if(ok && value==6.){double view[7]{};scene_camera_world(editor_time_,view);std::copy(view,view+6,plan_.editor_camera);snapped_view_=true;ok=(photo_mode_?photo_snap(view):editor_fov(view[6]) && pose(camera_,view,view+3)) && highlight(-1) && camera_guides();}
                 else if(ok){if(photo_mode_ && !photo_read()){packet.error=2008;return;}const int index=plan_.capture_editor_camera(editor_time_,editor_fov_);if(index<0){packet.error=2022;return;}timeline_drag_.camera_selected=index;camera_selected_=true;editor_time_=plan_.keys[index][0];ok=editor_seek(editor_time_) && camera_guides();}
             }
             else if(option>=plan_.count){packet.error=2022;return;}
@@ -1112,11 +1424,14 @@ public:
                 else if(value==3.){const double x=c[0]+std::cos(c[4]*3.141592653589793/180.)*300.-origin_[0],y=c[1]+std::sin(c[4]*3.141592653589793/180.)*300.-origin_[1];v[0]=std::clamp(x*f[0]+y*f[1],-5000.,5000.);v[1]=std::clamp(x*r[0]+y*r[1],-5000.,5000.);v[2]=std::clamp(c[2]-140.-origin_[2],-5000.,5000.);ok=editor_place();}
             }
             if(!ok){failed_step_=step_;error_=2008;const auto e=close(2);if(e)error_=e;}
+            }
         }else if(op==72){error_=close(1);}
         else if(op!=76)poll();
         packet.error=error_;packet.state=state_;packet.actor=visual_staging_?characters_[0]:camera_;packet.component=components_[0];
         packet.position[0]=elapsed_;packet.position[1]=animation_at_;packet.position[2]=audio_at_;
         packet.step=failed_step_?failed_step_:step_;packet.sections=(timing_.animation?1U:0U)|(timing_.audio?2U:0U)|(poses_?4U:0U)|(timing_.audio_count<<8)|(effect_count_<<16);
+        if(story_paused_)packet.sections|=8U;
+        if(story_input_)packet.sections|=story_controls_.progress(story_now())<<4;
         packet.sections|=(uint32_t(timeline_drag_.camera_selected+1)&31U)<<24;
         if(music_pause_.active())packet.sections|=1U<<29;
         if(camera_selected_)packet.sections|=1U<<30;

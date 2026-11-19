@@ -79,7 +79,7 @@ class Tests(unittest.TestCase):
   local=self.objects[5];pc=self.objects[6];world=self.objects[2]
   row=N(types={(local.class_index,'PlayerController'):'ObjectProperty'})
   self.catalog.by_index[local.class_index]=object()
-  with patch.object(m,'read_values_with_references',return_value=(self.rows[4],self.catalog)),patch.object(m,'read_values_many',return_value={local.index:row}),patch.object(m,'read_object_reference',return_value=(pc,self.catalog)):
+  with patch.object(m,'read_values_with_references',side_effect=[(self.rows[self.objects[3].index],self.catalog),(self.rows[local.index],self.catalog)]):
    current=self.observer.controller(self.catalog,self.objects[3])
   self.assertEqual(self.observer._ui_controller,m.identity(pc))
   self.assertEqual(current['world'],m.identity(world))

@@ -1,6 +1,7 @@
 #pragma once
 #include "battle_parameter_frame.h"
 #include "target_pod_schema.h"
+#include "story_trial_parameter_source.h"
 #include <cstring>
 
 // Private FBattleStartParams engine binding. The containing pinned runtime
@@ -59,7 +60,13 @@ template<class Pool> struct TargetBattleParameterOps {
     bool engine_ready()const {
         return engine_profile_ready()&&leases.owns_object(session,struct_lease,structure.address);
     }
+    uint32_t parameter_offset()const {
+        const auto offset=story_trial_parameter_offset(base,root,source,structure.address);return offset?offset:48U;
+    }
+    uint64_t source_data()const{return source.address+parameter_offset();}
     bool source_profile_ready()const {
+        if(engine_profile_ready()&&owner&&allowed_source&&valid(source)&&valid(root)&&
+           allowed_source(owner,root,source)&&story_trial_parameter_offset(base,root,source,structure.address))return true;
         if(!engine_profile_ready()||!owner||!allowed_source||!valid(source)||!valid(root)||
            !allowed_source(owner,root,source)||source.address==root.address||
            local_read<uint32_t>(source.address+8)&0x30)return false;
@@ -89,7 +96,7 @@ template<class Pool> struct TargetBattleParameterOps {
     }
     bool cleanup_ready()const{return engine_ready();}
     bool destination_separate(void* destination)const {
-        return parameter_destination_separate(reinterpret_cast<uintptr_t>(destination),source.address);
+        return parameter_destination_separate(reinterpret_cast<uintptr_t>(destination),source.address,parameter_offset());
     }
     ParameterCall initialize(void* destination)const {
         if(!destination_separate(destination)||!preflight())return ParameterCall::NotDispatched;
@@ -100,7 +107,7 @@ template<class Pool> struct TargetBattleParameterOps {
     ParameterCall copy(void* destination)const {
         if(!destination_separate(destination)||!preflight())return ParameterCall::NotDispatched;
         reinterpret_cast<void(__fastcall*)(void*,void*,const void*,int)>(base+parameter_engine_entries[1].rva)(
-            reinterpret_cast<void*>(structure.address),destination,reinterpret_cast<const void*>(source.address+48),1);
+            reinterpret_cast<void*>(structure.address),destination,reinterpret_cast<const void*>(source_data()),1);
         return ParameterCall::Completed;
     }
     ParameterCall destroy(void* destination)const {

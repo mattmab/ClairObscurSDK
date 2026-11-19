@@ -7,6 +7,15 @@ struct Ops{
     bool fresh_battle_quiescent(bool& value){++reads;value=idle;return observed;}
 };
 int main(){
+    {Ops o;o.observed=false;
+     assert(!helper_requires_battle_quiescence(true,true,false));
+     assert(helper_retirement_gate(o,true,helper_requires_battle_quiescence(true,true,false))==0&&o.reads==0);
+     assert(helper_requires_battle_quiescence(true,false,false));
+     assert(helper_retirement_gate(o,true,helper_requires_battle_quiescence(true,false,false))==407);
+     assert(helper_requires_battle_quiescence(true,true,true));
+     assert(helper_retirement_gate(o,true,helper_requires_battle_quiescence(true,true,true))==407);
+     assert(helper_requires_battle_quiescence(false,true,true));
+     assert(!helper_requires_battle_quiescence(false,false,false));}
     {Ops o;assert(helper_retirement_gate(o,true,true)==0&&o.reads==1);}
     {Ops o;o.idle=false;for(unsigned i=0;i<10;++i)assert(helper_retirement_gate(o,true,true)==407);assert(o.reads==10);o.idle=true;assert(helper_retirement_gate(o,true,true)==0);}
     {Ops o;o.observed=false;assert(helper_retirement_gate(o,true,true)==407);}

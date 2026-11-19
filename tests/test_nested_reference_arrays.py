@@ -52,6 +52,19 @@ class NestedReferenceArrayTests(unittest.TestCase):
         for kind,items in (('IntProperty',[True]),('ByteProperty',[256]),('UInt16Property',[-1]),
                            ('FloatProperty',[False]),('NameProperty',[None]),('BoolProperty',[1])):
             with self.assertRaises(ValueError):self.decode(self.row(items=items,kind=kind))
+    def test_blueprint_defined_struct_array_uses_reflected_metaclass_inheritance(self):
+        from dataclasses import replace
+        from types import SimpleNamespace
+        index=self.fixture.reference['index'];by_index=dict(self.catalog.by_index)
+        by_index[index]=replace(by_index[index],class_name='UserDefinedStruct',class_index=91)
+        self.catalog=SimpleNamespace(by_index=by_index,classes={91:SimpleNamespace(name='UserDefinedStruct'),
+            90:SimpleNamespace(name='ScriptStruct')},ancestors=lambda index:(91,90))
+        row=self.row(items=[self.fixture.struct([])],kind='StructProperty')
+        row['inner_struct']={'$reference':self.fixture.reference}
+        self.assertEqual(self.decode(row).items[0].type_object,by_index[index])
+        self.catalog.classes[90]=SimpleNamespace(name='Object')
+        with self.assertRaisesRegex(ValueError,'not a ScriptStruct'):self.decode(row)
+
     def test_reference_closure_walk_accepts_array_wrapped_typed_depth(self):
         from expedition33.values import _missing_references
         value=self.fixture.struct([dict(name='Value',type='IntProperty',value=24000)])

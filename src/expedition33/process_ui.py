@@ -221,7 +221,7 @@ class ProcessUI:
         from ._reader import ReadBatch
         self._reader_factory=reader_factory or (lambda pid:ReadBatch(pid,share=True))
         self._read_worker=None
-        self.shell=self.entry=self.context=None;self.failed=False;self.phase='inactive';self._shell_key=None
+        self.shell=self.entry=self.context=None;self.observed_context=None;self.failed=False;self.phase='inactive';self._shell_key=None
         self._entry_context=None
         self._rebuild_requested=False
         self._pending_reason=None
@@ -275,16 +275,46 @@ class ProcessUI:
 
     def observe(self,packet):
         """Copied scheduling only; actual handoff independently proves context."""
+        # Detached widget construction services title IO at acknowledged yield
+        # boundaries. If that construction belongs to this frontend itself,
+        # leave its current observation in charge instead of rebinding it.
+        if getattr(self,'_observing',False):return False
+        self._observing=True
+        try:return self._observe_owned(packet)
+        finally:self._observing=False
+
+    def _observe_owned(self,packet):
         context=(getattr(packet,'ui_context',None) or getattr(packet,'prewarm_context',None)) if packet is not None else None
         if context is not None:
             from ._reader import active_reader
             if active_reader() is None:
+                if getattr(getattr(self,'_read_worker',None),'_token',None) is not None:
+                    # Loading preparers may be borrowing our cached reader.
+                    # Their yield suspends it, so use a separate scoped worker
+                    # rather than rebinding the still-owned cached worker.
+                    from ._reader import shared_operation
+                    with shared_operation(self.session.pid):return self._observe(packet)
                 with self._read_operation():return self._observe(packet)
         return self._observe(packet)
 
     def _observe(self,packet):
         context=getattr(packet,'ui_context',None) if packet is not None else None
         prewarm=getattr(packet,'prewarm_context',None) if packet is not None else None
+        # Scheduling observation is distinct from the last attached frontend.
+        # An independent, self-validating consumer must still see title return
+        # when the optional shared frontend is held on an ownership proof.
+        self.observed_context=context or prewarm
+        # The new-save choice is part of the authored start flow. Service it
+        # before optional editor/menu warmup can occupy this owner thread.
+        stories=getattr(self.session,'_new_game_stories',None)
+        if stories is not None:stories.poll()
+        save_labels=getattr(self.session,'_save_story_ui',None)
+        if save_labels is not None:save_labels.poll(context or prewarm)
+        # A read-only label discovery failure closes the shared reader. End
+        # this observation so its owner can replace that reader next tick.
+        from ._reader import active_reader
+        label_reader=active_reader()
+        if label_reader is not None and label_reader._closed:return False
         request=getattr(self,'_travel_recovery',None)
         if request is not None and getattr(request,'state',None)=='traveling':
             # Arrival is pure observation, serviced even after the old world
@@ -306,6 +336,14 @@ class ProcessUI:
                 if self.shell is not None:self.shell.ready=None
                 if self.entry is not None:self.entry.ready=None
                 self.phase='travel_pending';return False
+        destination=prewarm if prewarm is not None and prewarm.kind=='world' else context
+        priority=getattr(self.session,'_priority_world_preparation',None)
+        if (destination is not None and destination.kind=='world' and priority is not None
+                and priority.defer_world_ui(destination)):
+            # Keep the old title/input ownership ACK barrier, but don't make
+            # critical map preparation wait for detached editor/pause repaint.
+            if not self.quiesce():return False
+            self.phase='world_preparation';return True
         if prewarm is not None and prewarm.kind=='world':
             if self.shell is None:return self.poll(prewarm,_prepare_only=True)
             # Build/rebind detached widgets while the loading screen still owns

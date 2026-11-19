@@ -52,13 +52,13 @@ inline bool valid_request(const Packet& p) {
     }
     if (p.registration || !p.duration_ms || p.duration_ms > 300000 || !p.limit || p.limit > 1000 ||
         validate_call_packet(p.schema) || p.schema.object_count ||
-        (!(p.schema.function_flags & 0x400) && !blueprint_damage_schema(p.schema)) || !p.schema.entry_rva || p.schema.entry_rva >= 166776832 ||
+        (!(p.schema.function_flags & 0x400) && !blueprint_observer_schema(p.schema)) || !p.schema.entry_rva || p.schema.entry_rva >= 166776832 ||
         !wire_zero(p.schema.data, sizeof(p.schema.data))) return false;
     if (p.filtered) {
         if (p.filter.index < 0 || p.filter.serial < 0 || p.filter.address < 0x10000 || (p.filter.address & 7)) return false;
     } else if (p.filter.index != -1 || p.filter.serial || p.filter.address) return false;
     for (uint32_t i = 0; i < p.schema.field_count; ++i)
-        if (p.schema.fields[i].kind > CallDouble && !blueprint_damage_schema(p.schema)) return false;
+        if (p.schema.fields[i].kind > CallDouble && !blueprint_observer_schema(p.schema)) return false;
     return true;
 }
 }

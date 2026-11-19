@@ -1,11 +1,13 @@
 #pragma once
 #include "scheduling_protocol.h"
+#include "module_snapshot_read.h"
 
 // Included by the fingerprint-validating research probe. Only a fixed ping can
 // execute; target PID/TID come from validated runtime discovery, not CLI input.
 inline bool ping_module_loaded(DWORD pid) {
-    Handle snapshot(CreateToolhelp32Snapshot(TH32CS_SNAPMODULE | TH32CS_SNAPMODULE32, pid));
-    require(snapshot.value != INVALID_HANDLE_VALUE, "PING_MODULE_SNAPSHOT_FAILED");
+    const auto module_snapshot = read_module_snapshot(pid);
+    Handle snapshot(module_snapshot.handle);
+    require(snapshot.value != INVALID_HANDLE_VALUE, module_snapshot_failure("PING_MODULE_SNAPSHOT_FAILED", module_snapshot));
     MODULEENTRY32W row{}; row.dwSize = sizeof(row);
     for (BOOL next = Module32FirstW(snapshot.value, &row); next; next = Module32NextW(snapshot.value, &row))
         if (_wcsicmp(row.szModule, L"scheduling_hook.dll") == 0) return true;

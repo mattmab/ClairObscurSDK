@@ -115,9 +115,9 @@ def validate_entry(name,data,*,runtime_bytecode=False):
         raise ValueError('Excluded local content in release input')
 
 
-def audit(path):
+def audit(path, *, unpacked_stdlib=False):
     count=0
-    def scan(archive,runtime_bytecode=False):
+    def scan(archive,runtime_bytecode=False,outer=False):
         nonlocal count
         if archive.testzip() is not None:raise ValueError('Corrupt archive')
         seen=set()
@@ -126,11 +126,12 @@ def audit(path):
             name=entry.filename.replace('\\','/')
             if name.casefold() in seen:raise ValueError('Duplicate archive path: '+name)
             seen.add(name.casefold());data=archive.read(entry)
-            validate_entry(name,data,runtime_bytecode=runtime_bytecode);count+=1
+            reviewed_stdlib = outer and unpacked_stdlib and name.startswith('SDK/runtime/Lib/')
+            validate_entry(name,data,runtime_bytecode=runtime_bytecode or reviewed_stdlib);count+=1
             if name.casefold().endswith(('.sdkmod','.zip')):
                 with zipfile.ZipFile(io.BytesIO(data)) as nested:
                     scan(nested,name=='SDK/runtime/python313.zip')
-    with zipfile.ZipFile(path) as archive:scan(archive)
+    with zipfile.ZipFile(path) as archive:scan(archive,outer=True)
     return count
 
 

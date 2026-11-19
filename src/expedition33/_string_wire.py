@@ -16,7 +16,7 @@ assert SIZE == 91800
 
 
 def audited_signature(entry, flags, size, extent, returned, parameters):
-    """Only the two exact audited native signatures use FString transport."""
+    """Only exact audited native signatures and the save path helper use FString transport."""
     shape = tuple((p.name, p.kind, p.offset, p.width, p.dimension, p.flags,
                    getattr(p.constraint, 'name', None)) for p in parameters)
     if (entry, flags, size, extent, returned) == (0x320b2d0, 0x4020403, 16, 16, 65535):
@@ -26,6 +26,27 @@ def audited_signature(entry, flags, size, extent, returned, parameters):
             ('WorldContextObject', 'ObjectProperty', 0, 8, 1, 0x18001000000280, 'Object'),
             ('Filename', 'StrProperty', 8, 16, 1, 0x18000000000280, None),
             ('ReturnValue', 'ObjectProperty', 24, 8, 1, 0x18001000000780, 'Texture2D'))
+    if (entry, flags, size, extent, returned) == (0x13937a0,474218496,32,56,16):
+        return shape == (
+            ('SaveName','StrProperty',0,16,1,2251799813685908,None),
+            ('ReturnValue','StrProperty',16,16,1,2251799813687168,None))
+    slot = ('SlotName', 'StrProperty', 0, 16, 1, 0x18000000000280, None)
+    user = ('UserIndex', 'IntProperty', 16, 4, 1, 0x18001040000282, None)
+    if (entry, flags, size, extent, returned) == (0x373c5c0, 0x4022403, 32, 32, 24):
+        return shape == (slot,user,('ReturnValue','ObjectProperty',24,8,1,0x18001000000780,'SaveGame'))
+    if (entry, flags, size, extent, returned) == (0x3740310, 0x4022403, 29, 32, 28):
+        return shape == (
+            ('SaveGameObject','ObjectProperty',0,8,1,0x18001000000280,'SaveGame'),
+            ('SlotName','StrProperty',8,16,1,0x18000000000280,None),
+            ('UserIndex','IntProperty',24,4,1,0x18001040000282,None),
+            ('ReturnValue','BoolProperty',28,1,1,0x18001040000780,None))
+    timer = (
+        ('Object', 'ObjectProperty', 0, 8, 1, 0x18001000000280, 'Object'),
+        ('FunctionName', 'StrProperty', 8, 16, 1, 0x18000000000280, None))
+    if (entry, flags, size, extent, returned) == (0x3858580, 0x4022403, 24, 24, 65535):
+        return shape == timer
+    if (entry, flags, size, extent, returned) == (0x3858fc0, 0x14022403, 25, 32, 24):
+        return shape == timer + (('ReturnValue', 'BoolProperty', 24, 1, 1, 0x18001040000780, None),)
     return False
 
 

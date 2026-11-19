@@ -54,6 +54,14 @@ int main(){
     {BattleParameterFrame f;PolicyOps p;assert(!f.apply_policy(p));assert(p.calls==0);}
     {BattleParameterFrame f;Ops o;assert(f.initialize_copy(o));assert(f.close(o));PolicyOps p;assert(!f.apply_policy(p));assert(p.calls==0);}
     {const uint64_t source=0x1000;
+     // Blueprint defaults store their audited struct after actor properties.
+     assert(!parameter_destination_separate(source+512,source,512));
+     assert(!parameter_destination_separate(source+504,source,512));
+     assert(!parameter_destination_separate(source+848,source,512));
+     assert(parameter_destination_separate(source+856,source,512));
+     assert(parameter_destination_separate(source+168,source,512));
+     assert(!parameter_destination_separate(0x2000,source,40));
+     assert(!parameter_destination_separate(0x2000,source,65536));
      assert(!parameter_destination_separate(0,source));
      assert(!parameter_destination_separate(source+48,source));
      assert(!parameter_destination_separate(source+40,source));

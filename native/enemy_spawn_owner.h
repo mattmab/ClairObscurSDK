@@ -33,8 +33,15 @@
 #include "retired_owned_actor.h"
 #include "npc_listener_observation.h"
 #include "timeline_blueprint_reveal.h"
+#include "story_streaming_radius.h"
+#include "story_world_configuration.h"
+#include "story_streaming_source_staging.h"
 #ifdef E33_TIMELINE_BLUEPRINT_SESSION
 #include "timeline_blueprint_profiles.h"
+#include "story_npc_configuration.h"
+#include "story_npc_finalize.h"
+#include "story_speaker_configuration.h"
+#include "story_npc_config_profiles.h"
 #endif
 #pragma warning(push)
 #pragma warning(disable:4324)
@@ -48,6 +55,12 @@ using namespace e33_mesh;
 #endif
 class Owner {
     e33_timeline_blueprint::RevealJournal timeline_reveal_{};
+    e33_story_npc::Journal story_npc_{};
+    e33_story_npc_finalize::Journal story_finalize_{};
+    bool story_speaker_named_=false;
+    e33_story_streaming::Journal streaming_radius_{};
+    e33_story_world::Journal story_world_configuration_{};
+    e33_story_source_staging::Journal story_streaming_staging_{};
     bool timeline_class(uint64_t b)const{
 #ifdef E33_TIMELINE_BLUEPRINT_SESSION
         if(!ids_[4].address||!call_identity(b,ids_[4])||!call_is_class(b,ids_[4].address))return false;
@@ -149,6 +162,7 @@ class Owner {
 #include "enemy_helper_retirement.inl"
 #include "enemy_authored_encounter.inl"
 #include "enemy_trigger_anchor.inl"
+#include "story_streaming_source_staging_owner.inl"
 public:
     explicit Owner(bool arena_staging=false,bool timeline_only=false):arena_staging_(arena_staging),timeline_only_(timeline_only){}
     template<class Pool> bool proves_viewport_camera(uint64_t b,const CallIdentity& player,const CallIdentity& camera,uint64_t session,Pool& pool)const{
@@ -159,6 +173,30 @@ public:
         auto outer=player.address;
         for(unsigned i=0;outer && i<32;++i,outer=local_read<uint64_t>(outer+32))if(outer==ids_[2].address)return true;
         return false;
+    }
+#include "story_npc_configuration_owner.inl"
+#include "story_speaker_configuration_owner.inl"
+#include "story_npc_finalize_owner.inl"
+    void quarantine_story_finalize(e33_story_npc_finalize::Packet& p){
+        story_finalize_.attempted=true;p.error=e33_story_npc_finalize::uncertain;p.state=0;
+        p.completed=story_finalize_.completed;p.attempted=story_finalize_.steps_attempted;
+    }
+#ifdef E33_TIMELINE_BLUEPRINT_SESSION
+#include "story_streaming_radius_owner.inl"
+#include "story_world_configuration_owner.inl"
+    void quarantine_streaming_radius(){streaming_radius_.attempted=true;}
+#endif
+    template<class Pool> bool proves_story_participant(uint64_t b,uint64_t session,Pool& pool,uint64_t owner,const CallIdentity& actor){
+        // Presentation-only carriers are configured owned speakers, deliberately
+        // never activated as interactable NPCs. Participant registration still
+        // proves the active dialogue and exact current world in its dispatcher.
+        return proves_story_resource(b,session,pool,owner,actor);
+    }
+    template<class Pool> bool proves_story_resource(uint64_t b,uint64_t session,Pool& pool,uint64_t owner,const CallIdentity& actor){
+        return timeline_only_&&story_npc_.configured&&owner_==owner&&lease_&&current(b)&&
+            construction_.phase==e33_owned_actor::ConstructionPhase::Complete&&
+            !std::memcmp(&actor,&actor_,sizeof(actor))&&call_identity(b,actor)&&pool.owns_object(session,lease_,actor.address)&&
+            named(b,local_read<uint64_t>(actor.address+16),"BP_NPC_Dialogue_Empty_FacelessBoyFinale_C","/Game/Characters/NPCs/Lumiere/DialogueNPCs/WalkToHarbour/BP_NPC_Dialogue_Empty_FacelessBoyFinale");
     }
     bool has_work()const{return owner_||lease_;}
     bool is_trigger_anchor()const{return trigger_anchor_;}
@@ -317,7 +355,8 @@ public:
         // Its retained arena therefore needs the same independent entry journal
         // as a visual helper. Ordinary overlap-started enemies are unchanged.
         const auto helper_gate=helper_retirement_gate(helper_retirement,owner_||lease_,
-            actor_valid&&(visual_class(b)||helper_entry_.phase()!=HelperEntryPhase::Empty));
+            actor_valid&&helper_requires_battle_quiescence(visual_class(b),timeline_only_,
+                helper_entry_.phase()!=HelperEntryPhase::Empty));
         if(helper_gate)return helper_gate;
         struct RetirementOps{
             uint64_t base,actor;
@@ -351,7 +390,7 @@ public:
         arena_ground_attempted_=arena_grounded_=false;arena_ground_journal_={};
         arena_ground_frame_function_={};arena_ground_rotation_function_={};
         for(auto& placement:combat_placements_)placement={};
-        owner_=0;attempted_=false;initialized_=false;placement_attempted_=false;arena_binding_state_={};arena_binding_={};extra_spots_={};preparing_world_=false;grounded_=false;movement_={};movement_function_={};helper_entry_={};encounter_override_={};encounter_table_={};construction_={};timeline_reveal_={};return 0;
+        owner_=0;attempted_=false;initialized_=false;placement_attempted_=false;arena_binding_state_={};arena_binding_={};extra_spots_={};preparing_world_=false;grounded_=false;movement_={};movement_function_={};helper_entry_={};encounter_override_={};encounter_table_={};construction_={};timeline_reveal_={};story_npc_={};story_speaker_named_=false;streaming_radius_={};story_finalize_={};story_world_configuration_={};story_streaming_staging_={};return 0;
     }
     template<class Pool> void command(uint64_t b,uint64_t session,Pool& pool,MeshPacket& p){
         auto* raw=reinterpret_cast<uint8_t*>(&p);
@@ -801,6 +840,14 @@ public:
                 return true;
             }
             if((!preparing_visual&&!hold_prepared(b))||!hide_prepared(b)){p.error=2970;return false;}
+            if(timeline_only_&&named(b,ids_[4].address,"BP_WP_StreamingSourceComponent_C",
+                    "/Game/Gameplay/GameplayElement/Content/StreamingSource/BP_WP_StreamingSourceComponent")){
+                // The original component starts enabled with radius 50,000.
+                // Suppress only this instance before returning to the game
+                // loop; Python configures its radius then explicitly enables.
+                p.error=stage_story_streaming_source(b,session,pool);
+                if(p.error)return false;
+            }
             if(arena_staging_){
                 // Only this disposable instance is affected. Do this in the
                 // same game-thread transaction, before a streaming update.

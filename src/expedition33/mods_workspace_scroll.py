@@ -413,7 +413,7 @@ class ScrollWorkspacePanel(ModsWorkspacePanel):
     BATCH_CONSTRUCTION = True
     EXTRA_NAMES = ModsWorkspacePanel.EXTRA_NAMES + ('ScrollBox','SizeBox','PanelWidget','ContentWidget',
         'AddChild','SetContent','SetHeightOverride','SetWidthOverride','GetScrollOffset','SetScrollOffset',
-        'SetZOrder','SetAlwaysShowScrollbar','SetWheelScrollMultiplier','Slider','GetValue','SetValue','SetStepSize')
+        'SetZOrder','SetAlwaysShowScrollbar','SetWheelScrollMultiplier','Slider','GetValue','SetValue','SetStepSize','SetRenderOpacity')
 
     def __init__(self, session, **options):
         OwnedMenuPanel.__init__(self, session, controls=64, **options)
@@ -438,14 +438,67 @@ class ScrollWorkspacePanel(ModsWorkspacePanel):
     @contextmanager
     def paint_batch(self):
         # Geometry entries are tentative until every queued setter is ACKed.
+        outer=getattr(self,'_paint_queue',None) is None
+        if outer:
+            self._paint_baseline=dict(getattr(self,'_visual_set_cache',{}))
+            self._paint_visual_calls={}
         try:
             with super().paint_batch():
                 yield
+                # Theme and view geometry can set the same visual property
+                # during one paint. Only the final value is presented; avoid
+                # dispatching intermediate theme scales/colors to the engine.
+                queue=getattr(self,'_paint_queue',None)
+                if queue is not None:
+                    latest={}
+                    names={'SetPosition','SetSize','SetRenderScale','SetRenderOpacity',
+                        'SetColorAndOpacity','SetBackgroundColor','SetBrushColor'}
+                    def key(call):
+                        plan=call._plan
+                        return (plan.target.index,plan.target.serial,plan.target.address,
+                            plan.function.index,plan.function.serial) if plan.function.name in names else None
+                    for index,call in enumerate(queue):
+                        identity=key(call)
+                        if identity is not None:latest[identity]=index
+                    changes=getattr(self,'_paint_visual_calls',{})
+                    baseline=getattr(self,'_paint_baseline',{})
+                    def changed(call):
+                        row=changes.get(id(call))
+                        return row is None or baseline.get(row[0])!=row[1]
+                    queue[:]=[call for index,call in enumerate(queue) if key(call) is None or
+                        latest[key(call)]==index and changed(call)]
         except BaseException:
             self._scaled_geometry.clear()
             self._slot_geometry.clear()
             self._readiness_visible = None
+            self._graph_set_cache={}
+            self._visual_set_cache={}
             raise
+        finally:
+            if outer:
+                self._paint_visual_calls={};self._paint_baseline={}
+
+    def _render_call(self,obj,owner,name,**arguments):
+        # Both the ordinary workspace and mod skins mutate the same owned
+        # widgets. One shared cache avoids restoring identical styles on every
+        # route change. Scroll offsets/focus remain live, uncached operations.
+        from ._ui_batch import setter_available
+        session=getattr(getattr(self,'scope',None),'_session',None)
+        cacheable=(session is not None and setter_available(session,name) or
+            name in ('SetHeightOverride','SetWidthOverride','SetAlwaysShowScrollbar'))
+        cache=getattr(self,'_visual_set_cache',None)
+        if cache is None:cache=self._visual_set_cache={}
+        key=(obj.index,obj.serial,obj.address,owner,name) if cacheable else None
+        value=repr(arguments)
+        if key is not None and cache.get(key)==value:return
+        queue=getattr(self,'_paint_queue',None)
+        before=len(queue) if queue is not None else 0
+        result=super()._render_call(obj,owner,name,**arguments)
+        if key is not None and queue is not None and len(queue)>before:
+            changes=getattr(self,'_paint_visual_calls',None)
+            if changes is not None:changes[id(queue[-1])]=(key,value)
+        if key is not None:cache[key]=value
+        return result
 
     def set_readiness_visible(self, show):
         if self._readiness_visible == show:
@@ -464,7 +517,8 @@ class ScrollWorkspacePanel(ModsWorkspacePanel):
         # Visibility/enabled setters have no outputs or read dependencies.
         # Keep them in the acknowledged paint batch; focus and unsupported
         # ScrollBox/SizeBox setters still use their ordinary direct calls.
-        if name in ('SetVisibility','SetIsEnabled') and self._paint_queue is not None:
+        from ._ui_batch import setter_available
+        if self._paint_queue is not None and setter_available(self.scope._session,name):
             return self._render_call(obj,owner,name,**args)
         queue, self._paint_queue = self._paint_queue, None
         try: return self._render_call(obj, owner, name, **args)
@@ -728,12 +782,12 @@ class ScrollWorkspacePanel(ModsWorkspacePanel):
 
     @measure_method('widget.appearance_total')
     def paint_appearance(self,theme,text_scale):
-        appearance = (theme, text_scale/TEXT_DEFAULT)
-        if self.appearance != appearance:
-            # The base theme pass also sets label scales; restore each bounded
-            # geometry after that pass even if only the theme changed.
-            self._scaled_geometry.clear()
-        ModsWorkspacePanel.paint_appearance(self,theme,text_scale/TEXT_DEFAULT)
+        # This renderer computes the final bounded font geometry below. The
+        # base pass's intermediate scales were immediately overwritten, making
+        # graph transitions prepare hundreds of unnecessary calls.
+        labels=self.scaled_labels;self.scaled_labels=()
+        try:ModsWorkspacePanel.paint_appearance(self,theme,text_scale/TEXT_DEFAULT)
+        finally:self.scaled_labels=labels
         if self.slider_scale!=text_scale:
             self.direct(self.slider,'Slider','SetValue',InValue=(text_scale-TEXT_MIN)/(TEXT_MAX-TEXT_MIN))
             self.slider_scale=text_scale
@@ -745,7 +799,9 @@ class ScrollWorkspacePanel(ModsWorkspacePanel):
             line_height=84 if label.index in getattr(self,'multiline_labels',()) else 56
             scale=min(base*(48/36)*text_scale, max(.25,height/line_height))
             geometry = (slot, width, height, scale)
-            if self._scaled_geometry.get(label.index) == geometry:
+            actual=getattr(self,'_visual_set_cache',{}).get((label.index,label.serial,label.address,'Widget','SetRenderScale'))
+            expected=repr(dict(Scale={'X':scale,'Y':scale}))
+            if self._scaled_geometry.get(label.index) == geometry and actual==expected:
                 continue
             self._render_call(label,'Widget','SetRenderScale',Scale={'X':scale,'Y':scale})
             self._render_call(slot,'CanvasPanelSlot','SetSize',InSize={'X':width/scale,'Y':height/scale})
@@ -861,6 +917,21 @@ class ScrollWorkspaceMenu(ModsWorkspaceMenu):
         return super()._close()
 
     def _paint_frame(self):
+        custom=getattr(self.view,'paint_workspace',None)
+        if callable(custom) and custom(self):return
+        story_skin=bool(getattr(self.view,'keep_workspace_skin',False))
+        if getattr(self.panel,'_graph_active',False) is True and (not story_skin or getattr(self.panel,'_story_layout_mode',None)!='standard'):
+            self.panel._graph_active=False;self.panel.layout_mode=None;self.panel.appearance=None;self.panel._graph_set_cache={};self._button_colors.clear()
+            story_skin=bool(getattr(self.view,'keep_workspace_skin',False))
+            for widget in (() if story_skin else getattr(self.panel,'_story_chrome_hidden',{}).values()):
+                self.panel.direct(widget,'Widget','SetRenderOpacity',InOpacity=1.)
+            if not story_skin:
+                self.panel._story_chrome_hidden={};self.panel._graph_set_cache={}
+            self.panel.direct(self.panel.scroll,'ScrollBox','SetAlwaysShowScrollbar',NewAlwaysShowScrollbar=True)
+            for image in getattr(self.panel,'story_art_images',()):self.panel.direct(image,'Widget','SetVisibility',InVisibility=self.panel.collapsed)
+            for image in (() if story_skin else getattr(self.panel,'story_skin_images',())):self.panel.direct(image,'Widget','SetVisibility',InVisibility=self.panel.collapsed)
+            skin_back=getattr(self.panel,'story_skin_back',None)
+            if skin_back is not None and not story_skin:self.panel.direct(skin_back,'Widget','SetVisibility',InVisibility=self.panel.collapsed)
         screen=self.view.screen if isinstance(self.view,ScrollWorkspaceView) else 'editor'
         if len(self.frame.controls)<CONTROL_COUNT:self.frame=replace(self.frame,controls=expand_controls(self.frame.controls))
         self.panel.layout(self.view)
@@ -930,7 +1001,7 @@ class ScrollWorkspaceMenu(ModsWorkspaceMenu):
                 font=36*min(.53*(48/36)*scale,max(.25,h/(84 if self.panel.labels[i].index in self.panel.multiline_labels else 56)))
                 limit=max(4,int(w/(font*.50)))
             else:limit=38
-            if screen.startswith('scene') and i in {row_token(r) for r in range(8)}:
+            if (screen.startswith('scene') or getattr(self.view,'multiline_rows',False)) and i in {row_token(r) for r in range(8)}:
                 lines=[part for paragraph in label.splitlines() for part in textwrap.wrap(paragraph,width=limit)]
                 label='\n'.join(lines[:2])
                 if len(lines)>2:label=label.rstrip()+'\u2026'

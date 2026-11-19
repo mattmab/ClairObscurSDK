@@ -17,7 +17,7 @@ class FrontendRejection:
 def known_rejection(error):
     from .menu import MenuError
     if (isinstance(error,MenuError) and error.outcome=='returned'
-            and error.native_error in (901,90220) and error.active is False):
+            and error.native_error in (901,90205,90220) and error.active is False):
         return FrontendRejection('MenuFocusUnavailable',error.native_error,'returned')
     if isinstance(error,UnstableUIIdentity):
         return FrontendRejection('UnstableUIIdentity',0,'not_dispatched',role=error.role)

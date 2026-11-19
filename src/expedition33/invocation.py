@@ -89,7 +89,7 @@ def decode_result(plan, reply, catalog, *, texts=()):
                         raise ValueError('Invalid native text result storage')
                     item = text_values[field_index]
                 elif parameter.kind == 'NameProperty':
-                    if plan.wire_version != 8 or not parameter.input or any(reply.data[at:at+8]):
+                    if plan.wire_version not in (4,8,12) or not parameter.input or any(reply.data[at:at+8]):
                         raise ValueError('Unsupported or changed FName result storage')
                     item = dict(plan.texts)[parameter.name]
                 elif parameter.kind == 'StructProperty':
@@ -240,7 +240,10 @@ def _parameter_schema(catalog, function, descriptor, *, pod_values=False, text_v
             type(returned) is not int or not (returned == 65535 or 0 <= returned < size)):
         raise ValueError('Invalid parameter size, extent or return offset')
     parameters, occupied, names, pod_descriptors = [], set(), set(), {}
+    inherited={owner['index'] for owner in descriptor.owners[1:]}
     for row in descriptor.properties:
+        if row['owner_index'] in inherited:
+            continue  # Override descriptors include the superclass function's separate frame.
         if not row['flags'] & PARM:
             continue  # Function locals are initialized by the engine dispatcher.
         name, kind = row['name'], row['type']
@@ -296,8 +299,10 @@ def _parameter_schema(catalog, function, descriptor, *, pod_values=False, text_v
                 if profile.path==_pod_values.BINDING_ID and dimension!=1:
                     raise UnsupportedInvocation('Binding IDs require scalar values')
             if kind == 'StrProperty' and string_values:
-                if dimension != 1 or row['flags'] != 0x18000000000280:
-                    raise UnsupportedInvocation('FString currently requires scalar by-value input')
+                save_path=(int(info['entry_rva'],16),info['flags'],size,extent,returned)==(0x13937a0,474218496,32,56,16)
+                path_field=save_path and (name,offset,row['flags']) in (('SaveName',0,2251799813685908),('ReturnValue',16,2251799813687168))
+                if dimension != 1 or not (row['flags']==0x18000000000280 or path_field):
+                    raise UnsupportedInvocation('FString requires an audited input or save-path return')
                 expected = 16
             if kind == 'TextProperty' and text_values:
                 if dimension != 1:

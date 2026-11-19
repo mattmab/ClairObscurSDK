@@ -7,6 +7,19 @@ from expedition33.tracing import prepare_trace, decode_trace, ObservedObject
 
 
 class BlueprintTraceTests(TestCase):
+    def test_new_game_start_is_exact_zero_argument_observation_with_own_capability(self):
+        fn=NS(pid=123,index=2,class_index=3,outer_index=1,name='OnStartGameSettingsApplied')
+        owner=NS(name='WBP_MM_MainMenu_C')
+        catalog=NS(resolve=lambda _:fn,find_class=lambda _:NS(index=3),ancestors=lambda _:(3,),
+            by_index={1:owner},path_name=lambda _:'/Game/UI/Widgets/MainMenu/WBP_MM_MainMenu.WBP_MM_MainMenu_C')
+        descriptor=NS(function={'flags':0x0c000000,'entry_rva':'0x13937a0'})
+        with patch('expedition33.tracing.describe',return_value={2:descriptor}),patch('expedition33.tracing._parameter_schema',return_value=(0,32,65535,())):
+            with self.assertRaises(ValueError):prepare_trace(catalog,fn,blueprint=True)
+            p=prepare_trace(catalog,fn,new_game=True)
+            self.assertEqual(p.phase,'entry');self.assertEqual(p.capture_size,0)
+            self.assertEqual(dict(decode_trace(p,b'').arguments),{})
+            owner.name='AnotherMenu_C'
+            with self.assertRaises(ValueError):prepare_trace(catalog,fn,new_game=True)
     def plan(self, enabled=True, entry='0x13937a0', out=False):
         fn=NS(pid=123,index=2,class_index=3,outer_index=1,name='OnCharacterReceivedDamages')
         catalog=NS(resolve=lambda _:fn,find_class=lambda _:NS(index=3),ancestors=lambda _:(3,),

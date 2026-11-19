@@ -374,9 +374,10 @@ class AuthoredWorkspaceTests(unittest.TestCase):
         self.assertEqual(view.screen,'scene_authored');self.assertEqual(view.query,'SimonIntro')
         self.assertIn(selected,frame.description)
         self.assertTrue(frame.controls[56].enabled);self.assertTrue(frame.controls[57].enabled)
-        self.assertFalse(frame.controls[58].enabled)
+        self.assertTrue(frame.controls[58].enabled)
+        self.assertEqual(frame.controls[57].label,'Go to source location')
         model.queue_authored.assert_not_called();model.load_timeline_source.assert_not_called()
-        view.activate(view._revision,57)
+        view.activate(view._revision,58)
         model.load_timeline_source.assert_called_once_with(selected,editing_only=True)
 
     def test_retained_import_is_world_checked_and_deferred_release_preserved(self):

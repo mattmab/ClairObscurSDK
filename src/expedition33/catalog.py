@@ -223,8 +223,18 @@ def capture_matching(pid, *, names=(), classes=()):
         if len(set(group)) != len(group):
             raise ValueError('Duplicate catalog match selector')
     selectors = ','.join([*('n=' + s for s in names), *('c=' + s for s in classes)])
-    with ReadBatch(pid) if active_reader() is None else nullcontext():
-        start, rows = _query(['--catalog-match', str(pid), selectors])
+    borrowed = active_reader() is not None
+    for attempt in range(1 if borrowed else 2):
+        try:
+            with nullcontext() if borrowed else ReadBatch(pid):
+                start, rows = _query(['--catalog-match', str(pid), selectors])
+            break
+        except RuntimeQueryError as error:
+            # A failed worker is terminal. The owner of a shared operation
+            # must yield before another observation; never query it again.
+            # Standalone discovery may discard its own worker and observe once
+            # with a fresh reader. No selected identity or mutation is retried.
+            if borrowed or attempt or 'READ_FAILED address=' not in str(error):raise
     if start['pid'] != pid:
         raise RuntimeQueryError('Matched catalog process changed')
     catalog = _decode_catalog(start, rows)

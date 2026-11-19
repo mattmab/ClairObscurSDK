@@ -67,6 +67,14 @@ class NativeManagementTests(unittest.TestCase):
             self.menu = NativeManagementMenu(None, self.registry)
         self.menu.open()
 
+    def test_refresh_rejects_unopened_panel_before_paint_or_binding(self):
+        self.start()
+        self.menu.panel.state='built';self.menu.panel.menu=None
+        with patch.object(self.menu,'_paint') as paint, patch.object(self.menu,'_bind') as bind:
+            with self.assertRaisesRegex(ManagementError,'open native menu'):
+                self.menu.refresh()
+        paint.assert_not_called();bind.assert_not_called()
+
     def test_detached_refresh_rejects_retained_active_callbacks(self):
         self.start()
         self.menu.panel.state='built';self.menu.panel.menu=None

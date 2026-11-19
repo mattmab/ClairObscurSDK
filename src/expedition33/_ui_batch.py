@@ -14,13 +14,22 @@ LAYOUT_SETTERS = frozenset(('SetPosition', 'SetSize', 'SetAnchors', 'SetHorizont
     'SetBackgroundColor', 'SetOwningPlayer'))
 EXTENDED_LAYOUT_SETTERS = frozenset(('SetMinDimensions', 'SetIsSelectable', 'SetIsToggleable',
     'SetRenderScale', 'SetRenderTransformPivot', 'SetPadding', 'SetLayer'))
+SKIN_SETTERS = frozenset(('SetRenderOpacity', 'SetColorAndOpacity', 'SetZOrder'))
 
 def extended_layout_available(session):
-    return available(session) and getattr(session._transport, 'layout_batch_protocol', 0) in (2, 3)
+    return available(session) and getattr(session._transport, 'layout_batch_protocol', 0) in (2, 3, 4)
 
 def layout_available(session):
     version = getattr(session._transport, 'layout_batch_protocol', 0)
-    return available(session) and type(version) is int and version in (1, 2, 3)
+    return available(session) and type(version) is int and version in (1, 2, 3, 4)
+
+def setter_available(session,name):
+    if name in ('SetText','SetIsEnabled','SetVisibility'):return available(session)
+    version=getattr(session._transport,'layout_batch_protocol',0)
+    return layout_available(session) and (name in LAYOUT_SETTERS or
+        extended_layout_available(session) and name in EXTENDED_LAYOUT_SETTERS or
+        version in (3,4) and name=='SetBrushResourceObject' or
+        version==4 and name in SKIN_SETTERS)
 
 def pack_sparse(data):
     chunks, start = [], 0
@@ -194,8 +203,7 @@ def invoke_setters(scope, prepared):
         planner, session = call._check()
         plan = call._plan
         if plan.function.name not in ('SetText', 'SetIsEnabled', 'SetVisibility'):
-            allowed = (frozenset(('SetBrushResourceObject',)) if getattr(session._transport, 'layout_batch_protocol', 0) == 3 else frozenset()) | LAYOUT_SETTERS | (EXTENDED_LAYOUT_SETTERS if extended_layout_available(session) else frozenset())
-            if not layout_available(session) or plan.function.name not in allowed:
+            if not setter_available(session,plan.function.name):
                 raise ValueError('Only supported menu setters can be batched')
         if any(parameter.flags & 0x500 for parameter in plan.parameters):
             raise ValueError('UI setters cannot return outputs')

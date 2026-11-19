@@ -10,10 +10,22 @@ class PreparedAssetLoaderTests(unittest.TestCase):
         N(name='LoadAsset_Blocking',outer_index=1,index=5,serial=6,address=0x30000)]
   scope=Mock(pid=7,_session=object())
   scope.retain.side_effect=lambda obj:N(active=True,object=obj)
-  with patch('expedition33.assets.capture_matching',return_value=N(objects=rows)) as discover:
+  with patch('expedition33.assets.capture_matching',return_value=N(objects=rows)) as discover,patch('expedition33._stable_lease.acquire_stable',side_effect=lambda scope,obj:(N(active=True,object=obj),None)) as stable:
    prepared=PreparedAssetLoader(scope)
-  self.assertEqual(discover.call_count,1);self.assertEqual(scope.retain.call_count,3)
+  self.assertEqual(discover.call_count,1);self.assertEqual(stable.call_count,3);scope.retain.assert_not_called()
   return prepared,scope
+ def test_zero_generation_discovery_is_stabilized_before_retaining_selectors(self):
+  rows=[N(name='KismetSystemLibrary',class_name='Class',index=1,serial=0,address=0x10000),
+        N(name='Default__KismetSystemLibrary',class_index=1,index=3,serial=0,address=0x20000),
+        N(name='LoadAsset_Blocking',outer_index=1,index=5,serial=0,address=0x30000)]
+  scope=Mock(pid=7,_session=object())
+  def stabilize(scope,obj):
+   copied=N(**vars(obj));copied.serial=1000+obj.index
+   return N(active=True,object=copied),None
+  with patch('expedition33.assets.capture_matching',return_value=N(objects=rows)),patch('expedition33._stable_lease.acquire_stable',side_effect=stabilize):prepared=PreparedAssetLoader(scope)
+  with patch('expedition33.catalog.capture_selected') as selected:prepared.capture(scope)
+  self.assertEqual(selected.call_args.args[1],((1,1001,0x10000),(3,1003,0x20000),(5,1005,0x30000)))
+  scope.retain.assert_not_called()
  def test_each_load_observes_fresh_selected_closure(self):
   prepared,scope=self.fixture();first,second=object(),object()
   with patch('expedition33.catalog.capture_selected',side_effect=(first,second)) as selected,patch('expedition33.assets.capture_matching') as discovery:

@@ -73,6 +73,25 @@ class LoadingModPreparationTests(unittest.TestCase):
         self.assertIs(owner.take(),monitor);self.assertTrue(owner.released)
         owner.close();monitor.close.assert_not_called()
 
+    def test_map_loader_adopts_shared_asset_owner_without_closing_it(self):
+        module=self.load('WorldBuilderMapLoader');loading=importlib.import_module(module.__name__+'.loading_context')
+        session=N(pid=7,_transport=N(map_asset_preparation_protocol=1));assets=Mock(closed=False)
+        store=N(read_plan=Mock(return_value=N(assets=('/Engine/BasicShapes/Cube.Cube',))))
+        mod=N(_startup_store=store,_startup_assignments={'/Game/Test.Test':'test'})
+        owner=loading.LoadingContext(mod,session)
+        with patch('expedition33.map_runtime.prepare_metadata'),patch('expedition33.map_readiness.prepare_readiness_metadata'),patch('expedition33.map_asset_preparation.process_asset_preparation',return_value=assets) as factory:
+            owner._prepare_assets();owner._prepare_assets()
+        self.assertIs(mod._asset_preparation,assets);self.assertEqual(factory.call_count,2)
+        assets.prepare.assert_called_with(('/Engine/BasicShapes/Cube.Cube',));assets.close.assert_not_called()
+
+    def test_map_loader_never_overwrites_a_different_live_owner(self):
+        module=self.load('WorldBuilderMapLoader');loading=importlib.import_module(module.__name__+'.loading_context')
+        session=N(pid=7,_transport=N(map_asset_preparation_protocol=1));existing=Mock(closed=False);shared=Mock(closed=False)
+        mod=N(_asset_preparation=existing);owner=loading.LoadingContext(mod,session)
+        with patch('expedition33.map_runtime.prepare_metadata'),patch('expedition33.map_readiness.prepare_readiness_metadata'),patch('expedition33.map_asset_preparation.process_asset_preparation',return_value=shared):
+            with self.assertRaisesRegex(RuntimeError,'owner changed'):owner._prepare_assets()
+        self.assertIs(mod._asset_preparation,existing);existing.close.assert_not_called();shared.prepare.assert_not_called()
+
     def test_travel_entry_builds_without_polling_clicks_and_retains_pending_owner(self):
         module=self.load('MapTravel')
         loading=importlib.import_module(module.__name__+'.loading_entry')
@@ -117,6 +136,7 @@ class LoadingModPreparationTests(unittest.TestCase):
         loading=importlib.import_module(module.__name__+'.loading_ui')
         owner=loading.LoadingUI.__new__(loading.LoadingUI)
         previous=object();owner.mod=N(session=previous,help_minimized=False);owner.scope=N(pid=7)
+        owner.catalog=owner.hud=None;owner.preparation_pending=True
         catalog=Mock();hud=Mock();proofs=(Mock(),Mock());context=N(kind='world')
         with patch.object(importlib.import_module(module.__name__+'.library'),'Library'), \
              patch.object(importlib.import_module(module.__name__+'.hud'),'BuilderHUD',return_value=hud), \
@@ -135,6 +155,7 @@ class LoadingModPreparationTests(unittest.TestCase):
         parent=ReadBatch(7,share=True)
         owner=loading.LoadingUI.__new__(loading.LoadingUI)
         owner.scope=N(pid=7);owner.context=object();owner.bound=None
+        owner.preparation_pending=False
         owner.catalog=object();owner.hud=object()
         seen=[]
         owner.proofs=(N(verify=lambda *a,**kw:seen.append(_active.get())),)*2

@@ -13,15 +13,13 @@ def ident(n):return (7,n,10+n,0x1000+n)
 class PacketTests(unittest.TestCase):
     def test_world_packet_copies_gi_local_controller_identity_not_live_handles(self):
         w=N(pid=7,index=3,serial=13,address=0x1003,class_name='World')
-        pc=N(index=4);cat=N(by_index={4:pc,9:object()},outer_chain=lambda obj:(w,))
+        pc=N(index=4,class_index=9);cat=N(by_index={4:pc,9:object()},outer_chain=lambda obj:(w,),ancestors=lambda cls:(cls,))
         admission=world.Admission('world_ready','ready',(ident(3),ident(2),ident(8),0),True)
         observer=ui.UiAdmissionObserver.__new__(ui.UiAdmissionObserver)
         observer.pid=7;observer._reader=N(bind=lambda:nullcontext())
         observer._ui_controller=ident(4);observer._ui_local_player=ident(5)
         with patch.object(ui.WarmAdmissionObserver,'observe',return_value=admission), \
-                patch.object(ui,'capture_selected',return_value=cat), \
-                patch.object(ui,'read_values_many',return_value={4:N(types={(9,'PauseMenuWidget'):'ObjectProperty'})}), \
-                patch.object(ui,'read_object_reference',return_value=(N(class_name='WBP_PauseMenu_C'),cat)):
+                patch.object(ui,'capture_selected_values',return_value=(cat,{4:N(types={(9,'PauseMenuWidget'):'ObjectProperty'},values={(9,'PauseMenuWidget'):N(class_name='WBP_PauseMenu_C')},errors={},truncated=set())})):
             packet=observer.observe()
         self.assertEqual(packet.ui_context.signature,('world',ident(3),ident(2),ident(5),ident(4)))
         self.assertTrue(packet.menu_ready)

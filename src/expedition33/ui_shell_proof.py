@@ -54,13 +54,22 @@ def prepare_panel_metadata(panel):
     # to validate typed setters. Retain their exact observations without
     # granting metadata leases or admitting unrelated Blueprint functions.
     retained.extend(o for o in catalog.objects if o.class_name in ('ScriptStruct','Enum'))
-    retained.extend((panel.widget,panel.tree,panel.canvas,panel.player))
+    # A detached panel's original controller can retire between construction
+    # and metadata admission. It is not owned widget metadata. The independent
+    # graph/context proof supplies and verifies the current controller later.
+    retained.extend((panel.widget,panel.tree,panel.canvas))
     retained.extend(o for o in catalog.objects if o.class_name=='GameEngine' and not o.object_flags&0x30)
     catalog=catalog.subset(retained)
     session=panel.scope._session;owner=process_preparation(session);replacements={}
     for offset in range(0,len(candidates),CAPACITY):
         observed=owner.prepare(catalog,candidates[offset:offset+CAPACITY])
         replacements.update(observed.by_index)
+    # Retaining script metadata can give the owned root's GameInstance class
+    # a serial too. That class is outside the Script admission whitelist;
+    # rediscover its exact descriptor without acquiring it or reusing zero.
+    uncovered=tuple(o for o in catalog.objects if o.class_name=='Class' and
+                    o.serial==0 and o.index not in replacements)
+    for obj in refresh_panel_metadata(panel.scope.pid,uncovered):replacements[obj.index]=obj
     fresh=fresh_catalog_replacing(catalog,tuple(replacements.values()))
     panel._planner.close();panel.catalog=fresh
     panel._functions.clear();panel._defaults.clear()
@@ -207,7 +216,7 @@ class OwnedUiProof:
     def _current(self,context,*,preparing=False):
         try:return self._current_observation(context,preparing=preparing)
         except RuntimeQueryError as error:
-            if any(reason in str(error) for reason in ('DESCRIPTOR_IDENTITY_CHANGED','READ_FAILED',
+            if any(reason in str(error) for reason in ('DESCRIPTOR_IDENTITY_CHANGED','READ_FAILED','REFLECTION_TARGET_CHANGED','DESCRIPTOR_SET_INCOMPLETE',
                     'SELECTED_DEPENDENCY_CHANGED','MODULE_SNAPSHOT_FAILED','Object identity changed or belongs to another process',
                     'Object property reference changed during observation')):
                 raise UiProofPending('UI context changed during loading observation') from None
@@ -361,6 +370,15 @@ class OwnedUiProof:
             # admit only this exact current LocalPlayer, never another player.
             if fresh.class_name=='LocalPlayer' and identity(fresh)==context.local_player:
                 continue
+            # StoryPacks imports its background into /Engine/Transient and
+            # retains the result in this panel scope. It is a resource, not a
+            # widget child. Admit only the panel's exact retained artwork;
+            # every resource still receives the two-pass identity/lifetime proof.
+            artwork=getattr(panel,'story_art_texture',None)
+            if artwork is not None and identity(fresh)==identity(artwork) and fresh.class_name=='Texture2D':
+                chain=current.outer_chain(fresh)
+                if len(chain)==2 and chain[0].class_name=='Package' and chain[0].name=='/Engine/Transient':
+                    continue
             if fresh.index!=root.index and user_class in current.ancestors(fresh.class_index):
                 raise UiProofPreflightRejected('Nested UserWidgets require an independent context proof')
             if fresh.index!=root.index and root.index not in {o.index for o in current.outer_chain(fresh)}:

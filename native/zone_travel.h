@@ -1,6 +1,7 @@
 #pragma once
 #include "zone_travel_protocol.h"
 #include "zone_display_name.h"
+#include "blueprint_name_resolution.h"
 // Included after the reflected identity and read-only sparse-table helpers.
 inline bool zone_named(uint64_t base,uint64_t object,const char* name,const char* package) {
  if(!call_capture(base,object).address || !exact_name(base,object+24,name))return false;
@@ -58,10 +59,16 @@ inline void zone_travel(uint64_t base,ZoneTravelPacket& p) {
  for(int i=0;i<view.count;++i)if(view.active(i)) {
   const auto at=view.data+uint64_t(i)*24;if(!zone_display_name(base,at,p.level))continue;
   const auto row=local_read<uint64_t>(at+8);
-  if(!row || (row&7) || !zone_display_name(base,row,p.asset) || !zone_display_name(base,row+152,p.tag) || exact_name(base,row+152,"None")){p.error=1810;return;}
+  if(!row || (row&7) || !zone_display_name(base,row,p.asset) || (p.version==1 && !zone_display_name(base,row+152,p.tag)) || exact_name(base,row+152,"None")){p.error=1810;return;}
   key=local_read<uint64_t>(at);tag=local_read<uint64_t>(row+152);++found;
  }
  if(found!=1){p.error=1810;return;}
+ if(p.version==2) {
+  // Story portals copy only a named, existing spawn tag. The level still comes
+  // from its verified live table row; no raw caller-supplied FName IDs.
+  if(std::strncmp(p.tag,"Level.SpawnPoint.",17) || std::strlen(p.tag)>=96 ||
+     !e33_blueprint_names::resolve(base,p.tag,tag)){p.error=1815;return;}
+ }
  const auto dispatch=local_read<uint64_t>(local_read<uint64_t>(cdo)+0x268);
  if(dispatch!=base+0x1393330 && dispatch!=base+0x332bb90){p.error=1811;return;}
  // Resolve the current game's pause widget; its Resume callback broadcasts

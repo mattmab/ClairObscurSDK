@@ -2,6 +2,7 @@
 #include "target_trace_schema.h"
 #include "trace_events.h"
 #include "blueprint_trace_frame.h"
+#include "cinematic_choice_observer.h"
 
 struct TargetTraceContext {
     uint64_t base{};
@@ -39,6 +40,7 @@ inline uint32_t prepare_target_trace_context(uint64_t base, CallPacket& schema,
     __try {
         TargetTraceContext candidate{};
         if (auto error = prepare_target_trace_guarded(base, schema, candidate.plan)) return error;
+        if(candidate.plan.story_direction && !filter)return 927;
         candidate.base = base; candidate.function = schema.function;
         candidate.owner = call_capture(base, local_read<uint64_t>(schema.function.address + 0x20));
         candidate.thread = GetCurrentThreadId(); candidate.pid = GetCurrentProcessId();
@@ -70,7 +72,9 @@ inline bool target_trace_collect_body(const TargetTraceContext& context, void* o
         if (e33_trace::resolve_blueprint_entry(target_trace_read, reinterpret_cast<uint64_t>(frame),
             context.function.address, address, script, storage
 #ifdef E33_BLUEPRINT_DIRECT_SESSION
-            ,blueprint_direct_frame
+            ,blueprint_direct_frame,context.plan.count==0&&context.plan.extent==0
+#else
+            ,false,context.plan.count==0&&context.plan.extent==0
 #endif
             ) != e33_trace::FrameError::none) return false;
         e33_trace::Copy candidate{};
@@ -103,6 +107,8 @@ inline bool target_trace_collect_body(const TargetTraceContext& context, void* o
         return false;
     if (e33_trace::capture_fields(target_trace_read, storage, context.plan.fields,
         context.plan.count, context.plan.extent, copied) != e33_trace::CaptureError::none) return false;
+    if(context.plan.story_direction&&copied.size==1&&e33_cinematic_choice::owner&&e33_cinematic_choice::direction)
+        e33_cinematic_choice::direction(e33_cinematic_choice::owner,object,copied.bytes[0]);
     identity = {context.pid, observed.index, observed.serial};
     return true;
 }

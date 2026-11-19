@@ -172,6 +172,15 @@ class WorldLifecycle:
         self._polling=True
         try:
             for name,row in tuple(self.bindings.items()):
+                # A domain adapter can finish its owned resources after its
+                # first ACK (for example an acknowledged cinematic cleanup).
+                # Recheck only this local incompleteness diagnosis. Never
+                # re-enter a throwing adapter or retry an uncertain dispatch.
+                if (row.state=='unknown' and row.error=='DomainOwnersRemain' and
+                        row.domain_ack and not row.scope_close_started):
+                    self._capture(row)
+                    if all(self._scope_domain_ack(scope) for scope in row.scopes):
+                        row.state='retiring';row.error=None
                 if row.state!='retiring':continue
                 try:
                     self._capture(row)

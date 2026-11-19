@@ -58,6 +58,7 @@ static bool validate_target_enum(uint64_t base,uint64_t property,const CallIdent
 #endif
 static StrongLeasePool<> session_leases;
 static uint64_t lease_session=0;
+
 #endif
 #ifdef E33_SEQUENCER_ARRAY_SESSION
 #include "target_sequencer_array.h"
@@ -94,7 +95,7 @@ static PictoBatch session_picto_batch;
 static e33_builder::Owner session_builder;
 static e33_mesh::Owner session_mesh;
 #include "map_runtime_owner.h"
-static e33_map_runtime::Owner session_map_runtime;
+static e33_map_runtime::Owner session_map_runtimes[4];
 #ifdef E33_MAP_LOAD_GATE_SESSION
 #include "map_load_gate.h"
 static e33_map_load_gate::Owner session_map_load_gate;
@@ -532,7 +533,15 @@ static StringCallFrame session_string_frame;
 static bool string_available(void*) { return session_string_frame.available(); }
 static uint32_t string_prepare(void*) { return session_string_frame.prepare(session_string_packet) ? 0 : 765; }
 static uint32_t string_begin(void*) { return session_string_frame.begin() ? 0 : 765; }
-static uint32_t string_returned(void*) { return session_string_frame.returned(session_string_packet) ? 0 : 766; }
+struct SavePathStringOps {
+    bool read(uint64_t address,uint16_t*out,uint32_t count)const {std::memcpy(out,reinterpret_cast<const void*>(address),size_t(count)*2);return true;}
+    bool release(uint64_t address)const {
+        // Established engine allocator ABI used by retained binding queries;
+        // this is the original helper's independent FString return allocation.
+        reinterpret_cast<void(__fastcall*)(void*)>(runtime_base+0x107c7d0)(reinterpret_cast<void*>(address));return true;
+    }
+};
+static uint32_t string_returned(void*) { SavePathStringOps ops;return session_string_frame.returned_output(session_string_packet,ops) ? 0 : 766; }
 static uint32_t string_finish(void*) { return session_string_frame.state==StringFrameState::Returned ? 0 : 766; }
 static uint32_t guarded_string_invoke(const CallRetention* retention) {
     CallTextHandling handling{&session_string_packet,session_string_frame.arguments,&session_string_frame,
@@ -593,7 +602,168 @@ static bool lifetime_valid() {
         fixed_slot(runtime_base, target.object_index, target.object_serial) == target_object &&
         fixed_slot(runtime_base, target.function_index, target.function_serial) == target_function;
 }
+#if E33_RUNTIME_CINEMATIC_VERSION>=255
+#include "target_defeat_delay_override.h"
+static e33_defeat_delay::Frame session_defeat_delay;
+#endif
+#if E33_RUNTIME_CINEMATIC_VERSION>=263
+#include "target_free_aim_region.h"
+#endif
+#if E33_RUNTIME_CINEMATIC_VERSION>=267
+#include "target_native_dialogue.h"
+#if E33_RUNTIME_CINEMATIC_VERSION>=269
+#include "target_story_identity.h"
+static e33_story_identity::Dispatcher session_story_identity;
+#endif
+#if E33_RUNTIME_CINEMATIC_VERSION>=274
+#include "target_story_participants.h"
+static e33_story_participants::Dispatcher session_story_participants;
+#endif
+#if E33_RUNTIME_CINEMATIC_VERSION>=275
+#include "target_story_camera.h"
+static e33_story_camera::Dispatcher session_story_camera;
+#endif
+static e33_dialogue_text::Dispatcher session_native_dialogue;
+#if E33_RUNTIME_CINEMATIC_VERSION>=285
+#include "target_story_inworld.h"
+static e33_story_inworld::Dispatcher session_story_inworld;
+#endif
+#if E33_RUNTIME_CINEMATIC_VERSION>=286
+#include "target_story_action.h"
+static e33_story_action::Dispatcher session_story_action;
+#endif
+#if E33_RUNTIME_CINEMATIC_VERSION>=291
+#include "target_story_rich_rewrite.h"
+#include "target_story_continuation.h"
+#include "target_story_ambient_overlay.h"
+#include "story_resource_names.h"
+#include "target_story_item_definitions.h"
+#include "target_story_reward_extensions.h"
+#if E33_RUNTIME_CINEMATIC_VERSION>=300
+#include "save_list_entry_query.h"
+#include "target_story_enemy_loot.h"
+#if E33_RUNTIME_CINEMATIC_VERSION>=307
+#include "target_story_trial_tables.h"
+#if E33_RUNTIME_CINEMATIC_VERSION>=310
+#include "target_story_character_tables.h"
+#include "battle_qte.h"
+#include "initial_encounter_roster.h"
+#if E33_RUNTIME_CINEMATIC_VERSION>=311
+#include "story_party_join_data.h"
+#include "character_skills.h"
+#include "story_trial_data.h"
+#endif
+#endif
+#endif
+#include "story_sequence_range.h"
+#include "inventory_rewards.h"
+#if E33_RUNTIME_CINEMATIC_VERSION>=317
+#include "story_wardrobe.h"
+#include "story_cinematics.h"
+#endif
+#if E33_RUNTIME_CINEMATIC_VERSION>=312
+#include "character_restore.h"
+#endif
+#if E33_RUNTIME_CINEMATIC_VERSION>=313
+#include "story_layer_batch_runtime.h"
+#endif
+#endif
+static e33_story_rewrite::Dispatcher session_story_rewrite;
+static e33_story_continuation::Dispatcher session_story_continuation;
+static e33_story_ambient_overlay::Dispatcher session_story_ambient_overlay;
+static e33_story_resource_names::Dispatcher session_story_resource_names;
+static e33_story_items::Dispatcher session_story_items;
+static e33_story_rewards::Dispatcher session_story_rewards;
+#if E33_RUNTIME_CINEMATIC_VERSION>=300
+static e33_story_enemy_loot::Dispatcher session_story_enemy_loot;
+#if E33_RUNTIME_CINEMATIC_VERSION>=307
+static e33_story_trial_tables::Dispatcher session_trial_encounters,session_trial_enemies;
+#if E33_RUNTIME_CINEMATIC_VERSION>=310
+static e33_story_character_tables::Dispatcher session_character_tables[4];
+static e33_battle_qte::Dispatcher session_battle_qte;
+static e33_initial_roster::Dispatcher session_initial_roster;
+#if E33_RUNTIME_CINEMATIC_VERSION>=311
+static e33_story_party_join_data::Dispatcher session_story_party_join_data;
+static e33_character_skills::Dispatcher session_character_skills;
+static e33_story_trial_data::Dispatcher session_story_trial_data;
+#if E33_RUNTIME_CINEMATIC_VERSION>=312
+static e33_character_restore::Dispatcher session_character_restore;
+#endif
+#endif
+#endif
+#endif
+static e33_story_sequence_range::Dispatcher session_story_sequence_range;
+static e33_inventory_reward::Dispatcher session_inventory_reward;
+#if E33_RUNTIME_CINEMATIC_VERSION>=317
+static e33_story_wardrobe::Dispatcher session_story_wardrobe;
+static e33_story_cinematics::Dispatcher session_story_cinematics;
+#endif
+#endif
+#if E33_RUNTIME_CINEMATIC_VERSION>=294
+#include "story_portal.h"
+static e33_story_portal::Dispatcher session_story_portal;
+static bool portal_actor_owned(uint64_t owner,const CallIdentity&npc){
+ const auto slot=session_timeline_slots.find(owner);
+ // Registration must precede revealing interaction collision. The resource
+ // proof validates the configured, fully constructed owned carrier as well.
+ return slot>=0&&session_timeline_actors[slot].proves_story_resource(runtime_base,lease_session,session_leases,owner,npc);
+}
+#endif
+static bool admit_original_story_dialogue(uint64_t b,uint64_t s,const CallIdentity&sys,const CallIdentity&d){
+ return session_story_continuation.admits(b,s,sys,d);
+}
+#endif
+#if E33_RUNTIME_CINEMATIC_VERSION>=278
+static bool restore_story_dialogue_view(uint64_t b,uint64_t session,CallIdentity system,CallIdentity dialogue){
+    return session_story_camera.restore_view(b,session,session_leases,system,dialogue,session_native_dialogue);
+}
+#endif
+static bool guarded_native_dialogue_cleanup(){
+    __try{TargetOwnedTextOps ops{runtime_base};return session_native_dialogue.frame.cleanup(ops);}
+    __except(EXCEPTION_EXECUTE_HANDLER){session_native_dialogue.frame.state=e33_dialogue_text::State::Quarantined;return false;}
+}
+#endif
 uint32_t backend_open(SessionPacket* packet) {
+#if E33_RUNTIME_CINEMATIC_VERSION>=312
+    if(session_character_restore.active())return 4001;
+#endif
+#if E33_RUNTIME_CINEMATIC_VERSION>=311
+    if(session_story_party_join_data.active()||session_character_skills.active()||session_character_skills.unknown||session_story_trial_data.active())return 4001;
+#if E33_RUNTIME_CINEMATIC_VERSION>=317
+    if(session_story_cinematics.active()||session_story_cinematics.unknown)return 4001;
+    if(session_story_wardrobe.active()||session_story_wardrobe.unknown)return 4001;
+#endif
+#endif
+#if E33_RUNTIME_CINEMATIC_VERSION>=310
+    if(session_initial_roster.active()||session_initial_roster.unknown||session_battle_qte.active()||session_battle_qte.unknown)return 4001;
+    for(const auto& registry:session_character_tables)if(registry.active()||registry.unknown)return 4001;
+#endif
+#if E33_RUNTIME_CINEMATIC_VERSION>=307
+    if(session_trial_encounters.active()||session_trial_encounters.unknown||session_trial_enemies.active()||session_trial_enemies.unknown)return 4001;
+#endif
+#if E33_RUNTIME_CINEMATIC_VERSION>=291
+#if E33_RUNTIME_CINEMATIC_VERSION>=300
+    if(session_story_enemy_loot.active()||session_story_enemy_loot.unknown||
+       session_story_sequence_range.attached||session_story_sequence_range.unknown||session_inventory_reward.unknown)return 4001;
+#endif
+    // A reconnect cannot adopt narrative hooks or borrowed resource rows from
+    // a previous owner, including an operation with an uncertain outcome.
+    if(session_story_rewrite.active()||session_story_rewrite.unknown||
+       session_story_continuation.active()||session_story_continuation.unknown||
+       session_story_ambient_overlay.active()||session_story_ambient_overlay.unknown||
+       session_story_rewards.active()||session_story_rewards.unknown||
+       session_story_items.active()||session_story_items.unknown)return 4001;
+#endif
+#if E33_RUNTIME_CINEMATIC_VERSION>=267
+    if(!session_native_dialogue.empty())return e33_dialogue_text::uncertain;
+#if E33_RUNTIME_CINEMATIC_VERSION>=285
+    if(session_story_inworld.active())return e33_story_inworld::uncertain;
+#endif
+#endif
+
+#if E33_RUNTIME_CINEMATIC_VERSION>=255
+    if(session_defeat_delay.active)return e33_defeat_delay::conflict;
+#endif
 #ifdef E33_AUTHORED_CURVE_SESSION
     if(session_curve_patch.quarantined())return 3783;
 #endif
@@ -656,6 +826,44 @@ static uint32_t guarded_pause_close(bool terminal) {
 #endif
 #ifdef E33_LEASE_SESSION
 static bool lease_release_protected(uint64_t token){
+#if E33_RUNTIME_CINEMATIC_VERSION>=312
+    if(session_character_restore.protects(token))return true;
+#endif
+#if E33_RUNTIME_CINEMATIC_VERSION>=311
+    if(session_story_party_join_data.protects(token)||session_character_skills.protects(token)||session_story_trial_data.protects(token))return true;
+#if E33_RUNTIME_CINEMATIC_VERSION>=317
+    if(session_story_cinematics.protects(token))return true;
+    if(session_story_wardrobe.protects(token))return true;
+#endif
+#endif
+#if E33_RUNTIME_CINEMATIC_VERSION>=307
+    if(session_trial_encounters.protects(token)||session_trial_enemies.protects(token))return true;
+#if E33_RUNTIME_CINEMATIC_VERSION>=310
+    for(const auto& registry:session_character_tables)if(registry.protects(token))return true;
+#endif
+#endif
+#if E33_RUNTIME_CINEMATIC_VERSION>=291
+#if E33_RUNTIME_CINEMATIC_VERSION>=294
+    if(session_story_portal.protects(token))return true;
+#endif
+    if(session_story_rewrite.protects(token)||session_story_continuation.protects(token)||session_story_ambient_overlay.protects(token)||session_story_rewards.protects(token)||session_story_items.protects(token))return true;
+#if E33_RUNTIME_CINEMATIC_VERSION>=300
+    if(session_story_enemy_loot.protects(token))return true;
+    if(session_story_sequence_range.protects(token))return true;
+#endif
+#endif
+#if E33_RUNTIME_CINEMATIC_VERSION>=286
+    if(session_story_action.protects(token))return true;
+#if E33_RUNTIME_CINEMATIC_VERSION>=310
+    if(session_battle_qte.protects(token)||session_initial_roster.protects(token))return true;
+#endif
+#endif
+#if E33_RUNTIME_CINEMATIC_VERSION>=285
+    if(session_story_inworld.protects(token))return true;
+#endif
+#if E33_RUNTIME_CINEMATIC_VERSION>=255
+    if(session_defeat_delay.protects(token))return true;
+#endif
 #ifdef E33_AUTHORED_CURVE_SESSION
     if(session_curve_patch.protects(token))return true;
 #endif
@@ -694,7 +902,7 @@ static bool lease_release_protected(uint64_t token){
     if(session_widget_hook.protects(token))return true;
 #endif
 #if defined(E33_RETIRED_WORLD_SESSION) && defined(E33_MESH_SESSION)
-    if(session_map_runtime.protects(token))return true;
+    for(const auto& map:session_map_runtimes)if(map.protects(token))return true;
     if(session_map_assets.protects(token))return true;
 #endif
     return false;
@@ -740,6 +948,357 @@ uint32_t backend_command(SessionPacket* packet) {
 #ifdef E33_MESH_SESSION
     case SessionMesh: {
         auto& p=*reinterpret_cast<MeshPacket*>(packet->console_text);
+#if E33_RUNTIME_CINEMATIC_VERSION>=313
+        if(p.operation==e33_story_layers::operation){
+            auto* raw=reinterpret_cast<uint8_t*>(&p);
+            __try{
+                e33_story_layers::RuntimeOps ops{runtime_base,session_pod_validation,E33_TRACE_ENTRY_VALIDATION,
+                    retain_preflight,retain_output,validate_target_enum};
+                e33_story_layers::run(raw,sizeof(p),ops);
+            }
+            __except(EXCEPTION_EXECUTE_HANDLER){
+                // Effects may have happened: return an unknown receipt, never
+                // claim a retryable prefix or dispatch the batch again.
+                e33_ui::put(raw+8,e33_story_layers::uncertain);e33_ui::put(raw+12,0);
+                e33_ui::put(raw+52,e33_story_layers::header);
+                std::memset(raw+e33_story_layers::header,0,sizeof(p)-e33_story_layers::header);
+            }
+            return 0;
+        }
+#endif
+#if E33_RUNTIME_CINEMATIC_VERSION>=269
+        if(p.operation==e33_story_identity::operation){
+            auto& input=*reinterpret_cast<e33_story_identity::Packet*>(&p);
+            __try{session_story_identity.run(runtime_base,lease_session,session_leases,input);}
+            __except(EXCEPTION_EXECUTE_HANDLER){input.error=e33_story_identity::uncertain;session_story_identity.unknown=true;}
+            return 0;
+        }
+#endif
+#if E33_RUNTIME_CINEMATIC_VERSION>=275 && defined(E33_TIMELINE_ACTOR_POOL_SESSION)
+#if E33_RUNTIME_CINEMATIC_VERSION>=285 && defined(E33_TIMELINE_ACTOR_POOL_SESSION)
+#if E33_RUNTIME_CINEMATIC_VERSION>=286
+#if E33_RUNTIME_CINEMATIC_VERSION>=291
+#if E33_RUNTIME_CINEMATIC_VERSION>=300
+        if(p.operation==e33_save_list_entry::operation){
+            auto& input=*reinterpret_cast<e33_save_list_entry::Packet*>(&p);
+            __try{e33_save_list_entry::run(runtime_base,lease_session,session_leases,input);}
+            __except(EXCEPTION_EXECUTE_HANDLER){input.error=e33_save_list_entry::uncertain;input.state=0;}
+            return 0;
+        }
+        if(p.operation==e33_story_enemy_loot::operation){
+            auto& input=*reinterpret_cast<e33_story_enemy_loot::Packet*>(&p);
+            __try{session_story_enemy_loot.run(runtime_base,lease_session,session_leases,input,session_story_items);}
+            __except(EXCEPTION_EXECUTE_HANDLER){session_story_enemy_loot.unknown=true;input.error=e33_story_enemy_loot::uncertain;input.state=0;}
+            return 0;
+        }
+#if E33_RUNTIME_CINEMATIC_VERSION>=307
+#if E33_RUNTIME_CINEMATIC_VERSION>=310
+        if(p.operation==e33_battle_qte::operation){
+            auto& input=*reinterpret_cast<e33_battle_qte::Packet*>(&p);
+            __try{session_battle_qte.run(runtime_base,lease_session,session_leases,input);}
+            __except(EXCEPTION_EXECUTE_HANDLER){session_battle_qte.unknown=true;input.error=e33_battle_qte::uncertain;input.state=0;}
+            return 0;
+        }
+#if E33_RUNTIME_CINEMATIC_VERSION>=311
+#if E33_RUNTIME_CINEMATIC_VERSION>=312
+        if(p.operation==e33_character_restore::operation){
+            auto& input=*reinterpret_cast<e33_character_restore::Packet*>(&p);
+            __try{session_character_restore.run(runtime_base,lease_session,session_leases,input);}
+            __except(EXCEPTION_EXECUTE_HANDLER){session_character_restore.unknown=true;input.error=e33_character_restore::uncertain;input.state=0;session_character_restore.diagnostics(input);}
+            return 0;
+        }
+#endif
+        if(p.operation==e33_story_trial_data::operation){
+            auto& input=*reinterpret_cast<e33_story_trial_data::Packet*>(&p);
+            if(input.mode==2&&session_parameter_research.holds_resources()){input.error=e33_story_trial_data::busy;return 0;}
+            __try{session_story_trial_data.run(runtime_base,lease_session,session_leases,input);}
+            __except(EXCEPTION_EXECUTE_HANDLER){session_story_trial_data.unknown=true;input.error=e33_story_trial_data::uncertain;input.state=0;}
+            return 0;
+        }
+        if(p.operation==e33_character_skills::operation){
+            auto& input=*reinterpret_cast<e33_character_skills::Packet*>(&p);
+            __try{session_character_skills.run(runtime_base,lease_session,session_leases,input);}
+            __except(EXCEPTION_EXECUTE_HANDLER){session_character_skills.unknown=true;input.error=e33_character_skills::uncertain;input.state=0;}
+            return 0;
+        }
+#if E33_RUNTIME_CINEMATIC_VERSION>=317
+        if(p.operation==e33_story_cinematics::operation){
+            auto& input=*reinterpret_cast<e33_story_cinematics::Packet*>(&p);
+            __try{session_story_cinematics.run(runtime_base,lease_session,session_leases,input);}
+            __except(EXCEPTION_EXECUTE_HANDLER){session_story_cinematics.unknown=true;input.error=e33_story_cinematics::uncertain;input.state=0;}
+            return 0;
+        }
+        if(p.operation==e33_story_wardrobe::operation){
+            auto& input=*reinterpret_cast<e33_story_wardrobe::Packet*>(&p);
+            __try{session_story_wardrobe.run(runtime_base,lease_session,session_leases,input);}
+            __except(EXCEPTION_EXECUTE_HANDLER){session_story_wardrobe.unknown=true;input.error=e33_story_wardrobe::uncertain;input.state=0;}
+            return 0;
+        }
+#endif
+        if(p.operation==e33_story_party_join_data::operation){
+            auto& input=*reinterpret_cast<e33_story_party_join_data::Packet*>(&p);
+            __try{session_story_party_join_data.run(runtime_base,lease_session,session_leases,input);}
+            __except(EXCEPTION_EXECUTE_HANDLER){session_story_party_join_data.unknown=true;input.error=e33_story_party_join_data::uncertain;input.state=0;}
+            return 0;
+        }
+#endif
+        if(p.operation==e33_initial_roster::operation){
+            auto& input=*reinterpret_cast<e33_initial_roster::Packet*>(&p);
+            __try{session_initial_roster.run(runtime_base,lease_session,session_leases,input,session_enemy_spawn);}
+            __except(EXCEPTION_EXECUTE_HANDLER){session_initial_roster.unknown=true;input.error=e33_initial_roster::uncertain;input.state=0;}
+            return 0;
+        }
+        if(p.operation==e33_story_character_tables::operation){
+            auto& input=*reinterpret_cast<e33_story_character_tables::Packet*>(&p);
+            if(!e33_story_character_tables::valid(input)){input.error=e33_story_character_tables::rejected;return 0;}
+            auto& dispatcher=session_character_tables[e33_story_character_tables::profile(input)];
+            __try{dispatcher.run(runtime_base,lease_session,session_leases,input);}
+            __except(EXCEPTION_EXECUTE_HANDLER){dispatcher.unknown=true;input.error=e33_story_character_tables::uncertain;input.state=0;}
+            return 0;
+        }
+#endif
+        if(p.operation==e33_story_trial_tables::operation){
+            auto& input=*reinterpret_cast<e33_story_trial_tables::Packet*>(&p);
+            if(!e33_story_trial_tables::valid(input)){input.error=e33_story_trial_tables::rejected;return 0;}
+            auto& dispatcher=e33_story_trial_tables::kind(input)==1?session_trial_enemies:session_trial_encounters;
+            if(input.mode==2&&session_parameter_research.holds_resources()){input.error=e33_story_trial_tables::busy;return 0;}
+            __try{dispatcher.run(runtime_base,lease_session,session_leases,input,session_story_items,session_story_enemy_loot);}
+            __except(EXCEPTION_EXECUTE_HANDLER){dispatcher.unknown=true;input.error=e33_story_trial_tables::uncertain;input.state=0;}
+            return 0;
+        }
+#endif
+        if(p.operation==e33_inventory_reward::operation){
+            auto& input=*reinterpret_cast<e33_inventory_reward::Packet*>(&p);
+            __try{session_inventory_reward.run(runtime_base,lease_session,session_leases,input,session_story_items);}
+            __except(EXCEPTION_EXECUTE_HANDLER){session_inventory_reward.unknown=true;input.error=e33_inventory_reward::uncertain;input.state=0;}
+            return 0;
+        }
+        if(p.operation==e33_story_sequence_range::operation){
+            auto& input=*reinterpret_cast<e33_story_sequence_range::Packet*>(&p);
+            __try{session_story_sequence_range.run(runtime_base,lease_session,session_leases,input);}
+            __except(EXCEPTION_EXECUTE_HANDLER){session_story_sequence_range.unknown=true;input.error=e33_story_sequence_range::uncertain;input.state=0;}
+            return 0;
+        }
+#endif
+        if(p.operation==e33_story_rewards::operation){
+            auto& input=*reinterpret_cast<e33_story_rewards::Packet*>(&p);
+            __try{session_story_rewards.run(runtime_base,lease_session,session_leases,input,session_story_items);}
+            __except(EXCEPTION_EXECUTE_HANDLER){session_story_rewards.unknown=true;input.error=e33_story_rewards::uncertain;input.state=0;}
+            return 0;
+        }
+#if E33_RUNTIME_CINEMATIC_VERSION>=294
+        if(p.operation==e33_story_portal::operation){
+            auto& input=*reinterpret_cast<e33_story_portal::Packet*>(&p);
+            __try{session_story_portal.command(runtime_base,lease_session,session_leases,input,portal_actor_owned);}
+            __except(EXCEPTION_EXECUTE_HANDLER){session_story_portal.unknown=true;input.error=e33_story_portal::uncertain;input.state=0;}
+            return 0;
+        }
+#endif
+        if(p.operation==e33_story_resource_names::operation||p.operation==243){
+            auto& input=*reinterpret_cast<e33_story_resource_names::Packet*>(&p);
+            __try{session_story_resource_names.run(runtime_base,lease_session,session_leases,input);}
+            __except(EXCEPTION_EXECUTE_HANDLER){session_story_resource_names.unknown=true;input.error=e33_story_resource_names::uncertain;input.state=0;}
+            return 0;
+        }
+        if(p.operation==e33_story_items::operation){
+            auto& input=*reinterpret_cast<e33_story_items::Packet*>(&p);
+            __try{session_story_items.run(runtime_base,lease_session,session_leases,input);}
+            __except(EXCEPTION_EXECUTE_HANDLER){session_story_items.unknown=true;input.error=e33_story_items::uncertain;input.state=0;}
+            return 0;
+        }
+        if(p.operation==e33_story_rewrite::operation){
+            auto& input=*reinterpret_cast<e33_story_rewrite::Packet*>(&p);
+            __try{session_story_rewrite.run(runtime_base,lease_session,session_leases,input);}
+            __except(EXCEPTION_EXECUTE_HANDLER){session_story_rewrite.unknown=true;input.error=e33_story_rewrite::uncertain;input.state=0;}
+            return 0;
+        }
+        if(p.operation==e33_story_continuation::operation){
+            auto& input=*reinterpret_cast<e33_story_continuation::Packet*>(&p);
+            __try{session_story_continuation.run(runtime_base,lease_session,session_leases,input);}
+            __except(EXCEPTION_EXECUTE_HANDLER){session_story_continuation.unknown=true;input.error=e33_story_continuation::uncertain;input.state=0;}
+            return 0;
+        }
+        if(p.operation==e33_story_ambient_overlay::operation){
+            auto& input=*reinterpret_cast<e33_story_ambient_overlay::Packet*>(&p);
+            __try{session_story_ambient_overlay.run(runtime_base,lease_session,session_leases,input);}
+            __except(EXCEPTION_EXECUTE_HANDLER){session_story_ambient_overlay.unknown=true;input.error=e33_story_ambient_overlay::uncertain;input.state=0;}
+            return 0;
+        }
+#endif
+        if(p.operation==e33_story_action::operation){
+            auto& input=*reinterpret_cast<e33_story_action::Packet*>(&p);
+            __try{session_story_action.run(runtime_base,lease_session,session_leases,input);}
+            __except(EXCEPTION_EXECUTE_HANDLER){session_story_action.lost=true;input.error=e33_story_action::overflow;input.state=0;}
+            return 0;
+        }
+#endif
+        if(p.operation==e33_story_inworld::operation){
+            auto& input=*reinterpret_cast<e33_story_inworld::Packet*>(&p);
+            if(!e33_story_inworld::valid(input)){input.error=e33_story_inworld::rejected;return 0;}
+            if(!input.mode){
+                const int slot=session_timeline_slots.find(input.owner);
+                if(slot<0){input.error=e33_story_inworld::rejected;return 0;}
+                bool admitted=false;
+                __try{admitted=session_timeline_actors[slot].proves_story_resource(runtime_base,lease_session,session_leases,input.owner,input.carrier);}
+                __except(EXCEPTION_EXECUTE_HANDLER){admitted=false;}
+                if(!admitted){input.error=e33_story_inworld::rejected;return 0;}
+            }
+            __try{session_story_inworld.run(runtime_base,lease_session,session_leases,input,session_native_dialogue);}
+            __except(EXCEPTION_EXECUTE_HANDLER){session_story_inworld.frame.unknown=true;input.error=e33_story_inworld::uncertain;input.state=0;}
+            return 0;
+        }
+#endif
+        if(p.operation==e33_story_camera::operation){
+            auto& input=*reinterpret_cast<e33_story_camera::Packet*>(&p);
+            if(!e33_story_camera::valid(input)){input.error=e33_story_camera::rejected;return 0;}
+#if E33_RUNTIME_CINEMATIC_VERSION>=279
+            if(input.retire){
+                __try{session_story_camera.retire_view(runtime_base,lease_session,session_leases,input);}
+                __except(EXCEPTION_EXECUTE_HANDLER){input.error=e33_story_camera::uncertain;input.state=0;session_story_camera.unknown=true;}
+                return 0;
+            }
+#endif
+            const int slot=session_timeline_slots.find(input.owner),camera_slot=session_timeline_slots.find(input.camera_owner);
+            bool admitted=slot>=0&&camera_slot>=0;
+            if(admitted){
+                __try{admitted=session_timeline_actors[slot].proves_story_participant(runtime_base,lease_session,session_leases,input.owner,input.npc)&&
+                    // Speaker/camera carriers are intentionally non-interactive.
+                    // Require their configured, retained construction rather than
+                    // interactive activation. The anchor remains interactive;
+                    // run() also proves the active dialogue and shared world.
+                    session_timeline_actors[camera_slot].proves_story_resource(runtime_base,lease_session,session_leases,input.camera_owner,input.camera_npc);}
+                __except(EXCEPTION_EXECUTE_HANDLER){admitted=false;}
+            }
+            if(!admitted){input.error=e33_story_camera::rejected;input.state=114;return 0;}
+            __try{session_story_camera.run(runtime_base,lease_session,session_leases,input,session_native_dialogue);}
+            __except(EXCEPTION_EXECUTE_HANDLER){input.error=e33_story_camera::uncertain;input.state=0;session_story_camera.unknown=true;}
+            return 0;
+        }
+#endif
+#if E33_RUNTIME_CINEMATIC_VERSION>=274 && defined(E33_TIMELINE_ACTOR_POOL_SESSION)
+        if(p.operation==e33_story_participants::operation){
+            auto& input=*reinterpret_cast<e33_story_participants::Packet*>(&p);
+            if(!e33_story_participants::valid(input)){input.error=e33_story_participants::rejected;return 0;}
+            bool admitted=true;
+            for(uint32_t i=0;i<input.count;++i){
+                const auto& participant=input.participants[i];const int slot=session_timeline_slots.find(participant.owner);
+                if(slot<0){admitted=false;break;}
+                __try{if(!session_timeline_actors[slot].proves_story_participant(runtime_base,lease_session,session_leases,participant.owner,participant.actor))admitted=false;}
+                __except(EXCEPTION_EXECUTE_HANDLER){admitted=false;}
+                if(!admitted)break;
+            }
+            if(!admitted){input.error=e33_story_participants::rejected;return 0;}
+            __try{session_story_participants.run(runtime_base,lease_session,session_leases,input,session_native_dialogue);}
+            __except(EXCEPTION_EXECUTE_HANDLER){input.error=e33_story_participants::uncertain;input.state=0;session_story_participants.unknown=true;}
+            return 0;
+        }
+#endif
+#if E33_RUNTIME_CINEMATIC_VERSION>=314 && defined(E33_TIMELINE_ACTOR_POOL_SESSION)
+        if(p.operation==e33_story_world::operation){
+            auto* raw=reinterpret_cast<uint8_t*>(&p);
+            auto& header=*reinterpret_cast<e33_story_world::Header*>(raw);
+            const int slot=session_timeline_slots.find(header.owner);
+            if(slot<0){
+                header.error=e33_story_world::rejected;header.completed=0;header.size=e33_story_world::header;
+                std::memset(raw+e33_story_world::header,0,sizeof(p)-e33_story_world::header);return 0;
+            }
+            __try{session_timeline_actors[slot].configure_story_world(runtime_base,lease_session,session_leases,
+                    raw,sizeof(p),session_pod_validation,E33_TRACE_ENTRY_VALIDATION,retain_preflight,retain_output);}
+            __except(EXCEPTION_EXECUTE_HANDLER){
+                session_timeline_actors[slot].quarantine_story_world();
+                header.error=e33_story_world::uncertain;header.completed=0;header.size=e33_story_world::header;
+                std::memset(raw+e33_story_world::header,0,sizeof(p)-e33_story_world::header);
+            }
+            return 0;
+        }
+        if(p.operation==e33_story_npc_finalize::operation){
+            auto& input=*reinterpret_cast<e33_story_npc_finalize::Packet*>(&p);
+            if(!e33_story_npc_finalize::valid(input)){input.error=e33_story_npc_finalize::rejected;return 0;}
+            const int slot=session_timeline_slots.find(input.owner);
+            const int visual=input.show_visual?session_timeline_slots.find(input.visual_owner):-1;
+            if(slot<0||(input.show_visual&&visual<0)){input.error=e33_story_npc_finalize::rejected;return 0;}
+            __try{session_timeline_actors[slot].finalize_story_npc(runtime_base,lease_session,session_leases,input,
+                    visual<0?nullptr:&session_timeline_actors[visual]);}
+            __except(EXCEPTION_EXECUTE_HANDLER){session_timeline_actors[slot].quarantine_story_finalize(input);}
+            return 0;
+        }
+#endif
+#if E33_RUNTIME_CINEMATIC_VERSION>=312 && defined(E33_TIMELINE_ACTOR_POOL_SESSION)
+        if(p.operation==e33_story_streaming::operation){
+            auto& input=*reinterpret_cast<e33_story_streaming::Packet*>(&p);
+            if(!e33_story_streaming::valid(input)){input.error=e33_story_streaming::rejected;return 0;}
+            const int slot=session_timeline_slots.find(input.owner);
+            if(slot<0){input.error=e33_story_streaming::rejected;return 0;}
+            __try{session_timeline_actors[slot].configure_streaming_radius(runtime_base,lease_session,session_leases,input);}
+            __except(EXCEPTION_EXECUTE_HANDLER){
+                session_timeline_actors[slot].quarantine_streaming_radius();
+                input.error=e33_story_streaming::uncertain;input.state=0;
+            }
+            return 0;
+        }
+#endif
+#if E33_RUNTIME_CINEMATIC_VERSION>=273 && defined(E33_TIMELINE_ACTOR_POOL_SESSION)
+        if(p.operation==e33_story_speaker::operation){
+            auto& input=*reinterpret_cast<e33_story_speaker::Packet*>(&p);
+            if(!e33_story_speaker::valid(input)){input.error=e33_story_speaker::rejected;return 0;}
+            const int slot=session_timeline_slots.find(input.owner);
+            if(slot<0){input.error=e33_story_speaker::rejected;return 0;}
+            __try{session_timeline_actors[slot].configure_story_speaker(runtime_base,lease_session,session_leases,input,session_native_dialogue);}
+            __except(EXCEPTION_EXECUTE_HANDLER){
+                if(!session_native_dialogue.empty())session_native_dialogue.frame.state=e33_dialogue_text::State::Quarantined;
+                input.error=e33_story_speaker::uncertain;input.state=0;
+            }
+            return 0;
+        }
+#endif
+#if E33_RUNTIME_CINEMATIC_VERSION>=268 && defined(E33_TIMELINE_ACTOR_POOL_SESSION)
+        if(p.operation==e33_story_npc::operation){
+            auto& configuration=*reinterpret_cast<e33_story_npc::Packet*>(&p);
+            if(!e33_story_npc::valid(configuration)){configuration.error=e33_story_npc::rejected;return 0;}
+            const int slot=session_timeline_slots.find(configuration.owner);
+            if(slot<0){configuration.error=e33_story_npc::rejected;return 0;}
+            __try{session_timeline_actors[slot].configure_story_npc(runtime_base,lease_session,session_leases,configuration);}
+            __except(EXCEPTION_EXECUTE_HANDLER){configuration.error=e33_story_npc::unknown;configuration.state=0;}
+            return 0;
+        }
+#endif
+
+#if E33_RUNTIME_CINEMATIC_VERSION>=267
+        if(p.operation==e33_dialogue_text::operation){
+            auto& input=*reinterpret_cast<e33_dialogue_text::Packet*>(&p);
+            __try{session_native_dialogue.run(runtime_base,lease_session,session_leases,input
+#if E33_RUNTIME_CINEMATIC_VERSION>=278
+                ,restore_story_dialogue_view
+#endif
+#if E33_RUNTIME_CINEMATIC_VERSION>=291
+                ,admit_original_story_dialogue
+#endif
+                );}
+            __except(EXCEPTION_EXECUTE_HANDLER){
+                if(!session_native_dialogue.empty())session_native_dialogue.frame.state=e33_dialogue_text::State::Quarantined;
+                input.error=session_native_dialogue.quarantined()?e33_dialogue_text::uncertain:e33_dialogue_text::unavailable;
+                input.state=0;
+            }
+            return 0;
+        }
+#endif
+
+#if E33_RUNTIME_CINEMATIC_VERSION>=263
+        if(p.operation==e33_aim_region::operation){
+            auto& query=*reinterpret_cast<e33_aim_region::Packet*>(&p);
+            __try{TargetFreeAimRegion<decltype(session_leases)> ops{runtime_base,lease_session,session_leases};ops.run(query);}
+            __except(EXCEPTION_EXECUTE_HANDLER){query.error=e33_aim_region::unavailable;query.state=0;}
+            return 0;
+        }
+#endif
+#if E33_RUNTIME_CINEMATIC_VERSION>=255
+        if(p.operation==e33_defeat_delay::operation){
+            auto& edit=*reinterpret_cast<e33_defeat_delay::Packet*>(&p);
+            __try{TargetDefeatDelayOps<decltype(session_leases)> ops{runtime_base,lease_session,session_leases};session_defeat_delay.run(edit,ops);}
+            __except(EXCEPTION_EXECUTE_HANDLER){edit.error=e33_defeat_delay::conflict;edit.state=session_defeat_delay.active?2U:0U;}
+            return 0;
+        }
+#endif
 #ifdef E33_AUTHORED_CURVE_SESSION
         if(p.operation==e33_curve_patch::operation){
             auto& edit=*reinterpret_cast<e33_curve_patch::Packet*>(&p);
@@ -770,7 +1329,11 @@ uint32_t backend_command(SessionPacket* packet) {
         }
 #endif
 #if E33_RUNTIME_CINEMATIC_VERSION>=186
-        if(p.operation>=157&&p.operation<=159){
+        if((p.operation>=157&&p.operation<=159)
+#if E33_RUNTIME_CINEMATIC_VERSION>=308
+           ||p.operation==161
+#endif
+           ){
             __try {session_encounter_tuning.command(runtime_base,lease_session,session_leases,p,session_enemy_spawn,session_npc_research);}
             __except(EXCEPTION_EXECUTE_HANDLER){p.error=3637;}
             return 0;
@@ -837,7 +1400,7 @@ uint32_t backend_command(SessionPacket* packet) {
                     if(approach)p.error=3600;
                     else
 #endif
-                    p.error=session_owned_battle_arena.ground_owned_arena(runtime_base,lease_session,session_leases,query,report,approach,detailed?&diagnostics:nullptr,!advisory);
+                    p.error=session_owned_battle_arena.ground_owned_arena(runtime_base,lease_session,session_leases,query,report,approach,detailed?&diagnostics:nullptr,!advisory,(flags&8)!=0);
                     std::memcpy(reinterpret_cast<uint8_t*>(&p)+4096,&report,sizeof(report));if(!p.error)p.state=1;
 #if E33_RUNTIME_CINEMATIC_VERSION>=183
                     if(detailed)std::memcpy(reinterpret_cast<uint8_t*>(&p)+4448,&diagnostics,sizeof(diagnostics));
@@ -1032,19 +1595,27 @@ uint32_t backend_command(SessionPacket* packet) {
             __except(EXCEPTION_EXECUTE_HANDLER){session_map_assets.quarantine();p.error=2169;}
             return 0;
         }
-        if(p.operation>=99&&p.operation<=103){
+        if((p.operation>=99&&p.operation<=103)||p.operation==267){
             __try{session_map_load_gate.command(runtime_base,p);}
             __except(EXCEPTION_EXECUTE_HANDLER){session_map_load_gate.quarantine();p.error=2142;}
             return 0;
         }
 #endif
-        if(p.operation>=93 && (p.operation<=97
+        if((p.operation>=93 && (p.operation<=97
 #ifdef E33_RETIRED_WORLD_SESSION
             ||(p.version==3 && (p.operation==98||p.operation==107))
 #endif
-            )) {
-            __try {session_map_runtime.command(runtime_base,lease_session,session_leases,p);}
-            __except(EXCEPTION_EXECUTE_HANDLER) {session_map_runtime.quarantine();p.error=2109;}
+            ))
+#if E33_RUNTIME_CINEMATIC_VERSION>=312 && defined(E33_RETIRED_WORLD_SESSION)
+            ||p.operation==e33_map_visibility::operation
+#endif
+            ) {
+            e33_map_runtime::Owner* selected_map=nullptr;
+            for(auto& map:session_map_runtimes)if(map.token_matches(p.owner)){selected_map=&map;break;}
+            if(!selected_map)for(auto& map:session_map_runtimes)if(map.available()){selected_map=&map;break;}
+            if(!selected_map){p.error=2101;return 0;}
+            __try {selected_map->command(runtime_base,lease_session,session_leases,p);}
+            __except(EXCEPTION_EXECUTE_HANDLER) {selected_map->quarantine();p.error=2109;}
             return 0;
         }
 #ifdef E33_RUNTIME_CINEMATIC_SESSION
@@ -1061,7 +1632,7 @@ uint32_t backend_command(SessionPacket* packet) {
             || p.operation==149
 #endif
 #if defined(E33_RUNTIME_SCENE_EDITOR_SESSION) && E33_RUNTIME_CINEMATIC_VERSION >= 174
-            || p.operation==150
+            || p.operation==150 || p.operation==199 || p.operation==200 || p.operation==201 || p.operation==202 || p.operation==203
 #endif
         ) {
 #ifdef E33_BATTLE_PARAMETER_FRAME_RESEARCH
@@ -1514,6 +2085,11 @@ static StrongLeaseResult guarded_lease_close() {
 #endif
 #ifdef E33_MESH_SESSION
 static uint32_t guarded_mesh_close() {
+#if E33_RUNTIME_CINEMATIC_VERSION>=255
+    __try{TargetDefeatDelayOps<decltype(session_leases)> ops{runtime_base,lease_session,session_leases};
+        const auto e=session_defeat_delay.close(ops);if(e)return e;}
+    __except(EXCEPTION_EXECUTE_HANDLER){return e33_defeat_delay::conflict;}
+#endif
 #if E33_RUNTIME_CINEMATIC_VERSION>=186
     __try {const auto e=session_encounter_tuning.close(runtime_base,lease_session,session_leases);if(e)return e;}
     __except(EXCEPTION_EXECUTE_HANDLER){return 3637;}
@@ -1537,6 +2113,7 @@ static uint32_t guarded_mesh_close() {
         }__except(EXCEPTION_EXECUTE_HANDLER){return 3772;}
     }
 #endif
+    if(!session_initial_roster.close()&&!backend_shutting_down())return kSessionCloseDeferred;
     __try {const auto e=session_enemy_spawn.close(runtime_base,lease_session,session_leases);if(e)return e;}
     __except(EXCEPTION_EXECUTE_HANDLER) {return 2910;}
 #if E33_RUNTIME_CINEMATIC_VERSION>=177
@@ -1558,8 +2135,10 @@ static uint32_t guarded_mesh_close() {
     __try {const auto e=session_map_load_gate.close(runtime_base);if(e)return e;}
     __except(EXCEPTION_EXECUTE_HANDLER) {return 2142;}
 #endif
-    __try {const auto e=session_map_runtime.close(runtime_base,lease_session,session_leases);if(e)return e;}
-    __except(EXCEPTION_EXECUTE_HANDLER) {return 2109;}
+    for(auto& map:session_map_runtimes){
+        __try {const auto e=map.close(runtime_base,lease_session,session_leases);if(e)return e;}
+        __except(EXCEPTION_EXECUTE_HANDLER) {return 2109;}
+    }
 #ifdef E33_MAP_LOAD_GATE_SESSION
     __try {const auto e=session_map_assets.close(runtime_base,lease_session,session_leases);if(e)return e;}
     __except(EXCEPTION_EXECUTE_HANDLER) {return 2169;}
@@ -1577,6 +2156,50 @@ static uint32_t guarded_mesh_poll() {
 }
 #endif
 uint32_t backend_close() {
+#if E33_RUNTIME_CINEMATIC_VERSION>=312
+    if(!session_character_restore.close()&&!backend_shutting_down())return kSessionCloseDeferred;
+#endif
+#if E33_RUNTIME_CINEMATIC_VERSION>=311
+#if E33_RUNTIME_CINEMATIC_VERSION>=317
+    if(!session_story_cinematics.close()&&!backend_shutting_down())return kSessionCloseDeferred;
+    if(!session_story_wardrobe.close()&&!backend_shutting_down())return kSessionCloseDeferred;
+#endif
+    if(!session_character_skills.close()&&!backend_shutting_down())return kSessionCloseDeferred;
+    if(!session_story_party_join_data.close()&&!backend_shutting_down())return kSessionCloseDeferred;
+#endif
+#if E33_RUNTIME_CINEMATIC_VERSION>=310
+    if(!session_battle_qte.close()&&!backend_shutting_down())return kSessionCloseDeferred;
+    for(auto& registry:session_character_tables)if(!registry.close()&&!backend_shutting_down())return kSessionCloseDeferred;
+#endif
+#if E33_RUNTIME_CINEMATIC_VERSION>=307
+    __try{const auto e=session_parameter_research.close(runtime_base,lease_session,session_leases);if(e&&!backend_shutting_down())return e;}
+    __except(EXCEPTION_EXECUTE_HANDLER){if(!backend_shutting_down())return 3056;}
+#if E33_RUNTIME_CINEMATIC_VERSION>=311
+    if(!session_story_trial_data.close()&&!backend_shutting_down())return kSessionCloseDeferred;
+#endif
+    if((!session_trial_enemies.close()||!session_trial_encounters.close())&&!backend_shutting_down())return kSessionCloseDeferred;
+#endif
+#if E33_RUNTIME_CINEMATIC_VERSION>=294
+    if(!session_story_portal.close()&&!backend_shutting_down())return kSessionCloseDeferred;
+#endif
+#if E33_RUNTIME_CINEMATIC_VERSION>=291
+#if E33_RUNTIME_CINEMATIC_VERSION>=300
+    if(!session_story_enemy_loot.close()&&!backend_shutting_down())return kSessionCloseDeferred;
+    if(!session_story_sequence_range.close()&&!backend_shutting_down())return kSessionCloseDeferred;
+#endif
+    if((!session_story_continuation.close()||!session_story_rewrite.close()||!session_story_ambient_overlay.close()||!session_story_rewards.close()||!session_story_items.close())&&!backend_shutting_down())return kSessionCloseDeferred;
+#endif
+#if E33_RUNTIME_CINEMATIC_VERSION>=286
+#if E33_RUNTIME_CINEMATIC_VERSION>=310
+    if(!session_battle_qte.close()&&!backend_shutting_down())return kSessionCloseDeferred;
+#endif
+    if(!session_story_action.close()&&!backend_shutting_down())return kSessionCloseDeferred;
+#endif
+#if E33_RUNTIME_CINEMATIC_VERSION>=285
+    // Private data assets borrow this pinned frame. Do not release their pool
+    // or carrier journals until the owner has detached the borrowed array.
+    if(session_story_inworld.active()&&!backend_shutting_down())return kSessionCloseDeferred;
+#endif
 #ifdef E33_MESH_SESSION
     const auto mesh_cleanup=guarded_mesh_close();
     if(mesh_cleanup==407 && !backend_shutting_down())return kSessionCloseDeferred;
@@ -1602,6 +2225,16 @@ uint32_t backend_close() {
     if(!backend_shutting_down() && !qa_mime_restore(runtime_base))return kSessionCloseDeferred;
 #endif
     uint32_t lease_cleanup_error=0;
+#if E33_RUNTIME_CINEMATIC_VERSION>=285
+    if(session_story_inworld.active())lease_cleanup_error=e33_story_inworld::uncertain;
+#endif
+#if E33_RUNTIME_CINEMATIC_VERSION>=267
+    if(!guarded_native_dialogue_cleanup()){
+        if(!session_native_dialogue.quarantined()&&!backend_shutting_down())return kSessionCloseDeferred;
+        lease_cleanup_error=e33_dialogue_text::uncertain;
+    }
+#endif
+
 #ifdef E33_AUTHORED_CURVE_SESSION
     if(session_curve_patch.quarantined())lease_cleanup_error=3783;
 #endif
@@ -1637,6 +2270,9 @@ uint32_t backend_close() {
     // An unresolved menu pins the pool. Continue detaching console/observer
     // hooks, but never release its widgets or adopt them in another session.
     if(lease_session && menu_released
+#if E33_RUNTIME_CINEMATIC_VERSION>=285
+       && session_story_inworld.empty()
+#endif
 #ifdef E33_AUTHORED_CURVE_SESSION
        && !session_curve_patch.quarantined()
 #endif
@@ -1649,6 +2285,9 @@ uint32_t backend_close() {
        ) {
 #else
     if(lease_session
+#if E33_RUNTIME_CINEMATIC_VERSION>=285
+       && session_story_inworld.empty()
+#endif
 #ifdef E33_AUTHORED_CURVE_SESSION
        && !session_curve_patch.quarantined()
 #endif
@@ -1681,6 +2320,16 @@ uint32_t backend_close() {
 }
 #ifdef E33_MESH_SESSION
 bool backend_mesh_wake_needed(){return session_mesh.animating() || session_builder.active()
+#if E33_RUNTIME_CINEMATIC_VERSION>=294
+    || session_story_portal.active()
+#if E33_RUNTIME_CINEMATIC_VERSION>=310
+    || session_battle_qte.active()
+#endif
+#if E33_RUNTIME_CINEMATIC_VERSION>=311
+    || session_story_sequence_range.active()
+    || session_story_cinematics.active()
+#endif
+#endif
 #ifdef E33_MAP_LOAD_GATE_SESSION
     || session_map_load_gate.active()
 #endif
@@ -1694,7 +2343,37 @@ bool backend_mesh_wake_needed(){return session_mesh.animating() || session_build
 #endif
     ;}
 #endif
+#if E33_RUNTIME_CINEMATIC_VERSION>=314
+uint64_t backend_menu_frame();
+bool backend_loading_handoff_active(){
+    __try{return session_map_load_gate.handoff_ready(runtime_base);}
+    __except(EXCEPTION_EXECUTE_HANDLER){return false;}
+}
+uint64_t backend_loading_handoff_frame(){return backend_menu_frame();}
+#endif
 void backend_message(MSG* message) {
+#if E33_RUNTIME_CINEMATIC_VERSION>=311
+    __try{session_story_cinematics.poll();}
+    __except(EXCEPTION_EXECUTE_HANDLER){session_story_cinematics.unknown=true;}
+    __try{session_story_sequence_range.poll();}
+    __except(EXCEPTION_EXECUTE_HANDLER){session_story_sequence_range.unknown=true;}
+#endif
+#if E33_RUNTIME_CINEMATIC_VERSION>=310
+    __try{session_battle_qte.poll(session_leases);}
+    __except(EXCEPTION_EXECUTE_HANDLER){session_battle_qte.unknown=true;}
+#endif
+#if E33_RUNTIME_CINEMATIC_VERSION>=294
+    __try{session_story_portal.poll(runtime_base,lease_session,session_leases,portal_actor_owned);}
+    __except(EXCEPTION_EXECUTE_HANDLER){session_story_portal.unknown=true;session_story_portal.running=false;}
+#endif
+#if E33_RUNTIME_CINEMATIC_VERSION>=291
+    __try{session_story_ambient_overlay.poll();}
+    __except(EXCEPTION_EXECUTE_HANDLER){session_story_ambient_overlay.unknown=true;}
+#endif
+#if defined(E33_SEQUENCE_FLIGHT_SESSION) && E33_RUNTIME_CINEMATIC_VERSION>=258
+    __try {session_sequence.pointer_message(runtime_base,session_menu,message,lifetime_valid() && attachment_valid(runtime_base) && local_read<uint64_t>(attached_console+0xd8)==0);}
+    __except(EXCEPTION_EXECUTE_HANDLER){session_sequence.editor_fault();}
+#endif
 #ifdef E33_MAP_LOAD_GATE_SESSION
     __try{session_map_load_gate.poll(runtime_base,lease_session,session_leases);}
     __except(EXCEPTION_EXECUTE_HANDLER){session_map_load_gate.quarantine();}
@@ -1722,8 +2401,23 @@ void backend_message(MSG* message) {
 #ifdef E33_RUNTIME_SCENE_EDITOR_SESSION
     session_runtime_cinematic.pointer_message(message);
 #endif
-    __try {if(session_runtime_cinematic.active())session_runtime_cinematic.poll();}
+    __try {
+#ifdef E33_RUNTIME_SCENE_EDITOR_SESSION
+        session_runtime_cinematic.story_key_message(message);
+#endif
+        if(session_runtime_cinematic.active())session_runtime_cinematic.poll();
+    }
     __except(EXCEPTION_EXECUTE_HANDLER) {session_runtime_cinematic.quarantine();}
+#ifdef E33_RUNTIME_SCENE_EDITOR_SESSION
+    // Cinematic controls are sampled by the scene owner before dispatch. Block
+    // SDK shortcuts as well as gameplay keys, including releases after skip.
+    static e33_runtime_scene::StoryInputFilter story_input_filter;
+    if(story_input_filter.consume(static_cast<unsigned>(message->wParam),
+        message->message==WM_KEYDOWN,message->message==WM_KEYUP,session_runtime_cinematic.story_input_active()) ||
+        (session_runtime_cinematic.story_input_active() && message->message==WM_CHAR)){
+        message->message=WM_NULL;return;
+    }
+#endif
 #endif
     if(session_builder.active())session_builder.poll(runtime_base,lease_session,session_leases,
         (!session_menu.menu.active() || session_builder.owns_menu(session_menu.widget)) && attachment_valid(runtime_base) && local_read<uint64_t>(attached_console+0xd8)==0);

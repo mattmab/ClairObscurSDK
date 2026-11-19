@@ -26,3 +26,32 @@ class MatchingCatalogTests(unittest.TestCase):
             with self.assertRaisesRegex(RuntimeQueryError, 'identity changed'):
                 capture_matching(123, names=('Create',))
         self.assertEqual(query.call_count, 1)
+
+    def test_transient_discovery_read_is_discarded_and_reobserved_once(self):
+        from types import SimpleNamespace
+        catalog=SimpleNamespace(objects=())
+        with patch('expedition33._reader.active_reader', return_value=None), \
+                patch('expedition33._reader.ReadBatch') as readers, \
+                patch('expedition33.catalog._query', side_effect=[RuntimeQueryError('READ_FAILED address=0x123 size=40'),({'pid':123},[])]) as query, \
+                patch('expedition33.catalog._decode_catalog', return_value=catalog) as decode:
+            self.assertIs(capture_matching(123,names=('Create',)),catalog)
+        self.assertEqual(query.call_count,2)
+        self.assertEqual(readers.call_count,2)
+        self.assertEqual(query.call_args_list[0],query.call_args_list[1])
+        decode.assert_called_once_with({'pid':123},[])
+
+    def test_borrowed_discovery_read_failure_yields_without_reusing_terminal_reader(self):
+        with patch('expedition33._reader.active_reader', return_value=object()), \
+                patch('expedition33.catalog._query', side_effect=RuntimeQueryError('READ_FAILED address=0x123 size=40')) as query, \
+                patch('expedition33.catalog._decode_catalog') as decode:
+            with self.assertRaisesRegex(RuntimeQueryError,'READ_FAILED'):
+                capture_matching(123,names=('Create',))
+        self.assertEqual(query.call_count,1);decode.assert_not_called()
+
+    def test_standalone_discovery_has_only_one_fresh_retry(self):
+        with patch('expedition33._reader.active_reader', return_value=None), \
+                patch('expedition33._reader.ReadBatch') as readers, \
+                patch('expedition33.catalog._query', side_effect=RuntimeQueryError('READ_FAILED address=0x123')) as query:
+            with self.assertRaisesRegex(RuntimeQueryError,'READ_FAILED'):
+                capture_matching(123,names=('Create',))
+        self.assertEqual(query.call_count,2);self.assertEqual(readers.call_count,2)

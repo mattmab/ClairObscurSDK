@@ -15,6 +15,14 @@ EXPLORATION_PAWNS = frozenset(('BP_jRPG_Character_WorldMap_pawn_C',
     'BP_jRPG_Character_World_C', 'BP_WorldMapCharacter_C'))
 
 
+def _projected_reference(catalog, observed, obj, name):
+    """Use the freshly projected reference, rather than reading it a second time."""
+    owners=[key[0] for key in observed.types if key[1]==name]
+    if len(owners)!=1 or owners[0] not in catalog.ancestors(obj.class_index):
+        raise RuntimeError('World admission reference owner is ambiguous or missing: '+name)
+    return field(observed,name,'ObjectProperty')
+
+
 @dataclass(frozen=True)
 class Admission:
     state: str
@@ -35,6 +43,12 @@ def _observe(pid, provider=None):
     chain, catalog = anchor(catalog, project=True)
     world, gi = chain[2:]
     if provider is not None:provider._ui_anchor=tuple(map(identity,chain))
+    # An explicit read-only observer can copy partition identities as soon as
+    # the engine anchor exists, before SaveLoaded/controller/pawn readiness.
+    # It receives no Session or mutation authority. Normal admission below is
+    # still read twice and must pass independently.
+    observer=getattr(provider,'observe_anchored_world',None) if provider is not None else None
+    if callable(observer):observer(catalog,chain)
     gi_owner = catalog.by_index[gi.class_index]
     manager, catalog = read_object_reference(catalog, gi, gi_owner, 'SaveManager', project=True)
     if manager is None:
@@ -63,14 +77,10 @@ def _observe(pid, provider=None):
                else provider.controller(catalog, gi))
     if tuple(current['world']) != identity(world):
         return Admission('observation_pending', 'controller_world_changed'), None, None
-    controller_catalog = capture_selected(pid, (current['controller'][1:],))
+    controller_catalog, rows = capture_selected_values(pid, (current['controller'][1:],),
+        fields=('Pawn',), references=True)
     controller = controller_catalog.by_index[current['controller'][1]]
-    values = read_values_many(controller_catalog, (controller,), fields=('Pawn',))[controller.index]
-    owners = [key[0] for key in values.types if key[1] == 'Pawn']
-    if len(owners) != 1:
-        raise RuntimeError('World admission controller Pawn field is ambiguous or missing')
-    pawn, _ = read_object_reference(controller_catalog, controller,
-        controller_catalog.by_index[owners[0]], 'Pawn', project=True)
+    pawn = _projected_reference(controller_catalog, rows[controller.index], controller, 'Pawn')
     if provider is not None:provider._ui_pawn=None if pawn is None else identity(pawn)
     exploration = pawn is not None and pawn.class_name in EXPLORATION_PAWNS
     token = (identity(world), identity(gi), identity(manager), slot)
@@ -169,12 +179,8 @@ class WarmAdmissionObserver:
         self._ui_local_player=identity(local)
         # The decoder validated the array reference identity and closure. Read the
         # selected member's controller anew; never reuse an earlier membership.
-        values = read_values_many(catalog, (local,), fields=('PlayerController',))[local.index]
-        owners = [key[0] for key in values.types if key[1] == 'PlayerController']
-        if len(owners) != 1:
-            raise RuntimeError('Current LocalPlayer controller field is ambiguous or missing')
-        player, catalog = read_object_reference(catalog, local,
-            catalog.by_index[owners[0]], 'PlayerController', project=True)
+        values, catalog = read_values_with_references(catalog, local, fields=('PlayerController',))
+        player = _projected_reference(catalog, values, local, 'PlayerController')
         if player is None:
             raise NotReady('Current local controller is unavailable')
         worlds = tuple(o for o in catalog.outer_chain(player) if o.class_name == 'World')

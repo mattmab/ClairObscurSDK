@@ -127,7 +127,9 @@ def start(session, function, exemplar, *, target=None, duration_ms=10000, limit=
     catalog = capture() if catalog is None else catalog
     plan = session._trace_plan_for(function)
     if plan is None:
-        plan = prepare_trace(catalog, function, blueprint=getattr(session._transport, 'blueprint_trace_protocol', 0) == 1)
+        plan = prepare_trace(catalog, function, blueprint=getattr(session._transport, 'blueprint_trace_protocol', 0) == 1,
+            new_game=getattr(session._transport,'new_game_story_start_protocol',0)==1,
+            story_direction=getattr(session._transport,'new_game_story_direction_protocol',0)==1)
     else:
         # The native thunk is already installed. Reuse its original observed
         # descriptor; registration still validates identities/schema natively.

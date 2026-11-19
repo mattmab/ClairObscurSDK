@@ -8,6 +8,13 @@ from expedition33.map_readiness import NativeMapReadiness, Receipt, RevealDecisi
 
 
 class ReadinessTests(unittest.TestCase):
+    def test_remote_landing_is_capability_gated_and_does_not_move_the_pawn(self):
+        q=self.query()
+        with self.assertRaisesRegex(RuntimeError,'296'):q.query(position=(1.,2.,3.))
+        q.runtime.scope._session._transport.story_local_transfer_protocol=1
+        self.assertTrue(q.query(position=(1.,2.,3.)).collision_ready)
+        self.assertEqual(struct.unpack_from('<I',self.packet,2008)[0],1)
+        self.assertEqual(struct.unpack_from('<3d',self.packet,2016),(1.,2.,3.))
     def test_title_prepares_stable_metadata_once_without_world_objects(self):
         root = N(pid=123)
         discovered = [N(index=i, serial=0, address=100*i) for i in range(1, 7)]

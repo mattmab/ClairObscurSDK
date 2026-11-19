@@ -105,7 +105,17 @@ class MetadataPreparation:
         functions=tuple(script_function(catalog,obj) for obj in functions)
         ids=tuple((obj.index,obj.serial,obj.address) for obj in functions)
         if not 1<=len(ids)<=CAPACITY or len(set(ids))!=len(ids):raise ValueError('Metadata preparation requires1..128 unique functions')
-        missing=[identity for identity in ids if identity not in self._known]
+        missing=[]
+        for identity in ids:
+            matches=[known for known in self._known if known[0]==identity[0] and known[2]==identity[2]]
+            if matches:
+                if len(matches)!=1 or (identity[1] and identity[1]!=matches[0][1]):
+                    raise RuntimeQueryError('Previously retained metadata identity changed')
+                # Another detached panel may still hold the pre-admission zero
+                # observation. Reuse the acknowledged lease and select its
+                # positive identity; never acquire that metadata a second time.
+                continue
+            missing.append(identity)
         if missing:
             sent=request(missing)
             try:

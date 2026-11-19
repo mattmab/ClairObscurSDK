@@ -1,18 +1,32 @@
 #pragma once
 #include "target_trace_collector.h"
 #include "trace_registry.h"
+#ifdef E33_DAMAGE_AUDIT_SESSION
+#include "damage_modifier_evidence.h"
+#endif
 
 struct TargetTraceOps {
     using Context = TargetTraceContext;
+#ifdef E33_DAMAGE_AUDIT_SESSION
+    static void flush_damage_evidence(){DamageModifierEvidence::flush();}
+#endif
     static uint32_t prepare(uint64_t base, CallPacket& schema, const CallIdentity* filter, Context& context) {
         auto error=prepare_target_trace_context(base, schema, filter, context);
 #ifdef E33_BLUEPRINT_DIRECT_SESSION
         if (!error && context.plan.blueprint && !BlueprintDirectTrace::install(base,context.function.address)) return 940;
+#ifdef E33_DAMAGE_AUDIT_SESSION
+        if(!error&&blueprint_damage_schema(schema))DamageModifierEvidence::begin(base,schema.fields[3].constraint);
+#endif
 #endif
         return error;
     }
 #ifdef E33_BLUEPRINT_DIRECT_SESSION
-    static void close_blueprint() { BlueprintDirectTrace::close(); }
+    static void close_blueprint() {
+#ifdef E33_DAMAGE_AUDIT_SESSION
+        DamageModifierEvidence::close();
+#endif
+        BlueprintDirectTrace::close();
+    }
     static bool is_blueprint(const Context& context) { return context.plan.blueprint; }
 #endif
     static e33_trace::Storage storage(const Context& context) {

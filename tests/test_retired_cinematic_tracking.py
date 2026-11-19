@@ -24,6 +24,17 @@ def scope():
 
 
 class RetiredTrackingTests(unittest.TestCase):
+    def test_closed_native_consumers_allow_lease_only_retirement_without_replaying_close(self):
+        s,_=scope();owner=N(_closed=True,close=Mock());s._native_owners.append(owner)
+        self.assertTrue(close_lease_only_scope(s));self.assertTrue(s._closed)
+        owner.close.assert_not_called()
+
+    def test_open_native_consumer_blocks_release_even_with_completed_playback(self):
+        s,_=scope();owner=N(_closed=False,state='completed',close=Mock())
+        s._native_owners.append(owner);lease=Lease((True,));s._leases.append(lease)
+        with self.assertRaisesRegex(RuntimeError,'_native_owners'):close_lease_only_scope(s)
+        self.assertFalse(s._closed);self.assertEqual(lease.calls,0);owner.close.assert_not_called()
+
     def test_confirmed_target_exit_is_terminal_not_release_ack(self):
         s,session=scope();session._transport.target_exit_code=0
         lease=Lease((False,));s._leases.append(lease)

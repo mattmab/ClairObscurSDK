@@ -4,6 +4,9 @@
 #include <stdexcept>
 #include <string>
 #include <bcrypt.h>
+#if E33_RUNTIME_CINEMATIC_VERSION>=314
+#include "session_handoff.h"
+#endif
 
 static void require(bool ok, const char* message) { if (!ok) throw std::runtime_error(message); }
 template<class F> static bool wait_for(F condition) {
@@ -16,6 +19,9 @@ static std::filesystem::path self_path() {
     wchar_t path[32768]; require(GetModuleFileNameW(nullptr, path, 32768) != 0, "SELF_PATH"); return path;
 }
 struct Controller {
+#if E33_RUNTIME_CINEMATIC_VERSION>=314
+    SessionHandoff handoff;
+#endif
     HANDLE mapping = nullptr;
     SessionPacket* packet = nullptr;
     HMODULE module = nullptr;
@@ -28,16 +34,35 @@ struct Controller {
         if (mapping) CloseHandle(mapping);
     }
     void command(DWORD action) {
+#if E33_RUNTIME_CINEMATIC_VERSION>=314
+        const LONG callbacks=atomic_read(&packet->request.callbacks);
+#endif
         packet->request.action = action; packet->request.error = 0;
         InterlockedExchange(&packet->request.state, kRequested);
         UINT message = RegisterWindowMessageW(kSessionMessage);
         require(message && PostThreadMessageW(tid, message, nonce, GetCurrentProcessId()), "POST");
+#if E33_RUNTIME_CINEMATIC_VERSION>=314
+        if(handoff.request)SetEvent(handoff.request);
+#endif
+#if E33_RUNTIME_CINEMATIC_VERSION>=314
+        const auto start=GetTickCount64();
+        while(atomic_read(&packet->request.state)!=kComplete&&GetTickCount64()-start<5000) {
+            if(handoff.complete)WaitForSingleObject(handoff.complete,1000);
+            else Sleep(1);
+        }
+        require(atomic_read(&packet->request.state)==kComplete,"REQUEST_TIMEOUT");
+        if(action!=SessionClose)require(atomic_read(&packet->request.callbacks)==callbacks+1,"DUPLICATE_DISPATCH");
+#else
         require(wait_for([&] { return atomic_read(&packet->request.state) == kComplete; }), "REQUEST_TIMEOUT");
+#endif
         if (packet->request.error) throw std::runtime_error("BACKEND_ERROR=" + std::to_string(packet->request.error));
     }
 };
 static int controller(DWORD pid, DWORD tid, uint64_t nonce, bool abrupt) {
     Controller connection; connection.tid = tid; connection.nonce = nonce;
+#if E33_RUNTIME_CINEMATIC_VERSION>=314
+    require(connection.handoff.connect(GetCurrentProcessId(),nonce,true),"HANDOFF_CREATE");
+#endif
     wchar_t name[96]; session_mapping_name(name, GetCurrentProcessId(), nonce);
     connection.mapping = CreateFileMappingW(INVALID_HANDLE_VALUE, nullptr, PAGE_READWRITE, 0, sizeof(SessionPacket), name);
     require(connection.mapping && GetLastError() != ERROR_ALREADY_EXISTS, "CREATE_MAPPING");
@@ -56,6 +81,20 @@ static int controller(DWORD pid, DWORD tid, uint64_t nonce, bool abrupt) {
     require(packet.request.observed_pid == pid && packet.request.observed_tid == tid, "THREAD_IDENTITY");
     require(UnhookWindowsHookEx(connection.bootstrap), "BOOTSTRAP_REMOVE"); connection.bootstrap = nullptr;
     connection.command(SessionEnable); connection.command(SessionEnable);
+#if E33_RUNTIME_CINEMATIC_VERSION>=314
+    SessionHandoff duplicate;
+    require(!duplicate.connect(GetCurrentProcessId(),nonce,true),"DUPLICATE_WAKEUP_OWNER");
+    SessionHandoffBudget budget;budget.count=32;
+    require(!budget.wait_ms(),"HANDOFF_COUNT_BUDGET");
+    budget=SessionHandoffBudget{};Sleep(12);
+    require(!budget.wait_ms(),"HANDOFF_TIME_BUDGET");
+    for(unsigned i=0;i<100;++i) {
+        // Deliberately stale hints: only the packet CAS grants dispatch.
+        SetEvent(connection.handoff.complete);SetEvent(connection.handoff.request);
+        connection.command(SessionPing);
+        require(packet.request.result==1,"HANDOFF_RESULT");
+    }
+#endif
     connection.command(SessionInvoke); require(packet.request.result == 42, "RESULT");
     connection.command(SessionDrain);
     require(packet.events.count == 1 && packet.events.dropped == 0 && packet.events.records[0].object == 123 &&

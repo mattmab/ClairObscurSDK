@@ -8,12 +8,14 @@ from .map_runtime import SIZE
 def validate_request(data):
     if type(data) is not bytes or len(data)!=SIZE:raise ValueError('Map load guard packet size')
     version,op,error,state,owner=struct.unpack_from('<4IQ',data)
-    if version!=3 or op not in (99,100,101,102,103) or error or state or not owner or any(data[24:88]):
+    if version!=3 or op not in (99,100,101,102,103,267) or error or state or not owner or any(data[24:88]):
         raise ValueError('Map load guard header')
-    count=3 if op==99 else 2 if op==100 else 5 if op==103 else 0
+    count=3 if op==99 else 2 if op in (100,267) else 5 if op==103 else 0
     for at in range(88,88+16*count,16):
         index,serial,address=struct.unpack_from('<iiQ',data,at)
         if index<0 or serial<0 or not address:raise ValueError('Map load guard identity')
+        if op==267 and (serial<=0 or address<0x10000 or address>0x7fffffffffff or address&7):
+            raise ValueError('Map loading priority requires stable exact identities')
     if any(data[88+16*count:2000]):raise ValueError('Map load guard identity padding')
     if op==99:
         paths=struct.unpack_from('<I',data,2000)[0]
@@ -26,23 +28,42 @@ def validate_request(data):
     elif any(data[2000:]):raise ValueError('Map load guard padding')
 
 
+class MapLoadGateNotReady(RuntimeError):
+    """Native preflight rejected release before changing movement or cover."""
+    outcome='not_dispatched'
+
+
 class MapLoadGate:
     def __init__(self,session,context,worlds):
         from .catalog import capture_matching,capture_selected
         from ._reader import ReadBatch
         self.session=session;self.owner=secrets.randbits(64) or 1;self.closed=False;self.overlay=None
+        self.priority_ids=None
         with ReadBatch(session.pid):
-            c=capture_matching(session.pid,names=('SetMovementMode',))
+            priority=getattr(session._transport,'map_loading_priority_protocol',0)
+            if type(priority) is not int or priority not in (0,1):raise RuntimeError('Unsupported loading priority runtime')
+            names=('SetMovementMode','Default__KismetSystemLibrary','SetBoolPropertyByName') if priority else ('SetMovementMode',)
+            c=capture_matching(session.pid,names=names)
             fn=c.find_path('/Script/Engine.CharacterMovementComponent:SetMovementMode')
             from ._metadata_stabilization import process_preparation
-            fn=process_preparation(session).prepare(c,(fn,)).by_index[fn.index]
+            functions=(fn,)
+            if priority:
+                functions+=(c.find_path('/Script/Engine.Default__KismetSystemLibrary'),
+                    c.find_path('/Script/Engine.KismetSystemLibrary:SetBoolPropertyByName'))
+            stable=process_preparation(session).prepare(c,functions)
+            fn=stable.by_index[fn.index]
+            if priority:self.priority_ids=tuple(stable.by_index[obj.index] for obj in functions[1:])
             selected=capture_selected(session.pid,(context.local_player[1:],context.gi[1:]))
             player=selected.by_index[context.local_player[1]];gi=selected.by_index[context.gi[1]]
             self.ids=(player,gi,fn);self.worlds=tuple(sorted(set(worlds)))
             process_preparation(session).scope._reference_owners.append(self)
             self._send(99,ids=self.ids,worlds=self.worlds)
+            if priority:self._send(267,ids=self.priority_ids)
 
     def _send(self,op,*,ids=(),worlds=()):
+        if op==267:
+            capability=getattr(self.session._transport,'map_loading_priority_protocol',0)
+            if type(capability) is not int or capability!=1:raise RuntimeError('Native loading priority unavailable')
         packet=bytearray(SIZE);struct.pack_into('<4IQ',packet,0,3,op,0,0,self.owner)
         for i,obj in enumerate(ids):
             value=(obj.index,obj.serial,obj.address) if hasattr(obj,'index') and not isinstance(obj,(tuple,list)) else tuple(obj)
@@ -60,12 +81,28 @@ class MapLoadGate:
         raw=bytes.fromhex(reply['mesh_packet']);compare=bytearray(raw)
         if len(raw)!=SIZE:raise RuntimeError('Map load guard acknowledgement size')
         compare[8:16]=packet[8:16]
+        timing=op==101 and getattr(self.session._transport,'map_load_timing_protocol',0)==1
         if op==101:compare[4096:4146]=packet[4096:4146]
+        if timing:compare[4160:4184]=packet[4160:4184]
+        priority_capability=getattr(self.session._transport,'map_loading_priority_protocol',0)
+        priority=op==101 and type(priority_capability) is int and priority_capability==1
+        if priority:compare[4184:4204]=packet[4184:4204]
         if compare!=packet:raise RuntimeError('Map load guard acknowledgement mismatch')
         error,state=struct.unpack_from('<II',raw,8)
+        if op==100 and error==2143:
+            raise MapLoadGateNotReady('Map load guard release is waiting for exact destination possession (2143)')
         if error:raise RuntimeError(f'Map load guard operation {op} rejected ({error}); not replayed')
         if state not in (0,1,2,4):raise RuntimeError('Map load guard state')
-        return dict(state=state,world=list(struct.unpack_from('<iiQ',raw,4096)),pawn=list(struct.unpack_from('<iiQ',raw,4112)))
+        result=dict(state=state,world=list(struct.unpack_from('<iiQ',raw,4096)),pawn=list(struct.unpack_from('<iiQ',raw,4112)))
+        if timing:
+            started,elapsed,sequence=struct.unpack_from('<3Q',raw,4160)
+            result.update(hold_started_ms=started,hold_duration_ms=elapsed,hold_sequence=sequence)
+        if priority:
+            phase,error,enabled,restored,retired=struct.unpack_from('<5I',raw,4184)
+            if phase>5 or enabled>1 or restored>1 or retired>1:raise RuntimeError('Map loading priority diagnostics')
+            result['priority']=dict(state=('empty','borrowed','owned','rejected','closed','unknown')[phase],
+                error=error,enable_returned=bool(enabled),restore_returned=bool(restored),retired=bool(retired))
+        return result
 
     def status(self):return self._send(101)
     def attach_cover(self,overlay):

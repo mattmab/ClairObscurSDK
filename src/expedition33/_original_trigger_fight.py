@@ -170,7 +170,11 @@ class OriginalTriggerFight:
         rows = [row for row in _recipes(spawner.catalog) if row['id'] == recipe_id]
         if len(rows) != 1 or rows[0]['admission']['menu_available'] is not True:
             raise ValueError('Original direct-fight recipe is unavailable')
-        self.recipe = rows[0]
+        self._initialize(spawner,rows[0],config)
+
+    def _initialize(self,spawner,recipe,config):
+        """Internal shared lifetime; public recipe admission remains unchanged."""
+        self.recipe = recipe
         self._spawner = spawner; self._scope = spawner._scope
         self._transport = self._scope._session._transport; self._owner = spawner._owner
         self._thread = threading.get_ident()
@@ -178,7 +182,8 @@ class OriginalTriggerFight:
         self._sequence_ready = False; self._sequence_diagnostic = None
         self._was_active = False
         self._holds = []; self._load_pending = None; self._release_unknown = False
-        self._context = None; self._source_root = None; self._trigger_class = None
+        self._context = None; self._context_reader = None
+        self._source_root = None; self._trigger_class = None
         self._anchor_attempted = False; self._anchor_removed = False
         self._started = False; self.dispatch_attempted = False; self.entry_acknowledged = False
         self.battle_observed = False; self._private_id = None; self._next_poll = 0.
@@ -197,11 +202,13 @@ class OriginalTriggerFight:
         return ReadBatch(self._scope.pid, share=True, _executable=self._transport._executable)
 
     def _current_context(self):
-        from .cinematics.original_game_action import controller_context
-        # Keep fresh LocalPlayer selection on this candidate's read worker.
-        # Outside a batch, the imported utility uses the installed probe.
+        from .cinematics.controller_anchor import context_observer
+        # Retain only the LocalPlayer selector on this scope. Every invocation
+        # still reads its current controller and world on this candidate worker.
         with self._batch():
-            return controller_context(self._scope._session)
+            if self._context_reader is None:
+                self._context_reader = context_observer(self._scope)
+            return self._context_reader()
 
     def _preflight(self):
         self._scope._check()
@@ -232,7 +239,6 @@ class OriginalTriggerFight:
         from .catalog import capture_selected
         from .enemy_spawning import _fields
         from ._npc_encounter_preparation import _controller_battle_manager
-        from .cinematics.original_game_action import controller_context
         context = self._current_context()
         if context != self._context: raise RuntimeError('Original fight world/controller changed; preserve owners')
         with self._batch():
@@ -287,7 +293,7 @@ class OriginalTriggerFight:
                  'Actor:K2_DestroyActor', 'Controller:K2_GetPawn', 'Actor:SetActorEnableCollision',
                  'Actor:SetActorTickEnabled', 'Actor:SetActorHiddenInGame')
         with self._batch():
-            c = _construction_metadata(self._scope,self._transport,self._context,self._spawner)
+            c = self._construction_catalog()
             c = c.with_observations(capture_selected(self._scope.pid, (tuple(self._context['controller'][1:]),
                                      tuple(self._context['world'][1:]), _identity(cls))))
             live = c.by_index[cls.index]
@@ -313,14 +319,26 @@ class OriginalTriggerFight:
         self._idle()
         return tuple(ids), pose
 
+    def _construction_catalog(self):
+        return _construction_metadata(self._scope,self._transport,self._context,self._spawner)
+
+    def _arena_frame_catalog(self):
+        from .catalog import capture_matching
+        return capture_matching(self._scope.pid,names=('K2_SetRelativeTransform','GetRelativeTransform'))
+
+    def _entry_catalog(self):
+        from .catalog import capture_matching
+        return capture_matching(self._scope.pid,names=('FBattleStartParams','StartBattleNEW'),classes=('BP_GameAction_TriggerBattle_C',))
+
     @measure_method('prepare.arena_frame_validation')
     def _arena_frames(self, staging, *, allow_corrections):
         from .catalog import capture_matching, capture_selected
         from .enemy_spawning import _fields, _exact
+        from .values import read_values_many_with_references
         profile = self.recipe['arena']; frames = profile['frames']; children = profile['children']
         with self._batch():
             c = capture_selected(self._scope.pid, (tuple(self._arena.actor_identity),))
-            c = c.with_observations(capture_matching(self._scope.pid, names=('K2_SetRelativeTransform', 'GetRelativeTransform')))
+            c = c.with_observations(self._arena_frame_catalog())
             actor = c.by_index[self._arena.actor_identity[0]]
             if _identity(actor) != tuple(self._arena.actor_identity) or c.path_name(c.by_index[actor.class_index]) != profile['class_path']:
                 raise RuntimeError('Exact owned original arena changed')
@@ -328,12 +346,38 @@ class OriginalTriggerFight:
             setter = _exact(c, '/Script/Engine.SceneComponent:K2_SetRelativeTransform')
             getter = _exact(c, '/Script/Engine.SceneComponent:GetRelativeTransform')
             fixes = []; seen_components = set(); seen_children = set(); observed_children = []
+            components = []
             for name, row in frames.items():
                 comp = values[name]
                 if (comp is None or comp.outer_index != actor.index or comp.outer_serial != actor.serial or
                         c.path_name(c.by_index[comp.class_index]) != row['class_path'] or _identity(comp) in seen_components):
                     raise RuntimeError('Original component ownership/class differs: ' + name)
-                seen_components.add(_identity(comp)); actual, c = _fields(c, comp, _GEOMETRY)
+                seen_components.add(_identity(comp)); components.append(comp)
+
+            def fields_many(objects, names):
+                # These are fresh sibling observations, not cached geometry.
+                # Decode references from the same response and reject an
+                # incomplete group before any component correction is attempted.
+                nonlocal c
+                result, c = read_values_many_with_references(c, objects, fields=names)
+                if set(result) != {obj.index for obj in objects}:
+                    raise RuntimeError('Incomplete original arena field batch')
+                decoded = {}
+                for obj in objects:
+                    value = result[obj.index]
+                    fields = {key[1]:item for key,item in value.values.items()}
+                    if (value.errors or value.truncated or set(fields) != set(names) or
+                            len(value.values) != len(names)):
+                        raise RuntimeError('Incomplete original arena fields: ' + str(obj.index))
+                    decoded[obj.index] = fields
+                return decoded
+
+            geometry = fields_many(tuple(components), _GEOMETRY)
+            child_refs = fields_many(tuple(values[name] for name in children),
+                                    ('ChildActor', 'ChildActorClass', 'ChildActorTemplate'))
+            slot_children = []
+            for name, row in frames.items():
+                comp = values[name]; actual = geometry[comp.index]
                 if row['parent_field'] is None:
                     if actual['AttachParent'] is not None or _identity(values['RootComponent']) != _identity(comp):
                         raise RuntimeError('Owned arena root differs')
@@ -350,7 +394,7 @@ class OriginalTriggerFight:
                         raise RuntimeError('Original arena frame verification failed: ' + name)
                     fixes.append((name, comp, want))
                 if name in children:
-                    expected = children[name]; refs, c = _fields(c, comp, ('ChildActor', 'ChildActorClass', 'ChildActorTemplate'))
+                    expected = children[name]; refs = child_refs[comp.index]
                     child, child_class, template = (refs[k] for k in ('ChildActor', 'ChildActorClass', 'ChildActorTemplate'))
                     if (child is None or child_class is None or template is None or child.class_index != child_class.index or
                             c.path_name(child_class) != expected['class_path'] or c.path_name(template) != expected['template_path'] or
@@ -358,10 +402,13 @@ class OriginalTriggerFight:
                         raise RuntimeError('Original child/template differs: ' + name)
                     seen_children.add(_identity(child))
                     if 'slot_index' in expected:
-                        slot, c = _fields(c, child, ('SlotIndex',))
-                        if type(slot['SlotIndex']) is not int or slot['SlotIndex'] != expected['slot_index']:
-                            raise RuntimeError('Original slot index differs: ' + name)
+                        slot_children.append((name, child, expected['slot_index']))
                     observed_children.append(dict(field=name, identity=_identity(child)))
+            slots = fields_many(tuple(child for _,child,_ in slot_children), ('SlotIndex',))
+            for name,child,expected_slot in slot_children:
+                slot = slots[child.index]['SlotIndex']
+                if type(slot) is not int or slot != expected_slot:
+                    raise RuntimeError('Original slot index differs: ' + name)
         if len(seen_components) != 20 or len(seen_children) != 14:
             raise RuntimeError('Complete owned original assembly required')
         self._assembly.update(frames_observed=20, children=observed_children, frames_verified=not fixes)
@@ -380,13 +427,13 @@ class OriginalTriggerFight:
         from .original_encounter_roster import _verify_source
         from .values import StoredMap, StoredMapEntries
         with self._batch():
-            c = capture_matching(self._scope.pid, names=('FBattleStartParams', 'StartBattleNEW'), classes=('BP_GameAction_TriggerBattle_C',))
+            c = self._entry_catalog()
             c = c.with_observations(capture_selected(self._scope.pid, (_identity(self._source_root),
                 tuple(self._owner.actor_identity), tuple(self._context['controller'][1:]), tuple(self._context['world'][1:]))))
             root = c.by_index[self._source_root.index]
             if _identity(root) != _identity(self._source_root) or c.path_name(root) != self.recipe['battle_source'].split(':')[0]:
                 raise RuntimeError('Retained original action root differs')
-            source = _owned_source(c, root, self.recipe['battle_source'])
+            source,c = self._resolve_entry_source(c,root)
             anchor = c.by_index[self._owner.actor_identity[0]]
             if _identity(anchor) != tuple(self._owner.actor_identity): raise RuntimeError('Held trigger identity differs')
             v, c = _fields(c, anchor, ('bHidden', 'bActorEnableCollision', 'BP_Interaction_SerializableComponent'))
@@ -408,11 +455,22 @@ class OriginalTriggerFight:
                     raise RuntimeError('Private trigger key already exists; never clear or reuse it')
             manager, c = _controller_battle_manager(c, c.by_index[self._context['controller'][1]])
             identities = (_exact(c, BATTLE_STRUCT), source, root, anchor, manager, _exact(c, _ENTRY))
-        _verify_source(self._scope, source, self.recipe['encounter'])
+        self._verify_entry_source(source)
         current = self._idle()
         if current['manager'] != _identity(manager): raise RuntimeError('Current battle manager changed before entry')
         self._private_id = private
         return identities
+
+    def _resolve_entry_source(self,c,root):
+        from .original_trigger_sources import _owned_source
+        return _owned_source(c,root,self.recipe['battle_source']),c
+
+    def _verify_entry_source(self,source):
+        from .original_encounter_roster import _verify_source
+        _verify_source(self._scope,source,self.recipe['encounter'])
+
+    def _parameter_mode(self):
+        return 2 if self.recipe['id']=='sciel-tutorial' else 1
 
     @measure_method('battle.prepare_total')
     def prepare(self, *, align_source_orientation=False):
@@ -495,7 +553,7 @@ class OriginalTriggerFight:
             self.dispatch_attempted = True; self.phase = 'entry_pending'
             options = {'track_completion': True} if track_completion else {}
             self._parameters.dispatch_trigger_cleanup(identities, anchor=self._owner, arena=self._arena,
-                mode=2 if self.recipe['id']=='sciel-tutorial' else 1, **options)
+                mode=self._parameter_mode(), **options)
             self.entry_acknowledged = True
             return self.status()
         except BaseException as error:

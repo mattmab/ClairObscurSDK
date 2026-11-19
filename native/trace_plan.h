@@ -8,6 +8,7 @@ struct CapturePlan {
     uint32_t count{}, extent{};
     CaptureField fields[max_fields]{};
     bool blueprint{};
+    bool story_direction{};
     CallIdentity constraints[max_fields]{};
 };
 
@@ -17,11 +18,12 @@ inline bool make_capture_plan(const CallPacket& schema, const uint64_t* properti
                               uint32_t property_count, CapturePlan& output) {
     output = {};
     if (validate_call_packet(schema) || schema.object_count ||
-        (!(schema.function_flags & 0x400) && !blueprint_damage_schema(schema)) || !schema.entry_rva || schema.entry_rva >= 166776832 ||
+        (!(schema.function_flags & 0x400) && !blueprint_observer_schema(schema)) || !schema.entry_rva || schema.entry_rva >= 166776832 ||
         property_count != schema.field_count || (property_count && !properties)) return false;
     for (auto byte : schema.data) if (byte) return false;
     CapturePlan candidate{};
-    candidate.blueprint = blueprint_damage_schema(schema);
+    candidate.blueprint = blueprint_observer_schema(schema);
+    candidate.story_direction = story_direction_schema(schema);
     for (uint32_t i = 0; i < property_count; ++i) {
         const auto& field = schema.fields[i];
         if ((field.kind > CallDouble && !candidate.blueprint) || !properties[i]) return false;

@@ -17,6 +17,11 @@ struct TargetOps {
    exact_name(base,local_read<uint64_t>(cls+16)+24,"Class");
  }
  bool live(uint64_t obj)const{return call_capture(base,obj).address&&!(local_read<uint32_t>(obj+8)&0x40018030U);}
+ bool replaced_world(const CallIdentity&old,const CallIdentity&fresh)const{
+  return context()&&old.address==fresh.address&&old.serial>0&&fresh.serial>0&&
+   !same(old,fresh)&&!call_identity(base,old)&&call_identity(base,fresh)==fresh.address&&
+   live(fresh.address)&&native_class(local_read<uint64_t>(fresh.address+16),"World","/Script/Engine");
+ }
  bool derives(uint64_t cls,const char*name,const char*package)const{
   for(unsigned n=0;cls&&n<64;++n,cls=local_read<uint64_t>(cls+0x40))
    if(native_class(cls,name,package))return true;

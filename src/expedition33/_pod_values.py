@@ -25,6 +25,8 @@ MARGIN = '/Script/SlateCore.Margin'
 ANCHORS = '/Script/Slate.Anchors'
 VECTOR3 = '/Script/CoreUObject.Vector'
 ROTATOR = '/Script/CoreUObject.Rotator'
+QUAT = '/Script/CoreUObject.Quat'
+TRANSFORM = '/Script/CoreUObject.Transform'
 FRAME_NUMBER = '/Script/CoreUObject.FrameNumber'
 FRAME_TIME = '/Script/CoreUObject.FrameTime'
 FRAME_RATE = '/Script/CoreUObject.FrameRate'
@@ -33,6 +35,8 @@ TIMESPAN = '/Script/CoreUObject.Timespan'
 BINDING_ID = '/Script/MovieScene.MovieSceneObjectBindingID'
 FRAME_PROFILES = (FRAME_NUMBER, FRAME_TIME, FRAME_RATE, QUALIFIED_FRAME_TIME)
 PROFILES = MappingProxyType({
+    QUAT: Profile(QUAT,32,tuple((name,i*8,'DoubleProperty') for i,name in enumerate('XYZW'))),
+    TRANSFORM: Profile(TRANSFORM,96,(('Rotation',0,QUAT),('Translation',32,VECTOR3),('Scale3D',64,VECTOR3))),
     GUID: Profile(GUID, 16, tuple((name, i*4, 'IntProperty') for i,name in enumerate('ABCD'))),
     BINDING_ID: Profile(BINDING_ID,24,(('Guid',0,GUID),('SequenceID',16,'IntProperty'),('ResolveParentIndex',20,'IntProperty'))),
     TIMESPAN: Profile(TIMESPAN, 8, ()),
@@ -125,6 +129,10 @@ def validate_profile(catalog, descriptor, descriptors):
             raise ValueError('Guid field flags or native type changed')
         if path==ROTATOR and (row['flags']!=6755469251052037 or int(row['vtable_rva'],16)!=0x6e11788):
             raise ValueError('Rotator field flags or native type changed')
+        if path in (QUAT,TRANSFORM):
+            flags=6755469251051525 if path==TRANSFORM and field_index==0 else 6755469251052037
+            if row['flags']!=flags or int(row['vtable_rva'],16)!=(0x6e136a0 if nested else 0x6e11788):
+                raise ValueError('Transform field flags or native type changed')
         if path == BINDING_ID:
             flags=(20266268116386305,20266268116386304,20266268116386304)
             if row['flags']!=flags[field_index] or int(row['vtable_rva'],16)!=(0x6e136a0 if nested else 0x6e10a98):
@@ -176,6 +184,9 @@ def encode(path, value):
             if not valid:
                 raise ValueError('POD component must be finite and fit the target UI float range')
             struct.pack_into('<d' if kind == 'DoubleProperty' else '<f', output, offset, item)
+    if path==QUAT:
+        norm=sum(v*v for v in struct.unpack('<4d',output))
+        if not math.isfinite(norm) or abs(norm-1.)>1e-4:raise ValueError('Rotation quaternion must be normalized')
     return bytes(output)
 
 
@@ -194,6 +205,9 @@ def decode(path, data):
     profile = PROFILES[path]
     if type(data) is not bytes or len(data) != profile.width:
         raise ValueError('POD result extent changed')
+    if path==TRANSFORM and (any(data[56:64]) or any(data[88:96])):
+        # Engine padding is not semantic data; copy only verified fields below.
+        data=data[:56]+bytes(8)+data[64:88]+bytes(8)
     if path == TIMESPAN:
         return TimespanValue(struct.unpack('<q', data)[0])
     result = {}

@@ -9,6 +9,8 @@
 #include "map_runtime_readiness.h"
 #include "validated_engine_profile_call.h"
 #include "npc_interaction_profiles.h"
+#include "actor_visibility_profile.h"
+#include "map_visibility_batch.h"
 #pragma warning(push)
 #pragma warning(disable:4324)
 
@@ -87,6 +89,49 @@ class Owner {
         if(uint8_t(encoding>>8)||!mask)return false;
         value=(local_read<uint8_t>(object.address+local_read<int32_t>(field+0x44))&mask)!=0;return true;
     }
+    bool visibility_current(uint64_t b){
+#ifdef E33_RETIRED_WORLD_SESSION
+        e33_retired_world::TargetOps proof{b};
+        return !retiring_&&epoch_.established()&&proof.current_binding(epoch_.engine(),epoch_.viewport(),ids_[2])&&
+            proof.controller_world(ids_[0],ids_[2])&&current(b);
+#else
+        (void)b;return false;
+#endif
+    }
+    bool visibility_observe(uint64_t b,CallIdentity id,bool& hidden){
+        const auto found=std::find_if(rows_.begin(),rows_.end(),[&](const Row& row){
+            return row.actor.index==id.index&&row.actor.serial==id.serial&&row.actor.address==id.address;});
+        if(found==rows_.end()||found->destroyed||!found->lease||!call_identity(b,id)||!call_identity(b,found->component)||
+           !call_derives(b,local_read<uint64_t>(id.address+16),ids_[4].address)||
+           local_read<uint64_t>(found->component.address+32)!=id.address)return false;
+        const auto root=readiness_field(b,id,"Actor","RootComponent","ObjectProperty",8);
+        bool collision=false;
+        return root&&local_read<uint64_t>(id.address+local_read<int32_t>(root+0x44))==found->component.address&&
+            readiness_bool(b,id,"Actor","bActorEnableCollision",collision)&&collision&&
+            readiness_bool(b,id,"Actor","bHidden",hidden);
+    }
+    void visibility(uint64_t b,MeshPacket& p){
+        auto* raw=reinterpret_cast<uint8_t*>(&p);
+        if(!e33_map_visibility::valid(raw,sizeof(p))){p.error=e33_map_visibility::rejected;return;}
+        struct Ops {
+            Owner& owner;uint64_t base;CallIdentity fn;const uint8_t* rows;
+            std::chrono::steady_clock::time_point started=std::chrono::steady_clock::now();
+            CallIdentity actor(uint32_t i){CallIdentity id{};std::memcpy(&id,rows+16*i,16);return id;}
+            bool function(){
+                const auto f=call_identity(base,fn);if(!f||!exact_name(base,local_read<uint64_t>(f+16)+24,"Function"))return false;
+                uint8_t argument=1;e33_engine_profile_call::TargetOps ops{base,f,call_identity(base,actor(0)),e33_actor_visibility::hidden,&argument};
+                return ops.context()&&ops.identities()&&ops.exact_profile()&&ops.recipient_derives()&&ops.dispatch_entry();
+            }
+            bool current(){return owner.visibility_current(base);}
+            bool observe(uint32_t i,bool& hidden){return owner.visibility_observe(base,actor(i),hidden);}
+            bool hide(uint32_t i){uint8_t argument=1;return e33_engine_profile_call::invoke(base,fn,actor(i),e33_actor_visibility::hidden,&argument);}
+            bool budget_exhausted(){return std::chrono::duration<double,std::milli>(std::chrono::steady_clock::now()-started).count()>=4.;}
+        };
+        CallIdentity fn{};std::memcpy(&fn,raw+88,16);
+        Ops ops{*this,b,fn,raw+4096};const auto result=e33_map_visibility::run(ops,e33_map_visibility::read<uint32_t>(raw+2000));
+        p.error=result.error;if(result.quarantine)quarantined_=true;
+        const auto count=uint32_t(rows_.size());std::memcpy(raw+3560,&result.completed,4);std::memcpy(raw+3564,&count,4);p.state=1;
+    }
     bool readiness_save(uint64_t b,const uint8_t* raw){
 #ifdef E33_RETIRED_WORLD_SESSION
         e33_retired_world::TargetOps proof{b};
@@ -118,62 +163,66 @@ class Owner {
     }
     bool readiness(uint64_t b,MeshPacket& packet){
         auto* raw=reinterpret_cast<uint8_t*>(&packet);CallIdentity query[6]{},expected[2]{};
+        const auto failed=[&](uint32_t stage){std::memcpy(raw+4096,&stage,4);return false;};
         std::memcpy(query,raw+88,sizeof(query));std::memcpy(expected,raw+184,sizeof(expected));
         const auto same=[](CallIdentity a,CallIdentity z){return a.index==z.index&&a.serial==z.serial&&a.address==z.address;};
         uint32_t require_owned=0;std::memcpy(&require_owned,raw+2000,4);
         if(require_owned>1||!same(expected[0],ids_[2])||!same(expected[1],ids_[1])||!current(b)||!readiness_save(b,raw)||
-           !call_identity(b,query[0])||!named(b,query[0].address,"Default__KismetSystemLibrary","/Script/Engine"))return false;
+           !call_identity(b,query[0])||!named(b,query[0].address,"Default__KismetSystemLibrary","/Script/Engine"))return failed(1);
         uint32_t report[13]={uint32_t(rows_.size()),0,0,0,0,0,0,1,0,0,0,0,0};
         const auto rendered=[&](CallIdentity component,bool& value){
             alignas(16) uint8_t frame[8]{};const float tolerance=.25f;std::memcpy(frame,&tolerance,4);
-            if(!e33_engine_profile_call::invoke(b,query[4],component,e33_map_readiness::rendered,frame)||frame[4]>1)return false;
+            if(!e33_engine_profile_call::invoke(b,query[4],component,e33_map_readiness::rendered,frame)||frame[4]>1)return failed(2);
             value=frame[4]!=0;return true;
         };
         for(const auto& row:rows_){
-            if(row.destroyed||!call_identity(b,row.actor)||!call_identity(b,row.component)||local_read<uint64_t>(row.component.address+32)!=row.actor.address)return false;
+            if(row.destroyed||!call_identity(b,row.actor)||!call_identity(b,row.component)||local_read<uint64_t>(row.component.address+32)!=row.actor.address)return failed(3);
             const auto mesh_field=readiness_field(b,row.component,"StaticMeshComponent","StaticMesh","ObjectProperty",8);
-            if(!mesh_field)return false;
+            if(!mesh_field)return failed(4);
             const auto mesh=call_capture(b,local_read<uint64_t>(row.component.address+local_read<int32_t>(mesh_field+0x44)));
-            if(!call_identity(b,mesh)||!call_derives(b,local_read<uint64_t>(mesh.address+16),ids_[5].address))return false;
+            if(!call_identity(b,mesh)||!call_derives(b,local_read<uint64_t>(mesh.address+16),ids_[5].address))return failed(5);
             ++report[1];
             alignas(16) uint8_t frame[464]{};
-            if(!e33_engine_profile_call::invoke(b,query[3],row.component,e33_npc_interaction::GetCollisionEnabled,frame))return false;
-            if(frame[0]>3)return false;if(frame[0]==1||frame[0]==3)++report[2];
+            if(!e33_engine_profile_call::invoke(b,query[3],row.component,e33_npc_interaction::GetCollisionEnabled,frame))return failed(6);
+            if(frame[0]>3)return failed(7);if(frame[0]==1||frame[0]==3)++report[2];
             bool visible=false,hidden=true,actor_hidden=true;
             if(!readiness_bool(b,row.component,"SceneComponent","bVisible",visible)||
                !readiness_bool(b,row.component,"SceneComponent","bHiddenInGame",hidden)||
-               !readiness_bool(b,row.actor,"Actor","bHidden",actor_hidden))return false;
+               !readiness_bool(b,row.actor,"Actor","bHidden",actor_hidden))return failed(8);
             if(visible&&!hidden&&!actor_hidden)++report[3];
-            bool recently_rendered=false;if(!rendered(row.component,recently_rendered))return false;
+            bool recently_rendered=false;if(!rendered(row.component,recently_rendered))return failed(9);
             if(recently_rendered)++report[8];
         }
         const auto streams=readiness_field(b,ids_[2],"World","StreamingLevels","ArrayProperty",16);
         if(!streams||local_read<uint64_t>(streams)!=b+0x6e0de80||local_read<int32_t>(streams+0x44)!=136||
-           local_read<uint64_t>(streams+0x38)!=0x144000000002200ULL||(local_read<uint8_t>(streams+0x70)&1))return false;
+           local_read<uint64_t>(streams+0x38)!=0x144000000002200ULL||(local_read<uint8_t>(streams+0x70)&1))return failed(10);
         const auto inner=local_read<uint64_t>(streams+0x78);
         if(!inner||local_read<uint64_t>(inner+16)!=streams||!exact_name(b,local_read<uint64_t>(inner+8),"ObjectProperty")||
            local_read<int32_t>(inner+0x30)!=1||local_read<int32_t>(inner+0x34)!=8||
-           !named(b,local_read<uint64_t>(inner+0x70),"LevelStreaming","/Script/Engine")||!call_is_class(b,local_read<uint64_t>(inner+0x70)))return false;
+           !named(b,local_read<uint64_t>(inner+0x70),"LevelStreaming","/Script/Engine")||!call_is_class(b,local_read<uint64_t>(inner+0x70)))return failed(11);
         const auto array=ids_[2].address+136;const auto stream_data=local_read<uint64_t>(array);
         const auto count=local_read<int32_t>(array+8),capacity=local_read<int32_t>(array+12);
-        if(count<0||count>4096||capacity<count||capacity>65536||(count&&(!stream_data||(stream_data&7))))return false;
+        if(count<0||count>4096||capacity<count||capacity>65536||(count&&(!stream_data||(stream_data&7))))return failed(12);
         for(int i=0;i<count;++i){
             const auto level=call_capture(b,local_read<uint64_t>(stream_data+8*i));
-            if(!call_identity(b,level)||!call_derives(b,local_read<uint64_t>(level.address+16),local_read<uint64_t>(inner+0x70)))return false;
+            if(!call_identity(b,level)||!call_derives(b,local_read<uint64_t>(level.address+16),local_read<uint64_t>(inner+0x70)))return failed(13);
             alignas(16) uint8_t frame[8]{};
-            if(!e33_engine_profile_call::invoke(b,query[5],level,e33_map_readiness::streaming,frame)||frame[0]>1)return false;
+            if(!e33_engine_profile_call::invoke(b,query[5],level,e33_map_readiness::streaming,frame)||frame[0]>1)return failed(14);
             ++report[9];if(frame[0])++report[10];
         }
-        clear();if(!call(b,4,ids_[1]))return false;const auto capsule=call_capture(b,pointer());
-        if(!call_identity(b,capsule)||local_read<uint64_t>(capsule.address+32)!=ids_[1].address)return false;
+        clear();if(!call(b,4,ids_[1]))return failed(15);const auto capsule=call_capture(b,pointer());
+        if(!call_identity(b,capsule)||local_read<uint64_t>(capsule.address+32)!=ids_[1].address)return failed(16);
         const auto h=readiness_field(b,capsule,"CapsuleComponent","CapsuleHalfHeight","FloatProperty",4);
         const auto r=readiness_field(b,capsule,"CapsuleComponent","CapsuleRadius","FloatProperty",4);
-        if(!h||!r)return false;
-        clear();if(!call(b,5,capsule))return false;
-        double transform[12]{};std::memcpy(transform,args_,96);if(!valid_pose(args_))return false;
+        if(!h||!r)return failed(17);
+        clear();if(!call(b,5,capsule))return failed(18);
+        double transform[12]{};std::memcpy(transform,args_,96);if(!valid_pose(args_))return failed(19);
         const double radius=local_read<float>(capsule.address+local_read<int32_t>(r+0x44))*std::max(std::abs(transform[8]),std::abs(transform[9]));
         const double height=local_read<float>(capsule.address+local_read<int32_t>(h+0x44))*std::abs(transform[10]);
         e33_map_readiness::Support support{};
+#if E33_RUNTIME_CINEMATIC_VERSION>=296
+        if(local_read<uint32_t>(reinterpret_cast<uint64_t>(raw+2008))==1)std::memcpy(transform+4,raw+2016,24);
+#endif
         const auto invoke=[&](unsigned stage,uint8_t* frame){return current(b)&&e33_engine_profile_call::invoke(b,query[stage+1],stage?ids_[3]:query[0],e33_engine_profiles::profiles[14+stage],frame);};
         bool render_query_valid=true;
         const auto owned=[&](uint64_t actor,uint64_t component){
@@ -182,7 +231,7 @@ class Owner {
             if(!call_identity(b,hit_component)||!rendered(hit_component,recent))render_query_valid=false;
             if(recent){++report[11];if(is_owned)++report[12];}return is_owned;
         };
-        if(!e33_map_readiness::support(invoke,owned,ids_[1].address,transform+4,radius,height,support)||!render_query_valid||!current(b)||!readiness_save(b,raw))return false;
+        if(!e33_map_readiness::support(invoke,owned,ids_[1].address,transform+4,radius,height,support)||!render_query_valid||!current(b)||!readiness_save(b,raw))return failed(20);
         report[4]=support.samples;report[5]=support.hits;report[6]=support.owned;
         if(report[0]==report[1])report[7]|=2;
         if(support.hits==5&&(!require_owned||support.owned==5))report[7]|=4;
@@ -226,9 +275,18 @@ class Owner {
         step_=10;
         clear();std::memcpy(args_,pose,96);args_[352]=1;
         if(!call(b,6,row.component))return false;
+        // Public material/visibility clients may create weak references later.
+        // Establish serials before publishing cached rows to collision queries.
+        // The actor is strongly held and its final root is owned by that actor.
+        if(local_read<uint64_t>(row.component.address+32)!=row.actor.address)return false;
+        TargetStrongReferenceOps actor_identity{b,row.actor},component_identity{b,row.component};
+        if(!stabilize_retained_identity(actor_identity,row.actor)||
+           !stabilize_retained_identity(component_identity,row.component)){quarantined_=true;return false;}
         result=row;return true;
     }
 public:
+    bool token_matches(uint64_t token)const{return token && owner_==token;}
+    bool available()const{return !owner_ && !quarantined_ && rows_.empty() && assets_.empty();}
     void quarantine(){quarantined_=true;}
 #ifdef E33_RETIRED_WORLD_SESSION
     bool protects(uint64_t token)const{
@@ -296,7 +354,7 @@ public:
     }
     template<class Pool> void command(uint64_t b,uint64_t session,Pool& pool,MeshPacket& p) {
         auto* raw=reinterpret_cast<uint8_t*>(&p);const auto op=p.operation;
-        if(p.version!=3 || p.error || p.state || !p.owner || (op!=107&&(op<93 || op>
+        if(p.version!=3 || p.error || p.state || !p.owner || (op!=107&&op!=e33_map_visibility::operation&&(op<93 || op>
 #ifdef E33_RETIRED_WORLD_SESSION
             98
 #else
@@ -339,10 +397,18 @@ public:
         } else if(op==95) {
             p.error=close(b,session,pool);
         } else if(!owner_){p.error=2102;return;}
+        else if(op==e33_map_visibility::operation){visibility(b,p);return;}
         else if(op==107){
             if(std::any_of(raw+24,raw+88,[](uint8_t c){return c!=0;})||
                std::any_of(raw+248,raw+2000,[](uint8_t c){return c!=0;})||
+#if E33_RUNTIME_CINEMATIC_VERSION>=296
+               local_read<uint32_t>(reinterpret_cast<uint64_t>(raw+2008))>1||
+               std::any_of(raw+2012,raw+2016,[](uint8_t c){return c!=0;})||
+               (!local_read<uint32_t>(reinterpret_cast<uint64_t>(raw+2008))&&std::any_of(raw+2016,raw+2040,[](uint8_t c){return c!=0;}))||
+               std::any_of(raw+2040,raw+sizeof(p),[](uint8_t c){return c!=0;})||!readiness(b,p)){p.error=2115;return;}
+#else
                std::any_of(raw+2008,raw+sizeof(p),[](uint8_t c){return c!=0;})||!readiness(b,p)){p.error=2115;return;}
+#endif
         }
         else if(op==97) {
             const auto* text=reinterpret_cast<const char*>(raw+2000);

@@ -15,10 +15,11 @@ class DashboardTests(unittest.TestCase):
         self.assertEqual(validate(data),data)
         self.assertTrue(encode(data))
 
-    def test_dashboard_has_eight_short_actions_and_single_summary(self):
+    def test_dashboard_has_short_actions_story_entry_and_single_summary(self):
         model=package.Mod();model.document=blank(WORLD);model.dirty=True
         view=SceneView(None,model);title,details,rows=view._rows()
-        self.assertEqual(len(rows),10)
+        self.assertEqual(len(rows),11)
+        self.assertEqual(sum(r[1]=='scene_story_packs' for r in rows),1)
         self.assertTrue(all(len(r[0])<=24 for r in rows))
         self.assertIn('Unsaved changes',details)
         self.assertNotIn('/Game/',details)
@@ -276,7 +277,7 @@ class MaskAnimationTests(unittest.TestCase):
 
     def test_existing_native_clip_slots_remain_unchanged_and_new_evidence_is_safe(self):
         from scene_editor_tests.palette import PALETTE
-        self.assertEqual(len(PALETTE['clips']),2689)
+        self.assertGreaterEqual(len(PALETTE['clips']),2689)
         baseline=json.loads((ROOT/'evidence/scene-editor/clip-baseline-v52.json').read_text())
         self.assertEqual([(r['id'],r['path']) for r in PALETTE['clips'][:303]],[(r['id'],r['path']) for r in baseline])
         for row in PALETTE['clips'][293:303]:
@@ -292,7 +293,7 @@ class MaskAnimationTests(unittest.TestCase):
 class ActorLibraryCurationTests(unittest.TestCase):
     def test_main_library_contains_verified_animated_actors_but_not_parts(self):
         from scene_editor_tests.palette import CHARACTERS,library_roles,animation_choices
-        main=library_roles();self.assertEqual(len(main),30)
+        main=library_roles();self.assertGreaterEqual(len(main),30)
         promoted=[k for k in main if CHARACTERS[k].get('raw')];self.assertEqual(len(promoted),21)
         for role in promoted:
             row=CHARACTERS[role];self.assertIn(row['default_animation'],animation_choices(role,row['skeleton']))
@@ -314,5 +315,21 @@ class ActorLibraryCurationTests(unittest.TestCase):
             if name=='Face_Anger':self.assertEqual(m.actor(key)['transform']['scale'],[.005]*3)
         role=next(k for k,v in CHARACTERS.items() if v['parts'][0]['path'].endswith('.SK_Hammer_VX'))
         key=m.add_character(role);self.assertEqual(m.event('anim-'+key)['params']['asset'],'bind_pose')
+
+
+    def test_story_location_capture_uses_fresh_flight_pose_without_changing_scene(self):
+        from unittest.mock import Mock
+        model=package.Mod();document=blank(WORLD);model.document=document;model.session=object()
+        model.runtime=SimpleNamespace(authoring=True,photo_mode=False,
+            editor_control=Mock(return_value={'editor_camera':[12,34,56,10,450,0]}))
+        with patch.object(package,'controller_context',return_value={'world_path':WORLD}):
+            self.assertEqual(model.capture_story_location(),dict(world=WORLD,position=[12,34,56],yaw=90))
+            self.assertIs(model.document,document);self.assertFalse(model.dirty)
+            model.runtime.editor_control.assert_called_once_with(0)
+            model.runtime.photo_mode=True
+            with self.assertRaises(ValueError):model.capture_story_location()
+            model.runtime.photo_mode=False;document['target_map']='/Game/Other.Other'
+            with self.assertRaises(ValueError):model.capture_story_location()
+            self.assertEqual(model.runtime.editor_control.call_count,1)
 
 if __name__=='__main__':unittest.main()

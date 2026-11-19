@@ -53,8 +53,11 @@ def validate_request(data):
         index, serial, address = struct.unpack_from('<iiQ', data, at)
         if index < 0 or serial < 0 or not address:
             raise ValueError('Map readiness identity')
+    point=struct.unpack_from('<I',data,2008)[0]
     if (any(data[248:2000]) or struct.unpack_from('<I', data, 2000)[0] > 1
-            or struct.unpack_from('<I', data, 2004)[0] >= 2**31 or any(data[2008:])):
+            or struct.unpack_from('<I', data, 2004)[0] >= 2**31 or point>1 or any(data[2012:2016])
+            or (not point and any(data[2016:2040])) or any(data[2040:])
+            or any(not math.isfinite(x) or abs(x)>1.e8 for x in struct.unpack_from('<3d',data,2016))):
         raise ValueError('Map readiness padding or support policy')
 
 
@@ -133,7 +136,7 @@ class NativeMapReadiness:
             self.ids = prepare_readiness_metadata(self.runtime.scope._session)
         return self
 
-    def query(self):
+    def query(self,*,position=None):
         if self.expected_token is None:
             raise RuntimeError('Map readiness requires the current saved-world token')
         self.prepare()
@@ -149,6 +152,10 @@ class NativeMapReadiness:
             struct.pack_into('<iiQ', packet, 88 + 16*i, *value)
         struct.pack_into('<I', packet, 2000, int(self.require_owned_support))
         struct.pack_into('<I', packet, 2004, self.expected_token[3])
+        if position is not None:
+            if getattr(runtime.scope._session._transport,'story_local_transfer_protocol',0)!=1:raise RuntimeError('Remote landing observation requires runtime 296')
+            if len(position)!=3 or any(not math.isfinite(x) or abs(x)>1.e8 for x in position):raise ValueError('Finite landing position required')
+            struct.pack_into('<I',packet,2008,1);struct.pack_into('<3d',packet,2016,*position)
         validate_request(bytes(packet))
         with runtime.scope._lease_context():
             reply = runtime.scope._session._transport.command('mesh', bytes(packet))
@@ -162,7 +169,8 @@ class NativeMapReadiness:
             raise RuntimeError('Map readiness acknowledgement mismatch')
         error, state = struct.unpack_from('<II', raw, 8)
         if error == 2115 and state in (0, 1):
-            raise ReadinessPending('Map readiness observation pending (2115)')
+            stage = struct.unpack_from('<I', raw, 4096)[0]
+            raise ReadinessPending(f'Map readiness observation pending (2115; stage {stage})')
         if error or state != 1:
             raise RuntimeError(f'Map readiness query rejected ({error}, {state})')
         counts = struct.unpack_from('<13I', raw, 4096)

@@ -1,5 +1,5 @@
 """Identity-checked stored property observations; no getters, writes or GC pinning."""
-from dataclasses import dataclass
+from dataclasses import dataclass,field
 from types import MappingProxyType
 import re
 import time
@@ -18,6 +18,10 @@ def _array_prefix_limits(catalog, owner_index, field, element_type, struct_type)
                   'ObjectBindings': 'MovieSceneBinding'}
     expected = cast_types.get(field)
     owner = catalog.by_index.get(owner_index)
+    if (field=='MappedElements' and element_type=='StructProperty' and owner is not None and struct_type is not None and
+            catalog.path_name(owner)=='/Script/ControlRig.ControlRigComponent' and
+            catalog.path_name(struct_type)=='/Script/ControlRig.ControlRigComponentMappedElement'):
+        return limits+(512,)
     if (expected and element_type == 'StructProperty' and owner is not None and
             struct_type is not None and
             catalog.path_name(owner) == '/Script/MovieScene.MovieScene' and
@@ -92,6 +96,9 @@ class StoredFrameRange:
 class StoredMap:
     """Complete copied supported map; never a native allocation owner."""
     items: object
+    key_type: str | None = field(default=None,compare=False)
+    value_type: str | None = field(default=None,compare=False)
+    key_class: object | None = field(default=None,compare=False)
 
 
 @dataclass(frozen=True)
@@ -141,15 +148,20 @@ def _soft_object_path(value):
 
 def _map_value(metadata, value, catalog=None):
     kinds = metadata.get('map_key_type'), metadata.get('map_value_type')
-    if kinds not in (('NameProperty', 'BoolProperty'), ('NameProperty', 'ByteProperty'), ('ByteProperty', 'StructProperty'),
+    if kinds not in (('NameProperty', 'BoolProperty'), ('NameProperty', 'ByteProperty'), ('ByteProperty', 'ByteProperty'), ('ByteProperty', 'StructProperty'),
                      ('NameProperty', 'StructProperty'), ('ByteProperty', 'DoubleProperty'), ('ByteProperty', 'IntProperty'),
-                     ('NameProperty', 'ObjectProperty'), ('StructProperty', 'ObjectProperty'), ('StructProperty', 'StructProperty')):
+                     ('NameProperty', 'ObjectProperty'), ('StructProperty', 'ObjectProperty'), ('StructProperty', 'StructProperty'),
+                     ('ObjectProperty', 'BoolProperty')):
         raise ValueError('Unsupported map element types')
     struct_key, struct_value = kinds[0] == 'StructProperty', kinds[1] == 'StructProperty'
-    if (struct_key or struct_value or kinds[1] == 'ObjectProperty') and catalog is None:
-        raise ValueError('Struct maps require an identity catalog')
+    object_key = kinds[0] == 'ObjectProperty'
+    if (struct_key or struct_value or object_key or kinds[1] == 'ObjectProperty') and catalog is None:
+        raise ValueError('Reference maps require an identity catalog')
     expected = _struct_type(catalog, metadata, 'map_value_struct') if struct_value else None
     expected_key = _struct_type(catalog, metadata, 'map_key_struct') if struct_key else None
+    key_class = _struct_type(catalog, metadata, 'map_key_property_class') if object_key else None
+    if key_class is not None and key_class.index not in catalog.classes:
+        raise ValueError('Map object key constraint is not a class')
     if type(value) is not dict or set(value) != {'$map'}:
         raise ValueError('Missing map tag')
     payload = value['$map']
@@ -168,6 +180,26 @@ def _map_value(metadata, value, catalog=None):
             if type(key) is not int or not 0 <= key <= 255:
                 raise ValueError('Invalid byte map key')
             key_token = key
+        elif object_key:
+            if key is None:
+                key_token = None
+            else:
+                if type(key) is not dict or set(key) != {'$reference'}:
+                    raise ValueError('Invalid map object key reference')
+                raw = key['$reference']
+                if (type(raw) is not dict or set(raw) != {'index', 'serial', 'address', 'name'}
+                        or type(raw['index']) is not int or raw['index'] < 0
+                        or type(raw['serial']) is not int or not -(1 << 31) <= raw['serial'] < (1 << 31)
+                        or type(raw['address']) is not str or re.fullmatch(r'0x[0-9a-fA-F]+', raw['address']) is None
+                        or type(raw['name']) is not str or not raw['name']):
+                    raise ValueError('Invalid map object key reference')
+                key = catalog.by_index.get(raw['index'])
+                if (key is None or key.serial != raw['serial'] or key.address != int(raw['address'], 16)
+                        or key.name != raw['name']):
+                    raise _StaleStruct('Map object key reference changed since catalog; refresh required')
+                if key_class.index not in catalog.ancestors(key.class_index):
+                    raise ValueError('Map object key violates its reflected class constraint')
+                key_token = (key.index, key.serial, key.address)
         elif struct_key:
             key = _struct_value(catalog, key, budget=budget)
             if key.type_object != expected_key or key.errors or key.truncated:
@@ -218,7 +250,7 @@ def _map_value(metadata, value, catalog=None):
             result[key] = entry
     if struct_key:
         return StoredMapEntries(tuple(pairs))
-    return StoredMap(MappingProxyType(result))
+    return StoredMap(MappingProxyType(result),*kinds,key_class)
 
 
 class _StaleStruct(ValueError):
@@ -281,7 +313,9 @@ def _struct_value(catalog, value, depth=0, budget=None):
                 if type(row['inner_struct']) is not dict or set(row['inner_struct'])!={'$reference'}:
                     raise ValueError('Invalid nested array struct identity')
                 expected=reference(row['inner_struct']['$reference'])
-                if expected.class_name!='ScriptStruct':raise ValueError('Nested array type is not a ScriptStruct')
+                if expected.class_name!='ScriptStruct' and not any(
+                        catalog.classes[index].name=='ScriptStruct' for index in catalog.ancestors(expected.class_index)):
+                    raise ValueError('Nested array type is not a ScriptStruct')
             if type(item) is not dict or set(item)!={'$array'}:raise ValueError('Missing nested array tag')
             array=item['$array']
             if (type(array) is not dict or set(array)!={'length','items'} or type(array['length']) is not int
@@ -638,7 +672,7 @@ def _missing_references(catalog,rows,*,affected=None):
             # Empty containers have no nested $struct value from which to
             # discover their type. Their descriptor still requires that exact
             # observed struct closure before the same response can be decoded.
-            for prefix in ('struct','inner_struct','map_key_struct','map_value_struct'):
+            for prefix in ('struct','inner_struct','map_key_struct','map_value_struct','map_key_property_class'):
                 if all(prefix+'_'+key in row for key in ('index','serial','address','name')):
                     reference({key:row[prefix+'_'+key] for key in ('index','serial','address','name')})
     if len(missing)>16384:raise RuntimeQueryError('Nested stored reference limit')
@@ -782,8 +816,11 @@ def _decode_values(catalog, obj, start, rows):
                             or row.get('truncated') is not (length > len(items))):
                         raise ValueError('Invalid array extent or truncation')
                     if element_type not in ('ObjectProperty', 'ClassProperty', 'FloatProperty', 'DoubleProperty',
-                                            'NameProperty', 'IntProperty', 'UInt16Property', 'ByteProperty', 'StructProperty'):
+                                            'NameProperty', 'IntProperty', 'UInt16Property', 'ByteProperty', 'StructProperty', 'BoolProperty'):
                         raise ValueError('Unsupported array element type')
+                    if element_type=='BoolProperty' and (metadata[key].get('inner_element_size')!=1 or
+                            metadata[key].get('inner_bool_encoding')!='0xff010001'):
+                        raise ValueError('Unsupported native bool array layout')
                     decoded = []
                     struct_budget = [_STRUCT_NODE_BUDGET]
                     for item in items:
@@ -802,6 +839,8 @@ def _decode_values(catalog, obj, start, rows):
                                 item = observed_ref
                                 if item is not None and element_type == 'ClassProperty' and item.index not in catalog.classes:
                                     raise ValueError('Class array item is not a class descriptor')
+                        elif element_type=='BoolProperty':
+                            if type(item) is not bool:raise ValueError('Invalid bool array item')
                         elif element_type in ('FloatProperty', 'DoubleProperty'):
                             if type(item) not in (int, float) and not (isinstance(item, dict) and
                                     set(item) == {'$float'} and item['$float'] in ('nan', 'inf', '-inf')):

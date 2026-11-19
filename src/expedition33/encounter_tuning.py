@@ -2,6 +2,7 @@
 from dataclasses import dataclass,asdict
 import math
 import struct
+import threading
 from ._reader import ReadBatch
 from .catalog import capture_matching,capture_selected
 from .cinematics.original_game_action import controller_context
@@ -38,7 +39,7 @@ def settings(value=None):
 def validate_request(data):
     if type(data) is not bytes or len(data)!=SIZE:raise ValueError('Encounter tuning packet size')
     version,op,error,state,token=struct.unpack_from('<4IQ',data)
-    if version!=3 or op not in (157,158,159) or error or state or not token:raise ValueError('Encounter tuning header')
+    if version!=3 or op not in (157,158,159,161) or error or state or not token:raise ValueError('Encounter tuning header')
     canonical=bytearray(SIZE);canonical[:24]=data[:24]
     if op==157:
         kind,mode,level,diff,hp=struct.unpack_from('<IIiid',data,24)
@@ -52,10 +53,20 @@ def validate_request(data):
         canonical[88:184]=data[88:184]
     if bytes(canonical)!=data:raise ValueError('Reserved encounter tuning bytes')
 
+class EncounterTuningError(RuntimeError):
+    def __init__(self,error):
+        self.native_error=error
+        super().__init__(f'Encounter tuning native error {error}; ownership retained for cleanup')
+
 class EncounterTuningOwner:
+    @property
+    def state(self):return 'closed' if self.closed else 'active'
+
     def __init__(self,scope,token,config):
         self.scope=scope;self._scope=scope;self.token=token;self.config=settings(config);self.attempted=False;self.closed=False;self.last=None
         self.check_available(scope,self.config)
+        self._transport=scope._session._transport;self._thread=threading.get_ident()
+        self._sdk_spawn_attempted=False;self._sdk_spawn_prepared=False
     @staticmethod
     def check_available(scope,config):
         if not settings(config).is_default and getattr(scope._session._transport,'encounter_tuning_protocol',0)!=1:
@@ -63,17 +74,19 @@ class EncounterTuningOwner:
         if settings(config).health>100 and getattr(scope._session._transport,'encounter_tuning_max_health_multiplier',100)<settings(config).health:
             raise RuntimeError('Health above 100x requires the 1000x SDK candidate')
     def _exchange(self,op,query=(),kind=0):
-        self.scope._check();data=bytearray(SIZE);struct.pack_into('<4IQ',data,0,3,op,0,0,self.token)
+        if threading.get_ident()!=self._thread:raise RuntimeError('Encounter tuning requires its owning thread')
+        if op!=159:self.scope._check()
+        data=bytearray(SIZE);struct.pack_into('<4IQ',data,0,3,op,0,0,self.token)
         if op==157:
             c=self.config;struct.pack_into('<IIiid',data,24,kind,('authored','offset','override').index(c.level_mode),c.level,c.difficulty,c.health)
             for i,o in enumerate(query):struct.pack_into('<iiQ',data,88+i*16,o.index,o.serial,o.address)
         request=bytes(data);validate_request(request)
-        reply=bytes.fromhex(self.scope._session._transport.command('mesh',request)['mesh_packet'])
+        reply=bytes.fromhex(self._transport.command('mesh',request)['mesh_packet'])
         if type(reply) is not bytes or len(reply)!=SIZE:raise RuntimeError('Uncertain encounter tuning reply; no replay')
         version,operation,error,state,token=struct.unpack_from('<4IQ',reply)
         expected=bytearray(request);expected[8:16]=reply[8:16];expected[4096:4168]=reply[4096:4168]
         if (version,operation,token)!=(3,op,self.token) or bytes(expected)!=reply:raise RuntimeError('Encounter tuning acknowledgement mismatch; no replay')
-        if error:raise RuntimeError(f'Encounter tuning native error {error}; ownership retained for cleanup')
+        if error:raise EncounterTuningError(error)
         if state!=1:raise RuntimeError('Unacknowledged encounter tuning operation; no replay')
         active,seen,finished,spawns,diffs,native_error=struct.unpack_from('<6I',reply,4096)
         observations=struct.unpack_from('<6d',reply,4120)
@@ -101,6 +114,18 @@ class EncounterTuningOwner:
     def status(self):
         if self.attempted and not self.closed:return self._exchange(158)
         return self.last
+    def prepare_owned_spawn(self):
+        """Apply this admitted policy once before a direct SDK narrative spawn."""
+        if self._sdk_spawn_prepared:return self.last
+        if self._sdk_spawn_attempted:raise RuntimeError('Owned spawn tuning outcome unresolved; no replay')
+        if not self.attempted or self.closed or getattr(self._transport,'owned_sdk_spawn_tuning_protocol',0)!=1:
+            raise RuntimeError('Owned SDK spawn tuning requires an armed runtime 308 owner')
+        self._sdk_spawn_attempted=True
+        result=self._exchange(161);self._sdk_spawn_prepared=True;return result
     def close(self):
         if not self.attempted or self.closed:return True
-        self._exchange(159);self.closed=True;return True
+        try:self._exchange(159)
+        except EncounterTuningError as error:
+            if error.native_error==407:return False
+            raise
+        self.closed=True;return True

@@ -1,4 +1,4 @@
-"""Bounded startup extraction of trusted SDK_Mods archives, before mod imports.
+"""Stage trusted mod payloads in a bounded cache before mod imports.
 
 The caller holds the install-root controller lock. Settings live outside this
 generated tree. Archives are Python code, not sandboxed or signed plugins.
@@ -9,7 +9,14 @@ from pathlib import Path
 import re
 import shutil
 import tempfile
-from .mod_archive import inspect_bytes, MAX_ARCHIVE
+from .mod_archive import (
+    Candidate, MAX_ARCHIVE, MAX_ENTRIES, MAX_EXPANDED, MAX_FILE, _parts, inspect_bytes,
+)
+
+# Resource-bearing story packs already permit 768 MiB individually. The old
+# 256 MiB aggregate rejected valid packs before their code could even load.
+# Keep a finite aggregate budget, including all decoded resources and code.
+MAX_COMBINED_EXPANDED = 1024 * 1024 * 1024
 
 
 def _plain_tree(path):
@@ -28,13 +35,61 @@ def _remove_cache(path, root):
     shutil.rmtree(path)
 
 
-def materialize(archives, sdk_root):
+def read_bundled_candidate(sdk_root, row):
+    """Read only the reviewed files belonging to a loose bundled mod."""
+    folder, entries = row['folder'], row['files']
+    if not re.fullmatch(r'[A-Za-z][A-Za-z0-9_]{0,63}', folder):
+        raise ValueError('Invalid bundled mod name')
+    if not 1 <= len(entries) <= MAX_ENTRIES:
+        raise ValueError('Invalid bundled mod file count')
+    bundles = Path(sdk_root) / 'bundled-mods'
+    source = bundles / folder
+    if bundles.is_symlink() or bundles.is_junction():
+        raise ValueError('Redirected bundled mod root')
+    _plain_tree(source)
+    files, expanded, seen = [], 0, set()
+    for entry in entries:
+        name = entry['path']
+        _parts(name)
+        path = source / name
+        if name.casefold() in seen or not path.is_file():
+            raise ValueError('Duplicate or missing bundled mod file: ' + name)
+        seen.add(name.casefold())
+        with path.open('rb') as stream:
+            data = stream.read(MAX_FILE + 1)
+        expanded += len(data)
+        if len(data) > MAX_FILE or expanded > MAX_EXPANDED:
+            raise ValueError('Bundled mod exceeds file or expanded size limit')
+        if len(data) != entry['size'] or hashlib.sha256(data).hexdigest() != entry['sha256']:
+            raise ValueError('Bundled mod file changed: ' + name)
+        files.append((name, data))
+    if not any(name == 'mod.py' for name, _ in files):
+        raise ValueError('Bundled mod requires root mod.py')
+    return Candidate(row['sha256'], tuple(sorted(files)))
+
+
+def materialize(archives, sdk_root, *, bundled_rows=()):
     archives, root = Path(archives), Path(sdk_root).resolve(strict=True)
     _plain_tree(archives)
-    files = sorted(archives.glob('*.sdkmod'))
-    if not 1 <= len(files) <= 64:
-        raise ValueError('Expected between 1 and 64 mod archives')
+    bundled_names = {row['folder'].casefold() for row in bundled_rows}
+    if len(bundled_names) != len(bundled_rows):
+        raise ValueError('Duplicate bundled mod name')
+    # A loose core package may be extracted over earlier archived core mods.
+    files = sorted(path for path in archives.glob('*.sdkmod') if path.stem.casefold() not in bundled_names)
+    if not 1 <= len(files) + len(bundled_rows) <= 64:
+        raise ValueError('Expected between 1 and 64 mod archives or loose bundled mods')
     payloads, identities, total = [], {}, 0
+
+    def add_payload(name, candidate):
+        nonlocal total
+        total += sum(len(data) for _, data in candidate.files)
+        if total > MAX_COMBINED_EXPANDED:
+            raise ValueError('Combined expanded mod payloads exceed '+str(MAX_COMBINED_EXPANDED)+' bytes')
+        identities[name.casefold()] = candidate.sha256
+        payloads.append((name, candidate))
+
+    for row in bundled_rows:
+        add_payload(row['folder'], read_bundled_candidate(root, row))
     for file in files:
         name = file.stem
         if not re.fullmatch(r'[A-Za-z][A-Za-z0-9_]{0,63}', name):
@@ -46,12 +101,7 @@ def materialize(archives, sdk_root):
         if len(payload) > MAX_ARCHIVE:
             raise ValueError('Mod archive exceeds size limit')
         digest = hashlib.sha256(payload).hexdigest()
-        candidate = inspect_bytes(payload, digest)
-        total += sum(len(data) for _, data in candidate.files)
-        if total > 256 * 1024 * 1024:
-            raise ValueError('Combined mod archives exceed 256 MiB')
-        identities[name.casefold()] = digest
-        payloads.append((name, candidate))
+        add_payload(name, inspect_bytes(payload, digest))
     target, backup = root / 'mods', root / 'mods.previous'
     # Recover an interrupted swap, never run a partly extracted tree.
     if backup.exists():

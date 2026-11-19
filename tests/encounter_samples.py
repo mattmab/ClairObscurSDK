@@ -1,0 +1,3 @@
+"""Fictional consumer configurations for generic encounter tests."""
+PROFILES={'ExampleEncounters': {'kind': 'encounter', 'source_package': '/Game/SDK/Sample/ExampleEncounters', 'row': 'SampleEncounter', 'required_reward': 'SampleReward'}, 'ExampleEnemies': {'kind': 'enemy', 'source_package': '/Game/SDK/Sample/ExampleEnemies', 'row': 'SampleEnemy', 'required_reward': 'SampleReward'}}
+ACTION={'table': '/Game/SDK/Sample/ExampleEncounters.ExampleEncounters', 'row': 'SampleEncounter', 'music': '/Game/Audio/SampleTheme.SampleTheme', 'party': ({'character': 'TestGuardian', 'formation': 0},), 'play_intro': True, 'force_no_flee': False, 'return_on_loss': True, 'allow_reserve': False, 'level_offset': -3}

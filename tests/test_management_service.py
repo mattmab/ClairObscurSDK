@@ -107,7 +107,7 @@ class NativeServiceTests(unittest.TestCase):
         from expedition33.menu import MenuError
         service=self.service();service.prepare();menu=service.menu
         menu.panel.uncertain=False
-        for code in (901,90220):
+        for code in (901,90205,90220):
             error=MenuError('focus unavailable',outcome='returned',native_error=code,active=False)
             with patch.object(menu,'open',side_effect=error):
                 self.assertIn('viewport focus',service.open())

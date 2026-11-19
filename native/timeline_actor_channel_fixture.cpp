@@ -13,6 +13,13 @@ int main(){
     assert(slots.retired(4,0,false)&&slots.find(5)==-1);
     assert(slots.reserve(1000)==4&&slots.find(1000)==4&&slots.find(1)==0);
     assert(!slots.retired(capacity,0,false));
+    // A complete story cast and a concurrent editor preview exceed the old
+    // global 32 slots. Retirement must also reach slots above that boundary.
+    static_assert(capacity>=11*6+21+32,"Story cast plus world actors and preview");
+    assert(slots.retired(capacity-1,0,false));
+    assert(slots.find(capacity)==-1&&slots.reserve(2000)==static_cast<int>(capacity-1));
+    for(unsigned i=0;i<capacity;++i){assert(slots.reserved(i));assert(slots.retired(i,0,false));assert(!slots.reserved(i));}
+    assert(slots.reserve(3000)==0&&slots.find(3000)==0);
     MeshPacket p{};p.operation=construct;p.owner=123;
     for(unsigned i=0;i<13;++i)p.inputs[i]={static_cast<int32_t>(i),1,0x10000+i*256};
     const double pose[]={0,0,0,1,100,200,300,0,1,1,1,0};

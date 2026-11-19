@@ -4,6 +4,7 @@ Uses the existing typed Blueprint planner. It never edits encounter tables,
 creates exploration recipes, or promotes discovered assets into the catalog.
 """
 import re
+import time
 from .catalog import capture_matching,capture_selected
 from ._reader import ReadBatch
 from .cinematics.original_game_action import controller_context
@@ -132,3 +133,60 @@ def add_combatant(service,recipe_id,*,definition_row=None,experimental=False):
             if entry['attempted']:service._owner.phase='unknown'
         raise
     return dict(entry)
+
+
+def add_combatants(service,members,*,experimental=False):
+    """Prepare a bounded group together; verify one preserved roster afterward.
+
+    The game's original spawn function still runs once per member. Descriptor
+    discovery, turn observation and formation work are shared across the group.
+    Any ambiguous result retains every attempted member without automatic replay.
+    """
+    service._scope._check()
+    if service._closed or experimental is not True:raise ValueError('An open spawner and experimental=True are required')
+    if type(members) not in (tuple,list) or not 1<=len(members)<=9:raise ValueError('Expected one to nine additional group members')
+    if service._owner.phase!='active' or service._owner.actor_identity is None or service._owner.arena_identity is None:
+        raise RuntimeError('Group addition requires an active SDK-owned encounter')
+    journal=service._record.setdefault('combat_additions',[])
+    if any(row.get('attempted') and not row.get('verified') for row in journal):
+        raise RuntimeError('A previous addition is unresolved; retire it rather than retrying')
+    definitions=[resolve_definition(service.catalog,*row) for row in members]
+    entries=[];started=time.perf_counter()
+    try:
+        with ReadBatch(service._scope.pid):
+            before=_observe(service);first=len(before['identities'])
+            if first+len(definitions)>10:raise ValueError('Group exceeds ten enemies')
+            positions=service._record.get('extra_battle_positions',{})
+            for slot in range(first,first+len(definitions)):
+                if slot>3 and (positions.get('total_count',0)<=slot or positions.get('enemy_slot_mask',0)&(1<<slot)==0):
+                    raise RuntimeError('Group battle positions were not prepared by this owner')
+            from .enemy_spawning import _exact,_fields
+            c=before['catalog'];function=_exact(c,SPAWN)
+            _,descriptors=_query(['--describe',str(service._scope.pid),f'{function.index}:{function.serial}:{function.address:x}'])
+            kinds=('struct','enum','property_class','meta_class','signature_function','inner_struct','inner_enum','inner_property_class','inner_meta_class')
+            names={r[k+'_name'] for r in descriptors for k in kinds if k+'_name' in r}
+            if names:c=c.with_observations(capture_matching(service._scope.pid,names=tuple(sorted(names))))
+            with service._scope._session.invocation_planner(catalog=c,selected_results=True) as planner:
+                # Complete metadata/name/schema validation before the first spawn.
+                plans=[planner.prepare_blueprint(before['manager'],function,BattleSpotIndex=first+i,
+                    CharacterHardcodedName=row['definition_row'],NotifyBattleStart=True) for i,row in enumerate(definitions)]
+                if controller_context(service._scope._session)!=before['context']:raise RuntimeError('Travel before group addition')
+                for i,(row,plan) in enumerate(zip(definitions,plans)):
+                    entry=dict(row,slot=first+i,planned=True,attempted=True,acknowledged=False,verified=False)
+                    entries.append(entry);journal.append(entry)
+                    result=plan.invoke();result.release();entry['acknowledged']=True
+            after=_observe(service)
+            if (after['context']!=before['context'] or after['identities'][:first]!=before['identities'] or len(after['identities'])!=first+len(entries)):
+                raise RuntimeError('Group spawn did not preserve and extend the owned roster')
+            c=after['catalog']
+            for entry in entries:
+                actor=after['actors'][entry['slot']];expected=_exact(c,entry['class_path'])
+                props,c=_fields(c,actor,('BattleSpotIndex',))
+                if actor.class_index!=expected.index or props['BattleSpotIndex']!=entry['slot']:
+                    raise RuntimeError('Group member class or battle slot differs from selected definition')
+            for entry in entries:entry.update(verified=True,actor_identity=after['identities'][entry['slot']])
+    except BaseException as error:
+        for entry in entries:entry['error']=str(error)
+        if entries:service._owner.phase='unknown'
+        raise
+    return dict(members=tuple(dict(row) for row in entries),elapsed_ms=(time.perf_counter()-started)*1000)

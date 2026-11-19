@@ -23,12 +23,12 @@ def _key(identity):
 
 
 def _read(scope, *, inventory=False):
-    from ._reader import ReadBatch
+    from ._reader import ReadBatch,active_reader
     from .catalog import capture_matching, capture_selected
     from .enemy_spawning import _fields, _exact
     from ._npc_encounter_preparation import _controller_battle_manager
     from .cinematics.original_game_action import controller_context
-    with ReadBatch(scope.pid, share=True, _executable=scope._session._transport._executable):
+    with ReadBatch(scope.pid, share=active_reader() is None, _executable=scope._session._transport._executable):
         context = controller_context(scope._session)
         c = capture_selected(scope.pid, (tuple(context['controller'][1:]), tuple(context['world'][1:])))
         if inventory:
@@ -115,7 +115,7 @@ def _read(scope, *, inventory=False):
                     ('bDisableMovementInput', 'bDisableLookAtInput', 'bHidePlayer', 'bHideHud')))
         result['catalog'] = c
         result['destroy'] = _exact(c, DESTROY) if inventory else None
-    with ReadBatch(scope.pid, share=True, _executable=scope._session._transport._executable):
+    with ReadBatch(scope.pid, share=active_reader() is None, _executable=scope._session._transport._executable):
         if controller_context(scope._session) != context:
             raise RuntimeError('Context changed during sequence inventory')
     return result

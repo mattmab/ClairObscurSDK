@@ -2,6 +2,7 @@
 #include "battle_parameter_source_match.h"
 #include "target_pod_schema.h"
 #include "numbered_field_name.h"
+#include "story_trial_parameter_source.h"
 namespace e33_enemy_spawn {
 struct TargetParameterSourceProof {
     uint64_t base;
@@ -15,6 +16,7 @@ struct TargetParameterSourceProof {
         auto& proof=*static_cast<TargetParameterSourceProof*>(context);
         if(!TargetPodSchemaOps{proof.base}.context()||!TargetPodSchemaOps{proof.base}.identity(root)||
            !TargetPodSchemaOps{proof.base}.identity(source))return false;
+        if(story_trial_parameter_offset(proof.base,root,source))return true;
         return match_parameter_source(proof,root.address,source.address,parameter_source_profiles,
             sizeof(parameter_source_profiles)/sizeof(parameter_source_profiles[0]));
     }

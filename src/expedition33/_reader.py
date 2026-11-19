@@ -24,6 +24,21 @@ def active_reader():
 
 
 @contextmanager
+def separate_read_context():
+    """Suspend the caller's reader while servicing an independent IO owner.
+
+    The enclosing operation must be at an acknowledged yield boundary. Its
+    reader is restored even if the independent owner fails; neither worker is
+    retried or reopened here.
+    """
+    token = _active.set(None)
+    try:
+        yield
+    finally:
+        _active.reset(token)
+
+
+@contextmanager
 def shared_operation(pid, *, _executable=None):
     """A local operation shares an existing owner or owns its own worker.
 

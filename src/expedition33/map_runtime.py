@@ -12,6 +12,7 @@ from ._scope import SessionScope
 LOG = logging.getLogger("expedition33.map_runtime")
 
 SIZE = 20984
+VISIBILITY_BATCH = 262
 FUNCTIONS = ('GameplayStatics.BeginDeferredActorSpawnFromClass',
              'GameplayStatics.FinishSpawningActor', 'Actor.K2_DestroyActor',
              'SceneComponent.SetMobility', 'Actor.K2_GetRootComponent',
@@ -40,9 +41,20 @@ def validate_request(data):
     if type(data) is not bytes or len(data) != SIZE:
         raise ValueError('Map runtime packet size')
     version, op, error, state, owner = struct.unpack_from('<4IQ', data)
-    if version != 3 or op not in (93, 94, 95, 96, 97, 98) or error or state or not owner or any(data[24:88]):
+    if version != 3 or op not in (93, 94, 95, 96, 97, 98, VISIBILITY_BATCH) or error or state or not owner or any(data[24:88]):
         raise ValueError('Map runtime header')
-    if op == 93:
+    if op == VISIBILITY_BATCH:
+        count=struct.unpack_from('<I',data,2000)[0]
+        if not 1<=count<=32 or any(data[104:2000]) or any(data[2004:4096]) or any(data[4096+16*count:]):
+            raise ValueError('Map visibility batch bounds')
+        seen=set()
+        for at in (88,*(4096+16*i for i in range(count))):
+            identity=struct.unpack_from('<iiQ',data,at);index,serial,address=identity
+            if index<0 or serial<=0 or address<0x10000 or address&7:raise ValueError('Map visibility identity')
+            if at!=88:
+                if identity in seen:raise ValueError('Duplicate map visibility actor')
+                seen.add(identity)
+    elif op == 93:
         for at in range(88, 360, 16):
             i, s, a = struct.unpack_from('<iiQ', data, at)
             if i < 0 or s < 0 or not a:
@@ -77,6 +89,26 @@ def context(scope, *, require_bound_world=False):
     A fresh query may see travel before the coordinator's asynchronous sample.
     That new world must not become writable through a previous-world scope.
     """
+    construction=getattr(getattr(scope,'_session',None),'_story_construction_resources',None)
+    if require_bound_world and construction is not None:
+        # The process-owned LocalPlayer anchor reads its current controller and
+        # World afresh. Reuse its discovery, never a cached pawn or admission.
+        from .values import capture_selected_values
+        current=construction.context(scope)
+        controller=tuple(current['controller'][1:])
+        c,values=capture_selected_values(scope.pid,(controller,),fields=('Pawn',),references=True)
+        row=values[controller[0]]
+        pawns=[v for k,v in row.values.items() if k[1]=='Pawn']
+        if row.errors or len(pawns)!=1:raise RuntimeError('Current local pawn observation incomplete')
+        pawn=pawns[0]
+        if pawn is None:return None
+        worlds=[o for o in c.outer_chain(pawn) if o.class_name=='World']
+        if len(worlds)!=1 or (worlds[0].index,worlds[0].serial,worlds[0].address)!=tuple(current['world'][1:]):
+            from .world_lifecycle import WorldLifecycleError
+            raise WorldLifecycleError('Current pawn differs from admitted controller World')
+        return dict(world=c.path_name(worlds[0]),visit=list(current['world'][1:]),
+            controller=list(controller),
+            pawn=[pawn.index,pawn.serial,pawn.address],ready=pawn.class_name in ('BP_jRPG_Character_World_C','BP_jRPG_Character_WorldMap_pawn_C'))
     with ReadBatch(scope.pid):
         c = capture_matching(scope.pid, classes=('PlayerController',))
         local = []
@@ -99,12 +131,19 @@ def context(scope, *, require_bound_world=False):
                         from .world_lifecycle import WorldLifecycleError
                         raise WorldLifecycleError('Observed world differs from the scope admission; waiting for lifecycle handoff')
                 return dict(world=c.path_name(obj), visit=[obj.index, obj.serial, obj.address],
+                            controller=[pc.index,pc.serial,pc.address],
                             pawn=[pawn.index, pawn.serial, pawn.address],
                             ready=pawn.class_name in ('BP_jRPG_Character_World_C', 'BP_jRPG_Character_WorldMap_pawn_C'))
             if obj.outer_index not in c.by_index:
                 return None
             obj = c.by_index[obj.outer_index]
     return None
+
+
+class MapRuntimeRejected(RuntimeError):
+    def __init__(self,operation,code):
+        self.operation=operation;self.native_error=code;self.outcome='not_dispatched'
+        super().__init__(f'Map runtime operation {operation} rejected before dispatch ({code})')
 
 
 class MapRuntime:
@@ -138,14 +177,14 @@ class MapRuntime:
         row['max_ms'] = max(row['max_ms'], elapsed)
         return elapsed
 
-    def _send(self, op, *, ids=(), rows=(), index=0, path=None):
+    def _send(self, op, *, ids=(), rows=(), index=0, path=None,actors=()):
         started = time.perf_counter()
         try:
-            return self._send_packet(op, ids=ids, rows=rows, index=index, path=path)
+            return self._send_packet(op, ids=ids, rows=rows, index=index, path=path,actors=actors)
         finally:
-            self._mark('native_' + str(op), started, count=len(rows) if op == 94 else 1)
+            self._mark('native_' + str(op), started, count=len(rows) if op == 94 else len(actors) if op==VISIBILITY_BATCH else 1)
 
-    def _send_packet(self, op, *, ids=(), rows=(), index=0, path=None):
+    def _send_packet(self, op, *, ids=(), rows=(), index=0, path=None,actors=()):
         packet = bytearray(SIZE)
         struct.pack_into('<4IQ', packet, 0, 3, op, 0, 0, self.owner)
         for i, obj in enumerate(ids):
@@ -154,6 +193,9 @@ class MapRuntime:
             struct.pack_into('<I', packet, 2000, len(rows))
             for i, (asset, transform) in enumerate(rows):
                 struct.pack_into('<iiQ12d', packet, 4096+128*i, asset.index, asset.serial, asset.address, *transform)
+        if op == VISIBILITY_BATCH:
+            struct.pack_into('<I',packet,2000,len(actors))
+            for i,identity in enumerate(actors):struct.pack_into('<iiQ',packet,4096+16*i,*identity)
         if op == 96:
             struct.pack_into('<I', packet, 2000, index)
         if op == 97:
@@ -187,7 +229,10 @@ class MapRuntime:
         if op == 98 and error == 407:
             return raw # Exact cleanup owner remains native; caller validates state.
         if error:
-            if error == 2109:
+            if op==93 and error==2101:
+                self.started=False
+                raise MapRuntimeRejected(op,error)
+            if error == 2109 or op==VISIBILITY_BATCH and error==2117:
                 self.uncertain = True
             if op==97:
                 reason={2111:'Missing registered static mesh',2112:'Asset load dispatch rejected',2113:'Missing or unsupported static mesh',2114:'Asset retention limit reached'}.get(error,'Static-mesh registry unavailable')
@@ -195,25 +240,85 @@ class MapRuntime:
             raise RuntimeError(f'Map runtime operation {op} failed ({error}, step {struct.unpack_from("<I",raw,80)[0]}); not retried')
         return raw
 
+    def hide_collision_objects(self,keys):
+        """Hide exact owned collision props, acknowledging at most 32 per call.
+
+        Native verifies the entire batch, then rechecks world, ownership and
+        collision around every original hide call. A failed attempt never
+        retries or falls back to a second mutation path.
+        """
+        self.scope._check()
+        capability=getattr(self.scope._session._transport,'map_visibility_batch_protocol',0)
+        if type(capability) is not int or capability!=1:raise RuntimeError('Owned map visibility batches unavailable')
+        if not self.started or self.uncertain or self._closed or getattr(self,'_visibility_failed',False):
+            raise RuntimeError('Owned map visibility is unavailable; failed work is not replayed')
+        keys=tuple(keys)
+        if not keys:return 0
+        if len(keys)>6000 or len(set(keys))!=len(keys) or any(key not in self.objects for key in keys):
+            raise ValueError('Unique current owned map keys required')
+        actors=tuple(tuple(self.objects[key]['actor']) for key in keys)
+        construction=getattr(self.scope._session,'_story_construction_resources',None)
+        temporary=SessionScope(self.scope);done=0
+        try:
+            catalog=(construction.catalog(self.scope,('SetActorHiddenInGame',)) if construction is not None else
+                capture_matching(self.scope.pid,names=('SetActorHiddenInGame',)))
+            function=catalog.find_path('/Script/Engine.Actor:SetActorHiddenInGame')
+            if construction is not None:held=construction.resources.hold(function)
+            else:
+                from ._stable_lease import acquire_stable
+                held,_=acquire_stable(temporary,function)
+            while done<len(actors):
+                batch=actors[done:done+32]
+                raw=self._send(VISIBILITY_BATCH,ids=(held.object,),actors=batch)
+                completed,total=struct.unpack_from('<2I',raw,3560)
+                if struct.unpack_from('<I',raw,12)[0]!=1 or not 1<=completed<=len(batch) or total!=len(self.objects):
+                    self.uncertain=True;raise RuntimeError('Map visibility acknowledgement progress mismatch')
+                done+=completed
+            return done
+        except BaseException:
+            self._visibility_failed=True
+            if done:self.uncertain=True
+            raise
+        finally:temporary.close()
+
     def _prepare(self, expected):
         ui=getattr(getattr(self.scope._session,'_process_ui',None),'context',None)
         copied_controller=(ui.controller if ui is not None and ui.kind=='world'
             and tuple(ui.world[1:])==tuple(expected['visit']) and ui.controller[0]==self.scope.pid else None)
-        if not expected['ready'] or copied_controller is None and context(self.scope) != expected:
+        # context() already supplies the exact local controller. Do not scan
+        # every PlayerController again during streaming: unrelated retired
+        # objects can disappear between registry enumeration and their read.
+        # This selector is only an input; freshly prove possession below and
+        # let native init independently validate current World/viewport epoch.
+        selected_controller=tuple(expected['controller']) if expected.get('controller') is not None else None
+        if not expected['ready'] or copied_controller is None and selected_controller is None and context(self.scope) != expected:
             raise RuntimeError('Exploration pawn or vanilla world changed')
         with ReadBatch(self.scope.pid):
             prepared=getattr(self.scope._session,'_map_runtime_metadata',None)
+            if prepared is None:
+                from ._metadata_stabilization import available
+                if available(self.scope._session._transport):
+                    prepared=prepare_metadata(self.scope._session)
             if prepared is not None:
                 from .catalog import capture_selected
                 selected=(tuple(expected['visit']),tuple(expected['pawn']))
-                if copied_controller is not None:selected+=(copied_controller[1:],)
+                controller=selected_controller if selected_controller is not None else (copied_controller[1:] if copied_controller is not None else None)
+                if controller is not None:selected+=(controller,)
                 c=capture_selected(self.scope.pid,selected)
                 pawn=c.by_index[expected['pawn'][0]];world=c.by_index[expected['visit'][0]]
-                if copied_controller is not None:
+                if controller is not None:
+                    pc=c.by_index[controller[0]]
+                    values,c=read_values_with_references(c,pc,fields=('Pawn','bIsLocalPlayerController'))
+                    observed={key[1]:value for key,value in values.values.items()}
+                    current=observed.get('Pawn')
+                    if (values.errors or values.truncated or pc.object_flags&0x30 or
+                        not observed.get('bIsLocalPlayerController') or current is None or
+                        (current.index,current.serial,current.address)!=tuple(expected['pawn'])):
+                        raise RuntimeError('Destination local controller or possession changed')
                     # Admission supplied only a copied selector. Native init
                     # still proves local possession and the active viewport
                     # epoch before granting this owner any spawn authority.
-                    ids=[c.by_index[copied_controller[1]],pawn,world,*prepared]
+                    ids=[pc,pawn,world,*prepared]
                     self._closed=False;self.started=True
                     self._send(93,ids=ids);self.visit=expected['visit'];return
                 # Exact local controller selection is still fresh; native current

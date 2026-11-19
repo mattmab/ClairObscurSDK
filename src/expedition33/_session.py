@@ -72,6 +72,20 @@ class SessionTransport:
             self.enemy_combat_placement_protocol = ready.get('enemy_combat_placement_protocol', 0)
             self.battle_parameter_frame_research_protocol = ready.get('battle_parameter_frame_research_protocol', 0)
             self.battle_completion_receipt_protocol = ready.get('battle_completion_receipt_protocol', 0)
+            self.story_trial_encounter_protocol = ready.get('story_trial_encounter_protocol', 0)
+            self.story_trial_tables_protocol = ready.get('story_trial_tables_protocol', 0)
+            self.story_character_tables_protocol = ready.get('story_character_tables_protocol', 0)
+            self.initial_encounter_roster_protocol=int(ready.get('initial_encounter_roster_protocol',0))
+            self.battle_qte_protocol = ready.get('battle_qte_protocol', 0)
+            self.story_party_join_data_protocol = ready.get('story_party_join_data_protocol', 0)
+            self.story_trial_data_protocol = ready.get('story_trial_data_protocol', 0)
+            self.character_skills_protocol = ready.get('character_skills_protocol', 0)
+            self.story_wardrobe_protocol = ready.get('story_wardrobe_protocol', 0)
+            self.character_restore_protocol = ready.get('character_restore_protocol', 0)
+            self.story_layer_batch_protocol = ready.get('story_layer_batch_protocol', 0)
+            self.story_npc_finalize_protocol = ready.get('story_npc_finalize_protocol', 0)
+            self.story_world_configure_protocol = ready.get('story_world_configure_protocol', 0)
+            self.loading_handoff_protocol = ready.get('loading_handoff_protocol', 0)
             self.battle_entry_preflight_research_protocol = ready.get('battle_entry_preflight_research_protocol', 0)
             self.battle_entry_arena_research_protocol = ready.get('battle_entry_arena_research_protocol', 0)
             self.battle_entry_dispatch_research_protocol = ready.get('battle_entry_dispatch_research_protocol', 0)
@@ -85,10 +99,44 @@ class SessionTransport:
             self.enemy_visual_staging_research_protocol = ready.get('enemy_visual_staging_research_protocol', 0)
             self.timeline_blueprint_protocol = ready.get('timeline_blueprint_protocol', 0)
             self.timeline_extended_characters_protocol = ready.get('timeline_extended_characters_protocol', 0)
+            self.story_blueprint_characters_protocol = ready.get('story_blueprint_characters_protocol', 0)
+            self.opera_story_characters_protocol = ready.get('opera_story_characters_protocol', 0)
+            self.zone_spawn_travel_protocol = ready.get('zone_spawn_travel_protocol', 0)
+            self.story_inworld_dialogue_protocol = ready.get('story_inworld_dialogue_protocol', 0)
+            self.story_action_completion_protocol = ready.get('story_action_completion_protocol', 0)
+            self.new_game_story_start_protocol = ready.get('new_game_story_start_protocol', 0)
+            self.new_game_story_direction_protocol = ready.get('new_game_story_direction_protocol', 0)
+            self.story_cinematic_routes_protocol = ready.get('story_cinematic_routes_protocol', 0)
+            self.story_original_narrative_protocol = ready.get('story_original_narrative_protocol', 0)
+            self.save_list_entry_protocol = ready.get('save_list_entry_protocol', 0)
+            self.story_enemy_loot_protocol = ready.get('story_enemy_loot_protocol', 0)
+            self.story_scene_cues_protocol = ready.get('story_scene_cues_protocol', 0)
+            self.story_scene_clip_offsets_protocol = ready.get('story_scene_clip_offsets_protocol', 0)
+            self.scene_facial_attachment_protocol = ready.get('scene_facial_attachment_protocol', 0)
+            self.story_scene_controls_protocol = ready.get('story_scene_controls_protocol', 0)
+            self.story_sequence_range_protocol = ready.get('story_sequence_range_protocol', 0)
+            self.inventory_reward_protocol = ready.get('inventory_reward_protocol', 0)
+            self.asset_path_name_protocol = ready.get('asset_path_name_protocol', 0)
+            self.map_load_timing_protocol = ready.get('map_load_timing_protocol', 0)
+            self.story_portal_handoff_protocol = ready.get('story_portal_handoff_protocol', 0)
+            self.story_local_transfer_protocol = ready.get('story_local_transfer_protocol', 0)
+            self.story_direct_portal_protocol = ready.get('story_direct_portal_protocol', 0)
+            self.dialogue_slot_protocol = ready.get('dialogue_slot_protocol',0)
+            self.story_collision_wall_protocol = ready.get('story_collision_wall_protocol', 0)
+            self.native_dialogue_text_protocol = ready.get('native_dialogue_text_protocol', 0)
+            self.story_npc_blueprint_protocol = ready.get('story_npc_blueprint_protocol', 0)
+            self.story_speaker_name_protocol = ready.get('story_speaker_name_protocol', 0)
+            self.story_dialogue_participants_protocol = ready.get('story_dialogue_participants_protocol', 0)
+            self.story_dialogue_camera_protocol = ready.get('story_dialogue_camera_protocol', 0)
+            self.native_dialogue_end_protocol = ready.get('native_dialogue_end_protocol', 0)
+            self.story_save_identity_protocol = ready.get('story_save_identity_protocol', 0)
             self.timeline_actor_pool_protocol = ready.get('timeline_actor_pool_protocol', 0)
+            self.story_streaming_radius_protocol = ready.get('story_streaming_radius_protocol', 0)
             self.timeline_current_world_protocol = ready.get('timeline_current_world_protocol', 0)
             self.sequence_binding_values_protocol = ready.get('sequence_binding_values_protocol', 0)
             self.rotator_values_protocol = ready.get('rotator_values_protocol',0)
+            self.transform_values_protocol = ready.get('transform_values_protocol',0)
+            self.scene_bone_timeline_protocol = ready.get('scene_bone_timeline_protocol',0)
             self.sequence_portable_binding_protocol = ready.get('sequence_portable_binding_protocol', 0)
             self.enemy_visual_arena_research_protocol = ready.get('enemy_visual_arena_research_protocol', 0)
             self.enemy_helper_lookup_research_protocol = ready.get('enemy_helper_lookup_research_protocol', 0)
@@ -111,7 +159,11 @@ class SessionTransport:
             self.enemy_current_world_staging_protocol = ready.get('enemy_current_world_staging_protocol', 0)
             self.enemy_extra_spots_protocol = ready.get('enemy_extra_spots_protocol', 0)
             self.map_runtime_protocol = ready.get('map_runtime_protocol', 0)
+            self.map_visibility_batch_protocol = ready.get('map_visibility_batch_protocol', 0)
+            self.map_runtime_owner_slots = ready.get('map_runtime_owner_slots', 1)
             self.map_load_gate_protocol = ready.get('map_load_gate_protocol', 0)
+            self.map_loading_priority_protocol = ready.get('map_loading_priority_protocol', 0)
+            self.loading_dispatch_reentrancy_protocol = ready.get('loading_dispatch_reentrancy_protocol', 0)
             self.map_loading_presentation_protocol = ready.get('map_loading_presentation_protocol', 0)
             self.map_asset_preparation_protocol = ready.get('map_asset_preparation_protocol', 0)
             self.map_readiness_protocol = ready.get('map_readiness_protocol', 0)
@@ -172,6 +224,7 @@ class SessionTransport:
             self.owned_battle_arena_approach_diagnostics_protocol = ready.get('owned_battle_arena_approach_diagnostics_protocol', 0)
             self.owned_battle_arena_advisory_route_protocol = ready.get('owned_battle_arena_advisory_route_protocol', 0)
             self.encounter_tuning_protocol = ready.get('encounter_tuning_protocol', 0)
+            self.owned_sdk_spawn_tuning_protocol = ready.get('owned_sdk_spawn_tuning_protocol', 0)
             self.encounter_tuning_max_health_multiplier = ready.get('encounter_tuning_max_health_multiplier', 100)
             self.encounter_retry_tuning_protocol = ready.get('encounter_retry_tuning_protocol', 0)
             self.owned_authored_entry_protocol = ready.get('owned_authored_entry_protocol', 0)
@@ -200,6 +253,8 @@ class SessionTransport:
             self.sequence_flight_protocol = ready.get('sequence_flight_protocol', 0)
             self.sequence_flight_keyboard_protocol = ready.get('sequence_flight_keyboard_protocol', 0)
             self.sequence_flight_playback_protocol = ready.get('sequence_flight_playback_protocol', 0)
+            self.sequence_drag_scrub_protocol = ready.get('sequence_drag_scrub_protocol', 0)
+            self.sequence_timeline_viewport_protocol = ready.get('sequence_timeline_viewport_protocol', 0)
             self.sequence_placement_input_protocol = ready.get('sequence_placement_input_protocol', 0)
             self.sequence_seek_protocol = ready.get('sequence_seek_protocol', 0)
             self.sequence_retirement_protocol = ready.get('sequence_retirement_protocol', 0)
@@ -216,6 +271,10 @@ class SessionTransport:
             self.cinematic_title_profiles = tuple(profiles)
             self.vector_value_protocol = ready.get('vector_value_protocol', 0)
             self.pause_attachment_protocol = ready.get('pause_attachment_protocol', 0)
+            self.pause_battle_controls_protocol = ready.get('pause_battle_controls_protocol', 0)
+            self.string_timer_protocol = ready.get('string_timer_protocol', 0)
+            self.defeat_delay_override_protocol = ready.get('defeat_delay_override_protocol', 0)
+            self.free_aim_region_query_protocol = ready.get('free_aim_region_query_protocol', 0)
             self.trace_renew_protocol = ready.get('trace_renew_protocol', 0)
             self.button_reference_protocol = ready.get('button_reference_protocol', 0)
             self.button_action_protocol = ready.get('button_action_protocol', 0)
@@ -440,14 +499,153 @@ class SessionTransport:
             map_mesh=(type(payload) is bytes and len(payload)>=8 and (93<=int.from_bytes(payload[4:8],'little')<=97 or
                     int.from_bytes(payload[:4],'little')==3 and int.from_bytes(payload[4:8],'little')==98))
             scene_mesh=(not map_mesh and type(payload) is bytes and len(payload)>=8 and getattr(self,'runtime_scene_protocol',0) in (1,2,3,4,5,6,7) and
-                    (70<=int.from_bytes(payload[4:8],'little')<=92 or int.from_bytes(payload[4:8],'little')==98))
+                    (70<=int.from_bytes(payload[4:8],'little')<=92 or int.from_bytes(payload[4:8],'little') in (98,199,200,201,202,203)))
             npc_admission=(type(payload) is bytes and len(payload)>=8 and int.from_bytes(payload[4:8],'little')==134)
             npc_membership=(type(payload) is bytes and len(payload)>=8 and int.from_bytes(payload[4:8],'little')==135)
             npc_staging=(type(payload) is bytes and len(payload)>=8 and 136<=int.from_bytes(payload[4:8],'little')<=147)
             visual_staging=(type(payload) is bytes and len(payload)>=8 and int.from_bytes(payload[4:8],'little') in (148,149,150))
             arena_staging=(type(payload) is bytes and len(payload)>=8 and int.from_bytes(payload[4:8],'little') in (151,152,153,154,155,156))
-            tuning=(type(payload) is bytes and len(payload)>=8 and 157<=int.from_bytes(payload[4:8],'little')<=159)
-            if curve_patch:
+            tuning=(type(payload) is bytes and len(payload)>=8 and int.from_bytes(payload[4:8],'little') in (157,158,159,161))
+            defeat_delay=(type(payload) is bytes and len(payload)>=8 and int.from_bytes(payload[4:8],'little')==227)
+            aim_region=(type(payload) is bytes and len(payload)>=8 and int.from_bytes(payload[4:8],'little')==228)
+            native_dialogue=(type(payload) is bytes and len(payload)>=8 and int.from_bytes(payload[4:8],'little')==229)
+            story_npc=(type(payload) is bytes and len(payload)>=8 and int.from_bytes(payload[4:8],'little')==230)
+            story_identity=(type(payload) is bytes and len(payload)>=8 and int.from_bytes(payload[4:8],'little')==231)
+            story_speaker=(type(payload) is bytes and len(payload)>=8 and int.from_bytes(payload[4:8],'little')==232)
+            story_participants=(type(payload) is bytes and len(payload)>=8 and int.from_bytes(payload[4:8],'little')==233)
+            story_camera=(type(payload) is bytes and len(payload)>=8 and int.from_bytes(payload[4:8],'little')==234)
+            story_inworld=(type(payload) is bytes and len(payload)>=8 and int.from_bytes(payload[4:8],'little')==235)
+            story_action=(type(payload) is bytes and len(payload)>=8 and int.from_bytes(payload[4:8],'little')==236)
+            story_original=(type(payload) is bytes and len(payload)>=8 and int.from_bytes(payload[4:8],'little') in (237,238,239))
+            story_items=(type(payload) is bytes and len(payload)>=8 and int.from_bytes(payload[4:8],'little') in (240,241,243))
+            story_rewards=(type(payload) is bytes and len(payload)>=8 and int.from_bytes(payload[4:8],'little')==242)
+            story_portal=(type(payload) is bytes and len(payload)>=8 and int.from_bytes(payload[4:8],'little')==244)
+            if type(payload) is bytes and len(payload)>=8 and int.from_bytes(payload[4:8],'little')==250:
+                if getattr(self,'save_list_entry_protocol',0)!=1:raise ValueError('Save list entry query requires SDK runtime 300')
+                from .save_list_entries import validate as validate_request
+            elif type(payload) is bytes and len(payload)>=8 and int.from_bytes(payload[4:8],'little')==251:
+                if getattr(self,'story_enemy_loot_protocol',0)!=2:raise ValueError('Enemy loot requires protocol 2')
+                from .story_enemy_loot import validate as validate_request
+            elif type(payload) is bytes and len(payload)>=8 and int.from_bytes(payload[4:8],'little')==253:
+                if getattr(self,'inventory_reward_protocol',0)!=2:raise ValueError('Inventory rewards require protocol 2')
+                from .inventory_rewards import validate as validate_request
+            elif type(payload) is bytes and len(payload)>=8 and int.from_bytes(payload[4:8],'little')==269:
+                if getattr(self,'story_cinematic_routes_protocol',0)!=2:raise ValueError('Cinematic routing runtime unavailable')
+                from .story_cinematic_routes import validate as validate_request
+            elif type(payload) is bytes and len(payload)>=8 and int.from_bytes(payload[4:8],'little')==268:
+                if getattr(self,'story_wardrobe_protocol',0)!=2:raise ValueError('Custom wardrobe requires protocol 2')
+                from .story_wardrobe import validate as validate_request
+            elif type(payload) is bytes and len(payload)>=8 and int.from_bytes(payload[4:8],'little')==259:
+                if getattr(self,'character_skills_protocol',0)!=3:raise ValueError('Configured character skills require native protocol 3')
+                from .character_skills import validate as validate_request
+            elif type(payload) is bytes and len(payload)>=8 and int.from_bytes(payload[4:8],'little')==260:
+                if getattr(self,'story_trial_data_protocol',0)!=2:raise ValueError('Owned encounter actions require protocol 2')
+                from .encounter_action import validate as validate_request
+            elif type(payload) is bytes and len(payload)>=8 and int.from_bytes(payload[4:8],'little')==261:
+                capability=getattr(self,'character_restore_protocol',0)
+                if type(capability)is not int or capability!=5:raise ValueError('Character skill and cosmetic restoration requires restore protocol 5')
+                from .character_restore import validate as validate_request
+            elif type(payload) is bytes and len(payload)>=8 and int.from_bytes(payload[4:8],'little')==262:
+                capability=getattr(self,'map_visibility_batch_protocol',0)
+                if type(capability) is not int or capability!=1:raise ValueError('Owned map visibility batches unavailable')
+                from .map_runtime import validate_request
+            elif type(payload) is bytes and len(payload)>=8 and int.from_bytes(payload[4:8],'little')==263:
+                capability=getattr(self,'story_streaming_radius_protocol',0)
+                if type(capability) is not int or capability!=1:raise ValueError('Owned streaming source radius unavailable')
+                from ._story_streaming_radius import validate_request
+            elif type(payload) is bytes and len(payload)>=8 and int.from_bytes(payload[4:8],'little')==264:
+                capability=getattr(self,'story_layer_batch_protocol',0)
+                if type(capability) is not int or capability!=1:raise ValueError('Story layer batching requires SDK runtime 313')
+                from ._story_layer_batch_wire import validate_request
+            elif type(payload) is bytes and len(payload)>=8 and int.from_bytes(payload[4:8],'little')==265:
+                capability=getattr(self,'story_npc_finalize_protocol',0)
+                if type(capability) is not int or capability!=1:raise ValueError('NPC finalization requires SDK runtime 314')
+                from ._story_npc_finalize_wire import validate_request
+            elif type(payload) is bytes and len(payload)>=8 and int.from_bytes(payload[4:8],'little')==266:
+                capability=getattr(self,'story_world_configure_protocol',0)
+                if type(capability) is not int or capability!=1:raise ValueError('World element configuration requires SDK runtime 314')
+                from ._story_world_configure_wire import validate_request
+            elif type(payload) is bytes and len(payload)>=8 and int.from_bytes(payload[4:8],'little')==258:
+                if getattr(self,'story_party_join_data_protocol',0)!=2:raise ValueError('Generic party recruitment requires protocol 2')
+                from .story_party_join import validate as validate_request
+            elif type(payload) is bytes and len(payload)>=8 and int.from_bytes(payload[4:8],'little')==257:
+                if getattr(self,'initial_encounter_roster_protocol',0)!=1:raise ValueError('Native initial roster requires updated runtime')
+                from .initial_encounter_roster import validate as validate_request
+            elif type(payload) is bytes and len(payload)>=8 and int.from_bytes(payload[4:8],'little')==256:
+                if type(getattr(self,'battle_qte_protocol',0))is not int or self.battle_qte_protocol!=3:raise ValueError('Battle QTE requires protocol 3')
+                from .battle_qte import validate as validate_request
+            elif type(payload) is bytes and len(payload)>=8 and int.from_bytes(payload[4:8],'little')==255:
+                if getattr(self,'story_character_tables_protocol',0)!=2:raise ValueError('Character registration requires table protocol 2')
+                from .story_character_tables import validate as validate_request
+            elif type(payload) is bytes and len(payload)>=8 and int.from_bytes(payload[4:8],'little')==254:
+                if getattr(self,'story_trial_tables_protocol',0)!=2:raise ValueError('Encounter tables require protocol 2')
+                from .encounter_tables import validate as validate_request
+            elif type(payload) is bytes and len(payload)>=8 and int.from_bytes(payload[4:8],'little')==252:
+                capability=getattr(self,'story_sequence_range_protocol',0)
+                if type(capability) is not int or capability not in (1,2):raise ValueError('Story sequence range requires runtime protocol 1 or 2')
+                from .story_sequence_range import validate as validate_request
+                if capability==1 and int.from_bytes(payload[92:96],'little')!=6493600:raise ValueError('Departure beach range requires runtime 311')
+            elif story_portal:
+                if getattr(self,'story_portal_handoff_protocol',0)!=1:raise ValueError('Native portal handoff requires SDK runtime 294')
+                from .story_portal import validate as validate_request
+            elif story_rewards:
+                capability=getattr(self,'story_original_narrative_protocol',0)
+                if type(capability) is not int or capability!=1:raise ValueError('Original narrative rewards require SDK runtime 291')
+                from ._story_reward_wire import validate as validate_request
+            elif story_items:
+                if int.from_bytes(payload[4:8],'little')==243 and getattr(self,'asset_path_name_protocol',0)!=1:raise ValueError('Asset path preparation requires SDK runtime 292')
+                capability=getattr(self,'story_original_narrative_protocol',0)
+                if type(capability) is not int or capability!=1:raise ValueError('Story item resources require SDK runtime 291')
+                from ._story_item_wire import validate as validate_request
+            elif story_original:
+                capability=getattr(self,'story_original_narrative_protocol',0)
+                if type(capability) is not int or capability!=1:raise ValueError('Original narrative adapters require SDK runtime 291')
+                from ._story_original_wire import validate as validate_request
+            elif story_action:
+                capability=getattr(self,'story_action_completion_protocol',0)
+                if type(capability) is not int or capability!=1:raise ValueError('Story action completion runtime unavailable')
+                from ._story_action_wire import validate as validate_request
+            elif story_inworld:
+                capability=getattr(self,'story_inworld_dialogue_protocol',0)
+                if type(capability) is not int or capability!=1:raise ValueError('Owned in-world dialogue runtime unavailable')
+                from ._story_inworld_wire import validate as validate_request
+            elif story_camera:
+                capability=getattr(self,'story_dialogue_camera_protocol',0)
+                if type(capability) is not int or capability not in (1,2,3,4):raise ValueError('Owned dialogue camera runtime unavailable')
+                if capability==1 and any(payload[144:176]):raise ValueError('Owned dialogue camera framing runtime unavailable')
+                if capability<3 and any(payload[176:208]):raise ValueError('Owned dialogue camera restoration runtime unavailable')
+                if capability<4 and any(payload[208:216]):raise ValueError('Owned dialogue camera retirement runtime unavailable')
+                from ._story_camera_wire import validate as validate_request
+            elif story_participants:
+                capability=getattr(self,'story_dialogue_participants_protocol',0)
+                if type(capability) is not int or capability!=1:raise ValueError('Owned dialogue participants runtime unavailable')
+                from ._story_participants_wire import validate as validate_request
+            elif story_speaker:
+                capability=getattr(self,'story_speaker_name_protocol',0)
+                if type(capability) is not int or capability!=1:raise ValueError('Owned story speaker runtime unavailable')
+                from ._story_speaker_wire import validate as validate_request
+            elif story_identity:
+                capability=getattr(self,'story_save_identity_protocol',0)
+                if type(capability) is not int or capability not in (1,2):raise ValueError('Story save identity runtime unavailable')
+                from ._story_identity_wire import validate_request
+            elif story_npc:
+                capability=getattr(self,'story_npc_blueprint_protocol',0)
+                if type(capability) is not int or capability!=1:raise ValueError('Original story NPC runtime unavailable')
+                from ._story_npc_wire import validate_request
+            elif native_dialogue:
+                capability=getattr(self,'native_dialogue_text_protocol',0)
+                if type(capability) is not int or capability!=1:raise ValueError('Native dialogue text runtime unavailable')
+                if int.from_bytes(payload[96:100],'little')==2:
+                    end_capability=getattr(self,'native_dialogue_end_protocol',0)
+                    if type(end_capability) is not int or end_capability!=1:raise ValueError('Native dialogue end runtime unavailable')
+                from ._native_dialogue_wire import validate_request
+            elif aim_region:
+                if getattr(self,'free_aim_region_query_protocol',0)!=1:raise ValueError('Aim-region query unavailable')
+                from ._free_aim_region import validate_request
+            elif defeat_delay:
+                if getattr(self,'defeat_delay_override_protocol',0)!=1:raise ValueError('Defeat delay override capability unavailable')
+                from ._defeat_delay import validate_request
+            elif curve_patch:
                 cap=getattr(self,'authored_curve_patch_protocol',0)
                 if type(cap) is not int or cap!=1:raise ValueError('Authored curve editing capability unavailable')
                 from ._authored_curve_patch import validate_request
@@ -461,6 +659,8 @@ class SessionTransport:
                 from ._timeline_actor_channel import validate_request
             elif tuning:
                 if getattr(self,'encounter_tuning_protocol',0)!=1:raise ValueError('Encounter tuning unavailable')
+                if int.from_bytes(payload[4:8],'little')==161 and getattr(self,'owned_sdk_spawn_tuning_protocol',0)!=1:
+                    raise ValueError('Owned SDK spawn preparation requires runtime 308')
                 from .encounter_tuning import validate_request
             elif arena_staging:
                 capability=getattr(self,'owned_battle_arena_staging_protocol',0)
@@ -580,9 +780,11 @@ class SessionTransport:
             elif type(payload) is bytes and len(payload)>=8 and int.from_bytes(payload[4:8],'little')==107:
                 if getattr(self,'map_readiness_protocol',0)!=1:raise ValueError('Map readiness unavailable')
                 from .map_readiness import validate_request
-            elif type(payload) is bytes and len(payload)>=8 and 99<=int.from_bytes(payload[4:8],'little')<=103:
+            elif type(payload) is bytes and len(payload)>=8 and (99<=int.from_bytes(payload[4:8],'little')<=103 or int.from_bytes(payload[4:8],'little')==267):
                 if type(getattr(self,'map_load_gate_protocol',0)) is not int or self.map_load_gate_protocol!=1:
                     raise ValueError('Native session does not support map-load movement protection')
+                if int.from_bytes(payload[4:8],'little')==267 and (type(getattr(self,'map_loading_priority_protocol',0)) is not int or self.map_loading_priority_protocol!=1):
+                    raise ValueError('Native session does not support loading priority')
                 from .map_load_gate import validate_request
             elif map_mesh:
                 if getattr(self,'map_runtime_protocol',0)!=1:
@@ -646,6 +848,10 @@ class SessionTransport:
                 raise ValueError('Native sequence origin transform unavailable')
             if int.from_bytes(payload[4:8],'little') in (10,11,12) and getattr(self,'sequence_flight_protocol',0)!=1:
                 raise ValueError('Native sequence flight unavailable')
+            if int.from_bytes(payload[4:8],'little')==23 and getattr(self,'sequence_timeline_viewport_protocol',0) not in (1,2):
+                raise RuntimeError('Native timeline viewport required')
+            if int.from_bytes(payload[4:8],'little') in (20,21,22) and getattr(self,'sequence_drag_scrub_protocol',0)!=1:
+                raise RuntimeError('Native timeline scrub runtime required')
             if int.from_bytes(payload[4:8],'little')==19 and getattr(self,'sequence_flight_playback_protocol',0)!=1:
                 raise RuntimeError('Observer flight runtime required')
             if int.from_bytes(payload[4:8],'little')==18 and getattr(self,'sequence_flight_keyboard_protocol',0)!=1:
@@ -714,6 +920,8 @@ class SessionTransport:
             from ._retained_wire import SIZE
             if type(payload) is not bytes or len(payload) != SIZE:
                 raise ValueError('Invalid retained invocation payload')
+            if int.from_bytes(payload[:4],'little')==12 and getattr(self,'dialogue_slot_protocol',0)!=1:
+                raise ValueError('Native session does not support dialogue slots')
             if int.from_bytes(payload[:4], 'little') == 8 and (
                     type(getattr(self, 'blueprint_invocation_protocol', None)) is not int or
                     self.blueprint_invocation_protocol != 1):
@@ -771,6 +979,8 @@ class SessionTransport:
             from ._invocation_wire import FIELDS_AT, FIELD, MAX_FIELDS
             frame_count=int.from_bytes(payload[24:28],'little')
             if frame_count>MAX_FIELDS:raise ValueError('Invalid invocation field count')
+            if any(int.from_bytes(payload[FIELDS_AT+i*FIELD.size:FIELDS_AT+i*FIELD.size+4],'little') in (28,29) for i in range(frame_count)) and getattr(self,'transform_values_protocol',0)!=1:
+                raise ValueError('Native session does not support Transform values')
             if any(int.from_bytes(payload[FIELDS_AT+i*FIELD.size:FIELDS_AT+i*FIELD.size+4],'little')==27 for i in range(frame_count)) and getattr(self,'rotator_values_protocol',0)!=1:
                 raise ValueError('Native session does not support Rotator values')
             if any(int.from_bytes(payload[FIELDS_AT+i*FIELD.size:FIELDS_AT+i*FIELD.size+4],'little')==26 for i in range(frame_count)):

@@ -136,8 +136,15 @@ class NativeManagementMenu:
             return
         try:
             with self.latency.measure('menu.paint_total'):
-                with self.panel.paint_batch():
-                    self._paint_frame()
+                from contextlib import nullcontext
+                operation=getattr(getattr(self,'view',None),'paint_operation',None)
+                with operation(self.panel) if callable(operation) else nullcontext():
+                    prepare=getattr(getattr(self,'view',None),'prepare_workspace',None)
+                    if callable(prepare):prepare(self.panel)
+                    with self.panel.paint_batch():
+                        self._paint_frame()
+                        finish=getattr(getattr(self,'view',None),'finish_workspace',None)
+                        if callable(finish):finish(self)
         except BaseException:
             # Queued caches are tentative until the native paint batch returns.
             self._button_colors.clear()
@@ -259,6 +266,8 @@ class NativeManagementMenu:
 
     @measure_method('menu.refresh')
     def refresh(self):
+        if self.panel.state != 'open' or self.panel.menu is None:
+            raise ManagementError('Menu refresh requires an open native menu')
         if self._presentation_suspended:
             self.frame = self._render_view()
             self._presentation_dirty = True

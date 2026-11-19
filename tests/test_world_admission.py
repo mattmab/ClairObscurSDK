@@ -34,7 +34,9 @@ class AdmissionTests(unittest.TestCase):
         manager = obj(5, 'BP_SaveManager_C')
         controller = obj(6, 'PlayerController')
         catalog = N(pid=7, by_index={14: obj(14,'Class'),15: obj(15,'Class')})
-        controller_catalog = N(by_index={6: controller,16: obj(16,'Class')})
+        controller_catalog = N(by_index={6: controller,16: obj(16,'Class')},ancestors=lambda cls:(16,))
+        pawn_values=N(types={(16,'Pawn'):'ObjectProperty'}, values={(16,'Pawn'):obj(7,pawn) if pawn else None},
+                      errors={},truncated=set())
         def read_reference(c, target, owner, name, *, project=False):
             self.assertTrue(project)
             return ({'SaveManager':manager, 'GameInstanceReference':chain[3] if reciprocal else None,
@@ -52,7 +54,7 @@ class AdmissionTests(unittest.TestCase):
              patch.object(m,'anchor',return_value=(chain,catalog)), \
              patch.object(m,'read_object_reference',side_effect=read_reference), \
              patch.object(m,'read_values_many',side_effect=read_values), \
-             patch.object(m,'capture_selected',return_value=controller_catalog), \
+             patch.object(m,'capture_selected_values',return_value=(controller_catalog,{6:pawn_values})), \
              patch.object(m,'controller_context',return_value=dict(controller=m.identity(controller),
                 world=m.identity(chain[2]) if controller_world is None else controller_world)):
             return m.observe_admission(7)
@@ -72,6 +74,20 @@ class AdmissionTests(unittest.TestCase):
         self.assertEqual(combat.state,'world_ready')
         self.assertEqual(combat.token,exploration.token)
         self.assertFalse(combat.activation_ready)
+
+    def test_null_possession_is_pending_without_activating(self):
+        result=self.observe(pawn=None)
+        self.assertEqual(result.reason,'possession_pending');self.assertFalse(result.activation_ready)
+
+    def test_projected_reference_rejects_wrong_owner_partial_and_wrong_type(self):
+        target=obj(4,'PlayerController');catalog=N(ancestors=lambda cls:(14,))
+        for owner,kind,values_,errors,truncated in ((13,'ObjectProperty',{(13,'Pawn'):None},{},set()),
+                (14,'IntProperty',{(14,'Pawn'):0},{},set()),(14,'ObjectProperty',{}, {},set()),
+                (14,'ObjectProperty',{(14,'Pawn'):None},{(14,'Pawn'):'changed'},set()),
+                (14,'ObjectProperty',{(14,'Pawn'):None},{},{(14,'Pawn')})):
+            row=N(types={(owner,'Pawn'):kind},values=values_,errors=errors,truncated=truncated)
+            with self.subTest(owner=owner,kind=kind,errors=errors,truncated=truncated),self.assertRaises(RuntimeError):
+                m._projected_reference(catalog,row,target,'Pawn')
 
     def test_controller_world_and_reciprocal_races_inhibit_without_teardown(self):
         self.assertEqual(self.observe(controller_world=(7,99,1,0x9999)).state,'observation_pending')
@@ -106,6 +122,21 @@ class AdmissionTests(unittest.TestCase):
 
 
 class WarmObserverTests(unittest.TestCase):
+    def test_optional_layer_read_observes_anchor_before_save_manager_or_possession(self):
+        from unittest.mock import Mock
+        chain=tuple(obj(i,kind) for i,kind in enumerate(('GameEngine','GameViewportClient','World','BP_jRPG_GI_Custom_C'),1))
+        catalog=N(pid=7,by_index={14:object()})
+        seen=[]
+        provider=N(engine_catalog=lambda:catalog,observe_anchored_world=lambda c,rows:seen.append((c,rows)))
+        def missing_manager(*args,**kwargs):
+            self.assertEqual(seen,[(catalog,chain)])
+            return None,catalog
+        with patch.object(m,'anchor',return_value=(chain,catalog)),patch.object(m,'read_object_reference',side_effect=missing_manager), \
+                patch.object(m,'controller_context') as controller:
+            result,_,_=m._observe(7,provider)
+        self.assertEqual(result.reason,'save_manager_unavailable');self.assertFalse(result.activation_ready)
+        controller.assert_not_called()
+
     def test_loading_retirement_confirmation_requires_two_fresh_matching_root_links(self):
         world=N(pid=7,index=1,serial=2,address=0x10000)
         gi=N(pid=7,index=2,serial=3,address=0x20000)
@@ -134,14 +165,15 @@ class WarmObserverTests(unittest.TestCase):
         if array=='valid':array=m.StoredArray((local,),1)
         values=N(types={(1,'LocalPlayers'):'ArrayProperty'},values={(1,'LocalPlayers'):array},errors={},truncated=set())
         player=obj(9,'PlayerController');world=obj(10,'World')
-        catalog=N(by_index={20:object()},outer_chain=lambda target:(world,))
+        catalog=N(by_index={20:object()},outer_chain=lambda target:(world,),ancestors=lambda cls:(20,))
+        controller_values=N(types={(20,'PlayerController'):'ObjectProperty'},values={(20,'PlayerController'):player},errors={},truncated=set())
         provider=m.WarmAdmissionObserver(7)
-        with patch.object(m,'read_values_with_references',return_value=(values,catalog)) as read, \
-             patch.object(m,'read_values_many',return_value={local.index:N(types={(20,'PlayerController'):'ObjectProperty'})}), \
-             patch.object(m,'read_object_reference',return_value=(player,catalog)):
+        with patch.object(m,'read_values_with_references',side_effect=((values,catalog),(controller_values,catalog))) as read, \
+             patch.object(m,'read_values_many') as metadata_only,patch.object(m,'read_object_reference') as reference:
             result=provider.controller(catalog,obj(11,'BP_jRPG_GI_Custom_C'))
-            read.assert_called_once()
-            self.assertEqual(read.call_args.kwargs,{'fields':('LocalPlayers',)})
+            self.assertEqual(read.call_count,2)
+            self.assertEqual([call.kwargs for call in read.call_args_list],[{'fields':('LocalPlayers',)},{'fields':('PlayerController',)}])
+            metadata_only.assert_not_called();reference.assert_not_called()
             return result
 
     def test_current_localplayer_replacement_is_not_cached(self):

@@ -155,6 +155,7 @@ class Session:
         self._leases = set()
         self._menus = set()
         self._enabled = False
+        self._ever_observed = False
         self._closed = False
         self._polling = False
         self._sequence = 0
@@ -427,6 +428,10 @@ class Session:
             from . import _text_wire as wire
         elif plan.wire_version == 4:
             from . import _enum_wire as wire
+        elif plan.wire_version == 12:
+            if getattr(self._transport,'dialogue_slot_protocol',0)!=1:
+                raise UnsupportedInvocation('Native dialogue-slot SDK hook unavailable')
+            from . import _dialogue_slot_wire as wire
         elif plan.wire_version == 8:
             if not self.supports_blueprint_invocation:
                 raise UnsupportedInvocation("Typed Blueprint invocation capability is unavailable")
@@ -625,6 +630,7 @@ class Session:
             if not self._enabled:
                 self._transport.command('enable')
                 self._enabled = True
+                self._ever_observed = True
         except BaseException:
             subscription.remove()
             raise
@@ -646,7 +652,10 @@ class Session:
         delivered = 0
         try:
             self._release_pending_leases()
-            batch = self._transport.command('drain')
+            # Before the first producer exists there can be no event backlog.
+            # Do not enqueue an empty GT request during engine startup. Once
+            # enabled even once, keep draining old events before resubscription.
+            batch = (self._transport.command('drain') if self._enabled or getattr(self,'_ever_observed',False) else {'events':[],'dropped':0})
             self.dropped_events += batch['dropped']
             identity = ObservedIdentity(self._object.pid, self._object.index, self._object.serial,
                                         self._object.name, self._object.class_name)

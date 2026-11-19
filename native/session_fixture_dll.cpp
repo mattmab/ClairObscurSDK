@@ -6,7 +6,16 @@ static bool enabled = false;
 alignas(8) static void* volatile fixture_slot = nullptr;
 static void __fastcall fixture_target(void*, void*, void* output) { *static_cast<uint8_t*>(output) = 42; }
 bool backend_shutting_down() { return false; }
+#if E33_RUNTIME_CINEMATIC_VERSION>=316
+static bool fixture_command_active=false,fixture_nested_poll=false;
+void backend_message(MSG*) {if(fixture_command_active)fixture_nested_poll=true;}
+#else
 void backend_message(MSG*) {}
+#endif
+#if E33_RUNTIME_CINEMATIC_VERSION>=314
+bool backend_loading_handoff_active(){return enabled;}
+uint64_t backend_loading_handoff_frame(){return GetTickCount64()/16+1;}
+#endif
 uint32_t backend_open(SessionPacket*) {
     fixture_thread = GetCurrentThreadId();
     if (!fixture_slot) InterlockedExchangePointer(&fixture_slot, reinterpret_cast<void*>(&fixture_target));
@@ -24,6 +33,14 @@ uint32_t backend_command(SessionPacket* packet) {
         if (!remove_observer()) return 72;
         enabled = false; return 0;
     case SessionInvoke: {
+#if E33_RUNTIME_CINEMATIC_VERSION>=316
+        fixture_command_active=true;
+        if(!PostThreadMessageW(fixture_thread,WM_APP+91,0,0))return 75;
+        MSG nested{};
+        const bool pumped=PeekMessageW(&nested,nullptr,WM_APP+91,WM_APP+91,PM_REMOVE)!=FALSE;
+        fixture_command_active=false;
+        if(!pumped||fixture_nested_poll)return 76;
+#endif
         uint8_t result = 0;
         auto fn = reinterpret_cast<ObserverEntry>(InterlockedCompareExchangePointer(&fixture_slot, nullptr, nullptr));
         fn(reinterpret_cast<void*>(uint64_t(123)), nullptr, &result);

@@ -9,7 +9,8 @@
 using namespace e33_retired_world;
 struct Proof {
  Snapshot snapshots[2]{{{1,1001,0x1000},{2,1002,0x2000},{3,1003,0x3000}},{{1,1001,0x1000},{2,1002,0x2000},{3,1003,0x3000}}};
- unsigned observed=0,acquired=0,released=0;bool ready=true,controller=true;uint32_t release_error=0;
+ unsigned observed=0,acquired=0,released=0;bool ready=true,controller=true,replacement=false;uint32_t release_error=0;
+ bool replaced_world(const CallIdentity&,const CallIdentity&)const{return replacement;}
  bool observe(Snapshot&out){if(!ready)return false;out=snapshots[observed++%2];return true;}
  bool controller_world(CallIdentity,CallIdentity){return controller;}
  template<class P>uint32_t acquire(P&,uint64_t,CallIdentity,uint64_t&token){++acquired;token=42;return 0;}
@@ -30,6 +31,11 @@ struct MenuOps {
  bool restore(){++restores;return true;}bool deactivate(){++deactivations;return true;}bool detach(){++detaches;return true;}
 };
 int main(){
+ {Proof p;int pool=0;Anchor a;assert(a.capture(p,pool,1,{4,1004,0x4000})==0);
+  p.snapshots[0].world=p.snapshots[1].world={3,2003,0x3000};
+  assert(a.prove(p)==Result::Unknown); // Address/serial difference alone is insufficient.
+  p.replacement=true;assert(a.prove(p)==Result::Retired); // Target proves old generation expired.
+  p.ready=false;assert(a.prove(p)==Result::Retired);}
  {CallPacket packet{};packet.outcome=CallDispatchReturned;CallIdentity result{};
   assert(owning_player_output(packet,result)==OwningPlayerResult::Null);
   packet.object_count=1;packet.objects[0]={0,{7,1007,0x7000}};

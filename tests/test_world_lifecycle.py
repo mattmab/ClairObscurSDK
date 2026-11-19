@@ -35,6 +35,25 @@ class Mod:
 
 
 class WorldLifecycleTests(unittest.TestCase):
+ def test_finished_scene_wrapper_acknowledges_world_retirement(self):
+  from expedition33.scene_packs import Playback
+  self.enable();scene=Playback.__new__(Playback);scene.closed=True
+  self.mod.scope._reference_owners.append(scene)
+  self.coordinator.observe(ready(9));self.coordinator.poll_cleanup()
+  self.assertEqual(self.coordinator.bindings['World'].state,'retired')
+ def test_local_domain_incompleteness_can_finish_without_replaying_adapter(self):
+  self.enable();owner=N(_closed=False,state=None,close=lambda:True)
+  self.mod.scope._reference_owners.append(owner)
+  self.coordinator.observe(ready(9));self.coordinator.poll_cleanup()
+  row=self.coordinator.bindings['World'];self.assertEqual(row.error,'DomainOwnersRemain')
+  self.coordinator.poll_cleanup();self.assertEqual(row.state,'unknown')
+  owner._closed=True;self.coordinator.poll_cleanup()
+  self.assertEqual(row.state,'retired');self.assertEqual(self.mod.events.count('begin'),1)
+ def test_unknown_adapter_outcome_is_never_retried_as_local_incompleteness(self):
+  self.enable();self.mod.outcomes=['unknown']
+  self.coordinator.observe(ready(9));self.coordinator.poll_cleanup();self.coordinator.poll_cleanup()
+  row=self.coordinator.bindings['World'];self.assertEqual(row.state,'unknown')
+  self.assertEqual(row.error,'AdapterUnknown');self.assertEqual(self.mod.events.count('begin'),1)
  def setUp(self):
   self.tmp=tempfile.TemporaryDirectory();root=Path(self.tmp.name);(root/'World').mkdir();(root/'World/mod.py').write_text(SOURCE)
   self.shared=FakeSession();self.shared._transport=object();self.shared._closed=False

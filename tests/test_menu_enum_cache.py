@@ -25,6 +25,15 @@ class MenuEnumCacheTests(unittest.TestCase):
   session=NS(pid=1,_check=lambda:None,_transport=NS(menu_protocol=1,menu_input_protocol=1),_menus=set(),_leases=leases)
   descriptor=Mock();descriptor.value.return_value=object()
   with patch('expedition33.catalog.Catalog',Catalog),patch('expedition33.enums.describe_enums',return_value={enum.index:descriptor}) as read,patch('expedition33.menu.prepare_call',return_value=NS(wire_version=1)),patch('expedition33.menu.encode_plan',return_value=bytes(24648)):
+   existing=Mock(active=True);session._menus.add(existing)
+   with patch.object(menu.NativeMenu,'_send') as send:
+    menu.prepare(session,widget,child,player,leases,catalog=Catalog(),_plan_only=True)
+    send.assert_not_called()
+    self.assertEqual(session._menus,{existing})
+    with self.assertRaisesRegex(menu.MenuError,'already owns a menu'):
+     menu.prepare(session,widget,child,player,leases,catalog=Catalog())
+    send.assert_not_called()
+   session._menus.clear()
    for _ in range(2):menu.prepare(session,widget,child,player,leases,catalog=Catalog(),_plan_only=True)
    self.assertEqual(read.call_count,1)
    enum.serial+=1

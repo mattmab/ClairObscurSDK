@@ -56,12 +56,18 @@ def prepare_route(recipe,policy,arena_identity,observation,capability,*,activate
     if type(capability) is not int or capability not in (2,3,4,5,6,7):raise RuntimeError('Authored instance encounter research unavailable')
     if capability<(2 if profile['route']==1 else 3 if profile['route']==2 else 4 if profile['route']<7 else 5 if profile['route']==7 else 6 if profile['route']<12 else 7):raise RuntimeError('Authored route requires the current native candidate')
     if type(activate) is not bool:raise ValueError('Enemy activation flag must be bool')
-    if experimental_battle_positions is not None:raise ValueError('Verified authored route does not include expanded positions')
+    if experimental_battle_positions is not None:
+        if type(experimental_battle_positions) is not int or not 5<=experimental_battle_positions<=10:
+            raise ValueError('Experimental battle position count must be 5..10')
+        if profile['arena_class']!='/Game/Levels/Battle_Maps/BP_BattleMap.BP_BattleMap_C':
+            raise ValueError('Expanded positions require a standard arena; this boss uses a special arena')
     if (type(arena_identity) not in (tuple,list) or len(arena_identity)!=3 or
         any(type(v) is not int for v in arena_identity)):
         raise ValueError('Select an observed '+profile['arena_label']+' first')
     matches=[a for a in observation['arenas'] if tuple(a['identity'])==tuple(arena_identity)]
     if len(matches)!=1 or matches[0]['class_path']!=profile['arena_class']:
         raise ValueError('Verified authored route requires the current '+profile['arena_label'])
-    return dict(policy=policy,arena_identity=tuple(arena_identity),grounded=True,
+    options=dict(policy=policy,arena_identity=tuple(arena_identity),grounded=True,
         activate=activate,authored_instance_route=profile['route'])
+    if experimental_battle_positions is not None:options['experimental_battle_positions']=experimental_battle_positions
+    return options

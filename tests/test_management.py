@@ -79,6 +79,19 @@ class ManagementTests(unittest.TestCase):
         self.assertEqual(list(steps), [])
         self.assertFalse(self.registry.view(self.registry.select('specimen'))['enabled'])
 
+    def test_critical_scene_restores_first_without_rewriting_user_order(self):
+        self.store.save('missing', {'enabled': True, 'folder': 'Missing'})
+        self.store.save('specimen', {'enabled': True, 'folder': 'Specimen'})
+        self.loader._loaded['Specimen'][1].startup_before_optional=True
+        order=self.registry.startup_order()
+        path=self.registry._startup_order.path;before=path.read_bytes()
+        steps=self.registry.restore_enabled_steps()
+        self.assertEqual(next(steps)[0],'specimen')
+        self.assertTrue(self.registry.view(self.registry.select('specimen'))['enabled'])
+        self.assertEqual(self.registry.startup_order(),order)
+        self.assertEqual(path.read_bytes(),before)
+        self.assertEqual([key for key,_ in steps],['missing'])
+
     def test_custom_startup_order_persists_without_enabling(self):
         self.store.save('missing', {'enabled': True, 'folder': 'Missing'})
         self.store.save('specimen', {'enabled': False, 'folder': 'Specimen'})

@@ -6,6 +6,42 @@ from ._scope import SessionScope
 SIZE=20984
 
 
+def process_asset_preparation(session):
+    """Share the native process owner without replacing another mod's cache.
+
+    The native protocol admits one owner. Its registered metadata lifetime is
+    shared by all loaders; callers must not close it on a world transition.
+    Failed construction is journaled before dispatch and is never replayed.
+    """
+    from ._metadata_stabilization import process_preparation
+    session._check()
+    journal=getattr(session,'_map_asset_preparation_journal',None)
+    if journal is not None:
+        if journal.session is not session or journal.error is not None:
+            raise RuntimeError('Process map asset preparation failed; not replayed')
+        owner=journal.owner
+    else:
+        journal=SimpleNamespace(session=session,owner=None,attempted=False,error=None)
+        session._map_asset_preparation_journal=journal
+        try:
+            metadata=process_preparation(session)
+            owners=[owner for owner in metadata.scope._reference_owners
+                    if isinstance(owner,AssetPreparation) and owner.session is session and not owner.closed]
+            if len(owners)>1:raise RuntimeError('Multiple process map asset owners')
+            if owners:owner=owners[0]
+            else:
+                journal.attempted=True
+                owner=AssetPreparation(session)
+            journal.owner=owner
+        except BaseException as error:
+            journal.error=str(error);raise
+    if (not isinstance(owner,AssetPreparation) or owner.session is not session or
+            owner.closed or owner.uncertain or not owner.started):
+        journal.error='Process map asset owner unavailable'
+        raise RuntimeError(journal.error)
+    return owner
+
+
 def validate_request(data):
     if type(data) is not bytes or len(data)!=SIZE:raise ValueError('Map asset packet size')
     version,op,error,state,owner=struct.unpack_from('<4IQ',data)
@@ -37,8 +73,8 @@ class AssetPreparation:
         if getattr(session._transport,'map_asset_preparation_protocol',0)!=1:
             raise RuntimeError('Map asset preparation backend unavailable')
         self.session=session;self.scope=SessionScope(session,lease_owner='SDKMapAssets')
-        self.owner=secrets.randbits(64) or 1;self.closed=False;self.uncertain=False
-        self.assets={};self.profile=dict(assets=0,preparation_ms=0.,load_ms=0.)
+        self.owner=secrets.randbits(64) or 1;self.closed=False;self.uncertain=False;self.started=False
+        self.assets={};self.attempts={};self.profile=dict(assets=0,preparation_ms=0.,load_ms=0.)
         metadata=process_preparation(session)
         metadata.scope._reference_owners.append(self)
         started=time.perf_counter()
@@ -50,6 +86,7 @@ class AssetPreparation:
             stable=metadata.prepare(catalog,ids)
             ids=tuple(stable.by_index[obj.index] for obj in ids)
         self._send(104,ids=ids)
+        self.started=True
         self.profile['preparation_ms']=(time.perf_counter()-started)*1000
 
     def _send(self,op,*,ids=(),path=None):
@@ -84,19 +121,25 @@ class AssetPreparation:
         if self.closed or self.uncertain:raise RuntimeError('Map asset owner unavailable')
         paths=tuple(dict.fromkeys(paths))
         if len(paths)>6000 or len(set(paths)|set(self.assets))>6000:raise ValueError('Map asset preparation limit')
+        if any(not isinstance(path,str) for path in paths):raise ValueError('Map asset path type')
         for path in paths:
-            if not isinstance(path,str):raise ValueError('Map asset path type')
             if path in self.assets:continue
+            if path in self.attempts:raise RuntimeError('Map asset preparation failed; not replayed: '+path)
+            attempt=dict(acknowledged=False,error=None);self.attempts[path]=attempt
             started=time.perf_counter()
-            if path.startswith('/Engine/'):
-                mesh=self._prepare_engine_asset(path)
-                index,serial,address=mesh.index,mesh.serial,mesh.address
-            else:
-                raw=self._send(105,path=path)
-                index,serial,address=struct.unpack_from('<iiQ',raw,4096)
-            if index<0 or serial<=0 or not address:
-                self.uncertain=True;raise RuntimeError('Map asset retained identity missing')
-            self.assets[path]=SimpleNamespace(index=index,serial=serial,address=address)
+            try:
+                if path.startswith('/Engine/'):
+                    mesh=self._prepare_engine_asset(path)
+                    index,serial,address=mesh.index,mesh.serial,mesh.address
+                else:
+                    raw=self._send(105,path=path)
+                    index,serial,address=struct.unpack_from('<iiQ',raw,4096)
+                if index<0 or serial<=0 or not address:
+                    self.uncertain=True;raise RuntimeError('Map asset retained identity missing')
+                self.assets[path]=SimpleNamespace(index=index,serial=serial,address=address)
+                attempt['acknowledged']=True
+            except BaseException as error:
+                attempt['error']=str(error);raise
             self.profile['assets']=len(self.assets)
             self.profile['load_ms']+=(time.perf_counter()-started)*1000
             service_loading_io(self.session)

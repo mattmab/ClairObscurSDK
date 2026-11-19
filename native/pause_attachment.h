@@ -117,8 +117,15 @@ public:
             if(p.lease||!wire_empty(&p.remove,sizeof(p.remove))||!state_||p.owner!=owner_){p.error=1301;return;}
             if(capture_pending_){p.error=close(base,false);p.state=state_;return;}
             e33_retired_world::TargetOps epoch{base};const auto proof=retired_anchor_.prove(epoch);
-            if(proof!=e33_retired_world::Result::Retired){p.error=proof==e33_retired_world::Result::Pending?407:1303;p.state=state_;return;}
-            retired_cleanup_=true;p.error=close(base,false);p.state=state_;return;
+            if(proof==e33_retired_world::Result::Pending||proof==e33_retired_world::Result::Unknown){
+                // This proof-only request has dispatched no setters/removal.
+                // Keep its journal pending rather than aborting every SDK mod.
+                p.error=proof==e33_retired_world::Result::Pending?407:1304;p.state=state_;return;
+            }
+            // A same-World epoch change uses the original checked close path.
+            // Only a proven retired World may skip borrowed state restoration.
+            if(proof==e33_retired_world::Result::Retired)retired_cleanup_=true;
+            p.error=close(base,false);p.state=state_;return;
         }
 #endif
         if(p.operation>=3) {
@@ -143,7 +150,9 @@ public:
                 auto fn=call_identity(base,c.function), obj=call_identity(base,c.target);
                 if(!fn || !obj || !exact_name(base,fn+0x18,i ? "SetIsEnabled" : "SetRenderOpacity") ||
                    !exact_name(base,local_read<uint64_t>(fn+0x20)+0x18,"Widget") ||
-                   !exact_name(base,local_read<uint64_t>(obj+0x10)+0x18,"Overlay")) { p.error=1301; return; }
+                   !(exact_name(base,local_read<uint64_t>(obj+0x10)+0x18,"Overlay") ||
+                     (exact_name(base,local_read<uint64_t>(obj+0x10)+0x18,"WBP_BaseButton_C") &&
+                      exact_name(base,obj+0x18,"AbandonBattleButton")))) { p.error=1301; return; }
                 auto copy=c;
                 if(reflected_call(base,copy,nullptr,nullptr,nullptr,nullptr,true)) { p.error=1302; return; }
                 restore_[i]=c; restore_lease_[i]=p.lease; return;
@@ -163,14 +172,16 @@ public:
             }
             p.error=close(base,false); p.state=state_; return;
         }
-        if(state_ || !p.lease || !leases.owns_object(session,p.lease,p.remove.target.address) ||
+        if(state_){p.error=1301;return;}
+        if(!p.lease || !leases.owns_object(session,p.lease,p.remove.target.address) ||
            validate_call_packet(p.remove) || p.remove.parameter_size || p.remove.field_count ||
-           p.remove.object_count || p.remove.return_offset!=65535) { p.error=1301; return; }
+           p.remove.object_count || p.remove.return_offset!=65535) { p.error=1306; return; }
         const auto fn=call_identity(base,p.remove.function), widget=call_identity(base,p.remove.target);
         if(!fn || !widget || !exact_name(base,fn+0x18,"RemoveFromParent") ||
            !exact_name(base,local_read<uint64_t>(fn+0x20)+0x18,"Widget") ||
-           !exact_name(base,local_read<uint64_t>(widget+0x10)+0x18,"WBP_BaseButton_C") ||
-           (local_read<uint32_t>(widget+8)&(0x10|0x40000000))) { p.error=1301; return; }
+           !(exact_name(base,local_read<uint64_t>(widget+0x10)+0x18,"WBP_BaseButton_C") ||
+             exact_name(base,local_read<uint64_t>(widget+0x10)+0x18,"CommonActivatableWidget")) ||
+           (local_read<uint32_t>(widget+8)&(0x10|0x40000000))) { p.error=1306; return; }
         auto call=p.remove;
         if(reflected_call(base,call,nullptr,nullptr,nullptr,nullptr,true) || call.outcome!=CallNotDispatched) {
             p.error=1302; return;
@@ -196,7 +207,10 @@ private:
 
 // Bounded independent cleanup owners for sibling pause-menu entries.
 class PauseAttachmentPool {
-    PauseAttachment entries_[4];
+public:
+    static constexpr unsigned capacity=8;
+private:
+    PauseAttachment entries_[capacity];
 public:
     bool protects(uint64_t lease) const {
         for(const auto& entry: entries_) if(entry.protects(lease)) return true;
@@ -215,7 +229,8 @@ public:
         if(p.operation==1) for(auto& entry: entries_) if(!entry.active()) {
             entry.command(base,session,leases,p); return;
         }
-        p.error=1301;
+        // No entry was selected and no journal or engine call was touched.
+        p.error=p.operation==1?1305:1301;
     }
 };
 

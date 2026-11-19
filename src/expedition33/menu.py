@@ -166,7 +166,10 @@ def prepare(session, widget, child, player, leases, *, z_order=1000, catalog=Non
     session._check()
     if getattr(session._transport, 'menu_protocol', 0) != 1:
         raise MenuError('Menu ownership requires v14', outcome='not_started')
-    if any(menu.active for menu in session._menus):
+    # Detached warmup only copies validated call plans; it acquires no native
+    # menu, viewport or focus. The current menu can remain visible until the
+    # replacement is ready. Real acquisition still enforces exclusive ownership.
+    if not _plan_only and any(menu.active for menu in session._menus):
         raise MenuError('This session already owns a menu', outcome='not_started')
     if type(z_order) is not int or not 0 <= z_order <= 10000:
         raise ValueError('Z order must be an integer from 0 through 10000')

@@ -36,7 +36,7 @@ class UIBatchTests(unittest.TestCase):
             session._abort_ownership.assert_called_once()
 
     def test_layout_requires_explicit_capability(self):
-        for protocol in (0, True, 4, '1'):
+        for protocol in (0, True, 5, '1'):
             session = SimpleNamespace(_transport=SimpleNamespace(ui_batch_protocol=1, layout_batch_protocol=protocol))
             self.assertFalse(wire.layout_available(session))
         session._transport.layout_batch_protocol = 1

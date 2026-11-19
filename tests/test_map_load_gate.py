@@ -6,6 +6,17 @@ from expedition33.map_load_gate import MapLoadGate,validate_request,SIZE
 
 
 class GateWireTests(unittest.TestCase):
+    def test_only_preflight_release_rejection_is_not_ready(self):
+        from expedition33.map_load_gate import MapLoadGateNotReady
+        def reject(packet):struct.pack_into('<I',packet,8,2143)
+        gate=self.owner(reject)
+        with self.assertRaises(MapLoadGateNotReady) as caught:
+            gate.release({'visit':[1,2,16],'pawn':[3,4,32]})
+        self.assertEqual(caught.exception.outcome,'not_dispatched')
+        self.assertEqual(len(self.sent),1)
+        with self.assertRaises(RuntimeError) as caught:gate.close()
+        self.assertNotIsInstance(caught.exception,MapLoadGateNotReady)
+        self.assertFalse(gate.closed)
     def owner(self,change=None):
         gate=MapLoadGate.__new__(MapLoadGate);gate.owner=123;gate.closed=False;gate.overlay=None
         self.sent=[]
@@ -29,6 +40,14 @@ class GateWireTests(unittest.TestCase):
             struct.pack_into('<iiQ',packet,4112,2,1002,32)
         result=self.owner(copy).status()
         self.assertEqual(result,{'state':2,'world':[1,1001,16],'pawn':[2,1002,32]})
+
+    def test_native_hold_timing_requires_an_explicit_capability(self):
+        def copy(packet):struct.pack_into('<3Q',packet,4160,1000,875,1)
+        gate=self.owner(copy)
+        with self.assertRaisesRegex(RuntimeError,'acknowledgement mismatch'):gate.status()
+        gate=self.owner(copy);gate.session._transport.map_load_timing_protocol=1
+        result=gate.status()
+        self.assertEqual((result['hold_started_ms'],result['hold_duration_ms'],result['hold_sequence']),(1000,875,1))
 
     def test_reply_cannot_change_owner_or_unrelated_packet_bytes(self):
         for offset in (16,88,2000,4146,SIZE-1):
@@ -77,3 +96,60 @@ class GateWireTests(unittest.TestCase):
             with self.subTest(offset=offset):
                 bad=bytearray(packet);bad[offset]^=255
                 with self.assertRaises(ValueError):validate_request(bytes(bad))
+
+    def test_priority_configuration_requires_capability_and_two_stable_identities(self):
+        ids=((1,1001,0x10000),(2,1002,0x20000))
+        for capability in (None,0,True,2):
+            gate=self.owner();gate.session._transport.map_loading_priority_protocol=capability
+            with self.assertRaisesRegex(RuntimeError,'unavailable'):gate._send(267,ids=ids)
+            self.assertFalse(self.sent)
+        gate=self.owner();gate.session._transport.map_loading_priority_protocol=1
+        gate._send(267,ids=ids)
+        self.assertEqual(struct.unpack_from('<iiQ',self.sent[0],104),ids[1])
+        for offset,fmt,value in ((92,'<i',0),(96,'<Q',0x10001),(112,'<Q',0x800000000000),(120,'<B',1),(4096,'<B',1)):
+            bad=bytearray(self.sent[0]);struct.pack_into(fmt,bad,offset,value)
+            with self.subTest(offset=offset),self.assertRaises(ValueError):validate_request(bytes(bad))
+
+    def test_priority_status_requires_capability_and_valid_diagnostic_values(self):
+        def copy(packet):struct.pack_into('<5I',packet,4184,4,0,1,1,0)
+        gate=self.owner(copy)
+        with self.assertRaisesRegex(RuntimeError,'acknowledgement mismatch'):gate.status()
+        gate=self.owner(copy);gate.session._transport.map_loading_priority_protocol=1
+        self.assertEqual(gate.status()['priority'],dict(state='closed',error=0,enable_returned=True,restore_returned=True,retired=False))
+        for values in ((6,0,0,0,0),(2,0,2,0,0),(4,0,1,2,0),(4,0,1,1,2)):
+            gate=self.owner(lambda packet:struct.pack_into('<5I',packet,4184,*values))
+            gate.session._transport.map_loading_priority_protocol=1
+            with self.subTest(values=values),self.assertRaisesRegex(RuntimeError,'diagnostics'):gate.status()
+
+    def test_priority_status_cannot_modify_adjacent_payload_or_configuration(self):
+        for offset in (88,4183,4204,SIZE-1):
+            gate=self.owner(lambda packet:packet.__setitem__(offset,1));gate.session._transport.map_loading_priority_protocol=1
+            with self.subTest(offset=offset),self.assertRaisesRegex(RuntimeError,'acknowledgement mismatch'):gate.status()
+
+    def test_unknown_priority_install_is_not_replayed_or_marked_closed(self):
+        gate=self.owner(lambda packet:packet.__setitem__(1999,1));gate.session._transport.map_loading_priority_protocol=1
+        with self.assertRaisesRegex(RuntimeError,'acknowledgement mismatch'):
+            gate._send(267,ids=((1,1001,0x10000),(2,1002,0x20000)))
+        self.assertEqual(len(self.sent),1);self.assertFalse(gate.closed)
+
+    def test_transport_admits_priority_only_with_exact_capability_and_wire(self):
+        import io
+        from expedition33._session import SessionTransport
+        def transport(capability):
+            value=SessionTransport.__new__(SessionTransport)
+            value._check_thread=lambda:None;value._closed=False;value.mesh_protocol=3
+            value.map_load_gate_protocol=1;value.map_loading_priority_protocol=capability
+            value._process=N(stdin=io.StringIO());value._read=lambda:dict(event='session_response',command='mesh',closed=False)
+            return value
+        gate=self.owner();gate.session._transport.map_loading_priority_protocol=1
+        gate._send(267,ids=((1,1001,0x10000),(2,1002,0x20000)));packet=self.sent[0]
+        for capability in (0,None,False,True,2):
+            connection=transport(capability)
+            with self.subTest(capability=capability),self.assertRaisesRegex(ValueError,'loading priority'):
+                connection.command('mesh',packet)
+            self.assertEqual(connection._process.stdin.getvalue(),'')
+        connection=transport(1);connection.command('mesh',packet)
+        self.assertTrue(connection._process.stdin.getvalue().startswith('mesh '))
+        bad=bytearray(packet);bad[120]=1;connection=transport(1)
+        with self.assertRaises(ValueError):connection.command('mesh',bytes(bad))
+        self.assertEqual(connection._process.stdin.getvalue(),'')

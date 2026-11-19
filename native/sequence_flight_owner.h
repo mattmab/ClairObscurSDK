@@ -102,7 +102,8 @@ public:
     uint32_t restore_pose(uint64_t base,const CallPodValidation* pod){
         if(!active_ || !current_camera(base,move_.target))return 1791;
         auto move=move_;std::memcpy(move.data,pose_,sizeof(pose_));
-        return reflected_call(base,move,nullptr,pod) || move.outcome!=CallDispatchReturned || !move.data[48]?1793:0;
+        if(reflected_call(base,move,nullptr,pod) || move.outcome!=CallDispatchReturned)return move.outcome==CallNotDispatched?1791:1793;
+        return move.data[48]?0:1791;
     }
     const CallIdentity& camera()const{return move_.target;}
     void cancel(){active_=dragging_=false;sampled_=0;std::fill(std::begin(nudge_),std::end(nudge_),0.);}
@@ -152,7 +153,8 @@ public:
         if(!current_camera(base,move_.target))return 1791;
         e33_editor_flight::advance(pose_,dt,input);
         auto move=move_;std::memcpy(move.data,pose_,sizeof(pose_));
-        if(reflected_call(base,move,nullptr,pod) || move.outcome!=CallDispatchReturned || !move.data[48])return 1793;
+        if(reflected_call(base,move,nullptr,pod) || move.outcome!=CallDispatchReturned)return move.outcome==CallNotDispatched?1791:1793;
+        if(!move.data[48])return 1791;
         return 0;
     }
 };

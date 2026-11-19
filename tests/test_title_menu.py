@@ -307,3 +307,62 @@ class TitleCloseRestorationTests(TitleInputRestorationTests):
   with self.assertRaisesRegex(RuntimeError,'hide not acknowledged'):self.entry.close()
   self.assertTrue(self.entry._title_restore_pending);self.assertEqual(self.events,[])
 if __name__=='__main__':unittest.main()
+
+class TitleAuthorityRaceTests(unittest.TestCase):
+ def test_gc_race_retains_title_owner_without_dispatch(self):
+  from expedition33 import RuntimeQueryError
+  from expedition33.cinematics.original_game_action import NotReady
+  entry=TitleMenuEntry.__new__(TitleMenuEntry)
+  entry.parent_scope=object();entry._title_binding=();entry.restore_tree=None;entry.restore_panel=None
+  entry.state='attached'
+  def changed(*args,**kwargs):raise RuntimeQueryError('DESCRIPTOR_IDENTITY_CHANGED')
+  entry._timed=changed
+  with self.assertRaises(NotReady):entry._current_title()
+  self.assertEqual(entry.state,'attached')
+  def unknown(*args,**kwargs):raise RuntimeQueryError('Unexpected schema')
+  entry._timed=unknown
+  with self.assertRaises(RuntimeQueryError):entry._current_title()
+ def test_reflection_retirement_between_reads_defers_without_owner_cleanup_or_clicks(self):
+  from expedition33 import RuntimeQueryError
+  from unittest.mock import Mock
+  proof=TitleAuthorityTests();proof.setUp()
+  entry=TitleMenuEntry(N(pid=7,_session=N(_transport=N())),N(menu=None),readiness=lambda:True)
+  entry._title_binding=proof.binding;entry.restore_tree=None;entry.restore_panel=None
+  entry.state='attached';entry._next_poll=entry._next_world_check=0
+  entry._title_restore_pending=True;entry._title_restore_disposition='pending'
+  entry._return_focus=True;entry.scope=object();owner=entry.scope
+  entry.close=Mock(side_effect=AssertionError('authority race is not retirement proof'))
+  entry.observer=N(read=Mock(side_effect=AssertionError('no stale title callbacks')))
+  entry._world_read_operation=lambda:nullcontext()
+  with patch('expedition33.title_menu.ReadBatch',lambda *a,**k:nullcontext()), \
+       patch('expedition33.title_menu.capture_selected',return_value=proof.catalog), \
+       patch('expedition33.title_menu.read_values_many',side_effect=RuntimeQueryError('REFLECTION_TARGET_CHANGED')) as reads:
+   entry.poll()
+  self.assertEqual(reads.call_count,1);entry.close.assert_not_called();entry.observer.read.assert_not_called()
+  self.assertEqual(entry.state,'attached');self.assertIs(entry.scope,owner)
+  self.assertTrue(entry._title_restore_pending);self.assertFalse(entry._title_restore_unknown)
+  self.assertEqual(entry._title_restore_disposition,'pending');self.assertTrue(entry._return_focus)
+ def test_reflection_preconstruction_race_never_replays_partial_construction(self):
+  from expedition33 import RuntimeQueryError
+  from unittest.mock import Mock
+  entry=TitleMenuEntry(N(pid=7,_session=N(_transport=N())),N(),readiness=lambda:True)
+  entry._poll_title=Mock(side_effect=RuntimeQueryError('REFLECTION_TARGET_CHANGED'))
+  for state in ('new','prepared'):
+   entry.state=state;entry.poll();self.assertEqual(entry.state,state)
+  self.assertEqual(entry._poll_title.call_count,2)
+  for state in ('building','attached'):
+   entry.state=state
+   with self.assertRaises(RuntimeQueryError):entry.poll()
+ def test_invocation_outcomes_are_never_deferred_as_read_races(self):
+  from expedition33 import RuntimeQueryError
+  from unittest.mock import Mock
+  entry=TitleMenuEntry(N(pid=7,_session=N(_transport=N())),N(),readiness=lambda:True)
+  entry._title_binding=();entry.restore_tree=None;entry.restore_panel=None
+  for outcome in ('not_dispatched','unknown','completed'):
+   error=RuntimeQueryError('REFLECTION_TARGET_CHANGED');error.outcome=outcome
+   entry._timed=Mock(side_effect=error)
+   with self.assertRaises(RuntimeQueryError) as failure:entry._current_title()
+   self.assertIs(failure.exception,error)
+   entry._poll_title=Mock(side_effect=error)
+   with self.assertRaises(RuntimeQueryError) as failure:entry.poll()
+   self.assertIs(failure.exception,error)

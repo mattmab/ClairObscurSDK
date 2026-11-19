@@ -1,5 +1,6 @@
 #pragma once
 #include "trace_slots.h"
+#include "blueprint_argument_transform.h"
 
 // Build 23765773 direct Blueprint opcode, independently analyzed in Ghidra:
 // 1413986b0 consumes an 8-byte UFunction operand, then 14138ee60 builds and
@@ -12,9 +13,14 @@ class BlueprintDirectTrace {
     inline static void* originals_[256]{};
     inline static void* wrappers_[256]{};
     inline static uint64_t damage_name_{};
+    inline static uint64_t new_game_name_{};
     inline static uint64_t external_names_[2]{};
     inline static bool external_{};
     inline static uint64_t completion_name_{};
+    inline static uint64_t modifier_name_{};
+    inline static uint64_t inworld_names_[2]{};
+    inline static uint64_t story_action_name_{};
+    inline static uint64_t narrative_names_[64]{};
     inline static unsigned count_{};
     static void observe(uint64_t function,void* object,void* frame,void* result,bool before,size_t post_handle=0) {
         const bool previous=blueprint_direct_frame;
@@ -32,7 +38,11 @@ class BlueprintDirectTrace {
         const auto post_handle=selected ? e33_trace::TraceSlots<>::post_observation(
             reinterpret_cast<void* volatile*>(function+0xd8)) : 0;
         if(selected) observe(function,object,frame,result,true);
-        reinterpret_cast<e33_trace::Entry>(base_+0x13938a0)(object,frame,result);
+        const auto transform=e33_blueprint_transform::find(function);
+        e33_blueprint_transform::Decision decision;
+        if(selected&&transform.owner)decision=transform.begin(transform.owner,function,object,frame);
+        if(!decision.skip)reinterpret_cast<e33_trace::Entry>(base_+0x13938a0)(object,frame,result);
+        if(decision.token&&transform.end)transform.end(transform.owner,decision.token);
         // Build() still owns this callee frame. Copy only after the original
         // interpreter returned, before Build destroys temporary parameters.
         if(post_handle) observe(function,object,frame,result,false,post_handle);
@@ -42,7 +52,8 @@ class BlueprintDirectTrace {
         return address && address <= UINT64_MAX-0x28 &&
             target_trace_read(address+0x20,&code,8) && code <= UINT64_MAX-8 &&
             target_trace_read(code,&function,8) && function && function <= UINT64_MAX-0xd8 &&
-            e33_trace::TraceSlots<>::observes_entry(reinterpret_cast<void* volatile*>(function+0xd8));
+            (e33_trace::TraceSlots<>::observes_entry(reinterpret_cast<void* volatile*>(function+0xd8))||
+             e33_blueprint_transform::selected(function));
     }
     static void __fastcall route(void* object, void* frame, void* result) {
         uint64_t code{}, function{};
@@ -68,7 +79,8 @@ class BlueprintDirectTrace {
             using Find=uint64_t(__fastcall*)(void*,uint64_t);
             const auto function=reinterpret_cast<Find>(base_+0x1391a40)(object,uint64_t(name[0]) | (uint64_t(name[2])<<32));
             if (function && function<=UINT64_MAX-0xd8 &&
-                e33_trace::TraceSlots<>::observes_entry(reinterpret_cast<void* volatile*>(function+0xd8))) {
+                (e33_trace::TraceSlots<>::observes_entry(reinterpret_cast<void* volatile*>(function+0xd8))||
+                 e33_blueprint_transform::selected(function))) {
                 const auto next=code+12;
                 std::memcpy(static_cast<uint8_t*>(frame)+0x20,&next,8);
                 using Build=void(__fastcall*)(void*,uint64_t,void*,void*,e33_trace::Entry);
@@ -84,8 +96,46 @@ public:
         base_=base;body(object,frame,result);
     }
 #endif
-    static bool matches_name(uint64_t name){return name&&((damage_name_&&damage_name_==name)||
-        (external_&&(external_names_[0]==name||external_names_[1]==name))||completion_name_==name);}
+    static bool matches_name(uint64_t name){
+        for(const auto value:narrative_names_)if(value&&value==name)return true;
+        return name&&((damage_name_&&damage_name_==name)||
+        (external_&&(external_names_[0]==name||external_names_[1]==name))||new_game_name_==name||completion_name_==name||modifier_name_==name||story_action_name_==name||inworld_names_[0]==name||inworld_names_[1]==name);}
+    static bool retain_narrative(uint64_t base,uint64_t function){
+        if(!function)return false;
+        const auto old=damage_name_;
+        if(!count_&&!install(base,function))return false;
+        if(base_!=base)return false;
+        const auto name=local_read<uint64_t>(function+24);damage_name_=old;if(!name)return false;
+        for(const auto value:narrative_names_)if(value==name)return false;
+        for(auto&value:narrative_names_)if(!value){value=name;return true;}return false;
+    }
+    static bool release_narrative(uint64_t function){
+        const auto name=local_read<uint64_t>(function+24);bool found=false;
+        for(auto&value:narrative_names_)if(value==name){value=0;found=true;}
+        return found&&(damage_name_?true:close());
+    }
+    static bool retain_story_action(uint64_t base,uint64_t function){
+        if(story_action_name_||!function)return false;
+        const auto old=damage_name_;
+        if(!count_&&!install(base,function))return false;
+        if(base_!=base)return false;
+        story_action_name_=local_read<uint64_t>(function+24);damage_name_=old;return story_action_name_!=0;
+    }
+    static bool release_story_action(){story_action_name_=0;return damage_name_?true:close();}
+    static bool retain_inworld(uint64_t base,uint64_t finished,uint64_t interrupted){
+        if(inworld_names_[0]||inworld_names_[1]||!finished||!interrupted)return false;
+        const auto old=damage_name_;
+        if(!count_&&!install(base,finished))return false;
+        if(base_!=base)return false;
+        inworld_names_[0]=local_read<uint64_t>(finished+24);inworld_names_[1]=local_read<uint64_t>(interrupted+24);
+        damage_name_=old;return inworld_names_[0]&&inworld_names_[1];
+    }
+    static bool release_inworld(){inworld_names_[0]=inworld_names_[1]=0;return damage_name_?true:close();}
+    static bool retain_modifier(uint64_t base,uint64_t function) {
+        if(modifier_name_ || base_!=base || !count_ || !function)return false;
+        modifier_name_=local_read<uint64_t>(function+24);return modifier_name_!=0;
+    }
+    static void release_modifier(){modifier_name_=0;}
     // Exact completion owner validates its function/controller schema first.
     // This only retains shared opcode routing; its POST slot remains separate.
     static bool retain_completion(uint64_t base,uint64_t function) {
@@ -121,12 +171,17 @@ public:
         uint64_t name{};
         if (!function || function>UINT64_MAX-0x20 ||
             !target_trace_read(function+0x18,&name,8) || !name) return false;
-        if (count_) {if(damage_name_&&damage_name_!=name)return false;damage_name_=name;return true;}
+        const bool menu=exact_name(base,function+24,"OnStartGameSettingsApplied");
+        if (count_) {
+            if(menu){if(new_game_name_&&new_game_name_!=name)return false;new_game_name_=name;}
+            else {if(damage_name_&&damage_name_!=name)return false;damage_name_=name;}
+            return true;
+        }
         HMODULE pinned{};
         if (!GetModuleHandleExW(GET_MODULE_HANDLE_EX_FLAG_FROM_ADDRESS|GET_MODULE_HANDLE_EX_FLAG_PIN,
             reinterpret_cast<LPCWSTR>(&route),&pinned)) return false;
         base_=base;
-        damage_name_=name;
+        if(menu)new_game_name_=name;else damage_name_=name;
         unsigned direct_count=0, named_count=0;
         for (unsigned i=0;i<256;++i) {
             auto slot=reinterpret_cast<void* volatile*>(base+0x9360600+i*8);
@@ -144,7 +199,9 @@ public:
     }
     static bool close() {
         damage_name_=0;
-        if(external_ || completion_name_)return true;
+        new_game_name_=0;
+        for(const auto value:narrative_names_)if(value)return true;
+        if(external_ || completion_name_ || modifier_name_ || story_action_name_ || inworld_names_[0] || inworld_names_[1])return true;
         bool ok=true;
         while(count_) {
             auto slot=slots_[--count_];

@@ -82,6 +82,31 @@ bool validate_frame_time_schema(Ops& ops,PodValueKind kind,const CallIdentity& i
 
 template<class Ops>
 bool validate_pod_schema(Ops& ops,PodValueKind kind,const CallIdentity& identity) {
+    if(kind==PodValueKind::Transform) {
+        if(!ops.context() || !ops.identity(identity))return false;
+        const auto object=identity.address;
+        if(!pod_registered(ops,object) || !ops.name(object+0x18,"Transform") ||
+           !pod_package(ops,ops.template read<uint64_t>(object+0x20),"/Script/CoreUObject") ||
+           ops.template read<uint64_t>(object+0x40) || ops.template read<uint32_t>(object+0x58)!=96)return false;
+        const auto cls=ops.template read<uint64_t>(object+0x10);
+        if(!pod_registered(ops,cls) || !ops.name(cls+0x18,"ScriptStruct") ||
+           !pod_package(ops,ops.template read<uint64_t>(cls+0x20),"/Script/CoreUObject"))return false;
+        const char* names[]={"Rotation","Translation","Scale3D"};
+        const uint32_t offsets[]={0,32,64}, widths[]={32,24,24};
+        auto field=ops.template read<uint64_t>(object+0x50);
+        for(unsigned i=0;i<3;++i) {
+            if(!field || ops.template read<uint64_t>(field)!=ops.base+0x6e136a0 ||
+               ops.template read<uint64_t>(field+0x10)!=(object|1) || !ops.name(field+0x20,names[i]) ||
+               !ops.name(ops.template read<uint64_t>(field+8),"StructProperty") ||
+               ops.template read<uint32_t>(field+0x30)!=1 || ops.template read<uint32_t>(field+0x34)!=widths[i] ||
+               ops.template read<uint32_t>(field+0x44)!=offsets[i] ||
+               ops.template read<uint64_t>(field+0x38)!=(i==0?6755469251051525ULL:6755469251052037ULL))return false;
+            const auto child=ops.template read<uint64_t>(field+0x70);
+            if(!validate_pod_schema(ops,i==0?PodValueKind::Quat:PodValueKind::Vector,ops.capture(child)))return false;
+            field=ops.template read<uint64_t>(field+0x18);
+        }
+        return !field && ops.identity(identity) && ops.context();
+    }
     if(kind==PodValueKind::FrameNumber || kind==PodValueKind::FrameTime || kind==PodValueKind::FrameRate ||
        kind==PodValueKind::QualifiedFrameTime || kind==PodValueKind::Timespan || kind==PodValueKind::BindingID) return validate_frame_time_schema(ops,kind,identity);
     const auto width=pod_value_width(kind);
@@ -94,6 +119,10 @@ bool validate_pod_schema(Ops& ops,PodValueKind kind,const CallIdentity& identity
     uint64_t table=0, flags=0;
     const char* field_type=nullptr;
     switch(kind) {
+    case PodValueKind::Quat:
+        struct_name="Quat";package="/Script/CoreUObject";
+        fields[0]="X";fields[1]="Y";fields[2]="Z";fields[3]="W";count=4;component=8;
+        table=0x6e11788;flags=6755469251052037ULL;field_type="DoubleProperty";break;
     case PodValueKind::Guid:
         struct_name="Guid"; package="/Script/CoreUObject";
         fields[0]="A"; fields[1]="B"; fields[2]="C"; fields[3]="D"; count=4; component=4;

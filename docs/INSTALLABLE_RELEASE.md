@@ -1,6 +1,6 @@
 # Expedition 33 SDK — installable release candidate
 
-The current package is SDK **0.1.0-rc23**. See `docs/RELEASE_0.1.0_RC23.md` in the
+The current package is SDK **0.1.0-rc25**. See `docs/RELEASE_0.1.0_RC25.md` in the
 source repository for release notes.
 
 This candidate supports the verified Windows Steam executable with SHA-256
@@ -42,16 +42,15 @@ same installed SDK is rejected by an operating-system file lock.
 SDKManagement, IntrospectionHarness and LiveObjectViewer are bundled in `SDK_Mods`.
 Enable LiveObjectViewer in Pause → Mods, then choose **Open Live Object Viewer**
 or enter `lov` in the native console. Existing saved enable choices are preserved.
-Download optional mods separately from the repository's Mods catalog and releases.
-World Builder 0.32.3 requires RC18 with runtime210 and is a separate optional download.
-Extract its ZIP beside `Sandfall` and enable World Builder in Pause → Mods.
-It needs no second controller or native DLL; preserve `SDK/settings/E33WorldBuilder`
-for maps, camera preferences and thumbnail caches.
-Add or replace trusted mod
-archives there while the controller is stopped. They are validated and extracted
-into a generated `SDK/mods` cache at startup. Do not edit the generated cache.
-Archives execute trusted Python code; they are not sandboxed or digitally signed.
-Limits: 64 archives, 32 MiB per archive, 64 MiB expanded per archive, 256 MiB total.
+Extract the optional mods ZIP into the same game folder. Enable its mods in
+Pause → Mods. Preserve `SDK/settings/E33WorldBuilder` for saved maps, camera
+preferences, and thumbnail caches when upgrading World Builder.
+
+Add or replace trusted mod archives while the controller is stopped. The SDK
+validates and extracts them into a generated `SDK/mods` cache at startup.
+Archives run trusted Python code with the controller's permissions. The loader
+accepts up to 64 archives, 512 MiB compressed and 768 MiB expanded per archive,
+4 MiB per entry, 512 entries per archive, and 1 GiB expanded across all archives.
 
 Management starts first. On a fresh installation only the Introspection Harness
 and Management are enabled by default. Optional mods must be installed and enabled
@@ -74,8 +73,9 @@ until game exit. Cleanup failures are not permission to attach another controlle
 
 The authenticated structured local command server is optional. Create
 `SDK/developer-commands.enabled` before game startup, or manually pass `--commands`.
-It exposes status and orderly shutdown, never unrestricted socket Python execution.
-Connection credentials are generated locally under `SDK/settings/controller`.
+It exposes status and orderly shutdown. The separate local Python controller
+requires explicit opt-in at `SDK/settings/python-control/enabled.json`. Its
+credentials are local to this installation. Enable it only for local development.
 
 ## Verification and known limits
 

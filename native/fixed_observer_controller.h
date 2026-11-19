@@ -1,9 +1,11 @@
 #pragma once
 #include "fixed_observer_protocol.h"
+#include "module_snapshot_read.h"
 
 inline bool observer_module_loaded(DWORD pid) {
-    Handle snapshot(CreateToolhelp32Snapshot(TH32CS_SNAPMODULE | TH32CS_SNAPMODULE32, pid));
-    require(snapshot.value != INVALID_HANDLE_VALUE, "OBSERVER_MODULE_SNAPSHOT_FAILED");
+    const auto module_snapshot = read_module_snapshot(pid);
+    Handle snapshot(module_snapshot.handle);
+    require(snapshot.value != INVALID_HANDLE_VALUE, module_snapshot_failure("OBSERVER_MODULE_SNAPSHOT_FAILED", module_snapshot));
     MODULEENTRY32W row{}; row.dwSize = sizeof(row);
     for (BOOL next = Module32FirstW(snapshot.value, &row); next; next = Module32NextW(snapshot.value, &row))
         if (_wcsicmp(row.szModule, kObserverDll) == 0) return true;

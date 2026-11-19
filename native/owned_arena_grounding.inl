@@ -1,5 +1,6 @@
     template<class Pool> uint32_t ground_owned_arena(uint64_t b,uint64_t session,Pool& pool,
-            const CallIdentity (&query)[9],ArenaGroundReport& report,bool forward_approach=false,ArenaGroundDiagnostics* diagnostics=nullptr,bool require_corridor=true){
+            const CallIdentity (&query)[9],ArenaGroundReport& report,bool forward_approach=false,ArenaGroundDiagnostics* diagnostics=nullptr,bool require_corridor=true,bool authored_origin=false){
+        if(authored_origin&&(forward_approach||diagnostics||!require_corridor))return 3610;
         if(diagnostics&&!forward_approach)return 3610;
         if(!require_corridor&&(!forward_approach||!diagnostics))return 3610;
         if(!arena_staging_||!owner_||!lease_||arena_ground_attempted_||!current(b,true)||!helper_battle_quiescent(b)||
@@ -57,7 +58,7 @@
         // Direct fights need no walking corridor. Keep the original nine nearby
         // candidates first, then search three complete bounded rings (32/64/96m)
         // without relaxing support spread or party clearance.
-        const unsigned count=forward_approach?3:57;
+        const unsigned count=authored_origin?1:(forward_approach?3:57);
         for(unsigned candidate=0;candidate<count;++candidate){
             ++report.candidates;report.samples=0;report.supported=report.clearance=0;
             report.approach_samples=0;
@@ -77,6 +78,7 @@
             // The battle area's origin, not the huge visual helper's bounds,
             // stays16m ahead. Rigid authored slot/focus transforms are preserved.
             double xy[]={pawn[0]+std::cos(angle)*distance,pawn[1]+std::sin(angle)*distance};
+            if(authored_origin){xy[0]=report.before[0];xy[1]=report.before[1];}
             if(forward_approach){
                 const double offset[]={slot_before[0][0]-report.before[0],slot_before[0][1]-report.before[1]};
                 // The arena was staged with the requested player-facing yaw.
@@ -93,8 +95,13 @@
                 // not a fabricated humanoid boss collision envelope.
                 const int radius=i>=4?1:0;
                 for(int sy=-radius;sy<=radius&&supported;++sy)for(int sx=-radius;sx<=radius&&supported;++sx){
-                    const double start[]={x+sx*half[0],y+sy*half[1],pawn[2]+5000.};
-                    const double end[]={start[0],start[1],pawn[2]-10000.};e33_surface_query::Sample sample{};
+                    // A fixed authored interior must sample its own floor,
+                    // rather than the roof of the same building above it.
+                    // Both endpoints stay bounded around the audited slot;
+                    // support, slope, capsule clearance and corridor proofs
+                    // below are unchanged.
+                    const double start[]={x+sx*half[0],y+sy*half[1],authored_origin?slot_before[i][2]+300.:pawn[2]+5000.};
+                    const double end[]={start[0],start[1],authored_origin?slot_before[i][2]-500.:pawn[2]-10000.};e33_surface_query::Sample sample{};
                     ++report.samples;
                     const auto sampled=e33_surface_query::sample([&](unsigned stage,uint8_t* frame){
                         std::memcpy(args_,frame,sizeof(args_));const bool ok=stage?call(b,15,query[2],ids_[3]):call(b,14,query[1],query[0]);

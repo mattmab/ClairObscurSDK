@@ -11,7 +11,7 @@ class FakeSession(SimpleNamespace):
 class ButtonActionsTests(unittest.TestCase):
     def setUp(self):
         self.events=[]; self.calls=[]; self.defer=False; self.aborted=False
-        self.session=FakeSession(_check=lambda:None, supports_button_actions=True, _menus=set())
+        self.session=FakeSession(_check=lambda:None, supports_button_actions=True, _menus=set(), _enabled=True)
         self.session._transport=SimpleNamespace(_check_thread=lambda:None, button_action_session=7,
                                                 command=self.command)
         self.session._abort_ownership=self.abort

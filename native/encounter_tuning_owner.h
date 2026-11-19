@@ -14,6 +14,7 @@ class Owner {
     bool (*replace_manager_)(void*,Owner&,CallIdentity)=nullptr;
     Settings settings_{};bool routing_=false;RetryLifetime lifetime_{};
     uint32_t spawn_calls_=0,difficulty_calls_=0,error_=0;
+    bool sdk_spawn_prepared_=false;
     ScalarOverride<int32_t> level_{};ScalarOverride<double> health_{};ScalarOverride<uint8_t> difficulty_{};
     static bool named(uint64_t b,uint64_t o,const char* name,const char* package){
         return call_identity(b,call_capture(b,o))&&exact_name(b,o+24,name)&&
@@ -98,6 +99,10 @@ class Owner {
         auto& difficulty=*reinterpret_cast<uint8_t*>(m+2456);
         if(settings_.difficulty>=0&&difficulty<=2){difficulty_.set(difficulty,static_cast<uint8_t>(settings_.difficulty));++difficulty_calls_;}
         if(fn!=ids_[4].address)return;
+        apply_spawn_values();
+    }
+    void apply_spawn_values(){
+        const auto m=ids_[2].address;
         auto& level=*reinterpret_cast<int32_t*>(m+1964);
         auto& hp=*reinterpret_cast<double*>(m+2552);
         if(level<0||level>10000||!std::isfinite(hp)||hp<0||hp>10000){error_=3636;return;}
@@ -152,7 +157,11 @@ public:
     template<class Pool,class Enemy,class Npc> void command(uint64_t b,uint64_t session,Pool& pool,MeshPacket& p,Enemy& enemy,Npc& npc){
         auto* bytes=reinterpret_cast<uint8_t*>(&p);std::array<uint8_t,sizeof(MeshPacket)> canonical{};
         std::memcpy(canonical.data(),bytes,24);
-        if(p.version!=3||p.error||p.state||!p.owner||p.operation<157||p.operation>159){p.error=3630;return;}
+        const bool sdk_spawn=p.operation==161;
+#if E33_RUNTIME_CINEMATIC_VERSION<308
+        if(sdk_spawn){p.error=3630;return;}
+#endif
+        if(p.version!=3||p.error||p.state||!p.owner||((p.operation<157||p.operation>159)&&!sdk_spawn)){p.error=3630;return;}
         if(p.operation==157){std::memcpy(canonical.data()+24,bytes+24,24);std::memcpy(canonical.data()+88,bytes+88,sizeof(ids_));}
         if(std::memcmp(canonical.data(),bytes,sizeof(p))){p.error=3630;return;}
         if(p.operation!=157&&p.owner!=token_){p.error=3631;return;}
@@ -165,7 +174,7 @@ public:
                 return owner.replace_manager(*static_cast<Pool*>(context),manager);
             };
             std::memcpy(ids_,bytes+88,sizeof(ids_));lifetime_={};spawn_calls_=difficulty_calls_=error_=0;
-            level_={};health_={};difficulty_={};
+            level_={};health_={};difficulty_={};sdk_spawn_prepared_=false;
             if(!schema()||!same_identity(current_manager(),ids_[2])||active_battle()||!(kind?npc.owned_parameter_instance_name(b,session,pool,token_,ids_[3],name_):
                 enemy.owned_instance_name(b,session,pool,token_,ids_[3],name_))){p.error=3632;return;}
             for(unsigned i=0;i<6;++i){TargetStrongReferenceOps ops{b,ids_[i]};
@@ -173,6 +182,19 @@ public:
             if(!BlueprintDirectTrace::retain_encounter(b,ids_[4].address,ids_[5].address)){p.error=3634;return;}routing_=true;
             for(unsigned i=0;i<2;++i){hooks_[i]=e33_trace::TraceSlots<>::install(reinterpret_cast<void* volatile*>(ids_[4+i].address+0xd8),
                 reinterpret_cast<e33_trace::Entry>(b+0x13937a0),callback,this,true,false);if(!hooks_[i]){p.error=3635;return;}}
+        }else if(sdk_spawn){
+            // Explicit bridge for the editor's direct Blueprint invocation,
+            // which intentionally bypasses script-event trace callbacks.
+            // No target or scalar comes from this request: use only the
+            // retained, previously admitted owner and its configured policy.
+            const auto m=ids_[2].address;
+            if(sdk_spawn_prepared_||error_||!has_work()||session!=session_||!schema()||
+               !same_identity(current_manager(),ids_[2])||!matches()||
+               local_read<uint8_t>(m+168)!=1||local_read<uint8_t>(m+1961)||local_read<int32_t>(m+208)||
+               !call_identity(b,ids_[3])||!pool.owns_object(session,leases_[3],ids_[3].address)){
+                p.error=3632;return;
+            }
+            sdk_spawn_prepared_=true;apply_spawn_values();if(error_)p.error=error_;
         }else if(p.operation==159)p.error=close(b,session,pool);
         else poll(b,session,pool);
         const uint32_t report[]={has_work()?1U:0U,lifetime_.battle_observed()?1U:0U,lifetime_.restored()?1U:0U,spawn_calls_,difficulty_calls_,error_};

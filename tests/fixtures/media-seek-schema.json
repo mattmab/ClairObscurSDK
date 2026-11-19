@@ -1,0 +1,57 @@
+{
+  "path": "/Script/MediaAssets.MediaPlayer:Seek",
+  "function": {
+    "event": "function_metadata",
+    "owner": "MediaPlayer",
+    "flags": 79823875,
+    "params_size": 9,
+    "return_offset": 8,
+    "entry_rva": "0x320ad80"
+  },
+  "properties": [
+    {
+      "event": "property_metadata",
+      "owner": "Seek",
+      "owner_index": 16352,
+      "name_id": 103686,
+      "name_number": 0,
+      "name_base": "Time",
+      "name": "Time",
+      "type": "StructProperty",
+      "offset": 0,
+      "element_size": 8,
+      "dimension": 1,
+      "flags": 6755468294751106,
+      "vtable_rva": "0x6e136a0",
+      "struct_name": "Timespan",
+      "struct_index": 5759,
+      "struct_serial": 0
+    },
+    {
+      "event": "property_metadata",
+      "owner": "Seek",
+      "owner_index": 16352,
+      "name_id": 5783338,
+      "name_number": 0,
+      "name_base": "ReturnValue",
+      "name": "ReturnValue",
+      "type": "BoolProperty",
+      "offset": 8,
+      "element_size": 1,
+      "dimension": 1,
+      "flags": 6755469234276224,
+      "vtable_rva": "0x6e119b0",
+      "bool_encoding": "0xff010001"
+    }
+  ],
+  "owners": [
+    {
+      "event": "struct_metadata",
+      "name": "Seek",
+      "index": 16352,
+      "size": 16,
+      "serial": 0,
+      "super": "0x0"
+    }
+  ]
+}

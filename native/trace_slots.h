@@ -5,6 +5,7 @@
 #include <array>
 #include <atomic>
 #include <utility>
+#include "cinematic_choice_observer.h"
 
 namespace e33_trace {
 using Entry = void (__fastcall*)(void*, void*, void*);
@@ -41,6 +42,7 @@ class TraceSlots {
           has_post = slot.post != nullptr && !slot.before;
           if (slot.post && slot.before) slot.post(slot.context, object, frame, result);
         }
+        e33_cinematic_choice::entry(object,frame);
         // Immutable, release-published before the thunk becomes reachable.
         slot.original.load(std::memory_order_acquire)(object, frame, result);
         if (has_post) {
@@ -82,6 +84,7 @@ public:
         return false;
     }
     static void observe_entry(void* volatile* address, void* object, void* frame, void* result) {
+        e33_cinematic_choice::entry(object,frame);
         Guard guard;
         for (size_t i=0;i<used_;++i) {
             auto& slot=slots_[i];
@@ -93,7 +96,7 @@ public:
     // An observation-only PRE/POST registration is dispatched by the shared
     // Blueprint opcode route. It leaves UFunction::Func unchanged, so typed
     // SDK calls keep their ordinary entry/schema validation and dispatch.
-    static size_t install(void* volatile* address, Entry expected, Post post, void* context, bool before = false, bool replace_entry = true) {
+    static size_t install(void* volatile* address, Entry expected, Post post, void* context, bool before = false, bool replace_entry = true, bool observe_direct = false) {
         if (!address || !expected || !post || (reinterpret_cast<uintptr_t>(address) & 7)) return 0;
         Guard guard;
         if (terminal_) return 0;
@@ -113,7 +116,9 @@ public:
                                reinterpret_cast<LPCWSTR>(entries_[index]), &pinned)) return 0;
         slot.original.store(expected, std::memory_order_release);
         slot.address = address; slot.post = post; slot.context = context; slot.before = before;
-        slot.observation_only=!replace_entry;
+        // A dual route owner observes both delegate/ProcessEvent calls through
+        // Func and local Blueprint calls whose interpreter bypasses Func.
+        slot.observation_only=!replace_entry||observe_direct;
         if (InterlockedCompareExchangePointer(address, replace_entry ? reinterpret_cast<void*>(entries_[index]) : reinterpret_cast<void*>(expected),
                 reinterpret_cast<void*>(expected)) != reinterpret_cast<void*>(expected)) {
             slot.post = nullptr; slot.context = nullptr;

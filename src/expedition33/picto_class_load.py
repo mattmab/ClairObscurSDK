@@ -10,7 +10,7 @@ from .reflection import describe
 from .invocation import CallPlan, Parameter, UnsupportedInvocation
 
 
-def load_class(scope,path):
+def load_class(scope,path,*,prepared=None):
     """Return a scoped RetainedInvocation; close it to release the asset lease.
 
     Accepts only top-level /Game/Package.Asset paths. The native backend verifies
@@ -24,10 +24,10 @@ def load_class(scope,path):
     if type(path) is not str or not re.fullmatch(r'/Game/(?:[A-Za-z0-9_]+/)*([A-Za-z0-9_]+)\.(?i:\1)_C',path):
         raise ValueError('Expected a canonical top-level /Game/Package.Asset path')
     from ._asset_names import resolve
-    names=[resolve(scope,path)]
+    names=[prepared.names_for(scope,path) if prepared is not None else resolve(scope,path)]
     if any(names[0].get(key+'_number',0) for key in ('package','asset')):
         raise UnsupportedInvocation('Numbered class asset names are not supported by this loader')
-    c=capture_matching(scope.pid,names=('KismetSystemLibrary','Default__KismetSystemLibrary','LoadClassAsset_Blocking'))
+    c=prepared.capture(scope) if prepared is not None else capture_matching(scope.pid,names=('KismetSystemLibrary','Default__KismetSystemLibrary','LoadClassAsset_Blocking'))
     def one(values):
         values=tuple(values)
         if len(values)!=1: raise ValueError('Ambiguous asset-loading identity')

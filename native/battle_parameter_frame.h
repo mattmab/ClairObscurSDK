@@ -8,10 +8,10 @@
 // A persistent native owner must retain this frame and its source/struct leases
 // until close is acknowledged. Unknown outcomes are quarantined, never replayed.
 namespace e33_enemy_spawn {
-inline bool parameter_destination_separate(uintptr_t destination,uint64_t source) {
+inline bool parameter_destination_separate(uintptr_t destination,uint64_t source,uint32_t offset=48) {
     if(!destination||destination%8||destination>std::numeric_limits<uintptr_t>::max()-344||
-       source>std::numeric_limits<uint64_t>::max()-392)return false;
-    return destination+344<=source+48 || destination>=source+392;
+       offset<48||offset>65536-344||source>std::numeric_limits<uint64_t>::max()-offset-344)return false;
+    return destination+344<=source+offset || destination>=source+offset+344;
 }
 enum class ParameterCall { NotDispatched, Completed, Unknown };
 enum class ParameterFrameState { Empty, InitializeUnknown, Initialized,

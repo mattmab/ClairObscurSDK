@@ -7,6 +7,14 @@ from expedition33 import _ui_batch as wire
 import test_text_transport
 
 class UIBatchTests(unittest.TestCase):
+    def test_skin_batch_capability_is_explicit_and_older_layout_keeps_fallback(self):
+        for version in range(5):
+            session=SimpleNamespace(_transport=SimpleNamespace(ui_batch_protocol=1,layout_batch_protocol=version))
+            for name in ('SetRenderOpacity','SetColorAndOpacity','SetZOrder'):
+                self.assertEqual(wire.setter_available(session,name),version==4)
+            self.assertFalse(wire.setter_available(session,'PlayAnimation'))
+            self.assertEqual(wire.setter_available(session,'SetRenderScale'),version>=2)
+            self.assertEqual(wire.setter_available(session,'SetBrushResourceObject'),version>=3)
     def test_layout_class_input_echo_is_validated_without_accepting_ownership(self):
         from test_invocation import InvocationTests
         specimen = InvocationTests(); specimen.setUp()
@@ -32,7 +40,7 @@ class UIBatchTests(unittest.TestCase):
             session._abort_ownership.assert_called_once()
 
     def test_layout_requires_explicit_capability(self):
-        for protocol in (0, True, 4, '1'):
+        for protocol in (0, True, 5, '1'):
             session = SimpleNamespace(_transport=SimpleNamespace(ui_batch_protocol=1, layout_batch_protocol=protocol))
             self.assertFalse(wire.layout_available(session))
         session._transport.layout_batch_protocol = 1

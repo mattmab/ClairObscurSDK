@@ -9,6 +9,36 @@ from expedition33 import _string_wire as wire
 from expedition33.catalog import Catalog, CatalogObject, ClassRelation
 
 class StringInputTests(unittest.TestCase):
+    def test_exact_object_timer_signatures_only(self):
+        def field(name,kind,offset,width,flags,constraint=None):
+            return SimpleNamespace(name=name,kind=kind,offset=offset,width=width,dimension=1,
+                flags=flags,constraint=SimpleNamespace(name=constraint) if constraint else None)
+        inputs=(field('Object','ObjectProperty',0,8,0x18001000000280,'Object'),
+                field('FunctionName','StrProperty',8,16,0x18000000000280))
+        self.assertTrue(wire.audited_signature(0x3858580,0x4022403,24,24,65535,inputs))
+        active=inputs+(field('ReturnValue','BoolProperty',24,1,0x18001040000780),)
+        self.assertTrue(wire.audited_signature(0x3858fc0,0x14022403,25,32,24,active))
+        self.assertFalse(wire.audited_signature(0x3858fc1,0x14022403,25,32,24,active))
+        self.assertFalse(wire.audited_signature(0x3858fc0,0x14022403,32,32,24,active))
+        inputs[1].name='OtherString'
+        self.assertFalse(wire.audited_signature(0x3858580,0x4022403,24,24,65535,inputs))
+    def test_save_slot_signatures_preserve_input_and_output_types(self):
+        def f(name,kind,offset,width,flags,constraint=None):
+            return SimpleNamespace(name=name,kind=kind,offset=offset,width=width,dimension=1,
+                flags=flags,constraint=SimpleNamespace(name=constraint) if constraint else None)
+        load=(f('SlotName','StrProperty',0,16,0x18000000000280),
+              f('UserIndex','IntProperty',16,4,0x18001040000282),
+              f('ReturnValue','ObjectProperty',24,8,0x18001000000780,'SaveGame'))
+        self.assertTrue(wire.audited_signature(0x373c5c0,0x4022403,32,32,24,load))
+        load[2].constraint.name='Object'
+        self.assertFalse(wire.audited_signature(0x373c5c0,0x4022403,32,32,24,load))
+        save=(f('SaveGameObject','ObjectProperty',0,8,0x18001000000280,'SaveGame'),
+              f('SlotName','StrProperty',8,16,0x18000000000280),
+              f('UserIndex','IntProperty',24,4,0x18001040000282),
+              f('ReturnValue','BoolProperty',28,1,0x18001040000780))
+        self.assertTrue(wire.audited_signature(0x3740310,0x4022403,29,32,28,save))
+        save[2].offset=16
+        self.assertFalse(wire.audited_signature(0x3740310,0x4022403,29,32,28,save))
     def setUp(self):
         self.p=test_invocation.InvocationTests(); self.p.setUp()
         self.row=self.p.field('Path','StrProperty',0,16,0x18000000000280)
@@ -28,6 +58,20 @@ class StringInputTests(unittest.TestCase):
             self.assertIsNone(result.return_value)
             self.assertEqual(decoded.texts,((0,value),))
             self.assertEqual(decoded.call.data,bytes(16))
+    def test_save_path_helper_plans_string_v5_and_copies_owned_return(self):
+        self.descriptor.owners=[dict(index=7,size=56)]
+        self.descriptor.properties=[self.p.field('SaveName','StrProperty',0,16,2251799813685908),self.p.field('ReturnValue','StrProperty',16,16,2251799813687168)]
+        self.descriptor.function=dict(params_size=32,return_offset=16,flags=474218496,entry_rva='0x13937a0')
+        plan=prepare_call(self.p.catalog,self.p.target,self.p.function,{'SaveName':'EXPEDITION_9'},string_values=True)
+        self.assertEqual(plan.wire_version,5)
+        sent=wire.encode_plan(plan,dict(plan.texts));reply=bytearray(sent);struct.pack_into('<II',reply,32,1,0)
+        output=wire.encode_units('native/path/EXPEDITION_9');at=wire.SLOTS_AT+wire.SLOT_SIZE
+        wire.SLOT_HEADER.pack_into(reply,at,1,len(output)//2);reply[at+8:at+8+len(output)]=output
+        decoded=wire.decode_reply(sent,reply.hex())
+        result=decode_result(plan,decoded.call,self.p.catalog,texts=decoded.texts)
+        self.assertEqual(result.return_value,'native/path/EXPEDITION_9')
+        self.descriptor.function['flags']^=1
+        with self.assertRaises(UnsupportedInvocation):prepare_call(self.p.catalog,self.p.target,self.p.function,{'SaveName':'EXPEDITION_9'},string_values=True)
     def test_invalid_inputs_and_opt_in(self):
         with self.assertRaises(UnsupportedInvocation): self.plan(enabled=False)
         for value in ('x\0y','\ud800','\udc00','x'*4096,'\U0001f680'*2048,None,b'x'):
@@ -48,6 +92,23 @@ class StringInputTests(unittest.TestCase):
 
 
 class TextureImportStringTests(unittest.TestCase):
+    def test_save_slot_signatures_preserve_input_and_output_types(self):
+        def f(name,kind,offset,width,flags,constraint=None):
+            return SimpleNamespace(name=name,kind=kind,offset=offset,width=width,dimension=1,
+                flags=flags,constraint=SimpleNamespace(name=constraint) if constraint else None)
+        load=(f('SlotName','StrProperty',0,16,0x18000000000280),
+              f('UserIndex','IntProperty',16,4,0x18001040000282),
+              f('ReturnValue','ObjectProperty',24,8,0x18001000000780,'SaveGame'))
+        self.assertTrue(wire.audited_signature(0x373c5c0,0x4022403,32,32,24,load))
+        load[2].constraint.name='Object'
+        self.assertFalse(wire.audited_signature(0x373c5c0,0x4022403,32,32,24,load))
+        save=(f('SaveGameObject','ObjectProperty',0,8,0x18001000000280,'SaveGame'),
+              f('SlotName','StrProperty',8,16,0x18000000000280),
+              f('UserIndex','IntProperty',24,4,0x18001040000282),
+              f('ReturnValue','BoolProperty',28,1,0x18001040000780))
+        self.assertTrue(wire.audited_signature(0x3740310,0x4022403,29,32,28,save))
+        save[2].offset=16
+        self.assertFalse(wire.audited_signature(0x3740310,0x4022403,29,32,28,save))
     def setUp(self):
         self.p = test_invocation.InvocationTests()
         self.p.setUp()

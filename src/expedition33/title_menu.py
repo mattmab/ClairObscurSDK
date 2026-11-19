@@ -14,6 +14,14 @@ from . import RuntimeQueryError
 
 TITLE_WORLD='/Game/Levels/UI/MainMenu/Level_MainMenu.Level_MainMenu'
 
+def _title_observation_changed(error):
+    # Only external-reader rejections are deferrable. A native invocation
+    # outcome must retain its original failure/cleanup handling.
+    return getattr(error,'outcome',None) is None and any(reason in str(error) for reason in (
+        'DESCRIPTOR_IDENTITY_CHANGED','SELECTED_DEPENDENCY_CHANGED',
+        'REFLECTION_TARGET_CHANGED','READ_FAILED',
+        'Object identity changed or belongs to another process'))
+
 def resolve_title(scope):
     """Follow the persistent LocalPlayer's controller, never named templates."""
     with ReadBatch(scope.pid):
@@ -326,7 +334,14 @@ class TitleMenuEntry(PauseMenuEntry):
         return super().close()
 
     def _current_title(self):
-        return self._timed('title_authority_current',title_authority_current,self.parent_scope,self._title_binding,restore_tree=self.restore_tree,restore_panel=self.restore_panel)
+        try:return self._timed('title_authority_current',title_authority_current,self.parent_scope,self._title_binding,restore_tree=self.restore_tree,restore_panel=self.restore_panel)
+        except RuntimeQueryError as error:
+            # Loading a save can retire title objects during this read-only
+            # authority proof. Retain owners and suppress callbacks until the
+            # independent context observer acknowledges the new world.
+            if _title_observation_changed(error):
+                raise NotReady('Title authority changed during loading') from error
+            raise
     def open(self):
         if self._readiness() is not True or not self._current_title():raise RuntimeError('Title context changed; Mods open deferred')
         return super().open()
@@ -340,9 +355,7 @@ class TitleMenuEntry(PauseMenuEntry):
             # 'prepared' (the latter owns only the detached button). A later observation
             # may start a new proof; partial construction/unknown dispatches
             # remain errors and are never replayed here.
-            if self.state in ('new','prepared') and any(reason in str(error) for reason in
-                    ('DESCRIPTOR_IDENTITY_CHANGED','SELECTED_DEPENDENCY_CHANGED','READ_FAILED',
-                     'Object identity changed or belongs to another process')):
+            if self.state in ('new','prepared') and _title_observation_changed(error):
                 return
             raise
     def _poll_title(self):

@@ -43,6 +43,14 @@ int main() {
     call.fields[0].flags=0; call.return_offset=0;
     if(ui_setter(0,call)) return 24;
 #endif
+#if E33_RUNTIME_CINEMATIC_VERSION>=282 && defined(E33_LAYOUT_BATCH_SESSION)
+    {CallPacket skin_call{};skin_call.return_offset=65535;skin_call.field_count=1;
+     fixture_owner="Widget";fixture_function="SetRenderOpacity";if(!ui_setter(0,skin_call))return 40;
+     fixture_owner="Image";fixture_function="SetColorAndOpacity";if(!ui_setter(0,skin_call))return 41;
+     fixture_owner="Actor";if(ui_setter(0,skin_call))return 42;
+     fixture_owner="CanvasPanelSlot";fixture_function="SetZOrder";if(!ui_setter(0,skin_call))return 43;
+     skin_call.fields[0].flags=0x100;if(ui_setter(0,skin_call))return 44;}
+#endif
     auto packet=std::make_unique<SessionPacket>();
     auto* data=reinterpret_cast<uint8_t*>(packet->console_text);
     MultiButtonPacket control{};

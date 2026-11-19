@@ -1,5 +1,6 @@
 #pragma once
 #include "retained_call_protocol.h"
+#include "blueprint_call_protocol.h"
 
 constexpr uint32_t kEnumCallVersion=4, kEnumCallKind=14;
 inline uint32_t validate_enum_call(const RetainedCallPacket& packet) {
@@ -12,6 +13,19 @@ inline uint32_t validate_enum_call(const RetainedCallPacket& packet) {
     unsigned enums=0;
     for(uint32_t i=0;i<normalized.field_count;++i) {
         auto& field=normalized.fields[i];
+        if(field.kind==kBlueprintNameKind) {
+#ifdef E33_TRANSFORM_SESSION
+            if(packet.call.entry_rva!=0x4067650 || packet.call.parameter_size!=121 ||
+               packet.call.function_flags!=75629569 || field.offset || !std::memchr(field.name,0,96) || std::strcmp(field.name,"BoneName"))return 756;
+            auto check=packet.call;check.version=kBlueprintCallVersion;check.function_flags=0;check.entry_rva=kBlueprintThunkRva;
+            for(unsigned j=0;j<check.field_count;++j)if(check.fields[j].kind==kEnumCallKind)check.fields[j].kind=CallByte;
+            if(validate_blueprint_call(check))return 756;
+            field.kind=CallDouble;
+            continue;
+#else
+            return 756;
+#endif
+        }
         if(field.kind!=kEnumCallKind) continue;
         ++enums;
         if(field.width!=1 || field.dimension!=1 || field.bool_encoding ||

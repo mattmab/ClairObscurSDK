@@ -27,7 +27,12 @@ def close_lease_only_scope(scope, *, closed_sequence_owners=()):
     scope._check()
     for name in ('_hooks', '_traces', '_reference_owners', '_audio_owners',
                  '_enemy_spawn_owners', '_native_owners', '_mesh_models'):
-        if getattr(scope, name, ()):
+        owners=getattr(scope,name,())
+        # Native consumers remain registered after an acknowledged close. They
+        # must not block lease-only actor retirement, and must never be closed
+        # again against the replacement World. An open/unknown owner still fails.
+        if name=='_native_owners':owners=tuple(o for o in owners if getattr(o,'_closed',False) is not True)
+        if owners:
             raise RuntimeError('Retired tracking still has an unresolved native domain: ' + name)
     if scope.actions is not None:
         raise RuntimeError('Retired tracking still has scoped actions')

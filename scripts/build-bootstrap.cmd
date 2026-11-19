@@ -1,8 +1,8 @@
 @echo off
 setlocal
 for %%I in ("%~dp0..") do set "PROJECT_ROOT=%%~fI"
-call D:\HobbyDevelopment\Tools\VSBuildTools\VC\Auxiliary\Build\vcvarsall.bat x64
-if errorlevel 1 exit /b %errorlevel%
+where cl >nul 2>nul
+if errorlevel 1 (echo Run from an x64 Visual Studio developer prompt. & exit /b 1)
 if not exist "%PROJECT_ROOT%\build\bootstrap" mkdir "%PROJECT_ROOT%\build\bootstrap"
 pushd "%PROJECT_ROOT%\build\bootstrap"
 ml64 /nologo /c /Foforwarders.obj "%PROJECT_ROOT%\native\bootstrap\forwarders.asm"

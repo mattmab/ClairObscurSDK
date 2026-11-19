@@ -98,6 +98,28 @@ class ValueTests(unittest.TestCase):
         with patch('expedition33.values._query', return_value=({'pid': 123}, self.rows)):
             return read_values(self.catalog, self.obj)
 
+    def test_top_level_native_bool_arrays_are_typed_and_bounded(self):
+        self.property('ComboSuccessHistory','ArrayProperty')
+        self.rows[-1].update(inner_type='BoolProperty',inner_element_size=1,inner_bool_encoding='0xff010001')
+        self.value('ComboSuccessHistory',{'$array':dict(length=3,items=[False,True,False])})
+        self.rows[-1]['truncated']=False
+        self.assertEqual(self.read().values[2,'ComboSuccessHistory'],StoredArray((False,True,False),3))
+        self.rows[-1]['value']={'$array':dict(length=0,items=[])}
+        self.assertEqual(self.read().values[2,'ComboSuccessHistory'],StoredArray((),0))
+        self.rows[-1]['value']={'$array':dict(length=257,items=[True]*256)};self.rows[-1]['truncated']=True
+        value=self.read();self.assertEqual(value.values[2,'ComboSuccessHistory'].length,257);self.assertIn((2,'ComboSuccessHistory'),value.truncated)
+        for item in (0,1,'true',None,[]):
+            self.rows[-1].update(value={'$array':dict(length=1,items=[item])},truncated=False)
+            with self.assertRaisesRegex(RuntimeQueryError,'bool array item'):self.read()
+    def test_top_level_bool_arrays_reject_unqualified_or_packed_layouts(self):
+        self.property('ComboPerfectHistory','ArrayProperty')
+        self.rows[-1].update(inner_type='BoolProperty',inner_element_size=1,inner_bool_encoding='0xff010001')
+        self.value('ComboPerfectHistory',{'$array':dict(length=1,items=[True])});self.rows[-1]['truncated']=False
+        for encoding in (None,'0x01010001','0x02020001','0xff010101',4278255617):
+            self.rows[1]['inner_bool_encoding']=encoding
+            with self.assertRaisesRegex(RuntimeQueryError,'bool array layout'):self.read()
+        self.rows[1]['inner_bool_encoding']='0xff010001';self.rows[1]['inner_element_size']=4
+        with self.assertRaisesRegex(RuntimeQueryError,'bool array layout'):self.read()
     def test_float_and_static_array_and_unsupported(self):
         self.property('Speed', 'FloatProperty'); self.value('Speed', 20)
         self.property('Fixed', 'IntProperty', 2); self.value('Fixed', -1); self.value('Fixed', 9, 1)

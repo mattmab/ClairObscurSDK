@@ -262,6 +262,7 @@ if __name__=='__main__':unittest.main()
 class ScrollGeometryCacheTests(unittest.TestCase):
     def test_no_output_visibility_uses_paint_batch_but_focus_remains_direct(self):
         panel=self.panel();queued=[];panel._paint_queue=queued
+        panel.scope=SimpleNamespace(_session=SimpleNamespace(_transport=SimpleNamespace(ui_batch_protocol=1,layout_batch_protocol=4)))
         observations=[]
         panel._render_call=lambda *args,**kw:observations.append((args[2],panel._paint_queue))
         panel.direct('widget','Widget','SetVisibility',InVisibility='visible')
@@ -276,9 +277,12 @@ class ScrollGeometryCacheTests(unittest.TestCase):
         panel.appearance=('World Builder',1.)
         panel._scaled_geometry={};panel._slot_geometry={};panel._readiness_visible=None
         panel.slider_scale=1.;panel.slider='slider';panel.scale_label='scale'
-        panel.scaled_labels=[(SimpleNamespace(index=1),.5),(SimpleNamespace(index=2),.4)]
+        panel.scaled_labels=[(SimpleNamespace(index=1,serial=1,address=101),.5),(SimpleNamespace(index=2,serial=1,address=102),.4)]
         panel.text_bounds={1:('slot1',200.,50.),2:('slot2',300.,60.)}
-        panel._render_call=Mock();panel.set_text=Mock()
+        panel._visual_set_cache={}
+        def record(obj,owner,name,**args):
+            if name=='SetRenderScale':panel._visual_set_cache[(obj.index,obj.serial,obj.address,owner,name)]=repr(args)
+        panel._render_call=Mock(side_effect=record);panel.set_text=Mock()
         panel.readiness_label='label';panel.readiness_track='track';panel.readiness_fill='fill'
         panel.invisible='visible';panel.collapsed='collapsed'
         return panel
@@ -331,3 +335,68 @@ class ScrollGeometryCacheTests(unittest.TestCase):
             self.assertEqual(panel._scaled_geometry,{})
         panel.set_readiness_visible(True)
         self.assertEqual(panel._render_call.call_count,6)
+
+
+class CrossRouteVisualCacheTests(unittest.TestCase):
+    def test_shared_renderer_cache_tracks_style_changes_across_presenters(self):
+        from expedition33.mods_workspace_scroll import ScrollWorkspacePanel
+        from expedition33.mods_workspace import ModsWorkspacePanel
+        from unittest.mock import patch
+        panel=object.__new__(ScrollWorkspacePanel)
+        panel.scope=SimpleNamespace(_session=SimpleNamespace(_transport=SimpleNamespace(ui_batch_protocol=1,layout_batch_protocol=4)))
+        widget=SimpleNamespace(index=1,serial=2,address=65536)
+        with patch.object(ModsWorkspacePanel,'_render_call') as dispatch:
+            panel._render_call(widget,'Widget','SetRenderOpacity',InOpacity=0.)
+            panel._render_call(widget,'Widget','SetRenderOpacity',InOpacity=0.)
+            self.assertEqual(dispatch.call_count,1)
+            panel._render_call(widget,'Widget','SetRenderOpacity',InOpacity=1.)
+            panel._render_call(widget,'Widget','SetRenderOpacity',InOpacity=0.)
+            self.assertEqual(dispatch.call_count,3)
+            panel._render_call(widget,'ScrollBox','SetScrollOffset',NewScrollOffset=0.)
+            panel._render_call(widget,'ScrollBox','SetScrollOffset',NewScrollOffset=0.)
+            self.assertEqual(dispatch.call_count,5)
+
+    def test_visual_batch_discards_only_superseded_geometry_and_keeps_other_calls(self):
+        from contextlib import contextmanager
+        from unittest.mock import patch
+        from expedition33.mods_workspace_scroll import ScrollWorkspacePanel
+        from expedition33.mods_workspace import ModsWorkspacePanel
+        panel=object.__new__(ScrollWorkspacePanel);sent=[]
+        def call(name,target=1):
+            return SimpleNamespace(_plan=SimpleNamespace(target=SimpleNamespace(index=target,serial=2,address=65536+target),function=SimpleNamespace(index=3 if name=='SetSize' else 4,serial=5,name=name)))
+        first,other,last,focus=call('SetSize'),call('SetSize',2),call('SetSize'),call('SetUserFocus')
+        @contextmanager
+        def batch(self):
+            self._paint_queue=[]
+            yield
+            sent.extend(self._paint_queue)
+        with patch.object(ModsWorkspacePanel,'paint_batch',batch):
+            with panel.paint_batch():panel._paint_queue.extend([first,other,last,focus])
+        self.assertEqual(sent,[other,last,focus])
+
+    def test_final_visual_equal_to_acknowledged_baseline_needs_no_native_call(self):
+        from contextlib import contextmanager
+        from unittest.mock import patch
+        from expedition33.mods_workspace_scroll import ScrollWorkspacePanel
+        from expedition33.mods_workspace import ModsWorkspacePanel
+        panel=object.__new__(ScrollWorkspacePanel);sent=[]
+        widget=SimpleNamespace(index=1,serial=2,address=100)
+        panel.scope=SimpleNamespace(_session=SimpleNamespace(_transport=SimpleNamespace(ui_batch_protocol=1,layout_batch_protocol=4)))
+        key=(1,2,100,'Widget','SetRenderOpacity')
+        panel._visual_set_cache={key:repr(dict(InOpacity=0.))}
+        @contextmanager
+        def batch(self):
+            self._paint_queue=[]
+            yield
+            sent.extend(self._paint_queue)
+            self._paint_queue=None
+        def enqueue(self,obj,owner,name,**args):
+            self._paint_queue.append(SimpleNamespace(_plan=SimpleNamespace(target=obj,
+                function=SimpleNamespace(index=3,serial=4,name=name))))
+        with patch.object(ModsWorkspacePanel,'paint_batch',batch),patch.object(ModsWorkspacePanel,'_render_call',enqueue):
+            with panel.paint_batch():
+                panel._render_call(widget,'Widget','SetRenderOpacity',InOpacity=1.)
+                panel._render_call(widget,'Widget','SetRenderOpacity',InOpacity=0.)
+            self.assertEqual(sent,[])
+            with panel.paint_batch():panel._render_call(widget,'Widget','SetRenderOpacity',InOpacity=.5)
+            self.assertEqual(len(sent),1)

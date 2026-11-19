@@ -12,6 +12,55 @@ def context(kind='title',world=1,gi=2,local=3,pc=4):
     return proof.UiContext(kind,identity(world),identity(gi),identity(local),identity(pc))
 
 class ProcessUiTests(unittest.TestCase):
+    def test_loading_pump_uses_separate_reader_when_cached_owner_is_suspended(self):
+        from contextlib import nullcontext
+        self.router._read_worker=N(_token=object())
+        packet=N(ui_context=self.title)
+        with patch('expedition33._reader.active_reader',return_value=None), \
+                patch('expedition33._reader.shared_operation',return_value=nullcontext()) as independent, \
+                patch.object(self.router,'_observe',return_value=True), \
+                patch.object(self.router,'_read_operation') as cached:
+            self.assertTrue(self.router.observe(packet))
+        independent.assert_called_once_with(self.session.pid)
+        cached.assert_not_called()
+        self.router._read_worker=None
+
+    def test_loading_yield_does_not_reenter_frontend_observation(self):
+        packet=N(ui_context=self.title)
+        def observe_owned(value):
+            self.assertFalse(self.router.observe(value))
+            return True
+        with patch.object(self.router,'_observe_owned',side_effect=observe_owned) as observe:
+            self.assertTrue(self.router.observe(packet))
+            observe.assert_called_once_with(packet)
+        self.assertFalse(self.router._observing)
+
+    def test_failed_observation_releases_reentrancy_guard(self):
+        with patch.object(self.router,'_observe_owned',side_effect=RuntimeError('held')):
+            with self.assertRaisesRegex(RuntimeError,'held'):self.router.observe(None)
+        self.assertFalse(self.router._observing)
+
+    def test_critical_world_preparation_defers_pause_ui_but_acks_title_cleanup(self):
+        self.router.poll(self.title)
+        self.events.clear()
+        priority=Mock();priority.defer_world_ui.return_value=True
+        self.session._priority_world_preparation=priority
+        packet=N(ui_context=self.world,prewarm_context=None,menu_ready=True,admission=N(activation_ready=True))
+        self.assertTrue(self.router.observe(packet))
+        self.assertTrue(self.router.title_cleanup_ready)
+        self.assertEqual(self.router.phase,'world_preparation')
+        self.assertNotIn('entry.create.world',self.events)
+        priority.defer_world_ui.return_value=False
+        self.assertTrue(self.router.observe(packet))
+        self.assertIn('entry.create.world',self.events)
+    def test_save_label_read_failure_ends_shared_observation(self):
+        labels=Mock();self.session._save_story_ui=labels
+        closed=N(_closed=True)
+        with patch('expedition33._reader.active_reader',return_value=closed):
+            self.assertFalse(self.router._observe(N(ui_context=self.title,prewarm_context=None,title_ready=True)))
+        labels.poll.assert_called_once_with(self.title)
+        self.assertEqual(self.events,[])
+
     def setUp(self):
         self.events=[];self.shells=[];self.entries=[];self.detach=True;self.entry_ack=True;self.shell_ack=True
         outer=self
@@ -425,12 +474,12 @@ class InitialPreparedPlanTests(unittest.TestCase):
 class ProofGetterTests(unittest.TestCase):
     def test_loading_metadata_uses_final_owned_graph_not_initial_discovery(self):
         from expedition33 import _metadata_stabilization as metadata,_stable_lease as stable
-        row=N(serial=0,class_name='Class');unrelated=N(class_name='BlueprintGeneratedClass')
+        row=N(index=1,serial=0,class_name='Class');unrelated=N(class_name='BlueprintGeneratedClass')
         anchors=N(serial=0,class_name='ScriptStruct')
-        pruned=object();final=N(objects=(row,unrelated,anchors),subset=Mock(return_value=pruned));fresh=object()
+        pruned=N(objects=(row,));final=N(objects=(row,unrelated,anchors),subset=Mock(return_value=pruned));fresh=object()
         owner=N(prepare=Mock(return_value=N(by_index={1:row})))
         session=N(_menu_plan_cache=object(),_menu_schema_observations=Mock())
-        owned=object();scope=N(_session=session,invocation_planner=Mock(return_value=N()),_leases=[N(active=True,object=owned)])
+        owned=object();scope=N(pid=7,_session=session,invocation_planner=Mock(return_value=N()),_leases=[N(active=True,object=owned)])
         planner=N(_catalog=final,close=Mock())
         panel=N(catalog=object(),_planner=planner,scope=scope,_functions={'old':1},_defaults={'old':1},
             widget=owned,tree=owned,canvas=owned,player=object())
@@ -682,6 +731,19 @@ class GraphProofTests(unittest.TestCase):
         self.rows[local.index]=local
         self.scope._leases.append(N(active=True,object=local))
         self.assertIs(self.graph(),self.catalog)
+
+    def test_retained_exact_story_artwork_survives_world_handoff(self):
+        package=obj(30,'/Engine/Transient','Package')
+        texture=obj(31,'Texture2D_1','Texture2D',30)
+        self.rows.update({30:package,31:texture})
+        self.scope._leases.append(N(active=True,object=texture))
+        self.panel.story_art_texture=texture
+        self.assertIs(self.graph(),self.catalog)
+        self.panel.story_art_texture=None
+        with self.assertRaisesRegex(proof.UiProofPreflightRejected,'escaped'):self.graph()
+        self.panel.story_art_texture=texture
+        package.name='/Game/Other'
+        with self.assertRaisesRegex(proof.UiProofPreflightRejected,'escaped'):self.graph()
 
     def test_external_player_or_wrong_anchor_class_remains_rejected(self):
         for local in (obj(5,'OtherLocalPlayer','LocalPlayer'),obj(3,'NotLocalPlayer','Widget')):

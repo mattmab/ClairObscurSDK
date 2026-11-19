@@ -52,6 +52,22 @@ class ControllerAnchorTests(unittest.TestCase):
         with patch('expedition33.cinematics.controller_anchor.capture_selected_values') as read,self.assertRaisesRegex(RuntimeError,'inactive'):
             anchor.context()
         read.assert_not_called()
+    def test_borrowed_process_selector_observes_fresh_controller_and_source_lifetime(self):
+        scope,local,player,world,catalog,value=self.fixture()
+        session=N();source_scope=N(pid=scope.pid,_session=session,_check=Mock())
+        source=ControllerAnchor.__new__(ControllerAnchor)
+        source.scope=source_scope;source.identity=(1,2,256);source._held=N(active=True)
+        session._story_construction_resources=N(anchor=source);scope._session=session
+        with patch('expedition33.cinematics.controller_anchor.capture_matching') as scan,\
+             patch('expedition33._stable_lease.acquire_stable') as acquire,\
+             patch('expedition33.cinematics.controller_anchor.capture_selected_values',return_value=(catalog,{1:value})) as read:
+            anchor=for_scope(scope);first=anchor.context()
+            value.values[(8,'PlayerController')]=N(index=9,serial=10,address=1024,class_index=10,object_flags=0)
+            self.assertNotEqual(first['controller'],anchor.context()['controller'])
+            self.assertEqual(read.call_count,2);scan.assert_not_called();acquire.assert_not_called()
+            source._held.active=False
+            with self.assertRaisesRegex(RuntimeError,'inactive'):anchor.context()
+            self.assertEqual(read.call_count,2)
     def test_ambiguous_local_players_and_foreign_cached_anchors_rejected(self):
         scope,local,player,world,catalog,value=self.fixture();catalog.objects=(local,local)
         with patch('expedition33.cinematics.controller_anchor.capture_matching',return_value=catalog),\

@@ -29,7 +29,11 @@ inline uint32_t validate(const MeshPacket& packet){
         if(!e33_component_pose::rigid(pose)||std::abs(pose[0])>1.e-6||std::abs(pose[1])>1.e-6)return 3600;
     }
     if(grounding){
-        if(bytes[24]!=0&&bytes[24]!=1&&bytes[24]!=3&&bytes[24]!=7)return 3600; // Advisory requires both screening and diagnostics.
+        if(bytes[24]!=0&&bytes[24]!=1&&bytes[24]!=3&&bytes[24]!=7
+#if defined(E33_RUNTIME_CINEMATIC_VERSION) && E33_RUNTIME_CINEMATIC_VERSION>=305
+           &&bytes[24]!=8
+#endif
+           )return 3600; // Authored origin is exclusive; advisory requires diagnostics.
         for(unsigned i=0;i<9;++i){CallIdentity id{};std::memcpy(&id,bytes+88+i*16,16);
             if(id.index<0||id.serial<0||id.address<0x10000||id.address>0x7fffffffffffULL||(id.address&7))return 3600;}
     }

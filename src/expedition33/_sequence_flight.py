@@ -91,7 +91,8 @@ class SequenceFlight:
             if sequence.uncertain:
                 owner.state='unknown';sequence.scope._session._abort_ownership()
             raise
-    def observer_view(self,view,cuts):self._send(19,(view,cuts))
+    def observer_view(self,view,cuts):
+        self._send(19,(view,cuts));self._external_bound=True
     def bind_input(self,focus):self._send(18,(focus,))
     def start(self,move,status,source,component_owner):
         if self.active:raise ValueError('Stop the current flight view before starting another')
@@ -99,7 +100,8 @@ class SequenceFlight:
     def poll(self):
         self._send(11);return self.pose
     def stop(self):
-        if self.active:self._send(11,(True,))
+        if self.active or getattr(self,'_external_bound',False):
+            self._send(11,(True,));self._external_bound=False
     def inputs(self):
         self._send(13);return self.input
     def restore_pose(self):

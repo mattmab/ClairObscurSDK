@@ -8,6 +8,7 @@
 #include "blueprint_trace_profile.h"
 #include "blueprint_call_protocol.h"
 #include "blueprint_name_resolution.h"
+#include "dialogue_slot_call.h"
 #include <cmath>
 #include "call_rejection_diagnostics.h"
 #include "picto_edit_profile.h"
@@ -65,6 +66,7 @@ inline bool call_is_class(uint64_t base,uint64_t object) {
 #include "target_game_owned_cinematic.h"
 #include "target_scavenger_repeat.h"
 #endif
+#include "save_file_path_admission.h"
 
 struct CallRetention {
     void* context;
@@ -126,6 +128,10 @@ inline uint32_t reflected_call(uint64_t base,CallPacket& packet,const CallRetent
     const bool pod_enabled=pod && pod->validate;
     const bool blueprint_enabled=packet.version==kBlueprintCallVersion && pod_enabled &&
         retention && retention->preflight && retention->capture && !text && !enums && !assets && !sequence;
+    bool slot_enabled=false;
+#if E33_RUNTIME_CINEMATIC_VERSION>=295
+    slot_enabled=packet.version==kDialogueSlotVersion && pod_enabled && retention && retention->preflight && retention->capture && !text && !enums && !assets && !sequence;
+#endif
     const bool asset_enabled=assets && assets->packet && &assets->packet->call==&packet && assets->validate &&
         pod_enabled && retention && retention->preflight && retention->capture && !text && !enums;
     if(assets && !asset_enabled) return 1453;
@@ -135,16 +141,21 @@ inline uint32_t reflected_call(uint64_t base,CallPacket& packet,const CallRetent
     const bool enum_enabled=enums && enums->packet && &enums->packet->call==&packet && enums->validate &&
         pod_enabled && retention && retention->preflight && retention->capture && !text;
     if(enums && !enum_enabled) return 753;
+    bool rig_names=false;
+#ifdef E33_TRANSFORM_SESSION
+    if(enum_enabled && packet.entry_rva==0x4067650 && packet.parameter_size==121)
+        for(unsigned i=0;i<packet.field_count && i<kCallFields;++i)if(packet.fields[i].kind==kBlueprintNameKind)rig_names=true;
+#endif
     const bool text_enabled=text && text->packet && &text->packet->retained.call==&packet &&
         text->arguments && text->context && text->available && text->prepare && text->begin && text->returned && text->finish &&
         pod_enabled && retention && retention->preflight && retention->capture;
     if(text && !text_enabled) return 227;
     // Never overwrite a frame still owning uncertain native arguments.
     if(text_enabled && !text->available(text->context)) return 230;
-    if(auto invalid=blueprint_enabled ? validate_blueprint_call(packet) : sequence_enabled ? validate_sequence_call(*sequence->packet) : asset_enabled ? validate_asset_call(*assets->packet) : enum_enabled ? validate_enum_call(*enums->packet) :
+    if(auto invalid=slot_enabled ? validate_dialogue_slot_call(packet) : blueprint_enabled ? validate_blueprint_call(packet) : sequence_enabled ? validate_sequence_call(*sequence->packet) : asset_enabled ? validate_asset_call(*assets->packet) : enum_enabled ? validate_enum_call(*enums->packet) :
        text_enabled ? (text->strings ? validate_string_call(*text->packet) : validate_text_call(*text->packet)) : validate_call_packet(packet,pod_enabled)) return invalid;
     packet.outcome=CallNotDispatched;
-    if((packet.version!=kCallVersion && !blueprint_enabled && !(sequence_enabled && packet.version==kSequenceCallVersion) && !(asset_enabled && packet.version==kAssetCallVersion) && !(pod_enabled && packet.version==kPodCallVersion) && !(text_enabled && (packet.version==kTextCallVersion || (text->strings && packet.version==kStringCallVersion))) && !(enum_enabled && packet.version==kEnumCallVersion)) || packet.parameter_size>kCallBytes ||
+    if((packet.version!=kCallVersion && !blueprint_enabled && !slot_enabled && !(sequence_enabled && packet.version==kSequenceCallVersion) && !(asset_enabled && packet.version==kAssetCallVersion) && !(pod_enabled && packet.version==kPodCallVersion) && !(text_enabled && (packet.version==kTextCallVersion || (text->strings && packet.version==kStringCallVersion))) && !(enum_enabled && packet.version==kEnumCallVersion)) || packet.parameter_size>kCallBytes ||
        packet.parameter_size>packet.allocation_extent || packet.allocation_extent>65536 ||
        packet.field_count>kCallFields || packet.object_count>kCallObjects) return 200;
     if(local_read<DWORD>(base+0x9272d30)!=GetCurrentThreadId() ||
@@ -161,6 +172,11 @@ inline uint32_t reflected_call(uint64_t base,CallPacket& packet,const CallRetent
     auto owner=local_read<uint64_t>(function+0x20);
     if(!exact_name(base,fn_class+0x18,"Function") ||
        !call_derives(base,local_read<uint64_t>(object+0x10),owner)) return 203;
+    if(rig_names && (!exact_name(base,function+0x18,"SetBoneTransform") ||
+       !exact_name(base,owner+0x18,"ControlRigComponent") ||
+       !exact_name(base,local_read<uint64_t>(owner+0x20)+0x18,"/Script/ControlRig")))return 756;
+    if(slot_enabled && (!exact_name(base,function+0x18,"PlaySlotAnimationAsDynamicMontage")||
+       !exact_name(base,owner+0x18,"AnimInstance")||!exact_name(base,local_read<uint64_t>(owner+0x20)+0x18,"/Script/Engine")))return 1481;
     if(asset_enabled && (!exact_name(base,function+0x18,packet.entry_rva==0x3860250?"LoadClassAsset_Blocking":"LoadAsset_Blocking") ||
        !exact_name(base,owner+0x18,"KismetSystemLibrary") ||
        !exact_name(base,local_read<uint64_t>(owner+0x20)+0x18,"/Script/Engine") ||
@@ -183,6 +199,7 @@ inline uint32_t reflected_call(uint64_t base,CallPacket& packet,const CallRetent
        !local_read<uint64_t>(function+0x60) || local_read<int32_t>(function+0x68)<=0 ||
        local_read<int32_t>(function+0x68)>16*1024*1024 ||
        local_read<int32_t>(function+0x6c)<local_read<int32_t>(function+0x68)))return 1472;
+    const bool save_file_path=admit_save_file_path(base,object,function,owner,packet);
     bool game_owned_blueprint=false;
 #ifdef E33_GAME_OWNED_CINEMATIC_SESSION
     if(!(packet.function_flags&0x400)) {
@@ -190,9 +207,16 @@ inline uint32_t reflected_call(uint64_t base,CallPacket& packet,const CallRetent
         game_owned_blueprint=admit_game_owned_cinematic(admission,packet);
     }
 #endif
-    if(!(packet.function_flags&0x400) && !blueprint_enabled && !game_owned_blueprint && !admit_picto_edit(base,object,function,owner,packet) && !(blueprint_observation && validate_only &&
-        blueprint_damage_schema(packet) && exact_name(base,function+0x18,"OnCharacterReceivedDamages") &&
-        exact_name(base,owner+0x18,"BP_BattleSummaryStatsManager_C"))) return 205;
+    const bool story_direction=validate_only && story_direction_schema(packet) &&
+        exact_name(base,function+0x18,"OnConstrainedNavigationTriggered") &&
+        exact_name(base,owner+0x18,"SFUIValueSelectorWidget") &&
+        exact_name(base,local_read<uint64_t>(owner+0x20)+0x18,"/Script/SFUIComponents");
+    if(!(packet.function_flags&0x400) && !blueprint_enabled && !game_owned_blueprint && !save_file_path && !admit_picto_edit(base,object,function,owner,packet) && !(blueprint_observation && validate_only &&
+        ((blueprint_damage_schema(packet) && exact_name(base,function+0x18,"OnCharacterReceivedDamages") &&
+        exact_name(base,owner+0x18,"BP_BattleSummaryStatsManager_C")) ||
+        (blueprint_new_game_schema(packet) && exact_name(base,function+0x18,"OnStartGameSettingsApplied") &&
+        exact_name(base,owner+0x18,"WBP_MM_MainMenu_C") &&
+        exact_name(base,local_read<uint64_t>(owner+0x20)+0x18,"/Game/UI/Widgets/MainMenu/WBP_MM_MainMenu"))))) return 205;
     auto dispatch=local_read<uint64_t>(local_read<uint64_t>(object)+0x268);
     if(dispatch!=base+0x1393330 && dispatch!=base+0x332bb90) return 206;
     alignas(16) uint8_t local_arguments[kCallBytes]{};
@@ -204,18 +228,25 @@ inline uint32_t reflected_call(uint64_t base,CallPacket& packet,const CallRetent
     unsigned seen=0, walked=0, returns=0;
     const char* kinds[]={"", "BoolProperty","ByteProperty","UInt16Property","IntProperty",
                          "FloatProperty","DoubleProperty","ObjectProperty","ClassProperty",
-                         "StructProperty","StructProperty","StructProperty","StructProperty","TextProperty","EnumProperty","StructProperty","StrProperty","SoftObjectProperty","StructProperty","StructProperty","StructProperty","NameProperty","StructProperty","StructProperty","StructProperty","StructProperty","StructProperty","StructProperty"};
-    static_assert(sizeof(kinds)/sizeof(kinds[0])==CallRotator+1, "Reflected kind table must cover every admitted kind");
+                         "StructProperty","StructProperty","StructProperty","StructProperty","TextProperty","EnumProperty","StructProperty","StrProperty","SoftObjectProperty","StructProperty","StructProperty","StructProperty","NameProperty","StructProperty","StructProperty","StructProperty","StructProperty","StructProperty","StructProperty","StructProperty","StructProperty"};
+    static_assert(sizeof(kinds)/sizeof(kinds[0])==CallTransform+1, "Reflected kind table must cover every admitted kind");
     for(;property;property=local_read<uint64_t>(property+0x18)) {
         if(++walked>4096) return 207;
         auto flags=local_read<uint64_t>(property+0x38);
         if(!(flags&0x80)) continue;
         if(seen>=packet.field_count) return 208;
         const auto& field=packet.fields[seen++];
-        if(field.kind>=sizeof(kinds)/sizeof(kinds[0]) || field.kind<CallBool || (field.kind>(sequence_enabled ? kSequenceSettingsKind : asset_enabled ? kAssetCallKind : enum_enabled ? kEnumCallKind : text_enabled ? (text->strings ? kStringCallKind : kTextCallKind) : pod_enabled && (packet.version==kPodCallVersion || blueprint_enabled) ? CallAnchors : CallClass) && !(blueprint_enabled && field.kind==kBlueprintNameKind) && !(pod_enabled && (rotator_call_enabled(field.kind) || binding_id_call_enabled(field.kind) || field.kind==CallGuid || field.kind==CallVector || frame_time_call_enabled(field.kind) || sequencer_frame_call_enabled(field.kind) || timespan_call_enabled(field.kind)))) || !field.name[0] || field.name[95] ||
+        if(story_direction){
+            const auto inner=local_read<uint64_t>(property+0x70),type=local_read<uint64_t>(property+0x78);
+            if(!inner||!type||!exact_name(base,local_read<uint64_t>(inner+8),"ByteProperty")||
+               local_read<uint32_t>(inner+0x34)!=1||!call_identity(base,call_capture(base,type))||
+               !exact_name(base,type+24,"EUINavigation")||
+               !exact_name(base,local_read<uint64_t>(type+32)+24,"/Script/SlateCore"))return 209;
+        }
+        if(field.kind>=sizeof(kinds)/sizeof(kinds[0]) || field.kind<CallBool || (field.kind>(sequence_enabled ? kSequenceSettingsKind : asset_enabled ? kAssetCallKind : enum_enabled ? kEnumCallKind : text_enabled ? (text->strings ? kStringCallKind : kTextCallKind) : pod_enabled && (packet.version==kPodCallVersion || blueprint_enabled || slot_enabled) ? CallAnchors : CallClass) && !((blueprint_enabled || slot_enabled || rig_names) && field.kind==kBlueprintNameKind) && !(pod_enabled && (transform_call_enabled(field.kind) || rotator_call_enabled(field.kind) || binding_id_call_enabled(field.kind) || field.kind==CallGuid || field.kind==CallVector || frame_time_call_enabled(field.kind) || sequencer_frame_call_enabled(field.kind) || timespan_call_enabled(field.kind)))) || !field.name[0] || field.name[95] ||
            field.flags!=flags || local_read<uint64_t>(property+0x10)!=(function|1) ||
            !exact_name(base,property+0x20,field.name) ||
-           !exact_name(base,local_read<uint64_t>(property+8),(asset_enabled && packet.entry_rva==0x3860250 && field.kind==kAssetCallKind)?"SoftClassProperty":kinds[field.kind]) ||
+           !exact_name(base,local_read<uint64_t>(property+8),story_direction?"EnumProperty":(asset_enabled && packet.entry_rva==0x3860250 && field.kind==kAssetCallKind)?"SoftClassProperty":kinds[field.kind]) ||
            field.offset!=local_read<uint32_t>(property+0x44) || field.width!=local_read<uint32_t>(property+0x34) ||
            field.dimension!=local_read<uint32_t>(property+0x30) || !field.dimension || field.dimension>64 ||
            !field.width || uint64_t(field.offset)+uint64_t(field.width)*field.dimension>packet.parameter_size) return 209;
@@ -244,11 +275,21 @@ inline uint32_t reflected_call(uint64_t base,CallPacket& packet,const CallRetent
             const bool texture=exact_name(base,function+0x18,"ImportFileAsTexture2D")&&exact_name(base,owner+0x18,"KismetRenderingLibrary")&&
                 exact_name(base,local_read<uint64_t>(owner+0x20)+0x18,"/Script/Engine")&&
                 exact_name(base,object+0x18,"Default__KismetRenderingLibrary")&&(local_read<uint32_t>(object+8)&0x10);
+            const bool timer=((packet.entry_rva==0x3858580&&exact_name(base,function+0x18,"K2_ClearTimer"))||
+                (packet.entry_rva==0x3858fc0&&exact_name(base,function+0x18,"K2_IsTimerActive")))&&
+                exact_name(base,owner+0x18,"KismetSystemLibrary")&&
+                exact_name(base,local_read<uint64_t>(owner+0x20)+0x18,"/Script/Engine")&&
+                exact_name(base,object+0x18,"Default__KismetSystemLibrary")&&(local_read<uint32_t>(object+8)&0x10);
+            const bool save_slot=((packet.entry_rva==0x3740310&&exact_name(base,function+0x18,"SaveGameToSlot"))||
+                (packet.entry_rva==0x373c5c0&&exact_name(base,function+0x18,"LoadGameFromSlot")))&&
+                exact_name(base,owner+0x18,"GameplayStatics")&&
+                exact_name(base,local_read<uint64_t>(owner+0x20)+0x18,"/Script/Engine")&&
+                exact_name(base,object+0x18,"Default__GameplayStatics")&&(local_read<uint32_t>(object+8)&0x10);
             if(!text_enabled || !text->strings || local_read<uint64_t>(property)!=base+0x6e131d8 ||
                local_read<uint64_t>(base+0x6e132e8)!=base+0x133a600 ||
                local_read<uint64_t>(base+0x6e132c8)!=base+0x1368400 ||
                local_read<uint64_t>(base+0x6e13258)!=base+0x10044f0 ||
-               (!file&&!texture)) return 764;
+               (!file&&!texture&&!timer&&!save_slot&&!save_file_path)) return 764;
         }
         if(field.kind==kTextCallKind) {
             width=16;
@@ -281,7 +322,7 @@ inline uint32_t reflected_call(uint64_t base,CallPacket& packet,const CallRetent
         if(field.width!=width) return 212;
         if(field.kind==kBlueprintNameKind) {
             uint64_t name=0;
-            if(!blueprint_enabled || !e33_blueprint_names::resolve(base,field.name+std::strlen(field.name)+1,name))return 1474;
+            if((!blueprint_enabled&&!slot_enabled&&!rig_names) || !e33_blueprint_names::resolve(base,field.name+std::strlen(field.name)+1,name))return 1474;
             std::memcpy(arguments+field.offset,&name,8);
         }
         for(unsigned element=0;element<field.dimension;++element) {
@@ -403,6 +444,10 @@ inline uint32_t reflected_call(uint64_t base,CallPacket& packet,const CallRetent
         if(call_pod_kind(field.kind)) {
             for(unsigned i=0;i<field.dimension;++i)
                 if(!valid_pod_value(call_pod_profile(field.kind),arguments+field.offset+i*field.width,field.width)) return 226;
+            if(field.kind==CallTransform)for(unsigned i=0;i<field.dimension;++i) {
+                std::memset(arguments+field.offset+i*field.width+56,0,8);
+                std::memset(arguments+field.offset+i*field.width+88,0,8);
+            }
         }
         if(field.kind==kBlueprintNameKind) {
             // Input-only registered names never leak raw FName IDs to Python.

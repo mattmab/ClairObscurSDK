@@ -188,7 +188,7 @@ class PreviewWiringTests(unittest.TestCase):
         deps.validate.assert_called_once_with('play-scope','context')
         services.assert_called_once_with('play-scope',unittest.mock.ANY,routing_class='routing',
                                          widget_dependencies=widgets,music_dependencies=music)
-        sequence.assert_called_once_with('play-scope',asset_loader='loader',metadata='metadata')
+        sequence.assert_called_once_with('play-scope',metadata='metadata')
 
     def test_both_service_game_instances_must_match_current_world(self):
         current=N(pid=9,index=1,serial=2,address=3,class_name='BP_jRPG_GI_Custom_C',name='CurrentGI')

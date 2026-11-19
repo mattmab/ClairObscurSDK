@@ -13,7 +13,27 @@ spec=importlib.util.spec_from_file_location('expedition33._ui_admission_candidat
 m=importlib.util.module_from_spec(spec);sys.modules[spec.name]=m;spec.loader.exec_module(m)
 
 
+def pause_values(pause=None):
+    return {4:N(types={(9,'PauseMenuWidget'):'ObjectProperty'},
+        values={(9,'PauseMenuWidget'):pause or N(class_name='WBP_PauseMenu_C')},errors={},truncated=set())}
+
+
 class UiProbeTests(unittest.TestCase):
+    def test_layer_observer_is_opt_in_and_copied_before_controller_admission(self):
+        import threading
+        event=threading.Event();observer=m.UiAdmissionObserver(7,layer_preparation=event)
+        worker=Mock();worker.observe.return_value=object()
+        with patch('expedition33.story_layers.LayerSelectorObserver',return_value=worker) as factory:
+            observer.observe_anchored_world('catalog','chain');factory.assert_not_called()
+            event.set();observer.observe_anchored_world('catalog','chain');observer.observe_anchored_world('fresh','chain')
+            factory.assert_called_once_with(7);self.assertEqual(worker.observe.call_count,2)
+            packet=m.UiAdmission(Admission('observation_pending','controller_unavailable'),None)
+            with patch.object(observer,'_observe',return_value=packet):
+                self.assertIs(observer.observe().layer_selectors,worker.observe.return_value)
+            event.clear();observer.observe_anchored_world('fresh','chain')
+            self.assertIsNone(observer._layer_selectors);self.assertIsNone(observer._layer_observer)
+        observer.close()
+
     def test_authored_title_can_attach_while_save_manager_is_loading(self):
         observer=m.UiAdmissionObserver.__new__(m.UiAdmissionObserver)
         context=N(kind='title');admission=Admission('loading','save_load_in_progress')
@@ -57,18 +77,17 @@ class UiProbeTests(unittest.TestCase):
         observer.pid=7;observer._reader=N(bind=lambda:nullcontext())
         context=N(kind='world',controller=(7,4,1,0x10400),world=(7,3,1,0x10300))
         world=N(pid=7,index=3,serial=1,address=0x10300,class_name='World')
-        controller=N(index=4)
-        catalog=N(by_index={4:controller,9:object()},outer_chain=lambda obj:(world,))
+        controller=N(index=4,class_index=9)
+        catalog=N(by_index={4:controller,9:object()},outer_chain=lambda obj:(world,),ancestors=lambda cls:(9,))
         admission=Admission('loading','save_load_in_progress')
-        with patch.object(m,'capture_selected',return_value=catalog), \
-             patch.object(m,'read_values_many',return_value={4:N(types={(9,'PauseMenuWidget'):'ObjectProperty'})}) as values, \
-             patch.object(m,'read_object_reference',return_value=(N(class_name='WBP_PauseMenu_C'),catalog)):
+        with patch.object(m,'capture_selected_values',return_value=(catalog,pause_values())) as values, \
+             patch.object(m,'read_object_reference') as duplicate:
             packet=observer._prewarm_packet(admission,context)
             self.assertTrue(packet.menu_ready);self.assertIs(packet.prewarm_context,context)
             self.assertIsNone(packet.ui_context);self.assertFalse(packet.admission.activation_ready)
             world.serial=2;values.reset_mock()
             self.assertFalse(observer._prewarm_packet(admission,context).menu_ready)
-            values.assert_not_called()
+            values.assert_called_once();duplicate.assert_not_called()
     def test_warm_binding_uses_fast_fresh_gate_then_rediscovers_after_invalidation(self):
         observer=m.UiAdmissionObserver.__new__(m.UiAdmissionObserver)
         observer._activation_binding=('selected',)
@@ -77,26 +96,24 @@ class UiProbeTests(unittest.TestCase):
             return Admission('observation_pending','activation_reference_changed')
         with patch.object(m.WarmAdmissionObserver,'observe_activation',side_effect=fast) as selected, \
              patch.object(m.WarmAdmissionObserver,'observe',return_value=Admission('inactive','test')) as full, \
-             patch.object(m,'capture_selected') as pause:
+             patch.object(m,'capture_selected_values') as pause:
             self.assertEqual(observer.observe().admission.reason,'activation_reference_changed')
             full.assert_not_called();selected.assert_called_once();pause.assert_not_called()
             self.assertEqual(observer.observe().admission.state,'inactive')
             full.assert_called_once();self.assertEqual(selected.call_count,1)
     def test_selected_current_controller_projection_without_registry_search(self):
         world=N(pid=7,index=3,serial=1,address=0x10300,class_name='World')
-        controller=N(index=4)
-        catalog=N(by_index={4:controller,9:object()},outer_chain=lambda target:(world,))
+        controller=N(index=4,class_index=9)
+        catalog=N(by_index={4:controller,9:object()},outer_chain=lambda target:(world,),ancestors=lambda cls:(9,))
         result=Admission('world_ready','test',((7,3,1,0x10300),(7,5,1,0x10500),'manager',0),True)
         observer=m.UiAdmissionObserver.__new__(m.UiAdmissionObserver)
         observer.pid=7;observer._reader=N(bind=lambda:nullcontext());observer._ui_controller=(7,4,1,0x10400);observer._ui_local_player=(7,6,1,0x10600)
         with patch.object(m.WarmAdmissionObserver,'observe',return_value=result), \
-             patch.object(m,'capture_selected',return_value=catalog) as select, \
-             patch.object(m,'read_values_many',return_value={4:N(types={(9,'PauseMenuWidget'):'ObjectProperty'})}) as values, \
-             patch.object(m,'read_object_reference',return_value=(N(class_name='WBP_PauseMenu_C'),catalog)) as reference:
+             patch.object(m,'capture_selected_values',return_value=(catalog,pause_values())) as select, \
+             patch.object(m,'read_object_reference') as reference:
             self.assertTrue(observer.observe().menu_ready)
-            select.assert_called_once_with(7,((4,1,0x10400),))
-            values.assert_called_once_with(catalog,(controller,),fields=('PauseMenuWidget',))
-            self.assertEqual(reference.call_args.kwargs,{'project':True})
+            select.assert_called_once_with(7,((4,1,0x10400),),fields=('PauseMenuWidget',),references=True)
+            reference.assert_not_called()
             with patch.object(m.WarmAdmissionObserver,'observe',return_value=Admission(
                     'world_ready','possession_pending',result.token,False)):
                 loading=observer.observe()
@@ -108,7 +125,7 @@ class UiProbeTests(unittest.TestCase):
         observer=m.UiAdmissionObserver.__new__(m.UiAdmissionObserver)
         for state,expected in (('inactive',False),('loading',False),('observation_pending',None)):
             with patch.object(m.WarmAdmissionObserver,'observe',return_value=Admission(state,'test')), \
-                 patch.object(m,'capture_selected') as select:
+                 patch.object(m,'capture_selected_values') as select:
                 self.assertIs(observer.observe().menu_ready,expected);select.assert_not_called()
 
     def test_ui_read_race_is_uncertain_and_discards_worker_without_retry(self):
@@ -116,25 +133,25 @@ class UiProbeTests(unittest.TestCase):
         observer.pid=7;observer._reader=N(bind=lambda:nullcontext());observer._ui_controller=(7,4,1,0x10400);observer._ui_local_player=(7,6,1,0x10600)
         observer._discard=Mock()
         with patch.object(m.WarmAdmissionObserver,'observe',return_value=Admission('world_ready','test',('epoch',),True)), \
-             patch.object(m,'capture_selected',side_effect=RuntimeQueryError('READ_FAILED')) as select:
+             patch.object(m,'capture_selected_values',side_effect=RuntimeQueryError('READ_FAILED')) as select:
             self.assertIsNone(observer.observe().menu_ready)
             observer._discard.assert_called_once_with();self.assertEqual(select.call_count,1)
 
-    def test_controller_world_change_inhibits_ui_without_querying_pause(self):
+    def test_controller_world_change_inhibits_ui_without_using_pause(self):
         observer=m.UiAdmissionObserver.__new__(m.UiAdmissionObserver)
         observer.pid=7;observer._reader=N(bind=lambda:nullcontext());observer._ui_controller=(7,4,1,0x10400);observer._ui_local_player=(7,6,1,0x10600)
         catalog=N(by_index={4:object()},outer_chain=lambda target:())
         with patch.object(m.WarmAdmissionObserver,'observe',return_value=Admission('world_ready','test',('epoch',),True)), \
-             patch.object(m,'capture_selected',return_value=catalog), \
-             patch.object(m,'read_values_many') as values:
-            self.assertIsNone(observer.observe().menu_ready);values.assert_not_called()
+             patch.object(m,'capture_selected_values',return_value=(catalog,{})) as values, \
+             patch.object(m,'read_object_reference') as duplicate:
+            self.assertIsNone(observer.observe().menu_ready);values.assert_called_once();duplicate.assert_not_called()
 
     def test_unknown_schema_failure_visible_after_reader_discard(self):
         observer=m.UiAdmissionObserver.__new__(m.UiAdmissionObserver)
         observer.pid=7;observer._reader=N(bind=lambda:nullcontext());observer._ui_controller=(7,4,1,0x10400);observer._ui_local_player=(7,6,1,0x10600)
         observer._discard=Mock()
         with patch.object(m.WarmAdmissionObserver,'observe',return_value=Admission('world_ready','test',('epoch',),True)), \
-             patch.object(m,'capture_selected',side_effect=RuntimeQueryError('Invalid class schema')):
+             patch.object(m,'capture_selected_values',side_effect=RuntimeQueryError('Invalid class schema')):
             with self.assertRaisesRegex(RuntimeQueryError,'Invalid class schema'):observer.observe()
             observer._discard.assert_called_once_with()
 

@@ -29,11 +29,12 @@ inline bool sequence_seek_target(TargetSequenceSeekOps& ops,const CallIdentity& 
 
 // No C++ destructors cross SEH. The only FString in the engine parameter frame
 // is locally zero-initialized. MarkedFrame mode and caller strings are forbidden.
-inline uint32_t sequence_seek_execute(uint64_t base,const CallIdentity& player,const CallIdentity& actor,SequenceSeekPacket& p) {
+inline uint32_t sequence_seek_execute(uint64_t base,const CallIdentity& player,const CallIdentity& actor,SequenceSeekPacket& p,bool continuous=false) {
     __try {
         TargetSequenceSeekOps ops{{base}};
         if(!sequence_seek_target(ops,player,actor,p))return 1691;
         alignas(16) uint8_t bytes[56]{};sequence_seek_parameters(p,bytes);
+        if(continuous)bytes[54]=0; // Continuous drag preserves temporal history.
         const auto dispatch=ops.read<uint64_t>(ops.read<uint64_t>(player.address)+0x268);
         p.outcome=CallOutcomeUnknown;
         reinterpret_cast<void(__fastcall*)(void*,void*,void*)>(dispatch)(reinterpret_cast<void*>(player.address),

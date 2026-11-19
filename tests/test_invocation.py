@@ -39,6 +39,18 @@ class InvocationTests(unittest.TestCase):
         self.assertEqual((plan.parameter_size,plan.allocation_extent), (5,24))
         self.assertEqual(len(plan.parameters),2)
 
+    def test_override_uses_own_parameters_not_superfunction_frame(self):
+        own=self.field('Value','IntProperty',0,4)
+        inherited=dict(own,owner_index=8)
+        descriptor=SimpleNamespace(owners=({'index':7,'size':4},{'index':8,'size':4}),
+            properties=(own,inherited),function={'params_size':4,'return_offset':65535,'flags':0x400,'entry_rva':'0x1234'})
+        with patch('expedition33.invocation.describe',return_value={7:descriptor}):
+            plan=prepare_call(self.catalog,self.target,self.function,{'Value':9})
+        self.assertEqual(plan.data,struct.pack('<i',9));self.assertEqual(len(plan.parameters),1)
+        descriptor.properties=(dict(own,owner_index=999),)
+        with patch('expedition33.invocation.describe',return_value={7:descriptor}):
+            with self.assertRaises(ValueError):prepare_call(self.catalog,self.target,self.function,{'Value':9})
+
     def test_packed_booleans_share_byte_but_cannot_overlap_bits(self):
         rows = [self.field('A','BoolProperty',0,1,bool_encoding='0x01010001'),
                 self.field('B','BoolProperty',0,1,bool_encoding='0x02020001')]

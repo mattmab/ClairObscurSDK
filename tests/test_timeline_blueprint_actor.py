@@ -23,9 +23,10 @@ class TimelineBlueprintTests(unittest.TestCase):
     def test_python_and_native_allowlists_select_the_same_exact_classes(self):
         import re
         from pathlib import Path
-        from expedition33.cinematics.blueprint_actor import PROFILES
+        from expedition33.cinematics.blueprint_actor import PROFILES,STORY_NPC
         header=(Path(__file__).resolve().parents[1]/'native/timeline_blueprint_profiles.h').read_text()
-        native=set(re.findall(r'\{"(BP_Cine_[A-Za-z0-9_]+_C)","(/Game/Characters/Heros/Cinematics/BP_Cine_[A-Za-z0-9_]+)"\}',header))
+        native=set(re.findall(r'\{"([A-Za-z0-9_]+_C)","(/Game/Characters/[A-Za-z0-9_/]+)"\}',header))
+        native.discard((STORY_NPC.rsplit('.',1)[1],STORY_NPC.rsplit('.',1)[0]))
         python={(path.rsplit('.',1)[1],path.rsplit('.',1)[0]) for path in PROFILES.values()}
         self.assertEqual(native,python)
         self.assertIn('maelle',PROFILES);self.assertIn('monoco',PROFILES)
@@ -35,11 +36,28 @@ class TimelineBlueprintTests(unittest.TestCase):
         self.assertEqual(available_profiles(N()),('lune','sciel','verso'))
         self.assertEqual(available_profiles(N(timeline_extended_characters_protocol=True)),('lune','sciel','verso'))
         self.assertIn('monoco',available_profiles(N(timeline_extended_characters_protocol=1)))
+        self.assertNotIn('faceless-boy',available_profiles(N(timeline_extended_characters_protocol=1)))
+        self.assertNotIn('faceless-boy',available_profiles(N(story_blueprint_characters_protocol=True)))
+        self.assertIn('faceless-boy',available_profiles(N(story_blueprint_characters_protocol=1)))
+        self.assertNotIn('sophie',available_profiles(N(opera_story_characters_protocol=True)))
+        self.assertIn('sophie',available_profiles(N(opera_story_characters_protocol=1)))
         transport=TimelineTransport();scope=self.scope(transport);actor=BlueprintActor(scope)
         with self.assertRaisesRegex(RuntimeError,'newer native character runtime'):
             actor.prepare('maelle',(0,0,0,1,10,20,30,0,1,1,1,0))
         self.assertEqual(actor.state,'new');self.assertEqual(transport.calls,[])
         actor.close();scope.close()
+
+    def test_original_story_npc_is_separate_from_cast_profiles_and_requires_its_capability(self):
+        from expedition33.cinematics.blueprint_actor import PROFILES,STORY_NPC
+        self.assertNotIn('story-npc',PROFILES)
+        self.assertIn('BP_NPC_Dialogue_Empty_FacelessBoyFinale',STORY_NPC)
+        for capability in (0,True,2):
+            transport=TimelineTransport();transport.story_npc_blueprint_protocol=capability
+            parent=self.scope(transport);actor=BlueprintActor(parent)
+            with self.assertRaisesRegex(RuntimeError,'newer native runtime'):
+                actor.prepare_story_npc((0,0,0,1,10,20,30,0,1,1,1,0))
+            self.assertEqual(actor.state,'new');self.assertEqual(transport.calls,[])
+            actor.close();parent.close()
 
     def test_actor_world_retirement_releases_owned_actor_without_normal_scope_close(self):
         transport=TimelineTransport();parent=self.scope(transport);actor=BlueprintActor(parent)

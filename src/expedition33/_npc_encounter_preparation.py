@@ -2,7 +2,7 @@
 import math
 from ._scope import SessionScope
 from .picto_class_load import load_class
-from ._reader import ReadBatch
+from ._reader import ReadBatch,active_reader
 from .catalog import capture_matching,capture_selected
 from .values import read_values_with_references
 from .cinematics.original_game_action import controller_context
@@ -26,14 +26,14 @@ def original_profile(route):
 
 
 def grounding_queries(scope):
-    from expedition33._reader import ReadBatch
+    from expedition33._reader import ReadBatch,active_reader
     from expedition33.catalog import capture_matching,capture_selected
     from expedition33.values import read_values_with_references
     from expedition33.cinematics.original_game_action import controller_context
     context=controller_context(scope._session)
     paths=('KismetSystemLibrary:LineTraceSingle','GameplayStatics:BreakHitResult','KismetSystemLibrary:GetComponentBounds',
            'Actor:K2_GetActorLocation','Actor:K2_GetActorRotation','Actor:K2_SetActorLocationAndRotation','KismetSystemLibrary:BoxTraceSingle','Controller:K2_GetPawn')
-    with ReadBatch(scope.pid,share=True,_executable=scope._session._transport._executable):
+    with ReadBatch(scope.pid,share=active_reader() is None,_executable=scope._session._transport._executable):
         c=capture_matching(scope.pid,names=('Default__KismetSystemLibrary',)+tuple(path.split(':')[1] for path in paths))
         c=c.with_observations(capture_selected(scope.pid,(context['controller'][1:],)))
         values,c=read_values_with_references(c,c.by_index[context['controller'][1]],fields=('Pawn',))
@@ -58,7 +58,7 @@ def prepare_original(scope,owner,*,route='clea-normal'):
                'IsInteractionAvailable','BeginDeferredActorSpawnFromClass','FinishSpawningActor','K2_DestroyActor',
                'SetActorEnableCollision','SetActorTickEnabled','SetActorHiddenInGame','SetMovementMode',
                'UnregisterInteractiveObject','UnregisterDistantInteractiveObject','BP_ConditionCheckerComponent_GEN_VARIABLE')
-        with ReadBatch(scope.pid,share=True,_executable=scope._session._transport._executable):
+        with ReadBatch(scope.pid,share=active_reader() is None,_executable=scope._session._transport._executable):
             c=capture_matching(scope.pid,names=names,classes=('BP_InteractionSystem_C',))
             c=c.with_observations(capture_selected(scope.pid,(context['controller'][1:],context['world'][1:])))
             def exact(path):
@@ -101,22 +101,30 @@ def prepare_original(scope,owner,*,route='clea-normal'):
     finally:
         child.close()
 
-def bind_original_arena(scope,owner,arena_identity,*,expected_class=ARENA_CLASS):
-    from ._enemy_arenas import observe_battle_arenas
+def bind_original_arena(scope,owner,arena_identity,*,expected_class=ARENA_CLASS,metadata_catalog=None):
+    from ._enemy_arenas import _arena_candidates
+    from .cinematics.controller_anchor import context_observer
     if expected_class not in (ARENA_CLASS, '/Game/Levels/Battle_Maps/BattleMap_SpecialEnemies/BP_BattleMap_DuollistAlpha.BP_BattleMap_DuollistAlpha_C', '/Game/Characters/Enemies/YellowForest/Boss_Scavenger/BP_BattleMap_Scavenger.BP_BattleMap_Scavenger_C'):
         raise ValueError('Unsupported exact original arena class')
-    observed=observe_battle_arenas(scope._session)
-    matches=[a for a in observed['arenas'] if tuple(a['identity'])==tuple(arena_identity) and a['class_path']==expected_class]
-    if len(matches)!=1:raise ValueError('Select one observed standard arena in the current world')
-    with ReadBatch(scope.pid,share=True,_executable=scope._session._transport._executable):
-        c=capture_matching(scope.pid,names=('Default__KismetSystemLibrary','Conv_ObjectToSoftObjectReference','Conv_SoftObjectReferenceToObject'))
-        c=c.with_observations(capture_selected(scope.pid,(tuple(arena_identity),)))
+    with ReadBatch(scope.pid,share=active_reader() is None,_executable=scope._session._transport._executable):
+        observe=context_observer(scope);context=observe()
+        # The caller already selected its exact arena. Validate that generation,
+        # original ancestry, lifetime and current world without enumerating every
+        # arena in the process. This is still only a read-side preflight; the
+        # owner performs the unchanged native one-shot binding transaction.
+        c=capture_selected(scope.pid,(tuple(arena_identity),tuple(context['world'][1:])))
+        matches=[a for a in _arena_candidates(c,context['world'][1:])
+                 if tuple(a['identity'])==tuple(arena_identity) and a['class_path']==expected_class]
+        if len(matches)!=1:raise ValueError('Select one observed standard arena in the current world')
+        c=c.with_observations(metadata_catalog if metadata_catalog is not None else
+            capture_matching(scope.pid,names=('Default__KismetSystemLibrary','Conv_ObjectToSoftObjectReference','Conv_SoftObjectReferenceToObject')))
         def exact(path):
             found=[o for o in c.objects if c.path_name(o)=='/Script/Engine.'+path]
             if len(found)!=1:raise RuntimeError('Arena conversion source unavailable: '+path)
             return found[0]
         identities=(c.by_index[arena_identity[0]],exact('Default__KismetSystemLibrary'),
             exact('KismetSystemLibrary:Conv_ObjectToSoftObjectReference'),exact('KismetSystemLibrary:Conv_SoftObjectReferenceToObject'))
+        if observe()!=context:raise RuntimeError('World/controller changed during arena binding preparation')
     return owner.bind_arena(identities)
 
 def _controller_battle_manager(c,controller):
@@ -141,7 +149,7 @@ def prepare_dispatch(scope,owner,*,route='clea-normal'):
     status=owner.status()
     if status['native_error'] or not status['has_work']:raise RuntimeError('Exact NPC owner is not prepared')
     context=controller_context(scope._session)
-    with ReadBatch(scope.pid,share=True,_executable=scope._session._transport._executable):
+    with ReadBatch(scope.pid,share=active_reader() is None,_executable=scope._session._transport._executable):
         c=capture_matching(scope.pid,classes=('BP_GameAction_TriggerBattle_C','AC_jRPG_BattleManager_C'),names=('FBattleStartParams','StartBattleNEW'))
         c=c.with_observations(capture_selected(scope.pid,((root.index,root.serial,root.address),tuple(status['actor_identity']),tuple(context['controller'][1:]))))
         source=_owned_source(c,root,SOURCE)
@@ -172,7 +180,7 @@ def dispatch_original(scope,owner,prepared=None):
 
 def interaction_queries(scope):
     names=('SetCollisionEnabled','GetCollisionEnabled','SetCollisionResponseToChannel','GetCollisionResponseToChannel','K2_SphereOverlapComponent')
-    with ReadBatch(scope.pid,share=True,_executable=scope._session._transport._executable):
+    with ReadBatch(scope.pid,share=active_reader() is None,_executable=scope._session._transport._executable):
         c=capture_matching(scope.pid,names=names)
         identities=[]
         for name in names:

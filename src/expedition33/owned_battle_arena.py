@@ -35,7 +35,7 @@ def validate_request(packet):
         for offset in range(88,232,16):
             index,serial,address=struct.unpack_from('<iiQ',packet,offset)
             if index<0 or serial<0 or not 0x10000<=address<=0x7fffffffffff or address%8:raise ValueError('Invalid arena ground identity')
-        if packet[24] not in (0,1,3,7) or any(packet[25:88]+packet[232:]):raise ValueError('Reserved arena grounding data')
+        if packet[24] not in (0,1,3,7,8) or any(packet[25:88]+packet[232:]):raise ValueError('Reserved arena grounding data')
         return
     if operation in (COMPONENT_POSE,QUALIFY_HELPER):
         version,_,error,state,owner=struct.unpack_from('<4IQ',packet)
@@ -123,7 +123,7 @@ class OwnedBattleArena:
         preparation only: terrain placement and battle entry are separate gates.
         """
         from .picto_class_load import load_class
-        from ._reader import ReadBatch
+        from ._reader import ReadBatch,active_reader
         from .catalog import capture_matching,capture_selected
         from .values import read_values_with_references
         from .cinematics.original_game_action import controller_context
@@ -135,7 +135,7 @@ class OwnedBattleArena:
         paths=('GameplayStatics:BeginDeferredActorSpawnFromClass','GameplayStatics:FinishSpawningActor',
             'Actor:K2_DestroyActor','Controller:K2_GetPawn','Actor:SetActorEnableCollision',
             'Actor:SetActorTickEnabled','Actor:SetActorHiddenInGame')
-        with ReadBatch(self._scope.pid,share=True,_executable=self._transport._executable):
+        with ReadBatch(self._scope.pid,share=active_reader() is None,_executable=self._transport._executable):
             c=capture_matching(self._scope.pid,names=('Default__GameplayStatics',)+tuple(p.split(':')[1] for p in paths))
             c=c.with_observations(capture_selected(self._scope.pid,(context['controller'][1:],context['world'][1:],(cls.index,cls.serial,cls.address))))
             if '/Game/Levels/Battle_Maps/BP_BattleMap.BP_BattleMap_C' not in {c.path_name(c.by_index[i]) for i in c.ancestors(cls.index)}:
@@ -201,7 +201,11 @@ class OwnedBattleArena:
         if error:
             failure=RuntimeError('Owned component pose rejected: '+str(error));failure.report=report;raise failure
         return report
-    def ground_once(self,identities=None,*,forward_approach=False,diagnostics=False,require_clear_approach=True):
+    def ground_once(self,identities=None,*,forward_approach=False,diagnostics=False,require_clear_approach=True,authored_origin=False):
+        if type(authored_origin) is not bool:raise ValueError('Authored origin must be explicit')
+        if authored_origin:
+            if forward_approach or diagnostics or not require_clear_approach:raise ValueError('Authored origin cannot select another placement policy')
+            if getattr(self._transport,'story_trial_encounter_protocol',0)!=1:raise RuntimeError('Authored story arena qualification requires runtime 305')
         """Place the inert arena using its actual seven spawn anchors.
 
         Uses shared surface/volume queries and owned actor-pose operations.
@@ -234,12 +238,12 @@ class OwnedBattleArena:
         if self._closed or self.phase!='spawned' or self._component_uncertain or self._ground_attempted or self._camera_focus_attempted:
             raise RuntimeError('Arena grounding unavailable or already attempted; no replay')
         if identities is None:
-            from ._reader import ReadBatch
+            from ._reader import ReadBatch,active_reader
             from .catalog import capture_matching
             paths=('Default__KismetSystemLibrary','KismetSystemLibrary:LineTraceSingle','GameplayStatics:BreakHitResult',
                 'SceneComponent:K2_GetComponentToWorld','Actor:K2_GetActorLocation','Actor:K2_GetActorRotation',
                 'Actor:K2_SetActorLocationAndRotation','KismetSystemLibrary:GetComponentBounds','KismetSystemLibrary:BoxTraceSingle')
-            with ReadBatch(self._scope.pid,share=True,_executable=self._transport._executable):
+            with ReadBatch(self._scope.pid,share=active_reader() is None,_executable=self._transport._executable):
                 c=capture_matching(self._scope.pid,names=tuple(path.split(':')[-1] for path in paths))
                 def exact(path):
                     rows=[o for o in c.objects if c.path_name(o)=='/Script/Engine.'+path]
@@ -248,7 +252,7 @@ class OwnedBattleArena:
                 identities=tuple(exact(path) for path in paths)
         if len(identities)!=9:raise ValueError('Nine observed arena grounding identities required')
         packet=bytearray(SIZE);struct.pack_into('<4IQ',packet,0,3,GROUND,0,0,self._owner._owner)
-        packet[24]=int(forward_approach)|(2 if diagnostics else 0)|(0 if require_clear_approach else 4)
+        packet[24]=8 if authored_origin else int(forward_approach)|(2 if diagnostics else 0)|(0 if require_clear_approach else 4)
         for i,identity in enumerate(identities):struct.pack_into('<iiQ',packet,88+16*i,identity.index,identity.serial,identity.address)
         validate_request(bytes(packet));self._ground_attempted=True;self._component_uncertain=True
         reply=self._transport.command('mesh',bytes(packet));raw=bytes.fromhex(reply['mesh_packet'])
@@ -305,7 +309,7 @@ class OwnedBattleArena:
         if error:
             failure=RuntimeError('Owned arena grounding rejected: '+str(error));failure.report=result;raise failure
         return result
-    def refresh_camera_focus_once(self):
+    def refresh_camera_focus_once(self,*,resources=None):
         """Recompute the original four camera targets after final arena placement.
 
         Calls the original Blueprint on this hidden owned arena, then verifies
@@ -318,7 +322,7 @@ class OwnedBattleArena:
         if self._closed or self.phase!='spawned' or self._component_uncertain or self._camera_focus_attempted:
             raise RuntimeError('Camera focus refresh unavailable; no replay')
         from ._owned_arena_camera import refresh_camera_focus
-        return refresh_camera_focus(self)
+        return refresh_camera_focus(self,resources=resources)
     def qualify_helper_once(self,helper,relative_pose,identities=None):
         """Qualify/reveal an original owned helper against this arena's receipt.
 
@@ -333,10 +337,10 @@ class OwnedBattleArena:
         if self._closed or self.phase!='spawned' or self._component_uncertain or self._helper_attempted or not self.grounding or not self.grounding['verified']:
             raise RuntimeError('Verified owned arena ground receipt required; no replay')
         if identities is None:
-            from ._reader import ReadBatch
+            from ._reader import ReadBatch,active_reader
             from .catalog import capture_matching
             paths=('SceneComponent:K2_GetComponentToWorld','Actor:K2_GetActorRotation','GameplayStatics:GetActorOfClass')
-            with ReadBatch(self._scope.pid,share=True,_executable=self._transport._executable):
+            with ReadBatch(self._scope.pid,share=active_reader() is None,_executable=self._transport._executable):
                 c=capture_matching(self._scope.pid,names=tuple(path.split(':')[-1] for path in paths))
                 def exact(path):
                     rows=[o for o in c.objects if c.path_name(o)=='/Script/Engine.'+path]

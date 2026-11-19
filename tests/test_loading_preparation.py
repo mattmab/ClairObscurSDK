@@ -5,6 +5,90 @@ from expedition33.loading_preparation import LoadingPreparation,service_loading_
 from expedition33.ui_shell_proof import UiProofPending
 
 class LoadingPreparationTests(unittest.TestCase):
+    def test_enabled_opt_in_owner_requests_worker_inventory_without_passing_session(self):
+        c,mod,owner=self.fixture();owner.preload_layer_selectors=True
+        self.assertFalse(c.layer_preparation_requested.is_set())
+        self.assertTrue(c.observe(N(ui_context=N(kind='title'))))
+        self.assertTrue(c.layer_preparation_requested.is_set())
+        c.close();self.assertFalse(c.layer_preparation_requested.is_set())
+        disabled,_,disabled_owner=self.fixture(False);disabled_owner.preload_layer_selectors=True
+        disabled.observe(N(ui_context=N(kind='title')))
+        self.assertFalse(disabled.layer_preparation_requested.is_set())
+
+    def test_worker_inventory_is_adopted_even_before_controller_context_exists(self):
+        c,_,owner=self.fixture();c.layer_preparation_requested.set();snapshot=object()
+        with patch('expedition33.story_layers.adopt_layer_selectors') as adopt:
+            c.observe(N(ui_context=None,prewarm_context=None,layer_selectors=snapshot))
+            adopt.assert_called_once_with(c.session,snapshot,None)
+            owner.bind.assert_not_called();owner.prepare.assert_not_called()
+
+    def test_disabling_requester_stops_background_inventory_and_ignores_pending_copy(self):
+        c,_,owner=self.fixture();owner.preload_layer_selectors=True
+        c.observe(N(ui_context=N(kind='title')))
+        self.assertTrue(c.layer_preparation_requested.is_set())
+        c.loader.registry._settings=N(get=lambda key:{'enabled':False})
+        with patch('expedition33.story_layers.adopt_layer_selectors') as adopt:
+            c.observe(N(ui_context=None,layer_selectors=object()))
+            self.assertFalse(c.layer_preparation_requested.is_set());adopt.assert_not_called()
+
+    def test_opt_in_preflight_pending_is_not_latched_as_construction_failure(self):
+        c,mod,owner=self.fixture()
+        owner.preparation_pending=True
+        owner.prepare.side_effect=UiProofPending('read-only discovery')
+        packet=N(ui_context=N(kind='title'))
+        self.assertTrue(c.observe(packet))
+        self.assertNotIn('Builder',c.failed)
+        self.assertIs(c.owners['Builder'],owner)
+        owner.observe_title=Mock()
+        c.observe(packet)
+        owner.observe_title.assert_called_once_with(packet.ui_context)
+        owner.prepare.assert_called_once()
+
+    def test_title_pump_cannot_close_suspended_construction_reader(self):
+        from expedition33._reader import _active,active_reader
+        construction=N(_closed=False)
+        title=N(_closed=False)
+        def pump():
+            self.assertIsNone(active_reader())
+            token=_active.set(title)
+            try:
+                title._closed=True # A deferred stale-descriptor discovery.
+            finally:_active.reset(token)
+        token=_active.set(construction)
+        try:
+            service_loading_io(N(_loading_ui_pump=pump))
+            self.assertIs(active_reader(),construction)
+            self.assertFalse(construction._closed)
+        finally:_active.reset(token)
+
+    def test_title_pump_failure_restores_suspended_reader_without_replay(self):
+        from expedition33._reader import _active,active_reader
+        reader=object();callback=Mock(side_effect=RuntimeError('held'))
+        session=N(_loading_ui_pump=callback)
+        token=_active.set(reader)
+        try:
+            with self.assertRaisesRegex(RuntimeError,'held'):service_loading_io(session)
+            self.assertIs(active_reader(),reader)
+            self.assertFalse(session._loading_ui_pumping)
+            callback.assert_called_once_with()
+        finally:_active.reset(token)
+
+    def test_story_declaration_precedes_resource_construction_and_runs_once(self):
+        c,mod,owner=self.fixture();mod.register_new_game_stories=Mock()
+        c.register_story_choices();c.register_story_choices()
+        mod.register_new_game_stories.assert_called_once_with(c.session)
+        mod.prepare_loading_ui.assert_not_called();owner.prepare.assert_not_called()
+
+    def test_disabled_story_declaration_is_not_executed(self):
+        c,mod,_=self.fixture(False);mod.register_new_game_stories=Mock()
+        c.register_story_choices();mod.register_new_game_stories.assert_not_called()
+
+    def test_failed_story_declaration_is_held_without_replay(self):
+        c,mod,_=self.fixture();mod.register_new_game_stories=Mock(side_effect=RuntimeError('held'))
+        with self.assertLogs('expedition33.loading_preparation',level='ERROR'):c.register_story_choices()
+        c.register_story_choices();mod.register_new_game_stories.assert_called_once()
+        self.assertIn('Builder',c.failed)
+
     def fixture(self,enabled=True):
         owner=N(prepare=Mock(),bind=Mock(),close=Mock())
         mod=N(prepare_loading_ui=Mock(return_value=owner))

@@ -15,6 +15,11 @@ inline bool ui_setter(uint64_t base,const CallPacket& call) {
 #endif
     if(call.field_count!=1) return false;
 #ifdef E33_LAYOUT_BATCH_SESSION
+#if E33_RUNTIME_CINEMATIC_VERSION>=282
+    if ((exact_name(base,owner+0x18,"Widget") && exact_name(base,function+0x18,"SetRenderOpacity")) ||
+        (exact_name(base,owner+0x18,"Image") && exact_name(base,function+0x18,"SetColorAndOpacity")) ||
+        (exact_name(base,owner+0x18,"CanvasPanelSlot") && exact_name(base,function+0x18,"SetZOrder"))) return true;
+#endif
     if(exact_name(base,owner+0x18,"Image") &&
        exact_name(base,function+0x18,"SetBrushResourceObject")) return true;
     if ((exact_name(base,owner+0x18,"CommonButtonBase") &&

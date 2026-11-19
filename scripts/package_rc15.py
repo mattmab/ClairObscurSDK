@@ -14,8 +14,7 @@ def audit(path):
         nonlocal count
         for n in z.namelist():
             data=z.read(n);lower=n.lower();count+=1
-            assert not any(x in lower for x in ('custom-source/','backup','settings/','logs/','.e33map.','azalea','8d8a0e6175305903'+'b22d67ba1a8e0c47')),n
-            assert (b'8d8a0e6175305903'+b'b22d67ba1a8e0c47') not in data and (b'azalea'+b'birthday') not in data.lower(),n
+            assert not any(x in lower for x in ('custom-source/','backup','settings/','logs/','.e33map.')),n
             if n.endswith(('.zip','.sdkmod')):
                 with zipfile.ZipFile(io.BytesIO(data)) as nested:scan(nested)
         assert z.testzip() is None

@@ -31,7 +31,7 @@ class AuthoredPreviewTests(unittest.TestCase):
         p=object.__new__(AuthoredPreview)
         p.closed=False;p.pending=None;p.ready=True;p.playing=False;p.next_sample=float('inf')
         p.start_frame=0;p.end_frame=300;p.frame=100;p.subframe=0.;p.sequence=Mock();p.menu=Mock()
-        p.menu.poll_scrub.return_value=None;p.flight=N(active=True)
+        p.menu.poll_scrub.return_value=None;p.flight=N(active=True,poll=Mock(),stop=Mock())
         p.scope=N(pid=42,_session=N(_transport=N(_executable='reader',sequence_placement_input_protocol=1)))
         p.menu.panel._planner.prepare.return_value=N(invoke=lambda:nullcontext(N(return_value=True)))
         with patch('expedition33._sequence_flight.SequenceFlight') as flight,\
@@ -76,6 +76,135 @@ class AuthoredPreviewTests(unittest.TestCase):
         p.sequence.seek_frame.assert_called_once_with(175,0.)
         p._sync_npcs.assert_called_once();self.assertFalse(p.playing)
         p.menu.refresh.assert_not_called();p.menu.draw_tracks.assert_called_once()
+
+    def test_fast_scrub_keeps_observer_and_flushes_final_paint(self):
+        p=object.__new__(AuthoredPreview)
+        p.closed=False;p.pending=None;p.ready=True;p.playing=True;p.npcs=None
+        p.start_frame=0;p.end_frame=1000;p.frame=0;p.subframe=0.;p.sequence=Mock();p.menu=Mock()
+        p.menu.poll_scrub.side_effect=(.2,.3,None);p.menu.view.picker=False
+        p.menu.panel.labels=[object() for _ in range(36)]
+        p.scope=N(pid=42,_session=N(_transport=N(_executable='reader')))
+        p.flight=N(active=True,poll=Mock(),stop=Mock());p.overview_component=object();p._sync_npcs=Mock(return_value=True)
+        with patch('scene_editor_tests.authored_preview.shared_operation',return_value=nullcontext()), \
+             patch('scene_editor_tests.authored_preview.time.monotonic',side_effect=(10.,10.02,10.12)), \
+             patch('scene_editor_tests.sequence_viewport.restore') as restore:
+            p.poll_scrub_fast();p.poll_scrub_fast();p.poll_scrub_fast()
+        self.assertEqual(p.sequence.seek_frame.call_count,2)
+        p.sequence.seek_frame.assert_called_with(300,0.)
+        restore.assert_not_called();self.assertTrue(p.flight.active)
+        self.assertEqual(p.menu.draw_tracks.call_count,2)
+        p.menu.panel.set_field.assert_called_with('300')
+        p.menu.refresh.assert_not_called()
+
+    def test_fast_scrub_yields_to_pending_actions_and_hidden_timeline(self):
+        p=object.__new__(AuthoredPreview);p.closed=False;p.ready=True;p.pending='close';p.menu=Mock()
+        p.poll_scrub_fast();p.menu.poll_scrub.assert_not_called()
+        p.pending=None;p.menu.hidden=True
+        p.poll_scrub_fast();p.menu.poll_scrub.assert_not_called()
+
+    def test_native_scrub_updates_ui_without_python_query_or_seek(self):
+        p=object.__new__(AuthoredPreview)
+        p.closed=False;p.pending=None;p.ready=True;p.playing=True;p.npcs=None
+        p.start_frame=0;p.end_frame=1000;p.frame=0;p.subframe=0.;p.sequence=Mock();p.menu=Mock()
+        p.menu.panel.labels=[object() for _ in range(36)];p.menu.view.picker=False
+        p.scope=N(pid=42,_session=N(_transport=N(_executable='reader',sequence_drag_scrub_protocol=1)))
+        p.native_scrub=N(bound=True,poll=Mock(return_value=(True,325,.25,.32525,True)),close=Mock())
+        p._sync_npcs=Mock(return_value=True)
+        with patch('scene_editor_tests.authored_preview.shared_operation',return_value=nullcontext()):p.poll_scrub_fast()
+        self.assertEqual((p.frame,p.subframe,p.playing),(325,.25,False))
+        p.sequence.seek_frame.assert_not_called();p.menu.poll_scrub.assert_not_called()
+        p.menu.panel.set_field.assert_called_once_with('325.25')
+        p.menu.refresh.assert_not_called()
+        p.menu.hidden=True;p.poll_scrub_fast();p.native_scrub.close.assert_called_once()
+
+    def test_timeline_item_picking_matches_lane_and_cycles_overlaps(self):
+        from scene_editor_tests.timeline import pick_sequence_row
+        rows=[dict(key='shot',lane=.86,start=0,end=100),dict(key='anim',lane=.86,start=10,end=25),
+              dict(key='audio',lane=.885,start=10,end=25)]
+        self.assertEqual(pick_sequence_row(rows,12,0)['key'],'anim')
+        self.assertEqual(pick_sequence_row(rows,12,0,'anim')['key'],'shot')
+        self.assertEqual(pick_sequence_row(rows,12,1)['key'],'audio')
+        self.assertIsNone(pick_sequence_row(rows,120,0))
+        self.assertIsNone(pick_sequence_row(rows,12,2))
+
+    def test_native_timeline_click_opens_existing_property_editor(self):
+        p=object.__new__(AuthoredPreview);p.closed=False;p.pending=None;p.ready=True;p.playing=False
+        p.start_frame=0;p.end_frame=100;p.frame=0;p.subframe=0.;p.sequence=Mock();p.menu=Mock()
+        p.scope=N(pid=42,_session=N(_transport=N(_executable='reader',sequence_drag_scrub_protocol=1,sequence_timeline_viewport_protocol=1)))
+        p.editor=N(selected=None,category_changed=Mock(),select=Mock(),rows=lambda:(('section/path','Section'),))
+        p.menu.panel._sequence_visible_rows=(dict(key='section/path',lane=.86,start=10,end=20),)
+        p.native_scrub=N(bound=True,viewport=lambda:dict(start=0.,end=100.,pick=True,frame=12.,lane=0),
+                         poll=lambda:(False,0,0.,0.,False))
+        with patch('scene_editor_tests.authored_preview.shared_operation',return_value=nullcontext()):p.poll_scrub_fast()
+        p.editor.category_changed.assert_called_once_with('sections');p.editor.select.assert_called_once_with('section/path')
+        self.assertEqual(p.menu.view.picker,'sequence');self.assertEqual(p.menu.view.page,0)
+        p.menu.refresh.assert_called_once();p.sequence.seek_frame.assert_not_called()
+
+    def test_zoomed_timeline_clips_bars_and_scales_ruler_and_playhead(self):
+        panel=object.__new__(TimelinePanel);panel.title=object();panel.detail=object();panel.playhead_slot=object();panel.scrub_grip=[(object(),object())]
+        panel.set_text=Mock();panel.anchor=Mock();panel._render_call=Mock();panel.position_scrub=Mock()
+        panel.markers=[(object(),object()) for _ in range(3)];panel.clip_names=[N(index=i) for i in range(3)]
+        panel.placements={i:object() for i in range(3)};panel.track_labels=[(object(),'') for _ in range(3)]
+        panel.rulers=[object() for _ in range(5)];panel.last_draw=None;panel.invisible=4;panel.collapsed=1
+        panel._sequence_projection=lambda *_:((dict(path='visible',name='AudioSection',start=30.,end=40.,instance=()),
+                                               dict(path='outside',name='AudioSection',start=0.,end=10.,instance=())),None)
+        model=N(start_frame=0,end_frame=100,timeline_window=(25.,75.),frame=50,subframe=0.,profile=N(saved_id='Test'),
+                edited=True,document={},detail=lambda:'Frame',editor=N(selected='visible'))
+        panel._draw_sequence(model)
+        self.assertEqual([r['key'] for r in panel._sequence_visible_rows],['visible'])
+        self.assertAlmostEqual(panel.anchor.call_args_list[0].args[1],.5)
+        bar=next(c for c in panel.anchor.call_args_list if c.args[0] is panel.markers[0][1])
+        self.assertAlmostEqual(bar.args[1],.164);self.assertAlmostEqual(bar.args[3],.332)
+        panel.set_text.assert_any_call(panel.rulers[0],'25f');panel.set_text.assert_any_call(panel.rulers[-1],'75f')
+
+    def test_expanded_section_groups_and_hover_pick_use_distinct_rows(self):
+        from scene_editor_tests.timeline import section_lane,pick_sequence_row,SEQUENCE_LANES
+        names=('CinematicShotSection','CameraCutSection','SkeletalAnimationSection','3DTransformSection','EventTriggerSection','AudioSection')
+        self.assertEqual([section_lane(name,True) for name in names],[y for _,y in SEQUENCE_LANES[:6]])
+        rows=[dict(key=name,name=name,lane=section_lane(name,True),start=0,end=100) for name in names]
+        self.assertEqual(pick_sequence_row(rows,50,2,expanded=True)['key'],'SkeletalAnimationSection')
+        self.assertEqual(pick_sequence_row(rows,50,3,expanded=True)['key'],'3DTransformSection')
+
+    def test_expanded_panel_separates_seek_surface_from_section_rows(self):
+        panel=object.__new__(TimelinePanel)
+        panel.title=N(index=1);panel.detail=N(index=2);panel.scrubber=N(index=3);panel.hover_label=N(index=4)
+        panel.timeline_back_slot=object();panel.playhead_slot=object();panel.scrub_grip=[(object(),object())];panel.anchor=Mock();panel._render_call=Mock()
+        panel.set_text=Mock();panel.position_scrub=Mock();panel.invisible=4;panel.collapsed=1;panel.last_draw=None
+        panel.track_labels=[(N(index=i),'') for i in range(10,17)];panel.track_lines=[(object(),object()) for _ in range(7)]
+        panel.markers=[(object(),object())];panel.clip_names=[N(index=20)];panel.rulers=[object() for _ in range(5)]
+        panel.placements={i:object() for i in (1,2,3,4,10,11,12,13,14,15,16,20)}
+        panel._sequence_projection=lambda *_:((dict(path='animation',name='SkeletalAnimationSection',start=10.,end=20.,instance=()),),None)
+        model=N(start_frame=0,end_frame=100,frame=15,subframe=0.,profile=N(saved_id='Test'),edited=True,rate=(30,1),
+                document={},detail=lambda:'Paused',scope=N(_session=N(_transport=N(sequence_timeline_viewport_protocol=2))))
+        panel._draw_sequence(model)
+        panel.anchor.assert_any_call(panel.placements[3],.08,.93,.92,.95,render=True)
+        playhead=next(c for c in panel.anchor.call_args_list if c.args[0] is panel.playhead_slot)
+        self.assertAlmostEqual(playhead.args[1],.206);self.assertEqual(playhead.args[2],.75)
+        self.assertEqual(panel._sequence_visible_rows[0]['lane'],.805)
+        self.assertTrue(panel._expanded_tracks)
+
+    def test_section_borders_mark_real_edges_including_overlaps(self):
+        from scene_editor_tests.timeline import section_boundaries
+        self.assertEqual(section_boundaries(dict(start=10,end=30),0,100),(10,30))
+        self.assertEqual(section_boundaries(dict(start=20,end=40),0,100),(20,40))
+        self.assertEqual(section_boundaries(dict(start=10,end=30),15,35),(None,30))
+        self.assertEqual(section_boundaries(dict(start=10,end=50),15,35),(None,None))
+
+    def test_timeline_hover_skips_unchanged_owned_geometry_setters(self):
+        from expedition33.widgets import OwnedMenuPanel
+        panel=object.__new__(TimelinePanel);panel.state='built';panel.uncertain=False
+        slot=N(index=1,serial=2,address=0x1000)
+        with patch.object(OwnedMenuPanel,'_render_call') as call:
+            panel._render_call(slot,'CanvasPanelSlot','SetSize',InSize={'X':3.,'Y':16.})
+            panel._render_call(slot,'CanvasPanelSlot','SetSize',InSize={'X':3.,'Y':16.})
+            self.assertEqual(call.call_count,1)
+            panel._render_call(slot,'CanvasPanelSlot','SetSize',InSize={'X':4.,'Y':16.})
+            self.assertEqual(call.call_count,2)
+            from expedition33.enums import EnumValue
+            visible=EnumValue(N(index=2,serial=3,address=0x2000),'Visible',0)
+            panel._render_call(slot,'Widget','SetVisibility',InVisibility=visible)
+            panel._render_call(slot,'Widget','SetVisibility',InVisibility=visible)
+            self.assertEqual(call.call_count,3)
 
     def test_start_rewinds_and_plays_instead_of_only_seeking(self):
         p=object.__new__(AuthoredPreview)
@@ -287,7 +416,7 @@ class AuthoredPreviewTests(unittest.TestCase):
                 self.assertTrue(preview.ready)
     def test_shared_panel_moves_cursor_without_repainting_unchanged_tracks(self):
         panel=object.__new__(TimelinePanel)
-        panel.title=object();panel.detail=object();panel.playhead_slot=object()
+        panel.title=object();panel.detail=object();panel.playhead_slot=object();panel.scrub_grip=[(object(),object())]
         panel.set_text=Mock();panel.anchor=Mock();panel._render_call=Mock()
         panel.scrubber=object();panel.scrub_value=None;panel._paint_queue=None
         panel._planner=Mock();panel._function=Mock()
@@ -301,7 +430,8 @@ class AuthoredPreviewTests(unittest.TestCase):
         panel._draw_sequence(model);paint_count=panel._render_call.call_count
         model.frame=200;panel._draw_sequence(model)
         self.assertEqual(panel._render_call.call_count,paint_count)  # Only the separate playhead moves.
-        self.assertEqual(panel.anchor.call_count,2)
+        self.assertEqual(panel.anchor.call_count,4)
+        self.assertEqual(panel.anchor.call_args_list[-1].args[1:3],(panel.anchor.call_args_list[-2].args[1],.93))
         self.assertNotEqual(panel.anchor.call_args_list[0],panel.anchor.call_args_list[1])
     def test_playhead_paint_preserves_unread_mouse_drag(self):
         panel=object.__new__(TimelinePanel)
@@ -494,6 +624,19 @@ class AuthoredPreviewTests(unittest.TestCase):
         view.activate(frame.revision,0);preview.queue.assert_called_once_with('seek')
         with self.assertRaises(RuntimeError):view.activate(frame.revision,8)
         with self.assertRaises(RuntimeError):view.activate(view.revision,True)
+    def test_camera_tools_toggle_preserves_transport_and_does_not_dispatch_scene(self):
+        preview=N(sequence_timeline=True,profile=N(saved_id='Test'),message='Ready',ready=True,playing=False,
+                  queue=Mock(),editor=N(document={}),playback_available=lambda:True)
+        view=TimelineView(None,preview)
+        frame=view.render()
+        self.assertEqual(next(c.label for c in frame.controls if c.token==2),'')
+        frame=view.activate(frame.revision,20)
+        self.assertEqual(next(c.label for c in frame.controls if c.token==2),'Orbit left')
+        self.assertEqual(next(c.label for c in frame.controls if c.token==8),'Play')
+        preview.queue.assert_not_called()
+        frame=view.activate(frame.revision,20)
+        self.assertEqual(next(c.label for c in frame.controls if c.token==2),'')
+
     def test_normal_close_is_sequence_services_then_menu_and_preserves_deferral(self):
         from expedition33._sequence_owner import SequenceCleanupDeferred
         preview=object.__new__(AuthoredPreview);preview.pending=None;preview.ready=True;preview.closed=False
@@ -525,17 +668,45 @@ class AuthoredPreviewTests(unittest.TestCase):
         p=object.__new__(AuthoredPreview)
         p.closed=False;p.pending=None;p.ready=True;p.playing=False;p.next_sample=0.
         p.sequence=Mock();p.menu=Mock();p.menu.poll_scrub.return_value=None
-        p.flight=N(active=True);p.scope=N(pid=42,_session=N(_transport=N(_executable='reader')))
+        p.flight=N(active=True,poll=Mock(),stop=Mock());p.scope=N(pid=42,_session=N(_transport=N(_executable='reader')))
         with patch('scene_editor_tests.authored_preview.shared_operation',return_value=nullcontext()):
             self.assertFalse(p.poll())
         p.sequence._call.assert_not_called();p.menu.draw_tracks.assert_not_called()
+
+    def test_flight_starts_at_shot_pose_without_moving_source_camera_to_estimated_anchor(self):
+        from scene_editor_tests.sequence_viewport import fly
+        preview=N(scope=N(_session=N(_transport=N(sequence_flight_protocol=1,sequence_flight_playback_protocol=1))),
+                  sequence=Mock(),play_scope='scope',menu=Mock(),flight=None)
+        camera=object();component=object();observer=Mock()
+        observer.prepare_camera.side_effect=ValueError('construction boundary')
+        location=dict(X=10.,Y=20.,Z=30.);rotation=dict(Pitch=5.,Yaw=90.,Roll=0.)
+        with patch('scene_editor_tests.sequence_viewport._active_camera',return_value=(component,camera)), \
+             patch('scene_editor_tests.sequence_viewport.overview') as overview, \
+             patch('scene_editor_tests.sequence_viewport.call',side_effect=(location,rotation)) as call, \
+             patch('expedition33.cinematics.blueprint_actor.BlueprintActor',return_value=observer), \
+             patch('expedition33.cinematics.authored_replacement.placement_pose',return_value='pose') as pose:
+            with self.assertRaisesRegex(ValueError,'construction boundary'):fly(preview)
+        overview.assert_not_called()
+        self.assertEqual([c.args[3] for c in call.call_args_list],['K2_GetActorLocation','K2_GetActorRotation'])
+        self.assertEqual(pose.call_args.args[1],(10.,20.,30.))
+
+    def test_native_cancelled_flight_restores_view_without_closing_timeline(self):
+        p=object.__new__(AuthoredPreview)
+        p.closed=False;p.pending=None;p.ready=True;p.playing=False;p.next_sample=float('inf')
+        p.sequence=Mock();p.menu=Mock();p.menu.poll_scrub.return_value=None
+        flight=N(active=True,stop=Mock())
+        flight.poll=Mock(side_effect=lambda:setattr(flight,'active',False))
+        p.flight=flight;p.scope=N(pid=42,_session=N(_transport=N(_executable='reader')))
+        with patch('scene_editor_tests.authored_preview.shared_operation',return_value=nullcontext()):self.assertFalse(p.poll())
+        flight.stop.assert_called_once();self.assertIsNone(p.flight)
+        self.assertIn('remains editable',p.message);p.sequence.close.assert_not_called()
 
     def test_start_and_toggle_keep_flight_camera_on_capable_runtime(self):
         for action in ('start','toggle'):
             p=object.__new__(AuthoredPreview)
             p.closed=False;p.pending=action;p.ready=True;p.playing=False;p.next_sample=float('inf');p.npcs=None
             p.start_frame=93;p.end_frame=2174;p.frame=800;p.subframe=.5;p.sequence=Mock();p.menu=Mock()
-            p.flight=N(active=True);p.overview_component=object();p.overview_camera=object()
+            p.flight=N(active=True,poll=Mock(),stop=Mock());p.overview_component=object();p.overview_camera=object()
             p.scope=N(pid=42,_session=N(_transport=N(_executable='reader',sequence_flight_playback_protocol=1)))
             with patch('scene_editor_tests.authored_preview.shared_operation',return_value=nullcontext()), \
                  patch('scene_editor_tests.sequence_viewport.restore') as restore:

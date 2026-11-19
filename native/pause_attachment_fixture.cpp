@@ -7,6 +7,9 @@
 #include "pause_attachment_protocol.h"
 static std::vector<uint64_t> dispatched;
 static uint32_t failure=0;
+static const char* remove_class="WBP_BaseButton_C";
+static const char* restore_class="Overlay";
+static const char* restore_name="OtherButton";
 template<class T> T local_read(uint64_t at) {
     if(at==0x1010) return static_cast<T>(0x5000);
     if(at==0x2010) return static_cast<T>(0x6000);
@@ -18,8 +21,9 @@ static bool exact_name(uint64_t,uint64_t at,const char* name) {
     return (at==0x118 && !std::strcmp(name,"RemoveFromParent")) ||
         (at==0x218 && !std::strcmp(name,"SetRenderOpacity")) ||
         (at==0x318 && !std::strcmp(name,"SetIsEnabled")) ||
-        (at==0x5018 && !std::strcmp(name,"WBP_BaseButton_C")) ||
-        (at==0x6018 && !std::strcmp(name,"Overlay")) ||
+        (at==0x5018 && !std::strcmp(name,remove_class)) ||
+        (at==0x6018 && !std::strcmp(name,restore_class)) ||
+        (at==0x2018 && !std::strcmp(name,restore_name)) ||
         (at==0x7018 && !std::strcmp(name,"Widget"));
 }
 static uint32_t reflected_call(uint64_t,CallPacket& c,const void* =nullptr,
@@ -65,13 +69,23 @@ int main() {
     if(owner.close(0,true)||owner.protects(12)) return 11;
     failure=0;
     PauseAttachmentPool owners; Pool leases;
-    for(uint64_t id=1;id<=5;++id) {
+    for(uint64_t id=1;id<=PauseAttachmentPool::capacity+1;++id) {
         PauseAttachmentPacket p{};p.version=1;p.operation=1;p.owner=id;p.lease=11;p.remove=remove;
         owners.command(0,7,leases,p);
-        if((id<=4 && p.error) || (id==5 && p.error!=1301)) return 12;
+        if((id<=PauseAttachmentPool::capacity && p.error) || (id==PauseAttachmentPool::capacity+1 && (p.error!=1305||p.state))) return 12;
     }
     PauseAttachmentPacket bad{};bad.version=1;bad.operation=2;bad.owner=77;
     owners.command(0,7,leases,bad);if(bad.error!=1301) return 13;
-    dispatched.clear();if(owners.close(0,false) || dispatched.size()!=4 || owners.protects(11)) return 14;
-    std::puts("Pause attachment: restore-before-detach, bounded multiple owners, deferred GC and no replay passed");
+    dispatched.clear();if(owners.close(0,false) || dispatched.size()!=PauseAttachmentPool::capacity || owners.protects(11)) return 14;
+    remove_class="CommonActivatableWidget";restore_class="WBP_BaseButton_C";
+    PauseAttachment battle;
+    if(send(battle,1,11,&remove)) return 15;
+    if(send(battle,3,12,&opacity)!=1301) return 16; // Unrelated game buttons remain forbidden.
+    restore_name="AbandonBattleButton";
+    if(send(battle,3,12,&opacity)||send(battle,4,12,&enabled)||
+       send(battle,5,0,&hide)||send(battle,6,0,&disable)) return 17;
+    dispatched.clear();if(battle.close(0,false)||dispatched!=std::vector<uint64_t>{0x300,0x200,0x100})return 18;
+    remove_class="Overlay";
+    if(send(battle,1,11,&remove)!=1306)return 19; // No arbitrary non-UserWidget detach roots.
+    std::puts("Pause attachment: restore-before-detach, battle-button allowlist, bounded owners, deferred GC and no replay passed");
 }

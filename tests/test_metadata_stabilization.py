@@ -21,6 +21,29 @@ def reply(sent,*,fail=None):
  return raw.hex()
 
 class MetadataTests(unittest.TestCase):
+ def test_second_panel_reuses_acknowledged_metadata_from_old_zero_observation(self):
+  session=Session();owner=metadata.MetadataPreparation.__new__(metadata.MetadataPreparation)
+  owner.session=session;owner.scope=Scope();owner._journal=[]
+  old=NS(index=1,serial=0,address=0x10000,name='Create')
+  stable=NS(index=1,serial=1234,address=0x10000,name='Create')
+  owner._known={(1,1234,0x10000):stable}
+  from unittest.mock import Mock
+  session._transport.command=Mock()
+  current=object()
+  with patch.object(metadata,'script_function',side_effect=lambda c,o:o),patch('expedition33.catalog.capture_selected',return_value=current) as capture:
+   self.assertIs(owner.prepare(object(),[old]),current)
+  session._transport.command.assert_not_called()
+  capture.assert_called_once_with(1,((1,1234,0x10000),))
+  self.assertFalse(session.aborted)
+
+ def test_changed_positive_metadata_identity_is_rejected_before_dispatch(self):
+  session=Session();owner=metadata.MetadataPreparation.__new__(metadata.MetadataPreparation)
+  owner.session=session;owner._known={(1,1234,0x10000):object()}
+  old=NS(index=1,serial=2345,address=0x10000)
+  with patch.object(metadata,'script_function',side_effect=lambda c,o:o):
+   with self.assertRaisesRegex(metadata.RuntimeQueryError,'Previously retained'):owner.prepare(object(),[old])
+  self.assertFalse(session.aborted)
+
  def test_batch_bounds_and_entire_input_validation(self):
   ids=[(i,0,0x10000+i*16) for i in range(128)]
   sent=metadata.request(ids);metadata.validate_request(sent)

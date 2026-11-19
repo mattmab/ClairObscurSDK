@@ -21,6 +21,7 @@ class EnemySpawnOwner:
         if getattr(transport,'_enemy_spawn_owner',None) is not None:
             raise RuntimeError('This SDK session already has an enemy owner')
         self._scope=scope;self._transport=transport;self._thread=threading.get_ident()
+        self._primary_channel=transport is scope._session._transport
         self._owner=secrets.randbits(64) or 1
         self._attempted=False;self._closed=False;self._prepared=False;self._grounded=False
         self._trigger_anchor=False
@@ -41,6 +42,11 @@ class EnemySpawnOwner:
     def _command(self,operation,identities=(),pose=(),policy=0,*,total_count=None,authored_route=None):
         if threading.get_ident()!=self._thread:raise RuntimeError('Enemy owner requires its owning Python thread')
         if self._closed:raise RuntimeError('Enemy owner is closed')
+        # A story may exclusively reserve the idle primary channel. Dormant
+        # editor owners remain intact and resume only after story cleanup ACK.
+        if self._primary_channel:
+            current=getattr(self._transport,'_enemy_spawn_owner',None)
+            if current is not self:raise RuntimeError('The primary encounter channel is reserved by another SDK owner')
         if self.phase=='cleanup_unknown':raise RuntimeError('Native controller cleanup required; cleanup is not replayed')
         if self._timeline and operation not in (120,221,111):
             raise RuntimeError('Timeline actor permits construction, reveal and retirement only')
@@ -193,6 +199,13 @@ class EnemySpawnOwner:
     def close(self):
         if threading.get_ident()!=self._thread:raise RuntimeError('Enemy cleanup requires its owning Python thread')
         if self._closed:return True
+        if (not self._attempted and self._primary_channel and
+                getattr(self._transport,'_enemy_spawn_owner',None) is not self):
+            # A dormant editor can be disabled while the story has the idle
+            # channel. It has never dispatched and owns no native transaction.
+            self._closed=True;self.phase='closed'
+            if self in self._scope._enemy_spawn_owners:self._scope._enemy_spawn_owners.remove(self)
+            return True
         if any(owner.state not in ('new','closed') for owner in self._timeline_binding_owners):return False
         try:self.remove() # Allowed after scope revocation, like other native owners.
         except EnemyCleanupDeferred:return False

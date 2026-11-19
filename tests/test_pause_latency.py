@@ -20,6 +20,7 @@ class LatencyTests(unittest.TestCase):
     def entry(self,warm=True):
         scope=SimpleNamespace(_session=SimpleNamespace())
         service=SimpleNamespace(menu=SimpleNamespace(panel=SimpleNamespace(state='built' if warm else 'new')),open=Mock())
+        service.open.side_effect=lambda:setattr(service.menu.panel,'state','open')
         o=PauseMenuEntry(scope,service);o.invoke=Mock(return_value=True)
         o._loading_label='loading';o._normal_label='normal';o._viewport_focus='viewport';o._hide_enabled='disable';o._hide_opacity='hide'
         o.attachment=SimpleNamespace(show_busy=Mock(return_value=True),hide_busy=Mock(return_value=True),restore=Mock(return_value=True))
@@ -37,6 +38,10 @@ class LatencyTests(unittest.TestCase):
         with self.assertRaises(RuntimeError):o._open_from_pause()
         o.service.open.assert_called_once();o.attachment.restore.assert_called_once()
         self.assertNotIn(unittest.mock.call('loading'),o.invoke.call_args_list)
+    def test_waiting_focus_restores_pause_without_hiding_it(self):
+        o=self.entry();o.service.open.side_effect=None;o._open_from_pause()
+        o.attachment.restore.assert_called_once();o.attachment.hide_busy.assert_not_called()
+        self.assertFalse(o._return_focus)
     def test_route_recognizes_shared_prepared_shell(self):
         o=self.entry();parent=o.service;o.service=SimpleNamespace(parent=parent,menu=None)
         self.assertTrue(o._has_prepared_shell());parent._failure='retained failed owner';self.assertFalse(o._has_prepared_shell())

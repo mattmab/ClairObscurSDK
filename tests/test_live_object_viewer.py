@@ -1,5 +1,6 @@
 """Viewer navigation contract; no game process or fabricated live evidence."""
 import importlib.util
+import sys
 from pathlib import Path
 from types import SimpleNamespace
 import unittest
@@ -7,8 +8,10 @@ from unittest.mock import Mock, patch
 from contextlib import nullcontext
 
 spec = importlib.util.spec_from_file_location('live_object_viewer',
-    Path(__file__).resolve().parents[1] / 'mods/LiveObjectViewer/mod.py')
+    Path(__file__).resolve().parents[1] / 'mods/LiveObjectViewer/mod.py',
+    submodule_search_locations=[str(Path(__file__).resolve().parents[1] / 'mods/LiveObjectViewer')])
 module = importlib.util.module_from_spec(spec)
+sys.modules[spec.name] = module
 spec.loader.exec_module(module)
 
 
@@ -161,7 +164,9 @@ class ViewerTests(unittest.TestCase):
             self.assertIs(mod.native.menu.panel, panel)
             self.assertEqual(panels.call_count, 1)
             self.assertIn('already open', mod.open())
-            # Console refresh paints this view through the shared owner.
+            # This test covers route ownership; the registry lookup has separate tests.
+            self.assertEqual(mod.browser.request['op'], 'lookup')
+            mod.browser.request = {'op': 'roots'}
             mod.refresh()
             self.assertEqual(shared.menu.frame.title, 'E33 Live Object Viewer')
             mod.toggle()
